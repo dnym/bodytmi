@@ -5,6 +5,7 @@ import 'progression_decision.dart';
 import 'program_service.dart';
 import 'stored_body_mass_service.dart';
 import 'timing_service.dart';
+import 'execution_service.dart';
 
 /// Full logical representation of the records currently persisted by training.
 /// This is a profile replacement contract, not a neutral external-history import.
@@ -20,7 +21,12 @@ final class TrainingArchive {
     List<ProgramReceipt> programReceipts = const [],
     List<BodyMassRecord> bodyMass = const [],
     List<TimingActivity> timers = const [],
-  }) : timers = List<TimingActivity>.unmodifiable(
+    List<WorkoutExecution> executions = const [],
+  }) : executions = List<WorkoutExecution>.unmodifiable(
+         <WorkoutExecution>[...executions]
+           ..sort((a, b) => a.id.compareTo(b.id)),
+       ),
+       timers = List<TimingActivity>.unmodifiable(
          <TimingActivity>[...timers]..sort((a, b) => a.id.compareTo(b.id)),
        ),
        bodyMass = List<BodyMassRecord>.unmodifiable(
@@ -76,6 +82,7 @@ final class TrainingArchive {
       'programReceipts',
       'bodyMass',
       'timers',
+      'executions',
     });
     List<Object?> optional(String key) =>
         json.containsKey(key) ? jsonList(json, key) : const [];
@@ -90,6 +97,9 @@ final class TrainingArchive {
       finalizations: [
         for (final item in jsonList(json, 'finalizations'))
           identifier({'id': item}, 'id'),
+      ],
+      executions: [
+        for (final e in optional('executions')) WorkoutExecution.fromJson(e),
       ],
       timers: [for (final t in optional('timers')) TimingActivity.fromJson(t)],
       bodyMass: [
@@ -119,6 +129,7 @@ final class TrainingArchive {
     );
   }
 
+  final List<WorkoutExecution> executions;
   final List<TimingActivity> timers;
   final List<BodyMassRecord> bodyMass;
   final List<WorkoutRevision> revisions;
@@ -131,6 +142,7 @@ final class TrainingArchive {
   final List<ProgramReceipt> programReceipts;
 
   Map<String, Object?> toJson() => {
+    'executions': [for (final e in executions) e.toJson()],
     'timers': [for (final t in timers) t.toJson()],
     'bodyMass': [for (final r in bodyMass) r.toJson()],
     'revisions': [for (final r in revisions) r.toJson()],
@@ -144,6 +156,7 @@ final class TrainingArchive {
   };
 
   Map<String, Object?> get summary => {
+    'executions': executions.length,
     'timers': timers.length,
     'bodyMass': bodyMass.length,
     'revisions': revisions.length,
@@ -158,6 +171,7 @@ final class TrainingArchive {
 
   void _validate() {
     validateTimingData(timers, sessions);
+    validateExecutionData(executions, sessions, timers);
     if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)
       invalid('Duplicate body-mass observation identity.');
     validateBodyMassInputReferences(sessions, bodyMass);

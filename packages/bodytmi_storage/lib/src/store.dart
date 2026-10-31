@@ -11,7 +11,8 @@ import 'database.dart'
         ProgramRun,
         ProgramReceipt,
         BodyMassRecord,
-        TimingActivity;
+        TimingActivity,
+        WorkoutExecution;
 import 'native_backup.dart';
 import 'schema.dart';
 
@@ -52,7 +53,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 7) {
+            if (native.userVersion > 8) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -113,7 +114,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 7);
+    validateSchema(schema.map((row) => row.data), 8);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -123,7 +124,8 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM session_programs), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_mass_records), 0)
-           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0) AS bytes
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM workout_executions), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
       invalid('Logical export exceeds the 64 MiB resource limit.');
@@ -291,6 +293,55 @@ final class TrainingStore implements TrainingRepository {
             snapshot: _snapshot(binding.toJson()),
           ),
         );
+  }
+
+  @override
+  Future<WorkoutExecution?> execution(String id) async {
+    final row = await (_db.select(
+      _db.workoutExecutions,
+    )..where((e) => e.id.equals(id))).getSingleOrNull();
+    if (row == null) return null;
+    final e = WorkoutExecution.fromJson(jsonDecode(row.snapshot));
+    if (e.id != row.id || e.sessionId != row.sessionId)
+      invalid('Execution row identity mismatch.');
+    return e;
+  }
+
+  @override
+  Future<List<WorkoutExecution>> executions() async {
+    final result = <WorkoutExecution>[];
+    for (final row in await _db.select(_db.workoutExecutions).get()) {
+      final e = WorkoutExecution.fromJson(jsonDecode(row.snapshot));
+      if (e.id != row.id || e.sessionId != row.sessionId)
+        invalid('Execution row identity mismatch.');
+      result.add(e);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveExecution(WorkoutExecution execution) async {
+    await _db
+        .into(_db.workoutExecutions)
+        .insertOnConflictUpdate(
+          WorkoutExecutionsCompanion.insert(
+            id: execution.id,
+            sessionId: execution.sessionId,
+            snapshot: _snapshot(execution.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<TimingActivity?> timingActivity(String id) async {
+    final row = await (_db.select(
+      _db.timingActivities,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row == null) return null;
+    final t = TimingActivity.fromJson(jsonDecode(row.snapshot));
+    if (t.id != row.id || t.sessionId != row.sessionId || t.setId != row.setId)
+      invalid('Timing row identity mismatch.');
+    return t;
   }
 
   @override

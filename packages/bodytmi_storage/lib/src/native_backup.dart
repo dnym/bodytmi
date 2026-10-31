@@ -98,7 +98,7 @@ final class NativeBackup {
       'database',
     });
     if (manifest['format'] != _format ||
-        !{1, 2, 3, 4, 5, 6, 7}.contains(manifest['databaseSchemaVersion'])) {
+        !{1, 2, 3, 4, 5, 6, 7, 8}.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
     requiredString(manifest, 'applicationVersion');
@@ -190,7 +190,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2, 3, 4, 5, 6, 7}.contains(db.userVersion) ||
+      if (!{1, 2, 3, 4, 5, 6, 7, 8}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -213,6 +213,7 @@ final class NativeBackup {
         if (db.userVersion >= 2) 'progression_decisions',
         if (db.userVersion >= 4) 'body_mass_records',
         if (db.userVersion >= 7) 'timing_activities',
+        if (db.userVersion >= 8) 'workout_executions',
         if (db.userVersion >= 3) ...[
           'program_revisions',
           'program_runs',
@@ -421,6 +422,8 @@ final class NativeBackup {
           final t = TimingActivity.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 8 && t.plan.restOnly)
+            invalid('Rest-only timing requires schema v8.');
           if (t.id != row['id'] ||
               t.sessionId != row['session_id'] ||
               t.setId != row['set_id'])
@@ -431,6 +434,30 @@ final class NativeBackup {
           for (final row in db.select('SELECT snapshot FROM sessions'))
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ]);
+      }
+      if (db.userVersion >= 8) {
+        final executions = <WorkoutExecution>[];
+        for (final row in db.select('SELECT * FROM workout_executions')) {
+          final e = WorkoutExecution.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (e.id != row['id'] || e.sessionId != row['session_id'])
+            invalid('Execution row identity mismatch.');
+          executions.add(e);
+        }
+        validateExecutionData(
+          executions,
+          [
+            for (final row in db.select('SELECT snapshot FROM sessions'))
+              sessionFromJson(jsonDecode(row['snapshot'] as String)),
+          ],
+          [
+            for (final row in db.select(
+              'SELECT snapshot FROM timing_activities',
+            ))
+              TimingActivity.fromJson(jsonDecode(row['snapshot'] as String)),
+          ],
+        );
       }
       return db.userVersion;
     } finally {

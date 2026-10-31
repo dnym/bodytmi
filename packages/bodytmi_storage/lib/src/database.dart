@@ -92,6 +92,18 @@ class TimingActivities extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+class WorkoutExecutions extends Table {
+  TextColumn get id => text()();
+  TextColumn get sessionId => text().references(Sessions, #id)();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {id};
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {sessionId},
+  ];
+}
+
 @DriftDatabase(
   tables: [
     Revisions,
@@ -104,22 +116,23 @@ class TimingActivities extends Table {
     ProgramReceipts,
     BodyMassRecords,
     TimingActivities,
+    WorkoutExecutions,
   ],
 )
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
-      await customStatement('PRAGMA user_version = 7');
+      await customStatement('PRAGMA user_version = 8');
       await validateMigration();
     }),
     onUpgrade: (m, from, to) async {
-      if (!{1, 2, 3, 4, 5, 6}.contains(from) || to != 7)
+      if (!{1, 2, 3, 4, 5, 6, 7}.contains(from) || to != 8)
         throw StateError('Unsupported database migration $from -> $to.');
       await transaction(() async {
         final schema = await customSelect(
@@ -134,10 +147,11 @@ class TrainingDatabase extends _$TrainingDatabase {
           await m.createTable(programReceipts);
         }
         if (from < 4) await m.createTable(bodyMassRecords);
-        await m.createTable(timingActivities);
+        if (from < 7) await m.createTable(timingActivities);
+        await m.createTable(workoutExecutions);
         // Drift also writes this after the callback. Writing it within our
         // transaction prevents a crash leaving new DDL with the old version.
-        await customStatement('PRAGMA user_version = 7');
+        await customStatement('PRAGMA user_version = 8');
         await validateMigration();
       });
     },
@@ -154,7 +168,7 @@ class TrainingDatabase extends _$TrainingDatabase {
     final schema = await customSelect(
       'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
     ).get();
-    validateSchema(schema.map((row) => row.data), 7);
+    validateSchema(schema.map((row) => row.data), 8);
     if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
       throw const BodyTmiException(
         'storage',

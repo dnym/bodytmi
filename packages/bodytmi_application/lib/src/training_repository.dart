@@ -6,6 +6,7 @@ import 'program_service.dart';
 import 'canonical_json.dart';
 import 'stored_body_mass_service.dart';
 import 'timing_service.dart';
+import 'execution_service.dart';
 
 /// One repository transaction is the durability boundary of each operation.
 abstract interface class TrainingRepository {
@@ -17,6 +18,10 @@ abstract interface class TrainingRepository {
   Future<void> saveProgressionDecision(ProgressionDecision decision);
   Future<List<ProgramRevision>> programRevisions();
   Future<void> insertProgramRevision(ProgramRevision revision);
+  Future<WorkoutExecution?> execution(String id);
+  Future<List<WorkoutExecution>> executions();
+  Future<void> saveExecution(WorkoutExecution execution);
+  Future<TimingActivity?> timingActivity(String id);
   Future<List<TimingActivity>> timingActivities();
   Future<void> saveTimingActivity(TimingActivity timer);
   Future<List<BodyMassRecord>> bodyMassRecords();
@@ -48,6 +53,7 @@ final class StoredTrainingService {
       programRevisions: await repository.programRevisions(),
       bodyMass: await repository.bodyMassRecords(),
       timers: await repository.timingActivities(),
+      executions: await repository.executions(),
       programRuns: await repository.programRuns(),
       sessionPrograms: await repository.sessionPrograms(),
       programReceipts: await repository.programReceipts(),
@@ -216,8 +222,9 @@ final class StoredTrainingService {
       if (t.active &&
           t.sessionId == id &&
           (next.status == SessionStatus.finalized ||
-              canonicalJson(current.set(t.setId).toJson()) !=
-                  canonicalJson(next.set(t.setId).toJson())))
+              (!t.plan.restOnly &&
+                  canonicalJson(current.set(t.setId).toJson()) !=
+                      canonicalJson(next.set(t.setId).toJson()))))
         invalid(
           'Stop the active timing activity before changing its result or finishing the session.',
         );
@@ -241,6 +248,15 @@ final class StoredTrainingService {
     validateTimingData(await repository.timingActivities(), [
       for (final s in await repository.sessions()) s.id == id ? next : s,
     ]);
+    final executions = await repository.executions();
+    if (next.status == SessionStatus.finalized &&
+        executions.any((e) => e.sessionId == id && !e.complete))
+      invalid(
+        'Acknowledge all execution occurrences before finishing the session.',
+      );
+    validateExecutionData(executions, [
+      for (final s in await repository.sessions()) s.id == id ? next : s,
+    ], await repository.timingActivities());
     await repository.updateSession(next);
     if (next.status == SessionStatus.finalized) {
       await repository.recordFinalization(id);

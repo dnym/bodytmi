@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/7';
+const _format = 'bodytmi-logical-export/8';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -68,6 +68,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/4',
       'bodytmi-logical-export/5',
       'bodytmi-logical-export/6',
+      'bodytmi-logical-export/7',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -76,7 +77,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final timingData = input['format'] == _format;
+    final executionData = input['format'] == _format;
+    final timingData =
+        executionData || input['format'] == 'bodytmi-logical-export/7';
     final inputDataV6 =
         timingData || input['format'] == 'bodytmi-logical-export/6';
     final inputDataV5 =
@@ -99,6 +102,7 @@ final class LogicalArchiveFiles {
       if (programData) ...programKeys,
       if (massData) 'bodyMass',
       if (timingData) 'timers',
+      if (executionData) 'executions',
     });
     if (!legacy && !inputData.containsKey('progressions'))
       invalid('Logical format requires progression records.');
@@ -108,7 +112,11 @@ final class LogicalArchiveFiles {
       invalid('Logical v4 requires body-mass records.');
     if (timingData && !inputData.containsKey('timers'))
       invalid('Logical v7 requires timing records.');
+    if (executionData && !inputData.containsKey('executions'))
+      invalid('Logical v8 requires execution records.');
     final archive = TrainingArchive.fromJson(inputData);
+    if (!executionData && archive.timers.any((t) => t.plan.restOnly))
+      invalid('Rest-only timing requires logical v8.');
     if (!inputDataV5 &&
         archive.revisions.any(
           (r) => r.definition.slots.any((s) => s.bodyMass != null),
@@ -123,6 +131,7 @@ final class LogicalArchiveFiles {
     if (legacy) data.remove('progressions');
     if (!massData) data.remove('bodyMass');
     if (!timingData) data.remove('timers');
+    if (!executionData) data.remove('executions');
     if (!programData) for (final key in programKeys) data.remove(key);
     if (_checksum({
           'format': input['format'],
@@ -141,11 +150,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV7.values) {
+          for (final ddl in schemaV8.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 7');
+          db.execute('PRAGMA user_version = 8');
           for (final revision in archive.revisions) {
             db.execute(
               'INSERT INTO revisions (template_id, number, snapshot) VALUES (?, ?, ?)',
@@ -213,6 +222,12 @@ final class LogicalArchiveFiles {
             db.execute(
               'INSERT INTO timing_activities(id,session_id,set_id,snapshot) VALUES (?,?,?,?)',
               [t.id, t.sessionId, t.setId, canonicalJson(t.toJson())],
+            );
+          }
+          for (final e in archive.executions) {
+            db.execute(
+              'INSERT INTO workout_executions(id,session_id,snapshot) VALUES (?,?,?)',
+              [e.id, e.sessionId, canonicalJson(e.toJson())],
             );
           }
           db.execute('COMMIT');

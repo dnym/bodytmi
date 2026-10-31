@@ -33,7 +33,9 @@ Future<void> main(List<String> arguments) async {
           'programs':
               'program publish pins workout revisions; run create permits multiple active runs. run start selects runId; store finish advances its bound occurrence once. Use run show/list for cursor and currentSessionId.',
           'timing':
-              'timer start creates a paused per-set clock; timer run uses a foreground monotonic clock. Optional stream:true emits NDJSON cue envelopes before the final response. Ctrl-C pauses; unexpected interruption requires explicit timer recover (freeze/adjust). Expiry never logs actuals: timer confirm requires expectedSessionVersion and explicit result review. Scoped windows, workout traversal, tempo and audio are pending.',
+              'timer start creates a paused per-set clock; timer rest times an authored rest occurrence. timer run uses a foreground monotonic clock. Optional stream:true emits NDJSON cue envelopes before the final response. Ctrl-C pauses; unexpected interruption requires explicit timer recover (freeze/adjust). Effort expiry never logs actuals: timer confirm requires expectedSessionVersion and explicit result review. Scoped windows, tempo and audio are pending.',
+          'execution':
+              'execution start/show/list/time/complete/confirm/advance/skip/run traverse finite effort/rest occurrences. Completion or timing review prepares the next authored rest. run advances a rest boundary; timed efforts require explicit review. Actions require execution/session versions and stable requestId; corrections never replay cursor advancement. Scoped windows are not yet supported.',
         }),
       );
       return;

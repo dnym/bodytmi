@@ -21,6 +21,7 @@ final class TimingPlan {
     this.restMilliseconds,
     this.overrun,
     this.nearEndMilliseconds,
+    this.restOnly,
   );
   factory TimingPlan.fromJson(Object? input) {
     final j = jsonObject(input, 'timing plan');
@@ -30,13 +31,21 @@ final class TimingPlan {
       'restMilliseconds',
       'overrun',
       'nearEndMilliseconds',
+      'restOnly',
     });
+    final restOnly = j['restOnly'] ?? false;
+    if (restOnly is! bool) invalid('restOnly must be boolean.');
     final prep = timingInt(
       {...j, 'preparationMilliseconds': j['preparationMilliseconds'] ?? 0},
       'preparationMilliseconds',
       max: 86400000,
     );
-    final effort = timingInt(j, 'effortMilliseconds', min: 1, max: 86400000);
+    final effort = timingInt(
+      j,
+      'effortMilliseconds',
+      min: restOnly ? 0 : 1,
+      max: 86400000,
+    );
     final rest = timingInt(
       {...j, 'restMilliseconds': j['restMilliseconds'] ?? 0},
       'restMilliseconds',
@@ -48,8 +57,16 @@ final class TimingPlan {
     final near = j.containsKey('nearEndMilliseconds')
         ? timingInt(j, 'nearEndMilliseconds', min: 1, max: effort - 1)
         : null;
-    return TimingPlan._(prep, effort, rest, overrun as String, near);
+    if (restOnly &&
+        (prep != 0 ||
+            effort != 0 ||
+            rest <= 0 ||
+            overrun != 'stop' ||
+            near != null))
+      invalid('A rest-only plan needs only a positive rest duration.');
+    return TimingPlan._(prep, effort, rest, overrun as String, near, restOnly);
   }
+  final bool restOnly;
   final int preparationMilliseconds, effortMilliseconds, restMilliseconds;
   final String overrun;
   final int? nearEndMilliseconds;
@@ -59,6 +76,7 @@ final class TimingPlan {
     'restMilliseconds': restMilliseconds,
     'overrun': overrun,
     if (nearEndMilliseconds != null) 'nearEndMilliseconds': nearEndMilliseconds,
+    if (restOnly) 'restOnly': true,
   };
 }
 
@@ -133,13 +151,17 @@ final class TimingActivity {
     'checkpointAt': at.toUtc().toIso8601String(),
     'version': 1,
     'status': 'paused',
-    'phase': plan.preparationMilliseconds > 0 ? 'preparation' : 'effort',
+    'phase': plan.restOnly
+        ? 'rest'
+        : plan.preparationMilliseconds > 0
+        ? 'preparation'
+        : 'effort',
     'phaseElapsedMilliseconds': 0,
     'effortElapsedMilliseconds': 0,
     'elapsedMilliseconds': 0,
     'ownerId': null,
     'ownerElapsedMilliseconds': 0,
-    'termination': null,
+    'termination': plan.restOnly ? 'rest' : null,
     'confirmation': null,
   });
   factory TimingActivity.fromJson(Object? input) {
@@ -176,6 +198,7 @@ final class TimingActivity {
           'awaitingConfirmation',
           'confirmed',
           'discarded',
+          'completed',
         }.contains(j['status']) ||
         !{'preparation', 'effort', 'rest', 'done'}.contains(j['phase']))
       invalid('Invalid timing state.');
@@ -186,7 +209,15 @@ final class TimingActivity {
     if (j['ownerId'] != null) identifier(j, 'ownerId');
     final p = TimingPlan.fromJson(j['plan']);
     final active = {'paused', 'running'}.contains(j['status']);
-    if (active == (j['phase'] == 'done') ||
+    if ((p.restOnly &&
+            (j['termination'] != 'rest' ||
+                effort != 0 ||
+                !{'rest', 'done'}.contains(j['phase']) ||
+                (!active &&
+                    !{'completed', 'discarded'}.contains(j['status'])))) ||
+        (!p.restOnly &&
+            (j['status'] == 'completed' || j['termination'] == 'rest')) ||
+        active == (j['phase'] == 'done') ||
         (j['status'] == 'running' && j['ownerId'] == null) ||
         (p.overrun == 'stop' && effort > p.effortMilliseconds) ||
         (j['termination'] != null &&
@@ -195,6 +226,7 @@ final class TimingActivity {
               'early',
               'overrun',
               'no-effort',
+              'rest',
             }.contains(j['termination'])) ||
         (j['phase'] == 'preparation' &&
             (phase >= p.preparationMilliseconds ||
@@ -218,7 +250,7 @@ final class TimingActivity {
                 total >
                     p.preparationMilliseconds + effort + p.restMilliseconds)) ||
         ((j['termination'] == 'no-effort') !=
-            (j['termination'] != null && effort == 0)) ||
+            (j['termination'] != null && effort == 0 && !p.restOnly)) ||
         (j['termination'] == 'target' && effort != p.effortMilliseconds) ||
         (j['termination'] == 'early' &&
             (effort <= 0 || effort >= p.effortMilliseconds)) ||
@@ -406,7 +438,9 @@ final class TimingActivity {
       'elapsedMilliseconds': total,
       'termination': end,
       'ownerElapsedMilliseconds': cumulative,
-      'status': currentPhase == 'done' ? 'awaitingConfirmation' : 'running',
+      'status': currentPhase == 'done'
+          ? (p.restOnly ? 'completed' : 'awaitingConfirmation')
+          : 'running',
     }, at);
     return TimingAdvance(next, List.unmodifiable(cues));
   }
@@ -447,7 +481,11 @@ final class TimingActivity {
       'phase': 'done',
       'phaseElapsedMilliseconds': 0,
       'termination': end,
-      'status': discard ? 'discarded' : 'awaitingConfirmation',
+      'status': discard
+          ? 'discarded'
+          : plan.restOnly
+          ? 'completed'
+          : 'awaitingConfirmation',
     }, at);
   }
 

@@ -1,14 +1,13 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
+import 'execution_service.dart';
 import 'training_repository.dart';
 
 final class TimingService {
   const TimingService(this.repository);
   final TrainingRepository repository;
   Future<TimingActivity> show(String id) async =>
-      (await repository.timingActivities())
-          .where((t) => t.id == id)
-          .firstOrNull ??
+      await repository.timingActivity(id) ??
       (throw const BodyTmiException('not_found', 'Timing activity not found.'));
   Future<TimingActivity> start(
     String id,
@@ -18,6 +17,8 @@ final class TimingService {
     TimingPlan plan,
     DateTime at,
   ) => repository.transaction(() async {
+    if (plan.restOnly)
+      invalid('Use the rest timing operation for a rest occurrence.');
     final next = TimingActivity.create(
       id: id,
       sessionId: sessionId,
@@ -51,6 +52,63 @@ final class TimingService {
       invalid(
         'Timing needs a planned duration metric in an active session and a valid start time.',
       );
+    validateExecutionData(
+      await repository.executions(),
+      await repository.sessions(),
+      [...all, next],
+    );
+    await repository.saveTimingActivity(next);
+    return next;
+  });
+  Future<TimingActivity> startRest(
+    String id,
+    String sessionId,
+    String occurrenceId,
+    DateTime at,
+  ) => repository.transaction(() async {
+    final s = await StoredTrainingService(repository).session(sessionId);
+    final occurrence = s.revision.definition.plan
+        .occurrences()
+        .where((o) => o.id == occurrenceId)
+        .firstOrNull;
+    if (occurrence?.activity is! Rest ||
+        _insideWindow(s, occurrenceId) ||
+        s.status != SessionStatus.active ||
+        at.isBefore(s.startedAt))
+      invalid(
+        'Rest timing requires an unscoped rest occurrence in an active session.',
+      );
+    final rest = occurrence!.activity as Rest;
+    final plan = TimingPlan.fromJson({
+      'restOnly': true,
+      'effortMilliseconds': 0,
+      'restMilliseconds': rest.durationSeconds * 1000,
+    });
+    final all = await repository.timingActivities();
+    final existing = all.where((t) => t.id == id).firstOrNull;
+    if (existing != null) {
+      if (existing.sessionId != sessionId ||
+          existing.setId != occurrenceId ||
+          !existing.plan.restOnly ||
+          existing.toJson()['createdAt'] != at.toUtc().toIso8601String())
+        _conflict();
+      return existing;
+    }
+    if (all.any((t) => t.active))
+      _conflict('Another timing activity is active.');
+    final next = TimingActivity.create(
+      id: id,
+      sessionId: sessionId,
+      setId: occurrenceId,
+      metric: 'duration',
+      plan: plan,
+      at: at,
+    );
+    validateExecutionData(
+      await repository.executions(),
+      await repository.sessions(),
+      [...all, next],
+    );
     await repository.saveTimingActivity(next);
     return next;
   });
@@ -206,6 +264,24 @@ void validateTimingData(
     if (t.active) active++;
     final s = bySession[t.sessionId];
     if (s == null) invalid('Timing session is missing.');
+    if (t.plan.restOnly) {
+      final occurrences = s.revision.definition.plan.occurrences().where(
+        (o) => o.id == t.setId,
+      );
+      if (occurrences.length != 1 ||
+          occurrences.single.activity is! Rest ||
+          _insideWindow(s, t.setId) ||
+          (occurrences.single.activity as Rest).durationSeconds * 1000 !=
+              t.plan.restMilliseconds ||
+          t.metric != 'duration' ||
+          parseInstant(
+            t.toJson()['createdAt'],
+            'createdAt',
+          ).isBefore(s.startedAt) ||
+          (t.active && s.status != SessionStatus.active))
+        invalid('Rest clock context is inconsistent.');
+      continue;
+    }
     final set = s.set(t.setId);
     if (_insideWindow(s, t.setId))
       invalid('Timing records for scoped windows are not supported yet.');

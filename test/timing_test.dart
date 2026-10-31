@@ -440,7 +440,7 @@ void timingTests() {
         instant(1),
       );
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 7);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 8);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
@@ -491,7 +491,9 @@ void timingTests() {
       final doc = <String, Object?>{
         'format': 'bodytmi-logical-export/6',
         'applicationVersion': '0.1.0',
-        'data': Map<String, Object?>.from(original)..remove('timers'),
+        'data': Map<String, Object?>.from(original)
+          ..remove('timers')
+          ..remove('executions'),
       };
       doc['sha256'] = sha256
           .convert(utf8.encode(canonicalJson(doc)))
@@ -513,6 +515,7 @@ void timingTests() {
       await store.close();
       final raw = sqlite3.open('$dir/db.sqlite');
       try {
+        raw.execute('DROP TABLE workout_executions');
         raw.execute('DROP TABLE timing_activities');
         raw.execute('PRAGMA user_version = 6');
       } finally {

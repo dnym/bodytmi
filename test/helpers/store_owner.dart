@@ -7,7 +7,31 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 2 &&
+    if (args.length == 2 && args[1].startsWith('execution-step-')) {
+      Future<void> action() async {
+        await ExecutionService(store).step(
+          'execution',
+          1,
+          1,
+          'crash-step',
+          DateTime.utc(2026, 10, 1, 12),
+          action: 'complete',
+          acceptSuggested: true,
+        );
+      }
+
+      if (args[1].endsWith('rollback'))
+        await store.transaction(() async {
+          await action();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      else {
+        await store.transaction(action);
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 2 &&
         (args[1].startsWith('clock-') ||
             args[1].startsWith('confirm-timing-'))) {
       Future<void> action() async {

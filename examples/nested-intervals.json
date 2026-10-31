@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "nested-intervals",
+    "name": "Nested walk and run intervals",
+    "slots": [
+      {"id": "walk", "exercise": "walking", "implementation": "outdoors", "targets": {"duration": {"value": "30", "unit": "s"}}},
+      {"id": "run", "exercise": "running", "implementation": "outdoors", "targets": {"duration": {"value": "30", "unit": "s"}}}
+    ],
+    "plan": {
+      "id": "outer", "type": "repeat", "count": 3, "restBetweenSeconds": 120,
+      "child": {"id": "inner", "type": "repeat", "count": 12,
+        "child": {"id": "pair", "type": "sequence", "children": [
+          {"id": "walk", "type": "effort", "slot": "walk"},
+          {"id": "run", "type": "effort", "slot": "run"}
+        ]}
+      }
+    }
+  }
+}

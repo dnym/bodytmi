@@ -16,3 +16,4 @@ export 'src/program_service.dart';
 export 'src/stored_body_mass_service.dart';
 export 'src/effective_mass_service.dart';
 export 'src/timing_service.dart';
+export 'src/execution_service.dart';

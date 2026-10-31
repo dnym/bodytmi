@@ -1,9 +1,20 @@
+import 'execution_runner.dart';
 import 'timing_runner.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
 
 const storedCommandNames = [
+  'execution start',
+  'execution show',
+  'execution list',
+  'execution time',
+  'execution advance',
+  'execution complete',
+  'execution confirm',
+  'execution skip',
+  'execution run',
+  'timer rest',
   'timer start',
   'timer show',
   'timer list',
@@ -63,6 +74,57 @@ Future<Map<String, Object?>> executeStored(
   if (request['schemaVersion'] != 1)
     invalid('Request schemaVersion must be 1.');
   final fields = switch (command) {
+    'execution start' => {'id', 'sessionId', 'at'},
+    'execution show' => {'id'},
+    'execution list' => <String>{},
+    'execution time' => {'id', 'expectedVersion', 'at', 'metric', 'plan'},
+    'execution advance' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'requestId',
+      'at',
+    },
+    'execution complete' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'requestId',
+      'at',
+      'actuals',
+      'acceptSuggested',
+    },
+    'execution confirm' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'requestId',
+      'at',
+      'timerId',
+      'timerVersion',
+      'actuals',
+      'acceptSuggested',
+    },
+    'execution skip' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'requestId',
+      'at',
+      'confirm',
+    },
+    'execution run' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'requestId',
+      'at',
+      'metric',
+      'plan',
+      'runForMilliseconds',
+      'stream',
+    },
+    'timer rest' => {'id', 'sessionId', 'occurrenceId', 'at'},
     'timer start' => {'id', 'sessionId', 'setId', 'metric', 'plan', 'at'},
     'timer show' => {'id'},
     'timer list' => <String>{},
@@ -279,7 +341,84 @@ Future<Map<String, Object?>> executeStored(
 
     Object? data;
     final timing = TimingService(store);
+    final execution = ExecutionService(store);
     switch (command) {
+      case 'execution start':
+        final e = await execution.start(
+          identifier(request, 'id'),
+          identifier(request, 'sessionId'),
+          parseInstant(request['at'], 'at'),
+        );
+        data = await execution.view(e.id);
+      case 'execution show':
+        data = await execution.view(identifier(request, 'id'));
+      case 'execution list':
+        final all = await store.executions();
+        all.sort((a, b) => a.id.compareTo(b.id));
+        data = [for (final e in all) await execution.view(e.id)];
+      case 'execution time':
+        data = (await execution.time(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          parseInstant(request['at'], 'at'),
+          metric: request.containsKey('metric')
+              ? identifier(request, 'metric')
+              : null,
+          plan: request.containsKey('plan')
+              ? TimingPlan.fromJson(request['plan'])
+              : null,
+        )).toJson();
+      case 'execution advance':
+      case 'execution complete':
+      case 'execution confirm':
+      case 'execution skip':
+        final e = await execution.step(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          integer('expectedSessionVersion'),
+          identifier(request, 'requestId'),
+          parseInstant(request['at'], 'at'),
+          action: command.substring(10),
+          actuals: metricsFromJson(request['actuals'] ?? <String, Object?>{}),
+          acceptSuggested: flag('acceptSuggested'),
+          confirm: flag('confirm'),
+          timerId: request.containsKey('timerId')
+              ? identifier(request, 'timerId')
+              : null,
+          timerVersion: request.containsKey('timerVersion')
+              ? integer('timerVersion')
+              : null,
+        );
+        data = await execution.view(e.id);
+      case 'execution run':
+        final limit = request.containsKey('runForMilliseconds')
+            ? integer('runForMilliseconds')
+            : null;
+        if (limit != null && limit > 86400000)
+          invalid('Foreground run limit exceeds 24 hours.');
+        data = await runExecution(
+          store,
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          integer('expectedSessionVersion'),
+          identifier(request, 'requestId'),
+          parseInstant(request['at'], 'at'),
+          metric: request.containsKey('metric')
+              ? identifier(request, 'metric')
+              : null,
+          plan: request.containsKey('plan')
+              ? TimingPlan.fromJson(request['plan'])
+              : null,
+          runForMilliseconds: limit,
+          stream: flag('stream'),
+        );
+      case 'timer rest':
+        data = (await timing.startRest(
+          identifier(request, 'id'),
+          identifier(request, 'sessionId'),
+          requiredString(request, 'occurrenceId'),
+          parseInstant(request['at'], 'at'),
+        )).toJson();
       case 'timer start':
         data = (await timing.start(
           identifier(request, 'id'),
