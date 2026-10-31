@@ -1,5 +1,6 @@
 import 'execution_runner.dart';
 import 'timing_runner.dart';
+import 'analytics_options.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
@@ -32,6 +33,8 @@ const storedCommandNames = [
   'store revision',
   'store start',
   'store show',
+  'store summary',
+  'store series',
   'store mass-status',
   'store effective-load',
   'store complete',
@@ -176,6 +179,15 @@ Future<Map<String, Object?>> executeStored(
       'bodyMassOverrides',
     },
     'store show' => {'id'},
+    'store summary' => {'id', 'includeWarmups', 'sumMetrics'},
+    'store series' => {
+      'context',
+      'metric',
+      'from',
+      'until',
+      'includeWarmups',
+      'includeActive',
+    },
     'store mass-status' => {'id'},
     'store effective-load' => {'id'},
     'store complete' => {
@@ -731,6 +743,37 @@ Future<Map<String, Object?>> executeStored(
         );
       case 'store show':
         data = (await service.session(identifier(request, 'id'))).toJson();
+      case 'store summary':
+        data = const TrainingAnalytics().summary(
+          await service.session(identifier(request, 'id')),
+          includeWarmups: flag('includeWarmups'),
+          sumMetrics: analyticsSums(request),
+        );
+      case 'store series':
+        data = await store.transaction(
+          () async => const TrainingAnalytics().series(
+            await store.sessions(),
+            runBySession: {
+              for (final b in await store.sessionPrograms())
+                b.sessionId: b.runId,
+            },
+            context: jsonObject(
+              request['context'] ?? <String, Object?>{},
+              'context',
+            ),
+            metric: request.containsKey('metric')
+                ? identifier(request, 'metric')
+                : null,
+            from: request.containsKey('from')
+                ? parseInstant(request['from'], 'from')
+                : null,
+            until: request.containsKey('until')
+                ? parseInstant(request['until'], 'until')
+                : null,
+            includeWarmups: flag('includeWarmups'),
+            includeActive: flag('includeActive'),
+          ),
+        );
       case 'store history':
         data = [for (final session in await store.sessions()) session.toJson()];
       case 'store complete':

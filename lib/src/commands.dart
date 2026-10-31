@@ -1,5 +1,6 @@
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'analytics_options.dart';
 
 const commandNames = [
   'quantity normalize',
@@ -8,6 +9,8 @@ const commandNames = [
   'activity expand',
   'session start',
   'session show',
+  'session summary',
+  'history series',
   'session mass-status',
   'session effective-load',
   'session complete',
@@ -95,6 +98,43 @@ final class Commands {
       case 'session show':
         keys({'session'});
         data = sessionFromJson(request['session']).toJson();
+      case 'session summary':
+        keys({'session', 'includeWarmups', 'sumMetrics'});
+        data = const TrainingAnalytics().summary(
+          sessionFromJson(request['session']),
+          includeWarmups: _bool(request, 'includeWarmups'),
+          sumMetrics: analyticsSums(request),
+        );
+      case 'history series':
+        keys({
+          'sessions',
+          'runBySession',
+          'context',
+          'metric',
+          'from',
+          'until',
+          'includeWarmups',
+          'includeActive',
+        });
+        data = const TrainingAnalytics().series(
+          [for (final s in jsonList(request, 'sessions')) sessionFromJson(s)],
+          runBySession: analyticsBindings(request),
+          context: jsonObject(
+            request['context'] ?? <String, Object?>{},
+            'context',
+          ),
+          metric: request.containsKey('metric')
+              ? identifier(request, 'metric')
+              : null,
+          from: request.containsKey('from')
+              ? parseInstant(request['from'], 'from')
+              : null,
+          until: request.containsKey('until')
+              ? parseInstant(request['until'], 'until')
+              : null,
+          includeWarmups: _bool(request, 'includeWarmups'),
+          includeActive: _bool(request, 'includeActive'),
+        );
       case 'session complete':
         keys({'session', 'setId', 'actuals', 'acceptSuggested'});
         data = const TrainingService()

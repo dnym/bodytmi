@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "id": "strength-session-001",
+  "sumMetrics": ["reps", "duration", "distance"],
+  "includeWarmups": false
+}

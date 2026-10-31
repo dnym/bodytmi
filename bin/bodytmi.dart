@@ -32,6 +32,8 @@ Future<void> main(List<String> arguments) async {
               'Slots may configure an effectiveMass model with explicit bodyMassFraction, addedMass and assistance components. store effective-load takes database/id; session effective-load takes session. Derived suggested/confirmed-actual estimates preserve raw inputs and do not change progression.',
           'programs':
               'program publish pins workout revisions; run create permits multiple active runs. run start selects runId; store finish advances its bound occurrence once. Use run show/list for cursor and currentSessionId.',
+          'analytics':
+              'session summary takes session; store summary takes database/id. Optional sumMetrics explicitly selects raw metric sums; warmups are excluded by default. history series takes sessions and optional runBySession; store series reads database history. Series support metric, exact context, inclusive from/exclusive until, includeWarmups and includeActive. Only confirmed results appear; series retain separate slot/setup/equipment/run contexts and source versions.',
           'timing':
               'timer start creates a paused per-set clock; timer rest times an authored rest occurrence. timer run uses a foreground monotonic clock. Optional stream:true emits NDJSON cue envelopes before the final response. Ctrl-C pauses; unexpected interruption requires explicit timer recover (freeze/adjust). Effort expiry never logs actuals: timer confirm requires expectedSessionVersion and explicit result review. Optional plan.tempo defines repeating effort cues; tempoState exposes logical phase without counting achieved reps. Scoped windows and audio are pending.',
           'execution':
