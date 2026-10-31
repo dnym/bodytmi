@@ -15,5 +15,6 @@ dependencies:
   sqlite3: ^3.8.0
 dev_dependencies:
   test: ^1.31.0
+  crypto: ^3.0.8
 executables:
   bodytmi:

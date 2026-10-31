@@ -18,6 +18,8 @@ Future<void> main(List<String> arguments) async {
           'input': 'One JSON request, schemaVersion: 1, from stdin or --input.',
           'storage':
               'store commands require a database path in the JSON request. Existing commands use explicit snapshots.',
+          'backup':
+              'create requires database/destination; validate requires source; restore requires database/source/recoveryDestination/confirm:true. Backup paths are directories.',
         }),
       );
       return;

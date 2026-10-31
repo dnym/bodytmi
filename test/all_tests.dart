@@ -1,3 +1,4 @@
+import 'backup_test.dart';
 import 'storage_test.dart';
 import 'activity_test.dart';
 import 'body_mass_test.dart';
@@ -9,6 +10,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  backupTests();
   storageTests();
   quantityTests();
   activityTests();

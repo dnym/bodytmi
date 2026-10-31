@@ -12,6 +12,9 @@ const storedCommandNames = [
   'store finish',
   'store history',
   'store snapshot',
+  'backup create',
+  'backup validate',
+  'backup restore',
 ];
 
 /// Filesystem/database construction belongs to the native adapter.
@@ -37,6 +40,9 @@ Future<Map<String, Object?>> executeStored(
     'store finish' => {'id', 'expectedVersion', 'finishedAt'},
     'store history' => <String>{},
     'store snapshot' => {'destination'},
+    'backup create' => {'destination'},
+    'backup validate' => {'source'},
+    'backup restore' => {'source', 'recoveryDestination', 'confirm'},
     _ => invalid('Unknown stored command.'),
   };
   checkKeys(request, {'schemaVersion', 'database', ...fields});
@@ -53,11 +59,55 @@ Future<Map<String, Object?>> executeStored(
     return value;
   }
 
+  if (command == 'backup validate') {
+    checkKeys(request, {'schemaVersion', 'source'});
+    final prepared = await NativeBackup.prepare(
+      requiredString(request, 'source'),
+    );
+    try {
+      return {'schemaVersion': 1, 'data': prepared.manifest};
+    } finally {
+      await prepared.close();
+    }
+  }
+  if (command == 'backup restore') {
+    if (!flag('confirm'))
+      invalid('Restore replaces the profile and requires confirm:true.');
+    final recovery = requiredString(request, 'recoveryDestination');
+    final prepared = await NativeBackup.prepare(
+      requiredString(request, 'source'),
+    );
+    try {
+      await prepared.checkDestination(requiredString(request, 'database'));
+      await prepared.checkDestination(recovery);
+      final store = await TrainingStore.open(
+        requiredString(request, 'database'),
+      );
+      try {
+        await store.restore(
+          prepared,
+          recoveryDestination: recovery,
+          confirm: true,
+        );
+        return {
+          'schemaVersion': 1,
+          'data': {'restored': true, 'recoveryDestination': recovery},
+        };
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await prepared.close();
+    }
+  }
+
   final store = await TrainingStore.open(requiredString(request, 'database'));
   try {
     final service = StoredTrainingService(store);
     Object? data;
     switch (command) {
+      case 'backup create':
+        data = await store.backup(requiredString(request, 'destination'));
       case 'store publish':
         data = (await service.publish(
           WorkoutDefinition.fromJson(request['definition']),

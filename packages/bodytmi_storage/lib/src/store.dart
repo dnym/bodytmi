@@ -5,6 +5,7 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'database.dart';
+import 'native_backup.dart';
 
 /// A single native owner. Never unlink the lock file: the OS holds ownership.
 final class TrainingStore implements TrainingRepository {
@@ -13,6 +14,8 @@ final class TrainingStore implements TrainingRepository {
   final RandomAccessFile _lock;
   final String path;
   static final _owned = <String>{};
+  bool _databaseClosed = false;
+  bool _closed = false;
 
   static Future<TrainingStore> open(String path) async {
     final file = File(path).absolute;
@@ -78,12 +81,41 @@ final class TrainingStore implements TrainingRepository {
   }
 
   Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
     try {
-      await _db.close();
+      if (!_databaseClosed) await _db.close();
     } finally {
-      await _lock.close();
-      _owned.remove(path);
+      try {
+        await _lock.close();
+      } finally {
+        _owned.remove(path);
+      }
     }
+  }
+
+  Future<Map<String, Object?>> backup(String destination) {
+    if (_closed || _databaseClosed) throw StateError('Store is closed.');
+    return NativeBackup.create(path, destination);
+  }
+
+  /// Terminal operation on this handle; close() releases ownership afterwards.
+  /// Replacement is committed by SQLite, rather than renaming a set of WAL files.
+  Future<void> restore(
+    PreparedNativeBackup backup, {
+    required String recoveryDestination,
+    required bool confirm,
+    Future<void> Function(double)? onProgress,
+  }) async {
+    if (!confirm)
+      invalid('Restore replaces the profile and requires confirm:true.');
+    if (_closed || _databaseClosed) throw StateError('Store is closed.');
+    await backup.checkDestination(path);
+    await backup.checkDestination(recoveryDestination);
+    await this.backup(recoveryDestination);
+    await _db.close();
+    _databaseClosed = true;
+    await backup.restoreInto(path, onProgress: onProgress);
   }
 
   @override
