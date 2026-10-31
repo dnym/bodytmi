@@ -1,4 +1,6 @@
 import 'package:drift/drift.dart';
+import 'package:bodytmi_core/bodytmi_core.dart';
+import 'schema.dart';
 
 part 'database.g.dart';
 
@@ -24,23 +26,63 @@ class Finalizations extends Table {
   Set<Column> get primaryKey => {sessionId};
 }
 
-@DriftDatabase(tables: [Revisions, Sessions, Finalizations])
+class ProgressionDecisions extends Table {
+  TextColumn get sessionId => text().references(Sessions, #id)();
+  TextColumn get slotId => text()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {sessionId, slotId};
+}
+
+@DriftDatabase(
+  tables: [Revisions, Sessions, Finalizations, ProgressionDecisions],
+)
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (m) async {
+    onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
+      await customStatement('PRAGMA user_version = 2');
+      await validateMigration();
+    }),
+    onUpgrade: (m, from, to) async {
+      if (from != 1 || to != 2)
+        throw StateError('Unsupported database migration $from -> $to.');
+      await transaction(() async {
+        final schema = await customSelect(
+          'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
+        ).get();
+        validateSchema(schema.map((row) => row.data), 1);
+        await m.createTable(progressionDecisions);
+        // Drift also writes this after the callback. Writing it within our
+        // transaction prevents a crash leaving new DDL with the old version.
+        await customStatement('PRAGMA user_version = 2');
+        await validateMigration();
+      });
     },
-    onUpgrade: (m, from, to) async =>
-        throw StateError('Unsupported database migration $from -> $to.'),
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
       await customStatement('PRAGMA synchronous = FULL');
       await customStatement('PRAGMA journal_mode = WAL');
     },
   );
+
+  /// Called before committing schema creation/upgrade, also instrumented by the
+  /// native crash test to terminate while the real migration transaction is open.
+  Future<void> validateMigration() async {
+    final schema = await customSelect(
+      'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
+    ).get();
+    validateSchema(schema.map((row) => row.data), 2);
+    if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
+      throw const BodyTmiException(
+        'storage',
+        'Migration found inconsistent references.',
+      );
+    }
+  }
 }

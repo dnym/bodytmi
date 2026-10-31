@@ -139,7 +139,7 @@ void backupTests() {
         await service.edit(s.id, s.contentVersion, finished);
         await store.backup('${dir.path}/valid');
         final modifications = <String, void Function(Database)>{
-          'future-schema': (db) => db.userVersion = 2,
+          'future-schema': (db) => db.userVersion = 99,
           'trigger': (db) => db.execute(
             'CREATE TRIGGER unexpected AFTER INSERT ON sessions BEGIN DELETE FROM revisions; END',
           ),

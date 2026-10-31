@@ -1,6 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'training_service.dart';
 import 'training_archive.dart';
+import 'progression_decision.dart';
 
 /// One repository transaction is the durability boundary of each operation.
 abstract interface class TrainingRepository {
@@ -8,6 +9,8 @@ abstract interface class TrainingRepository {
   Future<WorkoutRevision?> revision(String templateId, [int? number]);
   Future<List<WorkoutRevision>> revisions();
   Future<List<String>> finalizationIds();
+  Future<List<ProgressionDecision>> progressionDecisions();
+  Future<void> saveProgressionDecision(ProgressionDecision decision);
   Future<void> insertRevision(WorkoutRevision revision);
   Future<TrainingSession?> session(String id);
   Future<List<TrainingSession>> sessions();
@@ -25,6 +28,7 @@ final class StoredTrainingService {
       revisions: await repository.revisions(),
       sessions: await repository.sessions(),
       finalizations: await repository.finalizationIds(),
+      progressions: await repository.progressionDecisions(),
     ),
   );
 
@@ -60,11 +64,70 @@ final class StoredTrainingService {
         _conflict();
       return existing;
     }
-    final next = const TrainingService().start(
+    var next = const TrainingService().start(
       sessionId: id,
       revision: prescription,
       startedAt: startedAt,
       history: await repository.sessions(),
+    );
+    final decisions = (await repository.progressionDecisions()).where(
+      (d) =>
+          d.acceptedAt != null &&
+          !d.acceptedAt!.isAfter(startedAt) &&
+          d.session.startedAt.isBefore(startedAt),
+    );
+    final sets = <TrainingSet>[];
+    final bySlot = {
+      for (final slot in prescription.definition.slots)
+        slot.id: latestApplication(decisions, prescription.definition.id, slot),
+    };
+    final workingCounts = <String, int>{};
+    for (final set in next.sets.where((s) => s.role == 'work')) {
+      workingCounts.update(set.slotId, (n) => n + 1, ifAbsent: () => 1);
+    }
+    for (final set in next.sets) {
+      final applied = set.role == 'work' ? bySlot[set.slotId] : null;
+      if (applied == null) {
+        sets.add(set);
+        continue;
+      }
+      final rule = DoubleProgressionRule.fromJson(applied.rule);
+      final vector = applied.proposal.nextSets;
+      final count = workingCounts[set.slotId];
+      if (vector.length != count) _conflict();
+      final slot = prescription.definition.slot(set.slotId);
+      for (final metric in [rule.objective, rule.lever]) {
+        if (set.suggested[metric]?.dimension !=
+            vector[set.ordinal][metric]!.dimension)
+          _conflict();
+        if (slot.targets[metric]!.compareTo(applied.slot.targets[metric]!) != 0)
+          _conflict();
+      }
+      final suggested = {
+        ...set.suggested,
+        rule.objective: vector[set.ordinal][rule.objective]!,
+        rule.lever: vector[set.ordinal][rule.lever]!,
+      };
+      sets.add(
+        TrainingSet(
+          id: set.id,
+          slotId: set.slotId,
+          role: set.role,
+          ordinal: set.ordinal,
+          suggested: suggested,
+          sources: {
+            for (final e in set.sources.entries)
+              if (e.key != rule.objective && e.key != rule.lever)
+                e.key: e.value,
+          },
+        ),
+      );
+    }
+    next = TrainingSession(
+      id: next.id,
+      revision: next.revision,
+      startedAt: next.startedAt,
+      sets: sets,
     );
     await repository.insertSession(next);
     return next;

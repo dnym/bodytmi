@@ -18,6 +18,9 @@ const storedCommandNames = [
   'archive export',
   'archive validate',
   'archive restore',
+  'progression propose',
+  'progression show',
+  'progression accept',
 ];
 
 /// Filesystem/database construction belongs to the native adapter.
@@ -49,6 +52,14 @@ Future<Map<String, Object?>> executeStored(
     'archive export' => {'destination'},
     'archive validate' => {'source'},
     'archive restore' => {'source', 'recoveryDestination', 'confirm'},
+    'progression propose' => {'sessionId', 'slotId', 'rule'},
+    'progression show' => {'sessionId', 'slotId'},
+    'progression accept' => {
+      'sessionId',
+      'slotId',
+      'expectedVersion',
+      'acceptedAt',
+    },
     _ => invalid('Unknown stored command.'),
   };
   checkKeys(request, {'schemaVersion', 'database', ...fields});
@@ -156,6 +167,35 @@ Future<Map<String, Object?>> executeStored(
     final service = StoredTrainingService(store);
     Object? data;
     switch (command) {
+      case 'progression propose':
+      case 'progression show':
+      case 'progression accept':
+        final progression = StoredProgressionService(store);
+        final sessionId = identifier(request, 'sessionId');
+        final slotId = identifier(request, 'slotId');
+        final decision = switch (command) {
+          'progression propose' => await progression.propose(
+            sessionId,
+            slotId,
+            jsonObject(request['rule'], 'rule'),
+          ),
+          'progression accept' => await progression.accept(
+            sessionId,
+            slotId,
+            integer('expectedVersion'),
+            parseInstant(request['acceptedAt'], 'acceptedAt'),
+          ),
+          _ => await progression.decision(sessionId, slotId),
+        };
+        final changed = await progression.stale(decision);
+        data = {
+          'id': decision.id,
+          'applied': decision.acceptedAt != null,
+          'sequence': decision.sequence,
+          'inputsChanged': changed,
+          'stale': decision.acceptedAt == null && changed,
+          ...decision.toJson(),
+        };
       case 'archive export':
         data = await LogicalArchiveFiles.export(
           await store.archive(),

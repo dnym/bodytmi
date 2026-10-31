@@ -1,7 +1,7 @@
-import 'dart:convert';
-
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'session_codec.dart';
+import 'canonical_json.dart';
+import 'progression_decision.dart';
 
 /// Full logical representation of the records currently persisted by training.
 /// This is a profile replacement contract, not a neutral external-history import.
@@ -10,6 +10,7 @@ final class TrainingArchive {
     required List<WorkoutRevision> revisions,
     required List<TrainingSession> sessions,
     required List<String> finalizations,
+    List<ProgressionDecision> progressions = const [],
   }) : revisions = List<WorkoutRevision>.unmodifiable(
          <WorkoutRevision>[...revisions]..sort((a, b) {
            final id = a.definition.id.compareTo(b.definition.id);
@@ -19,13 +20,17 @@ final class TrainingArchive {
        sessions = List<TrainingSession>.unmodifiable(
          <TrainingSession>[...sessions]..sort((a, b) => a.id.compareTo(b.id)),
        ),
-       finalizations = List<String>.unmodifiable([...finalizations]..sort()) {
+       finalizations = List<String>.unmodifiable([...finalizations]..sort()),
+       progressions = List<ProgressionDecision>.unmodifiable(
+         <ProgressionDecision>[...progressions]
+           ..sort((a, b) => a.id.compareTo(b.id)),
+       ) {
     _validate();
   }
 
   factory TrainingArchive.fromJson(Object? input) {
     final json = jsonObject(input, 'logical training data');
-    checkKeys(json, {'revisions', 'sessions', 'finalizations'});
+    checkKeys(json, {'revisions', 'sessions', 'finalizations', 'progressions'});
     return TrainingArchive(
       revisions: [
         for (final item in jsonList(json, 'revisions'))
@@ -38,26 +43,37 @@ final class TrainingArchive {
         for (final item in jsonList(json, 'finalizations'))
           identifier({'id': item}, 'id'),
       ],
+      progressions: [
+        for (final item
+            in (!json.containsKey('progressions')
+                ? <Object?>[]
+                : jsonList(json, 'progressions')))
+          ProgressionDecision.fromJson(item),
+      ],
     );
   }
 
   final List<WorkoutRevision> revisions;
   final List<TrainingSession> sessions;
   final List<String> finalizations;
+  final List<ProgressionDecision> progressions;
 
   Map<String, Object?> toJson() => {
     'revisions': [for (final r in revisions) r.toJson()],
     'sessions': [for (final s in sessions) s.toJson()],
     'finalizations': finalizations,
+    'progressions': [for (final d in progressions) d.toJson()],
   };
 
   Map<String, Object?> get summary => {
     'revisions': revisions.length,
     'sessions': sessions.length,
     'finalizations': finalizations.length,
+    'progressions': progressions.length,
   };
 
   void _validate() {
+    validateProgressionDecisions(progressions, sessions);
     final byRevision = <String, WorkoutRevision>{};
     final numbers = <String, int>{};
     for (final revision in revisions) {
@@ -110,21 +126,4 @@ final class TrainingArchive {
       }
     }
   }
-}
-
-/// Deterministic v1 encoding: object keys sorted by Dart String.compareTo,
-/// arrays retain their order, and scalar encoding follows Dart jsonEncode.
-/// TrainingArchive sorts its record collections; set/activity order is semantic.
-String canonicalJson(Object? value) {
-  Object? ordered(Object? item) {
-    if (item is Map<String, Object?>) {
-      final keys = item.keys.toList()..sort();
-      return {for (final key in keys) key: ordered(item[key])};
-    }
-    if (item is List<Object?>)
-      return [for (final child in item) ordered(child)];
-    return item;
-  }
-
-  return jsonEncode(ordered(value));
 }

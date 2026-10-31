@@ -4,9 +4,9 @@ import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'database.dart';
+import 'database.dart' hide ProgressionDecision;
 import 'native_backup.dart';
-import 'schema_v1.dart';
+import 'schema.dart';
 
 /// A single native owner. Never unlink the lock file: the OS holds ownership.
 final class TrainingStore implements TrainingRepository {
@@ -45,7 +45,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 1) {
+            if (native.userVersion > 2) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -106,10 +106,11 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchemaV1(schema.map((row) => row.data));
+    validateSchema(schema.map((row) => row.data), 2);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
-           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0) AS bytes
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM progression_decisions), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
       invalid('Logical export exceeds the 64 MiB resource limit.');
@@ -157,6 +158,52 @@ final class TrainingStore implements TrainingRepository {
   Future<List<String>> finalizationIds() async => [
     for (final row in await _db.select(_db.finalizations).get()) row.sessionId,
   ];
+  @override
+  Future<List<ProgressionDecision>> progressionDecisions() async {
+    final result = <ProgressionDecision>[];
+    for (final row in await _db.select(_db.progressionDecisions).get()) {
+      final decision = ProgressionDecision.fromJson(jsonDecode(row.snapshot));
+      if (decision.session.id != row.sessionId || decision.slotId != row.slotId)
+        invalid('Stored progression identity is inconsistent.');
+      result.add(decision);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveProgressionDecision(ProgressionDecision decision) async {
+    final snapshot = canonicalJson(decision.toJson());
+    if (utf8.encode(snapshot).length > 8 * 1024 * 1024)
+      invalid('Progression decision exceeds the 8 MiB resource limit.');
+    final old =
+        await (_db.select(_db.progressionDecisions)..where(
+              (r) =>
+                  r.sessionId.equals(decision.session.id) &
+                  r.slotId.equals(decision.slotId),
+            ))
+            .getSingleOrNull();
+    if (old != null) {
+      final previous = ProgressionDecision.fromJson(jsonDecode(old.snapshot));
+      if (previous.acceptedAt != null &&
+          canonicalJson(previous.toJson()) !=
+              canonicalJson(decision.toJson())) {
+        throw const BodyTmiException(
+          'conflict',
+          'An applied progression receipt is immutable.',
+        );
+      }
+    }
+    await _db
+        .into(_db.progressionDecisions)
+        .insertOnConflictUpdate(
+          ProgressionDecisionsCompanion.insert(
+            sessionId: decision.session.id,
+            slotId: decision.slotId,
+            snapshot: snapshot,
+          ),
+        );
+  }
+
   @override
   Future<WorkoutRevision?> revision(String templateId, [int? number]) async {
     final query = _db.select(_db.revisions)

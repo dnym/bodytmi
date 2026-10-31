@@ -1,3 +1,4 @@
+import 'stored_progression_test.dart';
 import 'logical_archive_test.dart';
 import 'backup_test.dart';
 import 'storage_test.dart';
@@ -11,6 +12,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  storedProgressionTests();
   logicalArchiveTests();
   backupTests();
   storageTests();

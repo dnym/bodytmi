@@ -7,7 +7,25 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 4 && args[1] == 'restore') {
+    if (args.length == 5 && args[1].startsWith('accept-')) {
+      Future<void> accept() async {
+        await StoredProgressionService(
+          store,
+        ).accept(args[2], args[3], 1, DateTime.parse(args[4]));
+      }
+
+      if (args[1] == 'accept-rollback') {
+        await store.transaction(() async {
+          await accept();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await accept();
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 4 && args[1] == 'restore') {
       final prepared = await NativeBackup.prepare(args[2]);
       try {
         await store.restore(

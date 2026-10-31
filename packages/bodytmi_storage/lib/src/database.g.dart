@@ -645,12 +645,286 @@ class FinalizationsCompanion extends UpdateCompanion<Finalization> {
   }
 }
 
+class $ProgressionDecisionsTable extends ProgressionDecisions
+    with TableInfo<$ProgressionDecisionsTable, ProgressionDecision> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProgressionDecisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sessionIdMeta = const VerificationMeta(
+    'sessionId',
+  );
+  @override
+  late final GeneratedColumn<String> sessionId = GeneratedColumn<String>(
+    'session_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES sessions (id)',
+    ),
+  );
+  static const VerificationMeta _slotIdMeta = const VerificationMeta('slotId');
+  @override
+  late final GeneratedColumn<String> slotId = GeneratedColumn<String>(
+    'slot_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [sessionId, slotId, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'progression_decisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ProgressionDecision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('session_id')) {
+      context.handle(
+        _sessionIdMeta,
+        sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sessionIdMeta);
+    }
+    if (data.containsKey('slot_id')) {
+      context.handle(
+        _slotIdMeta,
+        slotId.isAcceptableOrUnknown(data['slot_id']!, _slotIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_slotIdMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sessionId, slotId};
+  @override
+  ProgressionDecision map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProgressionDecision(
+      sessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}session_id'],
+      )!,
+      slotId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}slot_id'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $ProgressionDecisionsTable createAlias(String alias) {
+    return $ProgressionDecisionsTable(attachedDatabase, alias);
+  }
+}
+
+class ProgressionDecision extends DataClass
+    implements Insertable<ProgressionDecision> {
+  final String sessionId;
+  final String slotId;
+  final String snapshot;
+  const ProgressionDecision({
+    required this.sessionId,
+    required this.slotId,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['session_id'] = Variable<String>(sessionId);
+    map['slot_id'] = Variable<String>(slotId);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  ProgressionDecisionsCompanion toCompanion(bool nullToAbsent) {
+    return ProgressionDecisionsCompanion(
+      sessionId: Value(sessionId),
+      slotId: Value(slotId),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory ProgressionDecision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProgressionDecision(
+      sessionId: serializer.fromJson<String>(json['sessionId']),
+      slotId: serializer.fromJson<String>(json['slotId']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sessionId': serializer.toJson<String>(sessionId),
+      'slotId': serializer.toJson<String>(slotId),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  ProgressionDecision copyWith({
+    String? sessionId,
+    String? slotId,
+    String? snapshot,
+  }) => ProgressionDecision(
+    sessionId: sessionId ?? this.sessionId,
+    slotId: slotId ?? this.slotId,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  ProgressionDecision copyWithCompanion(ProgressionDecisionsCompanion data) {
+    return ProgressionDecision(
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      slotId: data.slotId.present ? data.slotId.value : this.slotId,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProgressionDecision(')
+          ..write('sessionId: $sessionId, ')
+          ..write('slotId: $slotId, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(sessionId, slotId, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProgressionDecision &&
+          other.sessionId == this.sessionId &&
+          other.slotId == this.slotId &&
+          other.snapshot == this.snapshot);
+}
+
+class ProgressionDecisionsCompanion
+    extends UpdateCompanion<ProgressionDecision> {
+  final Value<String> sessionId;
+  final Value<String> slotId;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const ProgressionDecisionsCompanion({
+    this.sessionId = const Value.absent(),
+    this.slotId = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProgressionDecisionsCompanion.insert({
+    required String sessionId,
+    required String slotId,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : sessionId = Value(sessionId),
+       slotId = Value(slotId),
+       snapshot = Value(snapshot);
+  static Insertable<ProgressionDecision> custom({
+    Expression<String>? sessionId,
+    Expression<String>? slotId,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sessionId != null) 'session_id': sessionId,
+      if (slotId != null) 'slot_id': slotId,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProgressionDecisionsCompanion copyWith({
+    Value<String>? sessionId,
+    Value<String>? slotId,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return ProgressionDecisionsCompanion(
+      sessionId: sessionId ?? this.sessionId,
+      slotId: slotId ?? this.slotId,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sessionId.present) {
+      map['session_id'] = Variable<String>(sessionId.value);
+    }
+    if (slotId.present) {
+      map['slot_id'] = Variable<String>(slotId.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProgressionDecisionsCompanion(')
+          ..write('sessionId: $sessionId, ')
+          ..write('slotId: $slotId, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
   late final $RevisionsTable revisions = $RevisionsTable(this);
   late final $SessionsTable sessions = $SessionsTable(this);
   late final $FinalizationsTable finalizations = $FinalizationsTable(this);
+  late final $ProgressionDecisionsTable progressionDecisions =
+      $ProgressionDecisionsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -659,6 +933,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     revisions,
     sessions,
     finalizations,
+    progressionDecisions,
   ];
 }
 
@@ -867,6 +1142,31 @@ final class $$SessionsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<
+    $ProgressionDecisionsTable,
+    List<ProgressionDecision>
+  >
+  _progressionDecisionsRefsTable(_$TrainingDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.progressionDecisions,
+        aliasName: 'sessions__id__progression_decisions__session_id',
+      );
+
+  $$ProgressionDecisionsTableProcessedTableManager
+  get progressionDecisionsRefs {
+    final manager = $$ProgressionDecisionsTableTableManager(
+      $_db,
+      $_db.progressionDecisions,
+    ).filter((f) => f.sessionId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _progressionDecisionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$SessionsTableFilterComposer
@@ -904,6 +1204,31 @@ class $$SessionsTableFilterComposer
           }) => $$FinalizationsTableFilterComposer(
             $db: $db,
             $table: $db.finalizations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> progressionDecisionsRefs(
+    Expression<bool> Function($$ProgressionDecisionsTableFilterComposer f) f,
+  ) {
+    final $$ProgressionDecisionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.progressionDecisions,
+      getReferencedColumn: (t) => t.sessionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProgressionDecisionsTableFilterComposer(
+            $db: $db,
+            $table: $db.progressionDecisions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -973,6 +1298,32 @@ class $$SessionsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> progressionDecisionsRefs<T extends Object>(
+    Expression<T> Function($$ProgressionDecisionsTableAnnotationComposer a) f,
+  ) {
+    final $$ProgressionDecisionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.progressionDecisions,
+          getReferencedColumn: (t) => t.sessionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ProgressionDecisionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.progressionDecisions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$SessionsTableTableManager
@@ -988,7 +1339,10 @@ class $$SessionsTableTableManager
           $$SessionsTableUpdateCompanionBuilder,
           (Session, $$SessionsTableReferences),
           Session,
-          PrefetchHooks Function({bool finalizationsRefs})
+          PrefetchHooks Function({
+            bool finalizationsRefs,
+            bool progressionDecisionsRefs,
+          })
         > {
   $$SessionsTableTableManager(_$TrainingDatabase db, $SessionsTable table)
     : super(
@@ -1025,38 +1379,61 @@ class $$SessionsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({finalizationsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [
-                if (finalizationsRefs) db.finalizations,
-              ],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (finalizationsRefs)
-                    await $_getPrefetchedDataByColumns<
-                      Session,
-                      $SessionsTable,
-                      Finalization,
-                      $FinalizationsTable
-                    >(
-                      currentTable: table,
-                      referencedTable: $$SessionsTableReferences
-                          ._finalizationsRefsTable(db),
-                      managerFromTypedResult: (p0) => $$SessionsTableReferences(
-                        db,
-                        table,
-                        p0,
-                      ).finalizationsRefs,
-                      currentColumn: 'id',
-                      referencedColumn: 'session_id',
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({finalizationsRefs = false, progressionDecisionsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (finalizationsRefs) db.finalizations,
+                    if (progressionDecisionsRefs) db.progressionDecisions,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (finalizationsRefs)
+                        await $_getPrefetchedDataByColumns<
+                          Session,
+                          $SessionsTable,
+                          Finalization,
+                          $FinalizationsTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$SessionsTableReferences
+                              ._finalizationsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$SessionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).finalizationsRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'session_id',
+                          typedResults: items,
+                        ),
+                      if (progressionDecisionsRefs)
+                        await $_getPrefetchedDataByColumns<
+                          Session,
+                          $SessionsTable,
+                          ProgressionDecision,
+                          $ProgressionDecisionsTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$SessionsTableReferences
+                              ._progressionDecisionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$SessionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).progressionDecisionsRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'session_id',
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -1073,7 +1450,10 @@ typedef $$SessionsTableProcessedTableManager =
       $$SessionsTableUpdateCompanionBuilder,
       (Session, $$SessionsTableReferences),
       Session,
-      PrefetchHooks Function({bool finalizationsRefs})
+      PrefetchHooks Function({
+        bool finalizationsRefs,
+        bool progressionDecisionsRefs,
+      })
     >;
 typedef $$FinalizationsTableCreateCompanionBuilder =
     FinalizationsCompanion Function({
@@ -1320,6 +1700,306 @@ typedef $$FinalizationsTableProcessedTableManager =
       Finalization,
       PrefetchHooks Function({bool sessionId})
     >;
+typedef $$ProgressionDecisionsTableCreateCompanionBuilder =
+    ProgressionDecisionsCompanion Function({
+      required String sessionId,
+      required String slotId,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$ProgressionDecisionsTableUpdateCompanionBuilder =
+    ProgressionDecisionsCompanion Function({
+      Value<String> sessionId,
+      Value<String> slotId,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+final class $$ProgressionDecisionsTableReferences
+    extends
+        BaseReferences<
+          _$TrainingDatabase,
+          $ProgressionDecisionsTable,
+          ProgressionDecision
+        > {
+  $$ProgressionDecisionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $SessionsTable _sessionIdTable(_$TrainingDatabase db) => db.sessions
+      .createAlias('progression_decisions__session_id__sessions__id');
+
+  $$SessionsTableProcessedTableManager get sessionId {
+    final $_column = $_itemColumn<String>('session_id')!;
+
+    final manager = $$SessionsTableTableManager(
+      $_db,
+      $_db.sessions,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sessionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ProgressionDecisionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $ProgressionDecisionsTable> {
+  $$ProgressionDecisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get slotId => $composableBuilder(
+    column: $table.slotId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$SessionsTableFilterComposer get sessionId {
+    final $$SessionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sessionId,
+      referencedTable: $db.sessions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionsTableFilterComposer(
+            $db: $db,
+            $table: $db.sessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProgressionDecisionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $ProgressionDecisionsTable> {
+  $$ProgressionDecisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get slotId => $composableBuilder(
+    column: $table.slotId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$SessionsTableOrderingComposer get sessionId {
+    final $$SessionsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sessionId,
+      referencedTable: $db.sessions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionsTableOrderingComposer(
+            $db: $db,
+            $table: $db.sessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProgressionDecisionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $ProgressionDecisionsTable> {
+  $$ProgressionDecisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get slotId =>
+      $composableBuilder(column: $table.slotId, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+
+  $$SessionsTableAnnotationComposer get sessionId {
+    final $$SessionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sessionId,
+      referencedTable: $db.sessions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProgressionDecisionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $ProgressionDecisionsTable,
+          ProgressionDecision,
+          $$ProgressionDecisionsTableFilterComposer,
+          $$ProgressionDecisionsTableOrderingComposer,
+          $$ProgressionDecisionsTableAnnotationComposer,
+          $$ProgressionDecisionsTableCreateCompanionBuilder,
+          $$ProgressionDecisionsTableUpdateCompanionBuilder,
+          (ProgressionDecision, $$ProgressionDecisionsTableReferences),
+          ProgressionDecision,
+          PrefetchHooks Function({bool sessionId})
+        > {
+  $$ProgressionDecisionsTableTableManager(
+    _$TrainingDatabase db,
+    $ProgressionDecisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProgressionDecisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProgressionDecisionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ProgressionDecisionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> sessionId = const Value.absent(),
+                Value<String> slotId = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ProgressionDecisionsCompanion(
+                sessionId: sessionId,
+                slotId: slotId,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String sessionId,
+                required String slotId,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => ProgressionDecisionsCompanion.insert(
+                sessionId: sessionId,
+                slotId: slotId,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ProgressionDecisionsTable, ProgressionDecision>(
+                    table,
+                  ),
+                  $$ProgressionDecisionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({sessionId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (sessionId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.sessionId,
+                                referencedTable:
+                                    $$ProgressionDecisionsTableReferences
+                                        ._sessionIdTable(db),
+                                referencedColumn:
+                                    $$ProgressionDecisionsTableReferences
+                                        ._sessionIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ProgressionDecisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $ProgressionDecisionsTable,
+      ProgressionDecision,
+      $$ProgressionDecisionsTableFilterComposer,
+      $$ProgressionDecisionsTableOrderingComposer,
+      $$ProgressionDecisionsTableAnnotationComposer,
+      $$ProgressionDecisionsTableCreateCompanionBuilder,
+      $$ProgressionDecisionsTableUpdateCompanionBuilder,
+      (ProgressionDecision, $$ProgressionDecisionsTableReferences),
+      ProgressionDecision,
+      PrefetchHooks Function({bool sessionId})
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -1330,4 +2010,6 @@ class $TrainingDatabaseManager {
       $$SessionsTableTableManager(_db, _db.sessions);
   $$FinalizationsTableTableManager get finalizations =>
       $$FinalizationsTableTableManager(_db, _db.finalizations);
+  $$ProgressionDecisionsTableTableManager get progressionDecisions =>
+      $$ProgressionDecisionsTableTableManager(_db, _db.progressionDecisions);
 }

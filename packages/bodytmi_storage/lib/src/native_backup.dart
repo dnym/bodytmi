@@ -7,7 +7,7 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
-import 'schema_v1.dart';
+import 'schema.dart';
 
 const _format = 'bodytmi-native-backup/1';
 const _maxDatabaseBytes = 512 * 1024 * 1024;
@@ -40,11 +40,11 @@ final class NativeBackup {
       final size = await snapshot.length();
       if (size > _maxDatabaseBytes)
         invalid('Backup exceeds the 512 MiB resource limit.');
-      validateDatabase(snapshot.path);
+      final schemaVersion = validateDatabase(snapshot.path);
       final manifest = <String, Object?>{
         'format': _format,
         'applicationVersion': '0.1.0',
-        'databaseSchemaVersion': 1,
+        'databaseSchemaVersion': schemaVersion,
         'database': {
           'file': _snapshotName,
           'bytes': size,
@@ -98,7 +98,7 @@ final class NativeBackup {
       'database',
     });
     if (manifest['format'] != _format ||
-        manifest['databaseSchemaVersion'] != 1) {
+        !{1, 2}.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
     requiredString(manifest, 'applicationVersion');
@@ -136,7 +136,8 @@ final class NativeBackup {
       }
       if (received != bytes || await _digest(copy) != hash)
         invalid('Backup database checksum mismatch.');
-      validateDatabase(copy.path);
+      if (validateDatabase(copy.path) != manifest['databaseSchemaVersion'])
+        invalid('Backup manifest schema version does not match its database.');
       return PreparedNativeBackup._(
         stage,
         copy.path,
@@ -185,11 +186,11 @@ final class NativeBackup {
   }
 
   /// Validate exact supported schema, foreign keys and all serialized content.
-  static void validateDatabase(String path) {
+  static int validateDatabase(String path) {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (db.userVersion != 1 ||
+      if (!{1, 2}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -200,13 +201,17 @@ final class NativeBackup {
       final schema = db.select(
         'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name',
       );
-      validateSchemaV1(schema);
+      validateSchema(schema, db.userVersion);
       final integrity = db.select('PRAGMA integrity_check');
       if (integrity.length != 1 ||
           integrity.single.values.single != 'ok' ||
           db.select('PRAGMA foreign_key_check').isNotEmpty)
         invalid('Backup database integrity or reference check failed.');
-      for (final table in ['revisions', 'sessions']) {
+      for (final table in [
+        'revisions',
+        'sessions',
+        if (db.userVersion == 2) 'progression_decisions',
+      ]) {
         if (db.select(
           'SELECT 1 FROM $table WHERE length(CAST(snapshot AS BLOB)) > ? LIMIT 1',
           [_maxSnapshotBytes],
@@ -288,6 +293,27 @@ final class NativeBackup {
       } finally {
         sessions.close();
       }
+      if (db.userVersion == 2) {
+        final decisions = <ProgressionDecision>[];
+        for (final row in db.select(
+          'SELECT session_id,slot_id,snapshot FROM progression_decisions',
+        )) {
+          final d = ProgressionDecision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (d.session.id != row['session_id'] || d.slotId != row['slot_id'])
+            invalid('Progression receipt identity mismatch.');
+          decisions.add(d);
+        }
+        final sources = [
+          for (final row in db.select(
+            'SELECT DISTINCT s.id,s.snapshot FROM sessions s JOIN progression_decisions p ON p.session_id=s.id',
+          ))
+            sessionFromJson(jsonDecode(row['snapshot'] as String)),
+        ];
+        validateProgressionDecisions(decisions, sources);
+      }
+      return db.userVersion;
     } finally {
       db.close();
     }

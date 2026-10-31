@@ -9,9 +9,9 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
 import 'native_backup.dart';
-import 'schema_v1.dart';
+import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/1';
+const _format = 'bodytmi-logical-export/2';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -60,17 +60,29 @@ final class LogicalArchiveFiles {
     final sourcePath = await file.resolveSymbolicLinks();
     final input = jsonObject(jsonDecode(await _read(file)), 'logical export');
     checkKeys(input, {'format', 'applicationVersion', 'data', 'sha256'});
-    if (input['format'] != _format)
+    if (!{_format, 'bodytmi-logical-export/1'}.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
     final hash = requiredString(input, 'sha256');
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(hash))
       invalid('Invalid logical export checksum.');
+    final legacy = input['format'] == 'bodytmi-logical-export/1';
+    if (!legacy &&
+        !jsonObject(input['data'], 'logical data').containsKey('progressions'))
+      invalid('Logical format v2 requires progression records.');
+    if (legacy)
+      checkKeys(jsonObject(input['data'], 'legacy logical data'), {
+        'revisions',
+        'sessions',
+        'finalizations',
+      });
     final archive = TrainingArchive.fromJson(input['data']);
+    final data = archive.toJson();
+    if (legacy) data.remove('progressions');
     if (_checksum({
-          'format': _format,
+          'format': input['format'],
           'applicationVersion': version,
-          'data': archive.toJson(),
+          'data': data,
         }) !=
         hash) {
       invalid('Logical export checksum mismatch.');
@@ -84,11 +96,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV1.values) {
+          for (final ddl in schemaV2.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 1');
+          db.execute('PRAGMA user_version = 2');
           for (final revision in archive.revisions) {
             db.execute(
               'INSERT INTO revisions (template_id, number, snapshot) VALUES (?, ?, ?)',
@@ -110,6 +122,16 @@ final class LogicalArchiveFiles {
               id,
             ]);
           }
+          for (final decision in archive.progressions) {
+            db.execute(
+              'INSERT INTO progression_decisions(session_id,slot_id,snapshot) VALUES (?,?,?)',
+              [
+                decision.session.id,
+                decision.slotId,
+                canonicalJson(decision.toJson()),
+              ],
+            );
+          }
           db.execute('COMMIT');
         } catch (_) {
           db.execute('ROLLBACK');
@@ -120,7 +142,13 @@ final class LogicalArchiveFiles {
       }
       await NativeBackup.create(path, '${stage.path}/native');
       final backup = await NativeBackup.prepare('${stage.path}/native');
-      return PreparedLogicalArchive._(archive, hash, sourcePath, backup);
+      return PreparedLogicalArchive._(
+        archive,
+        hash,
+        sourcePath,
+        backup,
+        input['format'] as String,
+      );
     } finally {
       await stage.delete(recursive: true);
     }
@@ -133,14 +161,16 @@ final class PreparedLogicalArchive {
     this.checksum,
     this._sourcePath,
     this.backup,
+    this.sourceFormat,
   );
   final TrainingArchive archive;
   final String checksum;
   final String _sourcePath;
   final PreparedNativeBackup backup;
+  final String sourceFormat;
 
   Map<String, Object?> get summary => {
-    'format': _format,
+    'format': sourceFormat,
     'sha256': checksum,
     'records': archive.summary,
   };

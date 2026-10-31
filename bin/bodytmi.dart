@@ -22,6 +22,8 @@ Future<void> main(List<String> arguments) async {
               'create requires database/destination; validate requires source; restore requires database/source/recoveryDestination/confirm:true. Backup paths are directories.',
           'archive':
               'export requires database/destination; validate requires source; restore requires database/source/recoveryDestination/confirm:true. Logical exports are JSON files; recovery backups are directories.',
+          'progression':
+              'propose requires database/sessionId/slotId/rule; accept requires database/sessionId/slotId/expectedVersion/acceptedAt; show requires database/sessionId/slotId. Stored application currently supports manual double progression.',
         }),
       );
       return;

@@ -224,7 +224,7 @@ void logicalArchiveTests() {
             <({bool sign, void Function(Map<String, Object?>) change})>[
               (
                 sign: true,
-                change: (j) => j['format'] = 'bodytmi-logical-export/2',
+                change: (j) => j['format'] = 'bodytmi-logical-export/99',
               ),
               (
                 sign: true,
