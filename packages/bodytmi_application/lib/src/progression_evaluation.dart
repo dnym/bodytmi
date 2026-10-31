@@ -83,7 +83,11 @@ final class ProgressionEvaluation {
             hold ? sets[i].suggested : proposals[i].nextValues,
           ),
       ]),
-      changed ? failures : first.failedSessions,
+      changed
+          ? failures
+          : blocked
+          ? proposals.firstWhere((p) => p.outcome == 'blocked').failedSessions
+          : first.failedSessions,
       hold ? cursor : first.cursor,
       null,
       first.assessment,

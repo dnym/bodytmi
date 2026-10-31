@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "assisted-practice",
+    "name": "Explicit numeric direction practice",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom",
+        "implementation": "custom",
+        "targets": {
+          "reps": {
+            "value": "8",
+            "unit": "rep"
+          },
+          "assistance": {
+            "value": "40",
+            "unit": "kg"
+          },
+          "mass": {
+            "value": "10",
+            "unit": "kg"
+          },
+          "supportHeight": {
+            "value": "0.5",
+            "unit": "m"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "warmup",
+          "type": "effort",
+          "slot": "movement",
+          "role": "warmup"
+        },
+        {
+          "id": "work",
+          "type": "repeat",
+          "count": 2,
+          "child": {
+            "id": "set",
+            "type": "effort",
+            "slot": "movement"
+          }
+        }
+      ]
+    }
+  }
+}

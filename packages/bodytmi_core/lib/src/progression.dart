@@ -46,6 +46,9 @@ final class ThresholdRule {
     this.aggregation,
     this.failureAggregation,
     this.hasExplicitAggregation,
+    this.minimums,
+    this.directions,
+    this.hasNumericPolicy,
   );
 
   factory ThresholdRule.fromJson(Object? input) {
@@ -59,6 +62,8 @@ final class ThresholdRule {
       'increments',
       'resets',
       'maximums',
+      'minimums',
+      'directions',
       'coordination',
       'deloadAfter',
       'deloadPercent',
@@ -121,13 +126,34 @@ final class ThresholdRule {
           Dimension.distance,
         }.contains(min.dimension))
       invalid('Total aggregation requires count, duration or distance.');
+    final minimums = metricsFromJson(
+      json.containsKey('minimums') ? json['minimums'] : <String, Object?>{},
+    );
+    final maximums = metricsFromJson(json['maximums'] ?? <String, Object?>{});
+    for (final lower in minimums.entries) {
+      final upper = maximums[lower.key];
+      if (upper != null && lower.value.compareTo(upper) > 0)
+        invalid('Lower lever bound exceeds upper bound.');
+    }
+    final directions = jsonObject(
+      json.containsKey('directions') ? json['directions'] : <String, Object?>{},
+      'directions',
+    );
+    final controlled = {...increments.keys, ...deload.cast<String>()};
+    for (final entry in directions.entries) {
+      if (!controlled.contains(entry.key) ||
+          !{'increase', 'decrease'}.contains(entry.value))
+        invalid(
+          'Directions must name an increment or deload metric and increase/decrease.',
+        );
+    }
     return ThresholdRule._(
       identifier(json, 'metric'),
       min,
       threshold,
       increments,
       metricsFromJson(json['resets'] ?? <String, Object?>{}),
-      metricsFromJson(json['maximums'] ?? <String, Object?>{}),
+      maximums,
       sequence,
       after,
       Decimal.parse('1') - percent * Decimal.parse('0.01'),
@@ -135,6 +161,9 @@ final class ThresholdRule {
       aggregation,
       failureAggregation,
       json.containsKey('aggregation') || json.containsKey('failureAggregation'),
+      minimums,
+      Map<String, String>.unmodifiable(directions.cast<String, String>()),
+      json.containsKey('minimums') || json.containsKey('directions'),
     );
   }
 
@@ -150,6 +179,14 @@ final class ThresholdRule {
   final Set<String> deloadMetrics;
   final ResultAggregation aggregation, failureAggregation;
   final bool hasExplicitAggregation;
+  final Metrics minimums;
+  final Map<String, String> directions;
+  final bool hasNumericPolicy;
+  bool decreases(String metric) => directions[metric] == 'decrease';
+
+  bool _withinBounds(Metrics values) =>
+      minimums.entries.every((e) => values[e.key]!.compareTo(e.value) >= 0) &&
+      maximums.entries.every((e) => values[e.key]!.compareTo(e.value) <= 0);
 
   ProgressionProposal evaluate({
     required Metrics current,
@@ -197,10 +234,12 @@ final class ThresholdRule {
         cursor < 0 ||
         (sequence != null && cursor >= sequence!.length))
       invalid('Invalid progression state.');
-    for (final entry in {...increments, ...resets, ...maximums}.entries) {
-      final value = current[entry.key];
-      if (value == null || value.dimension != entry.value.dimension)
-        invalid('Missing/incompatible current lever ${entry.key}.');
+    for (final values in [increments, resets, maximums, minimums]) {
+      for (final entry in values.entries) {
+        final value = current[entry.key];
+        if (value == null || value.dimension != entry.value.dimension)
+          invalid('Missing/incompatible current lever ${entry.key}.');
+      }
     }
     if (resets.keys.any(increments.containsKey))
       invalid('A lever cannot be incremented and reset in the same rule.');
@@ -240,13 +279,27 @@ final class ThresholdRule {
         for (final key in deloadMetrics) {
           final value = current[key]!;
           next[key] = Quantity(
-            (value.value * deloadFactor).toString(),
+            (value.value *
+                    (decreases(key)
+                        ? Decimal.parse('2') - deloadFactor
+                        : deloadFactor))
+                .toString(),
             value.unit.name,
           );
         }
+        if (hasNumericPolicy && !_withinBounds(next))
+          return proposal(
+            'blocked',
+            'A lever bound blocks the entire deload; hold all changes.',
+            current,
+            failures,
+            cursor,
+          );
         return proposal(
           'deload',
-          'Failed-session threshold reached; reduction proposed.',
+          hasNumericPolicy
+              ? 'Failed-session threshold reached; easier numeric settings proposed.'
+              : 'Failed-session threshold reached; reduction proposed.',
           next,
           0,
           cursor,
@@ -277,7 +330,22 @@ final class ThresholdRule {
         : [sequence![cursor]];
     final next = <String, Quantity>{...current};
     for (final key in selected) {
-      final value = current[key]!.add(increments[key]!);
+      final prior = current[key]!;
+      final step = increments[key]!;
+      if (prior.dimension != step.dimension)
+        invalid('Increment dimension mismatch.');
+      final nextValue = decreases(key)
+          ? prior.value - step.value
+          : prior.value + step.value;
+      if (nextValue.compareTo(Decimal.zero) < 0)
+        return proposal(
+          'blocked',
+          'Lever $key cannot step below zero; hold all changes.',
+          current,
+          0,
+          cursor,
+        );
+      final value = Quantity(nextValue.toString(), prior.unit.name);
       if (maximums[key] case final Quantity maximum) {
         if (value.compareTo(maximum) > 0)
           return proposal(
@@ -302,6 +370,14 @@ final class ThresholdRule {
         );
       }
     }
+    if (minimums.entries.any((e) => next[e.key]!.compareTo(e.value) < 0))
+      return proposal(
+        'blocked',
+        'A lower lever bound blocks the entire advance; hold all changes.',
+        current,
+        0,
+        cursor,
+      );
     return proposal(
       'advance',
       hasExplicitAggregation

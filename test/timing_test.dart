@@ -440,7 +440,7 @@ void timingTests() {
         instant(1),
       );
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 15);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 16);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
