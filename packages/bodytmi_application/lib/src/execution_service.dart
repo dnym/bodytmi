@@ -37,49 +37,52 @@ final class ExecutionService {
     return candidate;
   });
 
-  Future<Map<String, Object?>> view(
-    String id,
-  ) => repository.transaction(() async {
-    final e = await show(id);
-    final s = await StoredTrainingService(repository).session(e.sessionId);
-    final plan = executionPlan(s);
-    final current = e.complete ? null : plan[e.cursor];
-    final kind = current?.activity is Rest ? 'rest' : 'effort';
-    final clock = e.complete
-        ? null
-        : await repository.timingActivity(e.clockId(kind));
-    if (clock != null &&
-        (clock.sessionId != s.id ||
-            clock.setId != current!.id ||
-            clock.plan.restOnly != (kind == 'rest')))
-      invalid(
-        'Managed execution clock identity belongs to another occurrence.',
-      );
-    return {
-      ...e.toJson(),
-      'version': e.version,
-      'cursor': e.cursor,
-      'status': e.complete ? 'completed' : 'active',
-      'sessionContentVersion': s.contentVersion,
-      'groups': [
-        for (final group in activityGroups(
-          s.revision.definition.plan,
-          containing: e.cursor,
-        ))
-          group.toJson(),
-      ],
-      'current': current == null
-          ? null
-          : {
-              'id': current.id,
-              'activity': current.activity.toJson(),
-              if (current.activity is Effort) 'set': s.set(current.id).toJson(),
-            },
-      'timer': clock == null
-          ? null
-          : {...clock.toJson(), 'requiresRecovery': clock.status == 'running'},
-    };
-  });
+  Future<Map<String, Object?>> view(String id) =>
+      repository.transaction(() async {
+        final e = await show(id);
+        final s = await StoredTrainingService(repository).session(e.sessionId);
+        final plan = executionPlan(s);
+        final current = e.complete ? null : plan[e.cursor];
+        final kind = current?.activity is Rest ? 'rest' : 'effort';
+        final clock = e.complete
+            ? null
+            : await repository.timingActivity(e.clockId(kind));
+        if (clock != null &&
+            (clock.sessionId != s.id ||
+                clock.setId != current!.id ||
+                clock.plan.restOnly != (kind == 'rest')))
+          invalid(
+            'Managed execution clock identity belongs to another occurrence.',
+          );
+        return {
+          ...e.toJson(),
+          'version': e.version,
+          'cursor': e.cursor,
+          'status': e.complete ? 'completed' : 'active',
+          'sessionContentVersion': s.contentVersion,
+          'groups': [
+            for (final group in activityGroups(
+              s.revision.definition.plan,
+              containing: e.cursor,
+            ))
+              group.toJson(),
+          ],
+          'current': current == null
+              ? null
+              : {
+                  'id': current.id,
+                  'activity': current.activity.toJson(),
+                  if (current.activity is Effort)
+                    'set': s.set(current.id).toJson(),
+                },
+          'timer': clock == null
+              ? null
+              : {
+                  ...clock.toViewJson(),
+                  'requiresRecovery': clock.status == 'running',
+                },
+        };
+      });
   Future<TimingActivity> time(
     String id,
     int version,

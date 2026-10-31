@@ -263,13 +263,13 @@ void storedBodyMassTests() {
       final resolved = canonicalJson(
         (await service.resolve(_query())).toJson(),
       );
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 9);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 10);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/export.json',
         ))['format'],
-        'bodytmi-logical-export/9',
+        'bodytmi-logical-export/10',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/export.json');
       try {
@@ -404,7 +404,7 @@ void storedBodyMassTests() {
       }
       final upgraded = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(upgraded.userVersion, 9);
+        equal(upgraded.userVersion, 10);
       } finally {
         upgraded.close();
       }

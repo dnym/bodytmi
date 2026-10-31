@@ -108,6 +108,7 @@ final class NativeBackup {
           7,
           8,
           9,
+          10,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -200,7 +201,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2, 3, 4, 5, 6, 7, 8, 9}.contains(db.userVersion) ||
+      if (!{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -432,6 +433,8 @@ final class NativeBackup {
           final t = TimingActivity.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 10 && t.plan.tempo != null)
+            invalid('Tempo timing requires schema v10.');
           if (db.userVersion < 8 && t.plan.restOnly)
             invalid('Rest-only timing requires schema v8.');
           if (t.id != row['id'] ||

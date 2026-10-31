@@ -377,7 +377,7 @@ Future<Map<String, Object?>> executeStored(
           plan: request.containsKey('plan')
               ? TimingPlan.fromJson(request['plan'])
               : null,
-        )).toJson();
+        )).toViewJson();
       case 'execution advance':
       case 'execution complete':
       case 'execution confirm':
@@ -439,7 +439,7 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'sessionId'),
           requiredString(request, 'occurrenceId'),
           parseInstant(request['at'], 'at'),
-        )).toJson();
+        )).toViewJson();
       case 'timer start':
         data = (await timing.start(
           identifier(request, 'id'),
@@ -448,24 +448,24 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'metric'),
           TimingPlan.fromJson(request['plan']),
           parseInstant(request['at'], 'at'),
-        )).toJson();
+        )).toViewJson();
       case 'timer list':
         final all = await store.timingActivities();
         all.sort((a, b) => a.id.compareTo(b.id));
         data = [
           for (final t in all)
-            {...t.toJson(), 'requiresRecovery': t.status == 'running'},
+            {...t.toViewJson(), 'requiresRecovery': t.status == 'running'},
         ];
       case 'timer show':
         final t = await timing.show(identifier(request, 'id'));
-        data = {...t.toJson(), 'requiresRecovery': t.status == 'running'};
+        data = {...t.toViewJson(), 'requiresRecovery': t.status == 'running'};
       case 'timer resume':
         data = (await timing.resume(
           identifier(request, 'id'),
           integer('expectedVersion'),
           identifier(request, 'ownerId'),
           parseInstant(request['at'], 'at'),
-        )).toJson();
+        )).toViewJson();
       case 'timer advance':
       case 'timer pause':
         final sample = integer('elapsedMilliseconds', min: 0);
@@ -477,13 +477,13 @@ Future<Map<String, Object?>> executeStored(
           parseInstant(request['at'], 'at'),
           action: command.substring(6),
         );
-        data = {'timer': step.activity.toJson(), 'cues': step.cues};
+        data = {'timer': step.activity.toViewJson(), 'cues': step.cues};
       case 'timer end-effort':
         data = (await timing.endEffort(
           identifier(request, 'id'),
           integer('expectedVersion'),
           parseInstant(request['at'], 'at'),
-        )).toJson();
+        )).toViewJson();
       case 'timer recover':
         final mode = request['mode'];
         if (mode != 'freeze' && mode != 'adjust')
@@ -497,7 +497,7 @@ Future<Map<String, Object?>> executeStored(
           adjustmentMilliseconds: mode == 'adjust'
               ? integer('adjustmentMilliseconds', min: 0)
               : null,
-        )).toJson();
+        )).toViewJson();
       case 'timer stop':
       case 'timer discard':
         data = (await timing.stop(
@@ -506,7 +506,7 @@ Future<Map<String, Object?>> executeStored(
           parseInstant(request['at'], 'at'),
           confirm: flag('confirm'),
           discard: command == 'timer discard',
-        )).toJson();
+        )).toViewJson();
       case 'timer confirm':
         data = (await timing.confirm(
           identifier(request, 'id'),
@@ -515,7 +515,7 @@ Future<Map<String, Object?>> executeStored(
           parseInstant(request['at'], 'at'),
           metricsFromJson(request['actuals'] ?? <String, Object?>{}),
           acceptSuggested: flag('acceptSuggested'),
-        )).toJson();
+        )).toViewJson();
       case 'timer run':
         final limit = request.containsKey('runForMilliseconds')
             ? integer('runForMilliseconds')

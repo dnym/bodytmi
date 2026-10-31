@@ -12,6 +12,7 @@ export 'src/body_mass.dart';
 export 'src/body_mass_input.dart';
 export 'src/effective_mass.dart';
 export 'src/timing.dart';
+export 'src/tempo.dart';
 export 'src/execution.dart';
 export 'src/double_progression.dart';
 export 'src/program.dart';

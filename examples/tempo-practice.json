@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "tempo-practice",
+    "name": "Tempo movement practice",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "bodyweight-squat",
+        "implementation": "bodyweight",
+        "targets": {
+          "duration": {"value": "30", "unit": "s"},
+          "reps": {"value": "5", "unit": "rep"}
+        }
+      }
+    ],
+    "plan": {"id": "practice", "type": "effort", "slot": "movement"}
+  }
+}

@@ -1,3 +1,4 @@
+import 'tempo_test.dart';
 import 'execution_test.dart';
 import 'timing_test.dart';
 import 'effective_mass_test.dart';
@@ -18,6 +19,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  tempoTests();
   executionTests();
   timingTests();
   effectiveMassTests();

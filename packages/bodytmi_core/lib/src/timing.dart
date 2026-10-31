@@ -1,6 +1,7 @@
 import 'errors.dart';
 import 'instant.dart';
 import 'quantity.dart';
+import 'tempo.dart';
 
 int timingInt(
   Map<String, Object?> j,
@@ -22,6 +23,7 @@ final class TimingPlan {
     this.overrun,
     this.nearEndMilliseconds,
     this.restOnly,
+    this.tempo,
   );
   factory TimingPlan.fromJson(Object? input) {
     final j = jsonObject(input, 'timing plan');
@@ -32,6 +34,7 @@ final class TimingPlan {
       'overrun',
       'nearEndMilliseconds',
       'restOnly',
+      'tempo',
     });
     final restOnly = j['restOnly'] ?? false;
     if (restOnly is! bool) invalid('restOnly must be boolean.');
@@ -57,19 +60,32 @@ final class TimingPlan {
     final near = j.containsKey('nearEndMilliseconds')
         ? timingInt(j, 'nearEndMilliseconds', min: 1, max: effort - 1)
         : null;
+    final tempo = j.containsKey('tempo')
+        ? TempoPlan.fromJson(j['tempo'])
+        : null;
     if (restOnly &&
         (prep != 0 ||
             effort != 0 ||
             rest <= 0 ||
             overrun != 'stop' ||
-            near != null))
+            near != null ||
+            tempo != null))
       invalid('A rest-only plan needs only a positive rest duration.');
-    return TimingPlan._(prep, effort, rest, overrun as String, near, restOnly);
+    return TimingPlan._(
+      prep,
+      effort,
+      rest,
+      overrun as String,
+      near,
+      restOnly,
+      tempo,
+    );
   }
   final bool restOnly;
   final int preparationMilliseconds, effortMilliseconds, restMilliseconds;
   final String overrun;
   final int? nearEndMilliseconds;
+  final TempoPlan? tempo;
   Map<String, Object?> toJson() => {
     'preparationMilliseconds': preparationMilliseconds,
     'effortMilliseconds': effortMilliseconds,
@@ -77,6 +93,7 @@ final class TimingPlan {
     'overrun': overrun,
     if (nearEndMilliseconds != null) 'nearEndMilliseconds': nearEndMilliseconds,
     if (restOnly) 'restOnly': true,
+    if (tempo != null) 'tempo': tempo!.toJson(),
   };
 }
 
@@ -327,7 +344,16 @@ final class TimingActivity {
       _json['confirmation'] as Map<String, Object?>?;
   TimingPlan get plan => TimingPlan.fromJson(_json['plan']);
   bool get active => status == 'running' || status == 'paused';
+  TempoPosition? get tempoState => phase == 'effort' && active
+      ? plan.tempo?.position(effortElapsedMilliseconds)
+      : null;
   Map<String, Object?> toJson() => Map.of(_json);
+
+  /// Query metadata is derived; persisted snapshots contain only their inputs.
+  Map<String, Object?> toViewJson() => {
+    ...toJson(),
+    if (plan.tempo != null) 'tempoState': tempoState?.toJson(),
+  };
   TimingActivity _change(Map<String, Object?> changes, DateTime at) =>
       TimingActivity.fromJson({
         ..._json,
@@ -442,6 +468,39 @@ final class TimingActivity {
           ? (p.restOnly ? 'completed' : 'awaitingConfirmation')
           : 'running',
     }, at);
+    if (p.tempo != null) {
+      final position = next.tempoState;
+      if (position != null &&
+          (position.boundaryEffortMilliseconds > effortElapsedMilliseconds ||
+              (phase == 'effort' && elapsedMilliseconds == 0))) {
+        cues.add({
+          'kind': 'tempo',
+          'phase': 'effort',
+          'elapsedMilliseconds':
+              p.preparationMilliseconds + position.boundaryEffortMilliseconds,
+          'tempo': position.toJson(),
+        });
+      }
+      // One delivery per checkpoint: lifecycle/phase beats target, near-end,
+      // then tempo. A delayed sample never produces a burst of obsolete beats.
+      if (cues.isNotEmpty) {
+        int priority(Map<String, Object?> cue) => switch (cue['kind']) {
+          'phase' => 3,
+          'target' => 2,
+          'near-end' => 1,
+          _ => 0,
+        };
+        var chosen = cues.first;
+        for (final cue in cues.skip(1))
+          if (priority(cue) >= priority(chosen)) chosen = cue;
+        return TimingAdvance(
+          next,
+          List.unmodifiable([
+            {...chosen, if (position != null) 'tempoState': position.toJson()},
+          ]),
+        );
+      }
+    }
     return TimingAdvance(next, List.unmodifiable(cues));
   }
 

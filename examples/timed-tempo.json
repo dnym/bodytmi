@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "tempo-clock-001",
+  "sessionId": "tempo-session-001",
+  "setId": "practice",
+  "metric": "duration",
+  "plan": {
+    "preparationMilliseconds": 10000,
+    "effortMilliseconds": 30000,
+    "restMilliseconds": 0,
+    "nearEndMilliseconds": 5000,
+    "tempo": {
+      "phases": [
+        {"id": "lower", "milliseconds": 3000},
+        {"id": "hold", "milliseconds": 1000},
+        {"id": "raise", "milliseconds": 2000}
+      ]
+    }
+  },
+  "at": "2026-10-31T09:00:00+01:00"
+}

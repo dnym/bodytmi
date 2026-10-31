@@ -148,7 +148,10 @@ final class TimingService {
       _ => invalid('Unknown clock action.'),
     };
     await repository.saveTimingActivity(next);
-    return TimingAdvance(next, step.cues);
+    return TimingAdvance(
+      next,
+      action == 'pause' && next.plan.tempo != null ? const [] : step.cues,
+    );
   });
   Future<TimingActivity> recover(
     String id,

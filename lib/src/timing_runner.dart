@@ -21,6 +21,7 @@ Future<Map<String, Object?>> runTiming(
     interrupted = true;
   });
   final cues = <Map<String, Object?>>[];
+  var cueCount = 0;
   try {
     var current = await service.resume(
       id,
@@ -49,6 +50,8 @@ Future<Map<String, Object?>> runTiming(
       // suppressing obsolete cues rather than claiming they sounded on time.
       if (step.cues.isNotEmpty) {
         final cue = {...step.cues.last, 'timerId': id};
+        cueCount++;
+        if (cues.length == 256) cues.removeAt(0);
         cues.add(cue);
         if (stream)
           stdout.writeln(
@@ -67,8 +70,10 @@ Future<Map<String, Object?>> runTiming(
     }
     watch.stop();
     return {
-      'timer': current.toJson(),
+      'timer': current.toViewJson(),
       'cues': cues,
+      'cueCount': cueCount,
+      'omittedCueCount': cueCount - cues.length,
       'interrupted': interrupted,
       'requiresRecovery': false,
     };

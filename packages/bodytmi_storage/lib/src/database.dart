@@ -122,17 +122,17 @@ class WorkoutExecutions extends Table {
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
-      await customStatement('PRAGMA user_version = 9');
+      await customStatement('PRAGMA user_version = 10');
       await validateMigration();
     }),
     onUpgrade: (m, from, to) async {
-      if (!{1, 2, 3, 4, 5, 6, 7, 8}.contains(from) || to != 9)
+      if (!{1, 2, 3, 4, 5, 6, 7, 8, 9}.contains(from) || to != 10)
         throw StateError('Unsupported database migration $from -> $to.');
       await transaction(() async {
         final schema = await customSelect(
@@ -151,7 +151,7 @@ class TrainingDatabase extends _$TrainingDatabase {
         if (from < 8) await m.createTable(workoutExecutions);
         // Drift also writes this after the callback. Writing it within our
         // transaction prevents a crash leaving new DDL with the old version.
-        await customStatement('PRAGMA user_version = 9');
+        await customStatement('PRAGMA user_version = 10');
         await validateMigration();
       });
     },
@@ -168,7 +168,7 @@ class TrainingDatabase extends _$TrainingDatabase {
     final schema = await customSelect(
       'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
     ).get();
-    validateSchema(schema.map((row) => row.data), 9);
+    validateSchema(schema.map((row) => row.data), 10);
     if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
       throw const BodyTmiException(
         'storage',
