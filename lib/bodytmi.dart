@@ -2,3 +2,4 @@
 library;
 
 export 'src/commands.dart';
+export 'src/stored_commands.dart';

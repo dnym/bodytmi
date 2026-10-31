@@ -7,8 +7,13 @@ environment:
 workspace:
   - packages/bodytmi_core
   - packages/bodytmi_application
+  - packages/bodytmi_storage
 dependencies:
   bodytmi_core: ^0.1.0
   bodytmi_application: ^0.1.0
+  bodytmi_storage: ^0.1.0
+  sqlite3: ^3.8.0
+dev_dependencies:
+  test: ^1.31.0
 executables:
   bodytmi:

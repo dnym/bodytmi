@@ -11,8 +11,9 @@ analyze:
 	ANALYZER_STATE_LOCATION_OVERRIDE=$(CURDIR)/.dart_tool/analyzer-state $(DART) --suppress-analytics analyze --cache .dart_tool/analyzer --fatal-infos
 
 test:
-	$(DART) --suppress-analytics run test/all_tests.dart
+	$(DART) --suppress-analytics test test/all_tests.dart
 
 build:
 	mkdir -p build
-	$(DART) --suppress-analytics compile exe bin/bodytmi.dart -o build/bodytmi
+	$(DART) --suppress-analytics build cli --output build/native
+	ln -sfn native/bundle/bin/bodytmi build/bodytmi

@@ -7,3 +7,4 @@ export 'src/session_codec.dart';
 // Preserve the application API while sharing timestamp validation with domain types.
 export 'package:bodytmi_core/bodytmi_core.dart' show parseInstant;
 export 'src/body_mass_service.dart';
+export 'src/training_repository.dart';

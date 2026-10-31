@@ -1,12 +1,9 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:bodytmi_core/bodytmi_core.dart';
 
-typedef TestCase = ({String name, FutureOr<void> Function() body});
-final tests = <TestCase>[];
-void test(String name, FutureOr<void> Function() body) =>
-    tests.add((name: name, body: body));
+export 'package:test/test.dart' show test;
+
 void check(bool condition, [String message = 'Check failed']) {
   if (!condition) throw StateError(message);
 }

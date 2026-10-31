@@ -6,16 +6,32 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'fixtures.dart';
 import 'support.dart';
 
+final Future<String> _cliExecutable = _compileCli();
+Future<String> _compileCli() =>
+    compileNative('bin/bodytmi.dart', '.dart_tool/test_cli');
+Future<String> compileNative(String target, String output) async {
+  final result = await Process.run(Platform.resolvedExecutable, [
+    '--suppress-analytics',
+    'build',
+    'cli',
+    '--target',
+    target,
+    '--output',
+    output,
+    '--root-package',
+    'bodytmi',
+  ]);
+  if (result.exitCode != 0)
+    throw StateError('${result.stdout} ${result.stderr}');
+  final name = target.split('/').last.replaceAll('.dart', '');
+  return File('$output/bundle/bin/$name').absolute.path;
+}
+
 Future<({int code, String output, String error})> invoke(
   List<String> args, [
   String? input,
 ]) async {
-  final process = await Process.start(Platform.resolvedExecutable, [
-    '--suppress-analytics',
-    'run',
-    'bin/bodytmi.dart',
-    ...args,
-  ]);
+  final process = await Process.start(await _cliExecutable, args);
   final output = process.stdout.transform(utf8.decoder).join();
   final error = process.stderr.transform(utf8.decoder).join();
   if (input != null) process.stdin.write(input);

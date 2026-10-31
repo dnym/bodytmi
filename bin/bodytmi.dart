@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 Future<void> main(List<String> arguments) async {
   try {
@@ -12,11 +13,11 @@ Future<void> main(List<String> arguments) async {
       stdout.writeln(
         jsonEncode({
           'schemaVersion': 1,
-          'commands': commandNames,
+          'commands': [...commandNames, ...storedCommandNames],
           'usage': 'bodytmi <group> <action> [--input FILE|-]',
           'input': 'One JSON request, schemaVersion: 1, from stdin or --input.',
           'storage':
-              'Explicit snapshots only; database integration is not implemented.',
+              'store commands require a database path in the JSON request. Existing commands use explicit snapshots.',
         }),
       );
       return;
@@ -32,7 +33,8 @@ Future<void> main(List<String> arguments) async {
       );
     }
     final command = arguments.take(2).join(' ');
-    if (!commandNames.contains(command) ||
+    if ((!commandNames.contains(command) &&
+            !storedCommandNames.contains(command)) ||
         (arguments.length == 4 && arguments[2] != '--input')) {
       throw const BodyTmiException(
         'usage',
@@ -52,13 +54,24 @@ Future<void> main(List<String> arguments) async {
       jsonDecode(utf8.decode(bytes.takeBytes())),
       'request',
     );
-    stdout.writeln(jsonEncode(const Commands().execute(command, request)));
+    final response = storedCommandNames.contains(command)
+        ? await executeStored(command, request)
+        : const Commands().execute(command, request);
+    stdout.writeln(jsonEncode(response));
   } on BodyTmiException catch (error) {
     _error(error.code, error.message);
-    exitCode = error.code == 'not_found' ? 3 : 2;
+    exitCode = switch (error.code) {
+      'not_found' => 3,
+      'conflict' || 'in_use' => 5,
+      'storage' => 4,
+      _ => 2,
+    };
   } on FormatException catch (error) {
     _error('validation', 'Invalid JSON/text: ${error.message}');
     exitCode = 2;
+  } on SqliteException catch (error) {
+    _error('storage', error.message);
+    exitCode = 4;
   } on FileSystemException catch (error) {
     _error('io', error.message);
     exitCode = 4;
