@@ -5,6 +5,7 @@ export 'src/errors.dart';
 export 'src/quantity.dart';
 export 'src/activity.dart';
 export 'src/workout.dart';
+export 'src/family.dart';
 export 'src/progression.dart';
 
 export 'src/instant.dart';

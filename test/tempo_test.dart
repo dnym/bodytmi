@@ -91,6 +91,7 @@ void tempoTests() {
         jsonDecode(await File('$dir/old.json').readAsString()),
         'logical',
       );
+      jsonObject(j['data'], 'data').remove('families');
       j['format'] = 'bodytmi-logical-export/9';
       j.remove('sha256');
       j['sha256'] = sha256.convert(utf8.encode(canonicalJson(j))).toString();
@@ -102,6 +103,7 @@ void tempoTests() {
         await logical.close();
       }
       final old = sqlite3.open('$dir/old/database.sqlite');
+      old.execute('DROP TABLE family_revisions');
       old.userVersion = 9;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 9);
@@ -112,7 +114,7 @@ void tempoTests() {
         equal((await TimingService(migrated).show('clock')).plan.tempo, null);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          11,
+          12,
         );
       } finally {
         await migrated.close();
@@ -415,13 +417,13 @@ void tempoTests() {
       t = await timing.resume(t.id, t.version, 'epoch', instant(1));
       await timing.advance(t.id, t.version, 'epoch', 4500, instant(1));
       final expected = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 11);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 12);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/11',
+        'bodytmi-logical-export/12',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -466,6 +468,7 @@ void tempoTests() {
         await active.close();
       }
       final old = sqlite3.open('$dir/native/database.sqlite');
+      old.execute('DROP TABLE family_revisions');
       old.userVersion = 9;
       old.close();
       rejects(
@@ -475,6 +478,7 @@ void tempoTests() {
         jsonDecode(await File('$dir/logical.json').readAsString()),
         'logical',
       );
+      jsonObject(j['data'], 'data').remove('families');
       j['format'] = 'bodytmi-logical-export/9';
       j.remove('sha256');
       j['sha256'] = sha256.convert(utf8.encode(canonicalJson(j))).toString();

@@ -35,6 +35,9 @@ const storedCommandNames = [
   'store show',
   'store summary',
   'store series',
+  'family publish',
+  'family show',
+  'family list',
   'store mass-status',
   'store effective-load',
   'store complete',
@@ -187,7 +190,12 @@ Future<Map<String, Object?>> executeStored(
       'until',
       'includeWarmups',
       'includeActive',
+      'familyId',
+      'familyRevision',
     },
+    'family publish' => {'family', 'expectedRevision'},
+    'family show' => {'familyId', 'revision'},
+    'family list' => <String>{},
     'store mass-status' => {'id'},
     'store effective-load' => {'id'},
     'store complete' => {
@@ -750,6 +758,9 @@ Future<Map<String, Object?>> executeStored(
           sumMetrics: analyticsSums(request),
         );
       case 'store series':
+        if (request.containsKey('familyRevision') &&
+            !request.containsKey('familyId'))
+          invalid('familyRevision needs familyId.');
         data = await store.transaction(
           () async => const TrainingAnalytics().series(
             await store.sessions(),
@@ -772,8 +783,33 @@ Future<Map<String, Object?>> executeStored(
                 : null,
             includeWarmups: flag('includeWarmups'),
             includeActive: flag('includeActive'),
+            family: request.containsKey('familyId')
+                ? await FamilyService(store).revision(
+                    identifier(request, 'familyId'),
+                    request.containsKey('familyRevision')
+                        ? integer('familyRevision')
+                        : null,
+                  )
+                : null,
           ),
         );
+      case 'family publish':
+        data = (await FamilyService(store).publish(
+          ExerciseFamily.fromJson(request['family']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'family show':
+        data = (await FamilyService(store).revision(
+          identifier(request, 'familyId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'family list':
+        final all = await store.familyRevisions();
+        all.sort((a, b) {
+          final id = a.family.id.compareTo(b.family.id);
+          return id == 0 ? a.number.compareTo(b.number) : id;
+        });
+        data = [for (final f in all) f.toJson()];
       case 'store history':
         data = [for (final session in await store.sessions()) session.toJson()];
       case 'store complete':

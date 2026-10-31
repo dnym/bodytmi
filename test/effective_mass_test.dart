@@ -303,13 +303,13 @@ void effectiveMassTests() {
       final next = await service.start('next', definition().id, 2, instant(11));
       equal(_value(_estimate(next)), '109.5');
       equal(canonicalJson(_view(await service.session('old'))), original);
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 11);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 12);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/11',
+        'bodytmi-logical-export/12',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -360,6 +360,7 @@ void effectiveMassTests() {
         jsonDecode(await File('$dir/logical.json').readAsString()),
         'document',
       )..remove('sha256');
+      jsonObject(doc['data'], 'data').remove('families');
       doc['format'] = 'bodytmi-logical-export/5';
       doc['sha256'] = sha256
           .convert(utf8.encode(canonicalJson(doc)))
@@ -374,6 +375,7 @@ void effectiveMassTests() {
       check(rejected);
       final raw = sqlite3.open('$dir/native/database.sqlite');
       try {
+        raw.execute('DROP TABLE family_revisions');
         raw.execute('DROP TABLE workout_executions');
         raw.execute('DROP TABLE timing_activities');
         raw.execute('PRAGMA user_version = 5');
@@ -403,6 +405,7 @@ void effectiveMassTests() {
         'applicationVersion': '0.1.0',
         'data': (Map<String, Object?>.from(original)
           ..remove('timers')
+          ..remove('families')
           ..remove('executions')),
       };
       doc['sha256'] = sha256
@@ -418,6 +421,7 @@ void effectiveMassTests() {
       await store.close();
       final raw = sqlite3.open('$dir/db.sqlite');
       try {
+        raw.execute('DROP TABLE family_revisions');
         raw.execute('DROP TABLE workout_executions');
         raw.execute('DROP TABLE timing_activities');
         raw.execute('PRAGMA user_version = 5');

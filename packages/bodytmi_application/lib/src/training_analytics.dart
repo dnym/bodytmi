@@ -114,6 +114,7 @@ final class TrainingAnalytics {
     DateTime? until,
     bool includeWarmups = false,
     bool includeActive = false,
+    FamilyRevision? family,
   }) {
     _context(context);
     if (metric != null) identifier({'metric': metric}, 'metric');
@@ -132,6 +133,7 @@ final class TrainingAnalytics {
         return date == 0 ? a.id.compareTo(b.id) : date;
       });
     var points = 0;
+    final members = family?.family.exercises.toSet();
     for (final session in ordered) {
       if ((!includeActive && session.status != SessionStatus.finalized) ||
           (from != null && session.startedAt.isBefore(from)) ||
@@ -147,6 +149,7 @@ final class TrainingAnalytics {
             (!includeWarmups && set.role == 'warmup'))
           continue;
         final slot = session.revision.definition.slot(set.slotId);
+        if (members != null && !members.contains(slot.exerciseId)) continue;
         final sourceContext = <String, Object?>{
           'runId': runBySession[session.id],
           'templateId': session.revision.definition.id,
@@ -201,7 +204,10 @@ final class TrainingAnalytics {
     final keys = grouped.keys.toList()..sort();
     return {
       'policy': {
-        'id': 'bodytmi-history-series/1',
+        'id': family == null
+            ? 'bodytmi-history-series/1'
+            : 'bodytmi-family-series/1',
+        if (family != null) 'family': family.toJson(),
         'includeWarmups': includeWarmups,
         'includeActive': includeActive,
         'context': context,

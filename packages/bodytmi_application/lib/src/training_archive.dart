@@ -22,7 +22,14 @@ final class TrainingArchive {
     List<BodyMassRecord> bodyMass = const [],
     List<TimingActivity> timers = const [],
     List<WorkoutExecution> executions = const [],
-  }) : executions = List<WorkoutExecution>.unmodifiable(
+    List<FamilyRevision> families = const [],
+  }) : families = List<FamilyRevision>.unmodifiable(
+         <FamilyRevision>[...families]..sort((a, b) {
+           final id = a.family.id.compareTo(b.family.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       executions = List<WorkoutExecution>.unmodifiable(
          <WorkoutExecution>[...executions]
            ..sort((a, b) => a.id.compareTo(b.id)),
        ),
@@ -83,10 +90,14 @@ final class TrainingArchive {
       'bodyMass',
       'timers',
       'executions',
+      'families',
     });
     List<Object?> optional(String key) =>
         json.containsKey(key) ? jsonList(json, key) : const [];
     return TrainingArchive(
+      families: [
+        for (final f in optional('families')) FamilyRevision.fromJson(f),
+      ],
       revisions: [
         for (final item in jsonList(json, 'revisions'))
           WorkoutRevision.fromJson(item),
@@ -130,6 +141,7 @@ final class TrainingArchive {
   }
 
   final List<WorkoutExecution> executions;
+  final List<FamilyRevision> families;
   final List<TimingActivity> timers;
   final List<BodyMassRecord> bodyMass;
   final List<WorkoutRevision> revisions;
@@ -142,6 +154,7 @@ final class TrainingArchive {
   final List<ProgramReceipt> programReceipts;
 
   Map<String, Object?> toJson() => {
+    'families': [for (final f in families) f.toJson()],
     'executions': [for (final e in executions) e.toJson()],
     'timers': [for (final t in timers) t.toJson()],
     'bodyMass': [for (final r in bodyMass) r.toJson()],
@@ -156,6 +169,7 @@ final class TrainingArchive {
   };
 
   Map<String, Object?> get summary => {
+    'families': families.length,
     'executions': executions.length,
     'timers': timers.length,
     'bodyMass': bodyMass.length,
@@ -170,6 +184,7 @@ final class TrainingArchive {
   };
 
   void _validate() {
+    validateFamilyRevisions(families);
     validateTimingData(timers, sessions);
     validateExecutionData(executions, sessions, timers);
     if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)

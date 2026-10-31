@@ -269,6 +269,274 @@ class RevisionsCompanion extends UpdateCompanion<Revision> {
   }
 }
 
+class $FamilyRevisionsTable extends FamilyRevisions
+    with TableInfo<$FamilyRevisionsTable, StoredFamilyRevision> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FamilyRevisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _familyIdMeta = const VerificationMeta(
+    'familyId',
+  );
+  @override
+  late final GeneratedColumn<String> familyId = GeneratedColumn<String>(
+    'family_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [familyId, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'family_revisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredFamilyRevision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('family_id')) {
+      context.handle(
+        _familyIdMeta,
+        familyId.isAcceptableOrUnknown(data['family_id']!, _familyIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_familyIdMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {familyId, number};
+  @override
+  StoredFamilyRevision map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredFamilyRevision(
+      familyId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}family_id'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $FamilyRevisionsTable createAlias(String alias) {
+    return $FamilyRevisionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredFamilyRevision extends DataClass
+    implements Insertable<StoredFamilyRevision> {
+  final String familyId;
+  final int number;
+  final String snapshot;
+  const StoredFamilyRevision({
+    required this.familyId,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['family_id'] = Variable<String>(familyId);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  FamilyRevisionsCompanion toCompanion(bool nullToAbsent) {
+    return FamilyRevisionsCompanion(
+      familyId: Value(familyId),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredFamilyRevision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredFamilyRevision(
+      familyId: serializer.fromJson<String>(json['familyId']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'familyId': serializer.toJson<String>(familyId),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredFamilyRevision copyWith({
+    String? familyId,
+    int? number,
+    String? snapshot,
+  }) => StoredFamilyRevision(
+    familyId: familyId ?? this.familyId,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredFamilyRevision copyWithCompanion(FamilyRevisionsCompanion data) {
+    return StoredFamilyRevision(
+      familyId: data.familyId.present ? data.familyId.value : this.familyId,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredFamilyRevision(')
+          ..write('familyId: $familyId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(familyId, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredFamilyRevision &&
+          other.familyId == this.familyId &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class FamilyRevisionsCompanion extends UpdateCompanion<StoredFamilyRevision> {
+  final Value<String> familyId;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const FamilyRevisionsCompanion({
+    this.familyId = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FamilyRevisionsCompanion.insert({
+    required String familyId,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : familyId = Value(familyId),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredFamilyRevision> custom({
+    Expression<String>? familyId,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (familyId != null) 'family_id': familyId,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FamilyRevisionsCompanion copyWith({
+    Value<String>? familyId,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return FamilyRevisionsCompanion(
+      familyId: familyId ?? this.familyId,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (familyId.present) {
+      map['family_id'] = Variable<String>(familyId.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FamilyRevisionsCompanion(')
+          ..write('familyId: $familyId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -2890,6 +3158,9 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
   late final $RevisionsTable revisions = $RevisionsTable(this);
+  late final $FamilyRevisionsTable familyRevisions = $FamilyRevisionsTable(
+    this,
+  );
   late final $SessionsTable sessions = $SessionsTable(this);
   late final $FinalizationsTable finalizations = $FinalizationsTable(this);
   late final $ProgressionDecisionsTable progressionDecisions =
@@ -2918,6 +3189,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     revisions,
+    familyRevisions,
     sessions,
     finalizations,
     progressionDecisions,
@@ -3099,6 +3371,189 @@ typedef $$RevisionsTableProcessedTableManager =
       $$RevisionsTableUpdateCompanionBuilder,
       (Revision, BaseReferences<_$TrainingDatabase, $RevisionsTable, Revision>),
       Revision,
+      PrefetchHooks Function()
+    >;
+typedef $$FamilyRevisionsTableCreateCompanionBuilder =
+    FamilyRevisionsCompanion Function({
+      required String familyId,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$FamilyRevisionsTableUpdateCompanionBuilder =
+    FamilyRevisionsCompanion Function({
+      Value<String> familyId,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$FamilyRevisionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $FamilyRevisionsTable> {
+  $$FamilyRevisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get familyId => $composableBuilder(
+    column: $table.familyId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FamilyRevisionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $FamilyRevisionsTable> {
+  $$FamilyRevisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get familyId => $composableBuilder(
+    column: $table.familyId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FamilyRevisionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $FamilyRevisionsTable> {
+  $$FamilyRevisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get familyId =>
+      $composableBuilder(column: $table.familyId, builder: (column) => column);
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$FamilyRevisionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $FamilyRevisionsTable,
+          StoredFamilyRevision,
+          $$FamilyRevisionsTableFilterComposer,
+          $$FamilyRevisionsTableOrderingComposer,
+          $$FamilyRevisionsTableAnnotationComposer,
+          $$FamilyRevisionsTableCreateCompanionBuilder,
+          $$FamilyRevisionsTableUpdateCompanionBuilder,
+          (
+            StoredFamilyRevision,
+            BaseReferences<
+              _$TrainingDatabase,
+              $FamilyRevisionsTable,
+              StoredFamilyRevision
+            >,
+          ),
+          StoredFamilyRevision,
+          PrefetchHooks Function()
+        > {
+  $$FamilyRevisionsTableTableManager(
+    _$TrainingDatabase db,
+    $FamilyRevisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FamilyRevisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FamilyRevisionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FamilyRevisionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> familyId = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FamilyRevisionsCompanion(
+                familyId: familyId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String familyId,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => FamilyRevisionsCompanion.insert(
+                familyId: familyId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$FamilyRevisionsTable, StoredFamilyRevision>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $FamilyRevisionsTable,
+                    StoredFamilyRevision
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FamilyRevisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $FamilyRevisionsTable,
+      StoredFamilyRevision,
+      $$FamilyRevisionsTableFilterComposer,
+      $$FamilyRevisionsTableOrderingComposer,
+      $$FamilyRevisionsTableAnnotationComposer,
+      $$FamilyRevisionsTableCreateCompanionBuilder,
+      $$FamilyRevisionsTableUpdateCompanionBuilder,
+      (
+        StoredFamilyRevision,
+        BaseReferences<
+          _$TrainingDatabase,
+          $FamilyRevisionsTable,
+          StoredFamilyRevision
+        >,
+      ),
+      StoredFamilyRevision,
       PrefetchHooks Function()
     >;
 typedef $$SessionsTableCreateCompanionBuilder =
@@ -6501,6 +6956,8 @@ class $TrainingDatabaseManager {
   $TrainingDatabaseManager(this._db);
   $$RevisionsTableTableManager get revisions =>
       $$RevisionsTableTableManager(_db, _db.revisions);
+  $$FamilyRevisionsTableTableManager get familyRevisions =>
+      $$FamilyRevisionsTableTableManager(_db, _db.familyRevisions);
   $$SessionsTableTableManager get sessions =>
       $$SessionsTableTableManager(_db, _db.sessions);
   $$FinalizationsTableTableManager get finalizations =>

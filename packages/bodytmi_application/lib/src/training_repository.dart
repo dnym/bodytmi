@@ -13,6 +13,8 @@ abstract interface class TrainingRepository {
   Future<T> transaction<T>(Future<T> Function() action);
   Future<WorkoutRevision?> revision(String templateId, [int? number]);
   Future<List<WorkoutRevision>> revisions();
+  Future<List<FamilyRevision>> familyRevisions();
+  Future<void> insertFamilyRevision(FamilyRevision revision);
   Future<List<String>> finalizationIds();
   Future<List<ProgressionDecision>> progressionDecisions();
   Future<void> saveProgressionDecision(ProgressionDecision decision);
@@ -47,6 +49,7 @@ final class StoredTrainingService {
   Future<TrainingArchive> exportArchive() => repository.transaction(
     () async => TrainingArchive(
       revisions: await repository.revisions(),
+      families: await repository.familyRevisions(),
       sessions: await repository.sessions(),
       finalizations: await repository.finalizationIds(),
       progressions: await repository.progressionDecisions(),

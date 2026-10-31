@@ -453,14 +453,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          11,
+          12,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/11',
+          'bodytmi-logical-export/12',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
@@ -568,6 +568,7 @@ void programTests() {
           jsonDecode(await file.readAsString()),
           'document',
         );
+        jsonObject(doc['data'], 'data').remove('families');
         doc['format'] = 'bodytmi-logical-export/2';
         doc.remove('sha256');
         doc['sha256'] = sha256
@@ -819,6 +820,7 @@ void programTests() {
           'bodyMass',
           'timers',
           'executions',
+          'families',
         ])
           data.remove(key);
         final envelope = <String, Object?>{

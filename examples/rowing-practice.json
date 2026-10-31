@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "rowing-practice",
+    "name": "Row implementations",
+    "slots": [
+      {"id": "barbell", "exercise": "row", "implementation": "barbell", "equipment": "practice-bar",
+       "targets": {"mass": {"value": "30", "unit": "kg"}, "reps": {"value": "8", "unit": "rep"}}},
+      {"id": "dumbbell", "exercise": "row", "implementation": "dumbbell", "equipment": "practice-dumbbell",
+       "targets": {"mass": {"value": "20", "unit": "kg"}, "reps": {"value": "12", "unit": "rep"}}},
+      {"id": "machine", "exercise": "row", "implementation": "machine", "equipment": "practice-row-machine",
+       "targets": {"mass": {"value": "40", "unit": "kg"}, "reps": {"value": "10", "unit": "rep"}}}
+    ],
+    "plan": {"id": "practice", "type": "sequence", "children": [
+      {"id": "barbell-set", "type": "effort", "slot": "barbell"},
+      {"id": "dumbbell-set", "type": "effort", "slot": "dumbbell"},
+      {"id": "machine-set", "type": "effort", "slot": "machine"}
+    ]}
+  }
+}

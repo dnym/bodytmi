@@ -110,6 +110,7 @@ final class NativeBackup {
           9,
           10,
           11,
+          12,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -202,7 +203,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}.contains(db.userVersion) ||
+      if (!{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -226,6 +227,7 @@ final class NativeBackup {
         if (db.userVersion >= 4) 'body_mass_records',
         if (db.userVersion >= 7) 'timing_activities',
         if (db.userVersion >= 8) 'workout_executions',
+        if (db.userVersion >= 12) 'family_revisions',
         if (db.userVersion >= 3) ...[
           'program_revisions',
           'program_runs',
@@ -239,6 +241,19 @@ final class NativeBackup {
         ).isNotEmpty) {
           invalid('Backup record exceeds the 8 MiB resource limit.');
         }
+      }
+      if (db.userVersion >= 12) {
+        final families = <FamilyRevision>[];
+        for (final row in db.select('SELECT * FROM family_revisions')) {
+          final family = FamilyRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (family.family.id != row['family_id'] ||
+              family.number != row['number'])
+            invalid('Family revision row identity mismatch.');
+          families.add(family);
+        }
+        validateFamilyRevisions(families);
       }
       final revisions = db.prepare(
         'SELECT template_id, number, snapshot FROM revisions ORDER BY template_id, number',

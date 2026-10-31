@@ -18,3 +18,4 @@ export 'src/effective_mass_service.dart';
 export 'src/timing_service.dart';
 export 'src/execution_service.dart';
 export 'src/training_analytics.dart';
+export 'src/family_service.dart';

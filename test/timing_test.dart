@@ -440,7 +440,7 @@ void timingTests() {
         instant(1),
       );
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 11);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 12);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
@@ -493,6 +493,7 @@ void timingTests() {
         'applicationVersion': '0.1.0',
         'data': Map<String, Object?>.from(original)
           ..remove('timers')
+          ..remove('families')
           ..remove('executions'),
       };
       doc['sha256'] = sha256
@@ -515,6 +516,7 @@ void timingTests() {
       await store.close();
       final raw = sqlite3.open('$dir/db.sqlite');
       try {
+        raw.execute('DROP TABLE family_revisions');
         raw.execute('DROP TABLE workout_executions');
         raw.execute('DROP TABLE timing_activities');
         raw.execute('PRAGMA user_version = 6');

@@ -319,6 +319,7 @@ void declineTests() {
         jsonDecode(await File('$dir/old.json').readAsString()),
         'old',
       );
+      jsonObject(oldJson['data'], 'data').remove('families');
       oldJson['format'] = 'bodytmi-logical-export/10';
       oldJson.remove('sha256');
       oldJson['sha256'] = sha256
@@ -332,6 +333,7 @@ void declineTests() {
         await legacy.close();
       }
       final old = sqlite3.open('$dir/old/database.sqlite');
+      old.execute('DROP TABLE family_revisions');
       old.userVersion = 10;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 10);
@@ -341,7 +343,7 @@ void declineTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), before);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          11,
+          12,
         );
       } finally {
         await migrated.close();
@@ -363,7 +365,7 @@ void declineTests() {
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/11',
+          'bodytmi-logical-export/12',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -403,6 +405,7 @@ void declineTests() {
         await active.close();
       }
       final forged = sqlite3.open('$dir/native/database.sqlite');
+      forged.execute('DROP TABLE family_revisions');
       forged.userVersion = 10;
       forged.close();
       rejects(
@@ -412,6 +415,7 @@ void declineTests() {
         jsonDecode(await File('$dir/new.json').readAsString()),
         'logical',
       );
+      jsonObject(mislabeled['data'], 'data').remove('families');
       mislabeled['format'] = 'bodytmi-logical-export/10';
       mislabeled.remove('sha256');
       mislabeled['sha256'] = sha256

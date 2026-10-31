@@ -205,6 +205,7 @@ void executionTests() {
       final original = canonicalJson((await store.archive()).toJson());
       await store.backup('$dir/v8');
       final old = sqlite3.open('$dir/v8/database.sqlite');
+      old.execute('DROP TABLE family_revisions');
       old.userVersion = 8;
       old.close();
       equal(await NativeBackup.validateDatabase('$dir/v8/database.sqlite'), 8);
@@ -214,7 +215,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          11,
+          12,
         );
       } finally {
         await migrated.close();
@@ -229,6 +230,7 @@ void executionTests() {
           jsonDecode(await File('$dir/old.json').readAsString()),
           'legacy',
         );
+        jsonObject(legacy['data'], 'data').remove('families');
         legacy['format'] = 'bodytmi-logical-export/8';
         legacy.remove('sha256');
         legacy['sha256'] = sha256
@@ -291,6 +293,7 @@ void executionTests() {
           3,
         );
         final forged = sqlite3.open('$dir/native/database.sqlite');
+        forged.execute('DROP TABLE family_revisions');
         forged.userVersion = 8;
         forged.close();
         rejects(
@@ -300,6 +303,7 @@ void executionTests() {
           jsonDecode(await File('$dir/new.json').readAsString()),
           'export',
         );
+        jsonObject(mislabeled['data'], 'data').remove('families');
         mislabeled['format'] = 'bodytmi-logical-export/8';
         mislabeled.remove('sha256');
         mislabeled['sha256'] = sha256
@@ -1229,13 +1233,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 11);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 12);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/11',
+        'bodytmi-logical-export/12',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -1309,7 +1313,9 @@ void executionTests() {
       final doc = <String, Object?>{
         'format': 'bodytmi-logical-export/7',
         'applicationVersion': '0.1.0',
-        'data': Map<String, Object?>.from(original)..remove('executions'),
+        'data': Map<String, Object?>.from(original)
+          ..remove('families')
+          ..remove('executions'),
       };
       doc['sha256'] = sha256
           .convert(utf8.encode(canonicalJson(doc)))
@@ -1331,6 +1337,7 @@ void executionTests() {
       await store.close();
       final raw = sqlite3.open('$dir/db.sqlite');
       try {
+        raw.execute('DROP TABLE family_revisions');
         raw.execute('DROP TABLE workout_executions');
         raw.execute('PRAGMA user_version = 7');
       } finally {
@@ -1368,7 +1375,9 @@ void executionTests() {
         final payload = <String, Object?>{
           'format': 'bodytmi-logical-export/7',
           'applicationVersion': '0.1.0',
-          'data': (await upgraded.archive()).toJson()..remove('executions'),
+          'data': (await upgraded.archive()).toJson()
+            ..remove('families')
+            ..remove('executions'),
         };
         payload['sha256'] = sha256
             .convert(utf8.encode(canonicalJson(payload)))
@@ -1377,6 +1386,7 @@ void executionTests() {
         await _fails(LogicalArchiveFiles.prepare('$dir/rest-forged.json'));
         final forged = sqlite3.open('$dir/rest-native/database.sqlite');
         try {
+          forged.execute('DROP TABLE family_revisions');
           forged.execute('DROP TABLE workout_executions');
           forged.execute('PRAGMA user_version = 7');
         } finally {

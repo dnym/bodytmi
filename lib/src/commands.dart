@@ -11,6 +11,7 @@ const commandNames = [
   'session show',
   'session summary',
   'history series',
+  'family validate',
   'session mass-status',
   'session effective-load',
   'session complete',
@@ -115,6 +116,7 @@ final class Commands {
           'until',
           'includeWarmups',
           'includeActive',
+          'family',
         });
         data = const TrainingAnalytics().series(
           [for (final s in jsonList(request, 'sessions')) sessionFromJson(s)],
@@ -134,7 +136,13 @@ final class Commands {
               : null,
           includeWarmups: _bool(request, 'includeWarmups'),
           includeActive: _bool(request, 'includeActive'),
+          family: request.containsKey('family')
+              ? FamilyRevision.fromJson(request['family'])
+              : null,
         );
+      case 'family validate':
+        keys({'family'});
+        data = ExerciseFamily.fromJson(request['family']).toJson();
       case 'session complete':
         keys({'session', 'setId', 'actuals', 'acceptSuggested'});
         data = const TrainingService()

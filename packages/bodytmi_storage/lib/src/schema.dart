@@ -47,6 +47,12 @@ const schemaV8 = {
       'CREATE TABLE "workout_executions" ("id" TEXT NOT NULL, "session_id" TEXT NOT NULL REFERENCES sessions (id), "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"), UNIQUE ("session_id"))',
 };
 
+const schemaV12 = {
+  ...schemaV8,
+  'family_revisions':
+      'CREATE TABLE "family_revisions" ("family_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("family_id", "number"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -59,6 +65,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   9 => schemaV8, // Same tables; v9 adds atomic group-skip receipt payloads.
   10 => schemaV8, // Same tables; v10 adds tempo timing plans.
   11 => schemaV8, // Same tables; v11 adds terminal progression declines.
+  12 => schemaV12,
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

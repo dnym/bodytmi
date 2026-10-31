@@ -1,3 +1,4 @@
+import 'family_test.dart';
 import 'analytics_test.dart';
 import 'decline_test.dart';
 import 'tempo_test.dart';
@@ -21,6 +22,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  familyTests();
   analyticsTests();
   declineTests();
   tempoTests();

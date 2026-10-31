@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/11';
+const _format = 'bodytmi-logical-export/12';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -72,6 +72,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/8',
       'bodytmi-logical-export/9',
       'bodytmi-logical-export/10',
+      'bodytmi-logical-export/11',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -80,7 +81,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final declineData = input['format'] == _format;
+    final familyData = input['format'] == _format;
+    final declineData =
+        familyData || input['format'] == 'bodytmi-logical-export/11';
     final tempoData =
         declineData || input['format'] == 'bodytmi-logical-export/10';
     final groupData =
@@ -112,6 +115,7 @@ final class LogicalArchiveFiles {
       if (massData) 'bodyMass',
       if (timingData) 'timers',
       if (executionData) 'executions',
+      if (familyData) 'families',
     });
     if (!legacy && !inputData.containsKey('progressions'))
       invalid('Logical format requires progression records.');
@@ -123,6 +127,8 @@ final class LogicalArchiveFiles {
       invalid('Logical v7 requires timing records.');
     if (executionData && !inputData.containsKey('executions'))
       invalid('Logical v8 requires execution records.');
+    if (familyData && !inputData.containsKey('families'))
+      invalid('Logical v12 requires family revisions.');
     final archive = TrainingArchive.fromJson(inputData);
     if (!declineData && archive.progressions.any((d) => d.declinedAt != null))
       invalid('Progression declines require logical v11.');
@@ -154,6 +160,7 @@ final class LogicalArchiveFiles {
     if (!massData) data.remove('bodyMass');
     if (!timingData) data.remove('timers');
     if (!executionData) data.remove('executions');
+    if (!familyData) data.remove('families');
     if (!programData) for (final key in programKeys) data.remove(key);
     if (_checksum({
           'format': input['format'],
@@ -172,11 +179,17 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV8.values) {
+          for (final ddl in schemaV12.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 11');
+          db.execute('PRAGMA user_version = 12');
+          for (final family in archive.families) {
+            db.execute(
+              'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
+              [family.family.id, family.number, canonicalJson(family.toJson())],
+            );
+          }
           for (final revision in archive.revisions) {
             db.execute(
               'INSERT INTO revisions (template_id, number, snapshot) VALUES (?, ?, ?)',
