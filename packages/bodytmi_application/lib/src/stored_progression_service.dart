@@ -10,13 +10,21 @@ final class StoredProgressionService {
   Future<ProgressionDecision> propose(
     String sessionId,
     String slotId,
-    Map<String, Object?> rule,
-  ) => repository.transaction(() async {
-    DoubleProgressionRule.fromJson(rule);
+    Map<String, Object?> rule, {
+    String ruleType = 'double',
+  }) => repository.transaction(() async {
+    if (ruleType == 'double') {
+      DoubleProgressionRule.fromJson(rule);
+    } else if (ruleType == 'threshold') {
+      ThresholdRule.fromJson(rule);
+    } else {
+      invalid('Unknown stored progression rule type.');
+    }
     final all = await repository.progressionDecisions();
     final existing = all.where((d) => d.id == '$sessionId/$slotId').firstOrNull;
     if (existing?.resolvedAt != null) {
-      if (canonicalJson(existing!.rule) != canonicalJson(rule))
+      if (existing!.ruleType != ruleType ||
+          canonicalJson(existing.rule) != canonicalJson(rule))
         _conflict('This exposure already resolved a different rule.');
       return existing;
     }
@@ -35,7 +43,9 @@ final class StoredProgressionService {
       candidates.single,
       runId: runId,
     );
-    if (before != null && canonicalJson(before.rule) != canonicalJson(rule))
+    if (before != null &&
+        (before.ruleType != ruleType ||
+            canonicalJson(before.rule) != canonicalJson(rule)))
       _conflict('Changing an active rule requires explicit reconciliation.');
     final next = ProgressionDecision(
       session: session,
@@ -46,6 +56,8 @@ final class StoredProgressionService {
       previousFailures: before?.failedSessions ?? 0,
       version: (existing?.version ?? 0) + 1,
       runId: runId,
+      ruleType: ruleType,
+      previousCursor: before?.cursor ?? 0,
     );
     if (before != null && !matchesProgressionBaseline(next, before))
       _conflict(

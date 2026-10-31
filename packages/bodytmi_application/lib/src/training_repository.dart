@@ -159,12 +159,11 @@ final class StoredTrainingService {
         sets.add(set);
         continue;
       }
-      final rule = DoubleProgressionRule.fromJson(applied.rule);
       final vector = applied.nextSets;
       final count = workingCounts[set.slotId];
       if (vector.length != count) _conflict();
       final slot = prescription.definition.slot(set.slotId);
-      for (final metric in [rule.objective, rule.lever]) {
+      for (final metric in applied.controlledMetrics) {
         if (set.suggested[metric]?.dimension !=
             vector[set.ordinal][metric]!.dimension)
           _conflict();
@@ -173,8 +172,8 @@ final class StoredTrainingService {
       }
       final suggested = {
         ...set.suggested,
-        rule.objective: vector[set.ordinal][rule.objective]!,
-        rule.lever: vector[set.ordinal][rule.lever]!,
+        for (final metric in applied.controlledMetrics)
+          metric: vector[set.ordinal][metric]!,
       };
       sets.add(
         TrainingSet(
@@ -185,8 +184,7 @@ final class StoredTrainingService {
           suggested: suggested,
           sources: {
             for (final e in set.sources.entries)
-              if (e.key != rule.objective && e.key != rule.lever)
-                e.key: e.value,
+              if (!applied.controlledMetrics.contains(e.key)) e.key: e.value,
           },
         ),
       );

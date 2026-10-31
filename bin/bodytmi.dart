@@ -23,7 +23,7 @@ Future<void> main(List<String> arguments) async {
           'archive':
               'export requires database/destination; validate requires source; restore requires database/source/recoveryDestination/confirm:true. Logical exports are JSON files; recovery backups are directories.',
           'progression':
-              'propose requires database/sessionId/slotId/rule; accept requires database/sessionId/slotId/expectedVersion/acceptedAt; decline requires database/sessionId/slotId/expectedVersion/declinedAt; show requires database/sessionId/slotId. Declines hold targets and resolve exposure counters once. Stored application currently supports manual double progression.',
+              'propose requires database/sessionId/slotId/rule; accept requires database/sessionId/slotId/expectedVersion/acceptedAt; decline requires database/sessionId/slotId/expectedVersion/declinedAt; show requires database/sessionId/slotId. Declines hold targets and resolve exposure counters once. Stored application supports manual double and numeric threshold progression; propose accepts optional ruleType:threshold with all/roundRobin/weighted coordination. Only accepted applicable transitions consume coordinator positions.',
           'bodyMass':
               'mass record/update/delete/show/list/trend/resolve use stored observations and require database. Updates/deletion require expectedVersion; deletion requires confirm:true. measurement trend/resolve still take explicit measurement arrays.',
           'sessionBodyMass':

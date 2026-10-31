@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "threshold-practice",
+    "name": "Numeric threshold practice",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom",
+        "implementation": "custom",
+        "targets": {
+          "duration": {
+            "value": "60",
+            "unit": "s"
+          },
+          "mass": {
+            "value": "10",
+            "unit": "kg"
+          },
+          "distance": {
+            "value": "1",
+            "unit": "m"
+          },
+          "angle": {
+            "value": "1",
+            "unit": "rad"
+          },
+          "reps": {
+            "value": "5",
+            "unit": "rep"
+          }
+        },
+        "prefill": [
+          "reps"
+        ]
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "warmup",
+          "type": "effort",
+          "slot": "movement",
+          "role": "warmup"
+        },
+        {
+          "id": "work",
+          "type": "repeat",
+          "count": 2,
+          "child": {
+            "id": "set",
+            "type": "effort",
+            "slot": "movement"
+          }
+        }
+      ]
+    }
+  }
+}

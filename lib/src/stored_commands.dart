@@ -215,7 +215,7 @@ Future<Map<String, Object?>> executeStored(
     'archive export' => {'destination'},
     'archive validate' => {'source'},
     'archive restore' => {'source', 'recoveryDestination', 'confirm'},
-    'progression propose' => {'sessionId', 'slotId', 'rule'},
+    'progression propose' => {'sessionId', 'slotId', 'rule', 'ruleType'},
     'progression show' => {'sessionId', 'slotId'},
     'progression accept' => {
       'sessionId',
@@ -677,6 +677,9 @@ Future<Map<String, Object?>> executeStored(
             sessionId,
             slotId,
             jsonObject(request['rule'], 'rule'),
+            ruleType: request.containsKey('ruleType')
+                ? requiredString(request, 'ruleType')
+                : 'double',
           ),
           'progression accept' => await progression.accept(
             sessionId,
@@ -701,6 +704,8 @@ Future<Map<String, Object?>> executeStored(
               ? null
               : {
                   'failedSessions': decision.failedSessions,
+                  if (decision.ruleType == 'threshold')
+                    'cursor': decision.cursor,
                   'nextSets': [
                     for (final set in decision.nextSets) metricsToJson(set),
                   ],

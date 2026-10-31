@@ -1,6 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'session_codec.dart';
 import 'canonical_json.dart';
+import 'progression_evaluation.dart';
 
 /// Stable exposure identity is session/slot, never a result content version.
 final class ProgressionDecision {
@@ -15,12 +16,17 @@ final class ProgressionDecision {
     this.acceptedAt,
     this.declinedAt,
     this.runId,
+    this.ruleType = 'double',
+    this.previousCursor = 0,
   }) : rule = _freeze(rule) as Map<String, Object?> {
     if (session.status != SessionStatus.finalized)
       invalid('Progression requires finalized confirmed work.');
     identifier({'id': slotId}, 'id');
     if (runId != null) identifier({'id': runId}, 'id');
     if (version < 1 ||
+        !{'double', 'threshold'}.contains(ruleType) ||
+        previousCursor < 0 ||
+        (ruleType == 'double' && previousCursor != 0) ||
         previousSequence < 0 ||
         previousFailures < 0 ||
         ((previousApplication == null) != (previousSequence == 0)))
@@ -53,6 +59,8 @@ final class ProgressionDecision {
       'declinedAt',
       'proposal',
       'runId',
+      'ruleType',
+      'previousCursor',
     });
     int count(String key, int min) {
       final v = j[key];
@@ -63,6 +71,10 @@ final class ProgressionDecision {
     final previous = j['previousApplication'];
     if (previous != null && previous is! String)
       invalid('Invalid previous application identity.');
+    final kind = j['ruleType'] ?? 'double';
+    if (kind is! String ||
+        (kind != 'threshold' && j.containsKey('previousCursor')))
+      invalid('Invalid stored rule type or coordinator state.');
     final decision = ProgressionDecision(
       session: sessionFromJson(j['session']),
       slotId: identifier(j, 'slotId'),
@@ -78,6 +90,8 @@ final class ProgressionDecision {
           ? parseInstant(j['declinedAt'], 'declinedAt')
           : null,
       runId: j['runId'] == null ? null : identifier(j, 'runId'),
+      ruleType: kind,
+      previousCursor: kind == 'threshold' ? count('previousCursor', 0) : 0,
     );
     if (canonicalJson(j['proposal']) !=
         canonicalJson(decision.proposal.toJson()))
@@ -97,6 +111,19 @@ final class ProgressionDecision {
       ? 'declined'
       : 'pending';
   final String? runId;
+  final String ruleType;
+  final int previousCursor;
+  int get cursor => declinedAt != null ? previousCursor : proposal.cursor;
+  late final Set<String> controlledMetrics = ruleType == 'double'
+      ? {
+          DoubleProgressionRule.fromJson(rule).objective,
+          DoubleProgressionRule.fromJson(rule).lever,
+        }
+      : {
+          ...ThresholdRule.fromJson(rule).increments.keys,
+          ...ThresholdRule.fromJson(rule).resets.keys,
+          ...ThresholdRule.fromJson(rule).deloadMetrics,
+        };
   String get id => '${session.id}/$slotId';
   int get sequence => previousSequence + (resolvedAt == null ? 0 : 1);
 
@@ -121,15 +148,23 @@ final class ProgressionDecision {
   late final List<TrainingSet> sets = List.unmodifiable(
     session.sets.where((s) => s.slotId == slotId && s.role == 'work'),
   );
-  late final DoubleProgressionProposal proposal =
-      DoubleProgressionRule.fromJson(rule).evaluate(
-        currentSets: [for (final s in sets) s.suggested],
-        results: [
-          for (final s in sets)
-            s.status == SetStatus.completed ? s.actuals : null,
-        ],
-        failedSessions: previousFailures,
-      );
+  late final ProgressionEvaluation proposal = ruleType == 'threshold'
+      ? ProgressionEvaluation.threshold(
+          ThresholdRule.fromJson(rule),
+          sets,
+          previousFailures,
+          previousCursor,
+        )
+      : ProgressionEvaluation.double(
+          DoubleProgressionRule.fromJson(rule).evaluate(
+            currentSets: [for (final s in sets) s.suggested],
+            results: [
+              for (final s in sets)
+                s.status == SetStatus.completed ? s.actuals : null,
+            ],
+            failedSessions: previousFailures,
+          ),
+        );
   bool sameContext(ProgressionDecision other) =>
       runId == other.runId &&
       session.revision.definition.id == other.session.revision.definition.id &&
@@ -148,6 +183,8 @@ final class ProgressionDecision {
     acceptedAt: at,
     declinedAt: declinedAt,
     runId: runId,
+    ruleType: ruleType,
+    previousCursor: previousCursor,
   );
   ProgressionDecision decline(DateTime at) => ProgressionDecision(
     session: session,
@@ -160,6 +197,8 @@ final class ProgressionDecision {
     acceptedAt: acceptedAt,
     declinedAt: at,
     runId: runId,
+    ruleType: ruleType,
+    previousCursor: previousCursor,
   );
   Map<String, Object?> toJson() => {
     'session': session.toJson(),
@@ -173,6 +212,10 @@ final class ProgressionDecision {
     if (declinedAt != null) 'declinedAt': declinedAt!.toUtc().toIso8601String(),
     'proposal': proposal.toJson(),
     if (runId != null) 'runId': runId,
+    if (ruleType == 'threshold') ...{
+      'ruleType': ruleType,
+      'previousCursor': previousCursor,
+    },
   };
 }
 
@@ -239,11 +282,15 @@ void validateProgressionDecisions(
           d.previousSequence != 0 ||
           d.previousFailures != 0)
         invalid('Progression base application is missing.');
+      if (d.previousCursor != 0)
+        invalid('Initial coordinator cursor must be zero.');
     } else {
       if (before.resolvedAt == null ||
           !d.sameContext(before) ||
           d.previousSequence != before.sequence ||
           d.previousFailures != before.failedSessions ||
+          d.ruleType != before.ruleType ||
+          d.previousCursor != before.cursor ||
           canonicalJson(d.rule) != canonicalJson(before.rule))
         invalid('Progression lineage is inconsistent.');
       if (!matchesProgressionBaseline(d, before))
@@ -268,11 +315,10 @@ bool matchesProgressionBaseline(
   ProgressionDecision decision,
   ProgressionDecision before,
 ) {
-  final rule = DoubleProgressionRule.fromJson(decision.rule);
   final expected = before.nextSets;
   if (expected.length != decision.sets.length) return false;
   for (var i = 0; i < expected.length; i++) {
-    for (final metric in [rule.objective, rule.lever]) {
+    for (final metric in decision.controlledMetrics) {
       final actual = decision.sets[i].suggested[metric];
       if (actual == null || actual.compareTo(expected[i][metric]!) != 0)
         return false;
