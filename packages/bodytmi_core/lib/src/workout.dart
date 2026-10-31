@@ -1,6 +1,7 @@
 import 'activity.dart';
 import 'body_mass_input.dart';
 import 'errors.dart';
+import 'effective_mass.dart';
 import 'quantity.dart';
 
 final class ExerciseSlot {
@@ -13,6 +14,7 @@ final class ExerciseSlot {
     this.targets,
     this.prefillMetrics,
     this.bodyMass,
+    this.effectiveMass,
   );
 
   factory ExerciseSlot.fromJson(Object? input) {
@@ -26,6 +28,7 @@ final class ExerciseSlot {
       'targets',
       'prefill',
       'bodyMass',
+      'effectiveMass',
     });
     final targets = metricsFromJson(json['targets']);
     if (targets.isEmpty) invalid('A slot needs at least one target metric.');
@@ -36,6 +39,13 @@ final class ExerciseSlot {
     }
     final note = json['setupNote'];
     if (note != null && note is! String) invalid('setupNote must be a string.');
+    final bodyMass = json['bodyMass'] == null
+        ? null
+        : BodyMassSelection.fromJson(json['bodyMass']);
+    final effectiveMass = json['effectiveMass'] == null
+        ? null
+        : EffectiveMassModel.fromJson(json['effectiveMass']);
+    effectiveMass?.validateBindings(targets, hasBodyMass: bodyMass != null);
     return ExerciseSlot._(
       identifier(json, 'id'),
       identifier(json, 'exercise'),
@@ -44,9 +54,8 @@ final class ExerciseSlot {
       note as String?,
       targets,
       Set.unmodifiable(prefill.cast<String>()),
-      json['bodyMass'] == null
-          ? null
-          : BodyMassSelection.fromJson(json['bodyMass']),
+      bodyMass,
+      effectiveMass,
     );
   }
 
@@ -58,6 +67,7 @@ final class ExerciseSlot {
   final Metrics targets;
   final Set<String> prefillMetrics;
   final BodyMassSelection? bodyMass;
+  final EffectiveMassModel? effectiveMass;
 
   bool compatibleWith(ExerciseSlot other) =>
       id == other.id &&
@@ -75,6 +85,7 @@ final class ExerciseSlot {
     'targets': metricsToJson(targets),
     'prefill': prefillMetrics.toList(),
     if (bodyMass != null) 'bodyMass': bodyMass!.toJson(),
+    if (effectiveMass != null) 'effectiveMass': effectiveMass!.toJson(),
   };
 }
 

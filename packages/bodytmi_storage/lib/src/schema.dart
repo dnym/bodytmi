@@ -41,6 +41,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   3 => schemaV3,
   4 => schemaV4,
   5 => schemaV4, // Same tables; v5 adds frozen body-mass session payloads.
+  6 => schemaV4, // Same tables; v6 adds pinned effective-mass models.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

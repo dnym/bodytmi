@@ -8,6 +8,7 @@ const storedCommandNames = [
   'store start',
   'store show',
   'store mass-status',
+  'store effective-load',
   'store complete',
   'store skip',
   'store finish',
@@ -60,6 +61,7 @@ Future<Map<String, Object?>> executeStored(
     },
     'store show' => {'id'},
     'store mass-status' => {'id'},
+    'store effective-load' => {'id'},
     'store complete' => {
       'id',
       'expectedVersion',
@@ -397,6 +399,10 @@ Future<Map<String, Object?>> executeStored(
             request['bodyMassOverrides'],
           ),
         )).toJson();
+      case 'store effective-load':
+        data = const EffectiveMassService().evaluate(
+          await service.session(identifier(request, 'id')),
+        );
       case 'store mass-status':
         data = await store.transaction(
           () async => const TrainingService().bodyMassStatus(

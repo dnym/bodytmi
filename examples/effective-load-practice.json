@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "effective-load-practice",
+    "name": "Explicit effective-load model example",
+    "slots": [
+      {
+        "id": "practice",
+        "exercise": "practice-movement",
+        "implementation": "configured-setup",
+        "targets": {
+          "addedMass": {"value": "10", "unit": "kg"},
+          "assistanceSetting": {"value": "20", "unit": "kg"},
+          "reps": {"value": "8", "unit": "rep"}
+        },
+        "bodyMass": {"context": "clothed-training"},
+        "effectiveMass": {
+          "id": "illustrative-model",
+          "version": 1,
+          "bodyMassFraction": "0.65",
+          "addedMass": {"metric": "addedMass", "multiplier": "1"},
+          "assistance": {"metric": "assistanceSetting", "multiplier": "0.5"}
+        }
+      }
+    ],
+    "plan": {"id": "practice-set", "type": "effort", "slot": "practice"}
+  }
+}

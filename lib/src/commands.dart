@@ -9,6 +9,7 @@ const commandNames = [
   'session start',
   'session show',
   'session mass-status',
+  'session effective-load',
   'session complete',
   'session skip',
   'session finish',
@@ -79,6 +80,11 @@ final class Commands {
               ),
             )
             .toJson();
+      case 'session effective-load':
+        keys({'session'});
+        data = const EffectiveMassService().evaluate(
+          sessionFromJson(request['session']),
+        );
       case 'session mass-status':
         keys({'session', 'measurements'});
         data = const TrainingService()
