@@ -73,6 +73,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
     schemaV12, // Same tables; v15 adds explicit result aggregation policies.
   16 =>
     schemaV12, // Same tables; v16 adds numeric harder directions and lower bounds.
+  17 => schemaV12, // Same tables; v17 adds chosen/priority vector coordination.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

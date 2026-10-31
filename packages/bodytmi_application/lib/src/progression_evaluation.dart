@@ -11,6 +11,7 @@ final class ProgressionEvaluation {
     this.cursor,
     this._double,
     this.assessment,
+    this.coordination,
   );
   factory ProgressionEvaluation.double(DoubleProgressionProposal p) =>
       ProgressionEvaluation._(
@@ -20,6 +21,7 @@ final class ProgressionEvaluation {
         p.failedSessions,
         0,
         p,
+        null,
         null,
       );
   factory ProgressionEvaluation.threshold(
@@ -91,6 +93,7 @@ final class ProgressionEvaluation {
       hold ? cursor : first.cursor,
       null,
       first.assessment,
+      first.coordination,
     );
   }
   final String outcome, reason;
@@ -98,6 +101,7 @@ final class ProgressionEvaluation {
   final int failedSessions, cursor;
   final DoubleProgressionProposal? _double;
   final ThresholdAssessment? assessment;
+  final LeverSelection? coordination;
   Map<String, Object?> toJson() =>
       _double?.toJson() ??
       {
@@ -107,5 +111,6 @@ final class ProgressionEvaluation {
         'nextState': {'failedSessions': failedSessions, 'cursor': cursor},
         'requiresAcceptance': true,
         if (assessment != null) 'assessment': assessment!.toJson(),
+        if (coordination != null) 'coordination': coordination!.toJson(),
       };
 }

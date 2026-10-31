@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "rule": {
+    "metric": "reps",
+    "minimum": {
+      "value": "5",
+      "unit": "rep"
+    },
+    "threshold": {
+      "value": "8",
+      "unit": "rep"
+    },
+    "increments": {
+      "assistance": {
+        "value": "5",
+        "unit": "kg"
+      },
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      },
+      "supportHeight": {
+        "value": "0.05",
+        "unit": "m"
+      }
+    },
+    "directions": {
+      "assistance": "decrease",
+      "supportHeight": "decrease"
+    },
+    "minimums": {
+      "assistance": {
+        "value": "38",
+        "unit": "kg"
+      },
+      "supportHeight": {
+        "value": "0.45",
+        "unit": "m"
+      }
+    },
+    "maximums": {
+      "assistance": {
+        "value": "60",
+        "unit": "kg"
+      },
+      "mass": {
+        "value": "11",
+        "unit": "kg"
+      }
+    },
+    "resets": {
+      "reps": {
+        "value": "5",
+        "unit": "rep"
+      }
+    },
+    "coordination": {
+      "mode": "chosen",
+      "metric": "mass"
+    },
+    "deloadAfter": 2,
+    "deloadPercent": "10",
+    "deloadMetrics": [
+      "assistance",
+      "mass",
+      "supportHeight"
+    ]
+  },
+  "current": {
+    "reps": {
+      "value": "8",
+      "unit": "rep"
+    },
+    "assistance": {
+      "value": "40",
+      "unit": "kg"
+    },
+    "mass": {
+      "value": "10",
+      "unit": "kg"
+    },
+    "supportHeight": {
+      "value": "0.5",
+      "unit": "m"
+    }
+  },
+  "results": [
+    {
+      "reps": {
+        "value": "8",
+        "unit": "rep"
+      }
+    },
+    {
+      "reps": {
+        "value": "9",
+        "unit": "rep"
+      }
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 import 'errors.dart';
 import 'quantity.dart';
 import 'result_aggregation.dart';
+import 'lever_selection.dart';
+export 'lever_selection.dart';
 export 'result_aggregation.dart';
 
 /// A proposal only: callers must persist approval and an idempotent application
@@ -13,6 +15,7 @@ final class ProgressionProposal {
     this.failedSessions,
     this.cursor, {
     this.assessment,
+    this.coordination,
   }) : nextValues = Map.unmodifiable(nextValues);
   final String outcome;
   final String reason;
@@ -20,6 +23,7 @@ final class ProgressionProposal {
   final int failedSessions;
   final int cursor;
   final ThresholdAssessment? assessment;
+  final LeverSelection? coordination;
   Map<String, Object?> toJson() => {
     'outcome': outcome,
     'reason': reason,
@@ -27,6 +31,7 @@ final class ProgressionProposal {
     'nextState': {'failedSessions': failedSessions, 'cursor': cursor},
     'requiresAcceptance': true,
     if (assessment != null) 'assessment': assessment!.toJson(),
+    if (coordination != null) 'coordination': coordination!.toJson(),
   };
 }
 
@@ -49,6 +54,9 @@ final class ThresholdRule {
     this.minimums,
     this.directions,
     this.hasNumericPolicy,
+    this.coordinationMode,
+    this.chosenMetric,
+    this.priorityOrder,
   );
 
   factory ThresholdRule.fromJson(Object? input) {
@@ -80,18 +88,34 @@ final class ThresholdRule {
       json['coordination'] ?? {'mode': 'all'},
       'coordination',
     );
-    checkKeys(config, {'mode', 'order'});
+    checkKeys(config, {'mode', 'order', 'metric'});
     final mode = config['mode'] ?? 'all';
-    List<String>? sequence;
-    if (mode == 'roundRobin' || mode == 'weighted') {
+    List<String>? sequence, priorityOrder;
+    String? chosenMetric;
+    if (mode != 'chosen' && config.containsKey('metric'))
+      invalid('Only chosen coordination accepts metric.');
+    if (mode == 'chosen') {
+      if (config.containsKey('order'))
+        invalid('Chosen coordination does not accept order.');
+      chosenMetric = identifier(config, 'metric');
+      if (!increments.containsKey(chosenMetric))
+        invalid('Chosen metric must name an increment.');
+    } else if (mode == 'roundRobin' ||
+        mode == 'weighted' ||
+        mode == 'priority') {
       final order = jsonList(config, 'order');
       if (order.isEmpty ||
           order.length > 1000 ||
           order.any((k) => k is! String || !increments.containsKey(k)))
         invalid('Coordinator order must name increment metrics.');
-      sequence = List.unmodifiable(order.cast<String>());
-      if (mode == 'roundRobin' && sequence.toSet().length != sequence.length)
-        invalid('Round-robin order must have unique entries.');
+      final values = List<String>.unmodifiable(order.cast<String>());
+      if (mode != 'weighted' && values.toSet().length != values.length)
+        invalid('Round-robin/priority order must have unique entries.');
+      if (mode == 'priority') {
+        priorityOrder = values;
+      } else {
+        sequence = values;
+      }
     } else if (mode != 'all') {
       invalid('Unknown coordination mode.');
     }
@@ -164,6 +188,9 @@ final class ThresholdRule {
       minimums,
       Map<String, String>.unmodifiable(directions.cast<String, String>()),
       json.containsKey('minimums') || json.containsKey('directions'),
+      mode as String,
+      chosenMetric,
+      priorityOrder,
     );
   }
 
@@ -182,6 +209,10 @@ final class ThresholdRule {
   final Metrics minimums;
   final Map<String, String> directions;
   final bool hasNumericPolicy;
+  final String coordinationMode;
+  final String? chosenMetric;
+  final List<String>? priorityOrder;
+  bool get hasSelectionPolicy => chosenMetric != null || priorityOrder != null;
   bool decreases(String metric) => directions[metric] == 'decrease';
 
   bool _withinBounds(Metrics values) =>
@@ -200,8 +231,9 @@ final class ThresholdRule {
     cursor: cursor,
   ).single;
 
-  /// Classify once, then transform each target vector independently. Callers
-  /// applying a vector must hold every set if any one transformation is blocked.
+  /// Classify once. Chosen/priority advancement selects a whole-vector candidate.
+  /// Failure/deload proposals and other coordinator transforms remain per-set;
+  /// callers applying any vector must hold it if any transformation is blocked.
   List<ProgressionProposal> evaluateVector({
     required List<Metrics> currentSets,
     required List<Metrics?> results,
@@ -210,6 +242,14 @@ final class ThresholdRule {
   }) {
     if (currentSets.isEmpty || currentSets.length > 10000)
       invalid('Threshold progression needs 1 to 10000 target sets.');
+    if (failedSessions < 0 ||
+        cursor < 0 ||
+        (sequence != null && cursor >= sequence!.length) ||
+        (hasSelectionPolicy && cursor != 0))
+      invalid('Invalid progression state.');
+    for (final current in currentSets) {
+      _validateCurrent(current);
+    }
     final assessment = ThresholdAssessment.evaluate(
       advancement: aggregation,
       failure: failureAggregation,
@@ -218,22 +258,71 @@ final class ThresholdRule {
       threshold: threshold,
       results: results,
     );
+    List<ProgressionProposal> evaluate(String? selected) => [
+      for (final current in currentSets)
+        _evaluate(
+          current,
+          assessment,
+          failedSessions,
+          cursor,
+          selectedMetric: selected,
+        ),
+    ];
+    if (!hasSelectionPolicy) return List.unmodifiable(evaluate(null));
+    final candidates = priorityOrder ?? [chosenMetric!];
+    if (candidates.length * currentSets.length > 100000)
+      invalid('Coordinator exceeds 100000 candidate-set evaluations.');
+    final attempts = <LeverCandidate>[];
+    for (final metric in candidates) {
+      final proposals = evaluate(metric);
+      if (!assessment.eligible) {
+        final selection = LeverSelection(coordinationMode, null, const []);
+        return List.unmodifiable([
+          for (final p in proposals) _withSelection(p, selection),
+        ]);
+      }
+      final blocked = [
+        for (var i = 0; i < proposals.length; i++)
+          if (proposals[i].outcome == 'blocked')
+            BlockedLeverSet(i, proposals[i].reason),
+      ];
+      attempts.add(LeverCandidate(metric, blocked));
+      if (blocked.isEmpty) {
+        final selection = LeverSelection(coordinationMode, metric, attempts);
+        return List.unmodifiable([
+          for (final p in proposals) _withSelection(p, selection),
+        ]);
+      }
+    }
+    final selection = LeverSelection(coordinationMode, null, attempts);
     return List.unmodifiable([
       for (final current in currentSets)
-        _evaluate(current, assessment, failedSessions, cursor),
+        ProgressionProposal(
+          'blocked',
+          'No configured candidate can advance the complete target vector; hold all changes.',
+          current,
+          0,
+          cursor,
+          assessment: hasExplicitAggregation ? assessment : null,
+          coordination: selection,
+        ),
     ]);
   }
 
-  ProgressionProposal _evaluate(
-    Metrics current,
-    ThresholdAssessment assessment,
-    int failedSessions,
-    int cursor,
-  ) {
-    if (failedSessions < 0 ||
-        cursor < 0 ||
-        (sequence != null && cursor >= sequence!.length))
-      invalid('Invalid progression state.');
+  ProgressionProposal _withSelection(
+    ProgressionProposal p,
+    LeverSelection selection,
+  ) => ProgressionProposal(
+    p.outcome,
+    p.reason,
+    p.nextValues,
+    p.failedSessions,
+    p.cursor,
+    assessment: p.assessment,
+    coordination: selection,
+  );
+
+  void _validateCurrent(Metrics current) {
     for (final values in [increments, resets, maximums, minimums]) {
       for (final entry in values.entries) {
         final value = current[entry.key];
@@ -248,6 +337,15 @@ final class ThresholdRule {
       if (value == null || value.dimension == Dimension.count)
         invalid('Deload needs a non-count current quantity: $key.');
     }
+  }
+
+  ProgressionProposal _evaluate(
+    Metrics current,
+    ThresholdAssessment assessment,
+    int failedSessions,
+    int cursor, {
+    String? selectedMetric,
+  }) {
     ProgressionProposal proposal(
       String outcome,
       String reason,
@@ -325,7 +423,9 @@ final class ThresholdRule {
         cursor,
       );
     }
-    final selected = sequence == null
+    final selected = selectedMetric != null
+        ? [selectedMetric]
+        : sequence == null
         ? increments.keys.toList()
         : [sequence![cursor]];
     final next = <String, Quantity>{...current};
