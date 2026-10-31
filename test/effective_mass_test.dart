@@ -303,13 +303,13 @@ void effectiveMassTests() {
       final next = await service.start('next', definition().id, 2, instant(11));
       equal(_value(_estimate(next)), '109.5');
       equal(canonicalJson(_view(await service.session('old'))), original);
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 6);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 7);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/6',
+        'bodytmi-logical-export/7',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -374,6 +374,7 @@ void effectiveMassTests() {
       check(rejected);
       final raw = sqlite3.open('$dir/native/database.sqlite');
       try {
+        raw.execute('DROP TABLE timing_activities');
         raw.execute('PRAGMA user_version = 5');
       } finally {
         raw.close();
@@ -399,7 +400,7 @@ void effectiveMassTests() {
       final doc = <String, Object?>{
         'format': 'bodytmi-logical-export/5',
         'applicationVersion': '0.1.0',
-        'data': original,
+        'data': (Map<String, Object?>.from(original)..remove('timers')),
       };
       doc['sha256'] = sha256
           .convert(utf8.encode(canonicalJson(doc)))
@@ -414,6 +415,7 @@ void effectiveMassTests() {
       await store.close();
       final raw = sqlite3.open('$dir/db.sqlite');
       try {
+        raw.execute('DROP TABLE timing_activities');
         raw.execute('PRAGMA user_version = 5');
       } finally {
         raw.close();

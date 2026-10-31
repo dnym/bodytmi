@@ -64,6 +64,7 @@ TrainingSession sessionFromJson(Object? input) {
       'sources',
       'status',
       'actuals',
+      'timing',
       'contentVersion',
     });
     final expected = baseline.sets[i];
@@ -93,6 +94,18 @@ TrainingSession sessionFromJson(Object? input) {
     } else if (actuals.isNotEmpty) {
       invalid('Uncompleted sets cannot contain completed actuals.');
     }
+    if (row['timing'] != null) {
+      final timing = TimedResult.fromJson(row['timing']);
+      if (setStatus != SetStatus.completed ||
+          actuals[timing.metric]?.dimension != Dimension.duration)
+        invalid('Timing provenance requires a completed duration result.');
+      if (timing.mode == 'timer' &&
+          actuals[timing.metric]!.compareTo(
+                Quantity(timing.elapsedMilliseconds.toString(), 'ms'),
+              ) !=
+              0)
+        invalid('Timed duration does not match clock provenance.');
+    }
     final sources = <String, HistorySource>{};
     for (final entry in jsonObject(row['sources'], 'sources').entries) {
       if (!suggested.containsKey(entry.key))
@@ -114,6 +127,9 @@ TrainingSession sessionFromJson(Object? input) {
         suggested: suggested,
         sources: sources,
         actuals: actuals,
+        timing: row['timing'] == null
+            ? null
+            : TimedResult.fromJson(row['timing']),
         status: setStatus,
         contentVersion: _positive(row, 'contentVersion'),
       ),

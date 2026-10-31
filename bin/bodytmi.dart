@@ -32,6 +32,8 @@ Future<void> main(List<String> arguments) async {
               'Slots may configure an effectiveMass model with explicit bodyMassFraction, addedMass and assistance components. store effective-load takes database/id; session effective-load takes session. Derived suggested/confirmed-actual estimates preserve raw inputs and do not change progression.',
           'programs':
               'program publish pins workout revisions; run create permits multiple active runs. run start selects runId; store finish advances its bound occurrence once. Use run show/list for cursor and currentSessionId.',
+          'timing':
+              'timer start creates a paused per-set clock; timer run uses a foreground monotonic clock. Optional stream:true emits NDJSON cue envelopes before the final response. Ctrl-C pauses; unexpected interruption requires explicit timer recover (freeze/adjust). Expiry never logs actuals: timer confirm requires expectedSessionVersion and explicit result review. Scoped windows, workout traversal, tempo and audio are pending.',
         }),
       );
       return;

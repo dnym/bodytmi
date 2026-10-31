@@ -5,6 +5,7 @@ import 'progression_decision.dart';
 import 'program_service.dart';
 import 'canonical_json.dart';
 import 'stored_body_mass_service.dart';
+import 'timing_service.dart';
 
 /// One repository transaction is the durability boundary of each operation.
 abstract interface class TrainingRepository {
@@ -16,6 +17,8 @@ abstract interface class TrainingRepository {
   Future<void> saveProgressionDecision(ProgressionDecision decision);
   Future<List<ProgramRevision>> programRevisions();
   Future<void> insertProgramRevision(ProgramRevision revision);
+  Future<List<TimingActivity>> timingActivities();
+  Future<void> saveTimingActivity(TimingActivity timer);
   Future<List<BodyMassRecord>> bodyMassRecords();
   Future<void> saveBodyMassRecord(BodyMassRecord record);
   Future<List<ProgramRun>> programRuns();
@@ -44,6 +47,7 @@ final class StoredTrainingService {
       progressions: await repository.progressionDecisions(),
       programRevisions: await repository.programRevisions(),
       bodyMass: await repository.bodyMassRecords(),
+      timers: await repository.timingActivities(),
       programRuns: await repository.programRuns(),
       sessionPrograms: await repository.sessionPrograms(),
       programReceipts: await repository.programReceipts(),
@@ -208,6 +212,16 @@ final class StoredTrainingService {
     final current = await session(id);
     if (current.contentVersion != expectedVersion) _conflict();
     final next = change(current);
+    for (final t in await repository.timingActivities()) {
+      if (t.active &&
+          t.sessionId == id &&
+          (next.status == SessionStatus.finalized ||
+              canonicalJson(current.set(t.setId).toJson()) !=
+                  canonicalJson(next.set(t.setId).toJson())))
+        invalid(
+          'Stop the active timing activity before changing its result or finishing the session.',
+        );
+    }
     if (next.id != current.id ||
         next.startedAt != current.startedAt ||
         canonicalJson({
@@ -224,6 +238,9 @@ final class StoredTrainingService {
         'Editing results cannot change session identity, start time, pinned prescription or captured body-mass inputs.',
       );
     }
+    validateTimingData(await repository.timingActivities(), [
+      for (final s in await repository.sessions()) s.id == id ? next : s,
+    ]);
     await repository.updateSession(next);
     if (next.status == SessionStatus.finalized) {
       await repository.recordFinalization(id);

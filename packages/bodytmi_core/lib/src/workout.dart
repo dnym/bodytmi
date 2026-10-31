@@ -3,6 +3,7 @@ import 'body_mass_input.dart';
 import 'errors.dart';
 import 'effective_mass.dart';
 import 'quantity.dart';
+import 'timing.dart';
 
 final class ExerciseSlot {
   ExerciseSlot._(
@@ -197,6 +198,7 @@ final class TrainingSet {
     this.status = SetStatus.planned,
     Metrics actuals = const {},
     this.contentVersion = 1,
+    this.timing,
   }) : suggested = Map.unmodifiable(suggested),
        sources = Map.unmodifiable(sources),
        actuals = Map.unmodifiable(actuals);
@@ -208,9 +210,14 @@ final class TrainingSet {
   final Map<String, HistorySource> sources;
   final SetStatus status;
   final Metrics actuals;
+  final TimedResult? timing;
   final int contentVersion;
 
-  TrainingSet complete(Metrics observations, {bool acceptSuggested = false}) {
+  TrainingSet complete(
+    Metrics observations, {
+    bool acceptSuggested = false,
+    TimedResult? timingResult,
+  }) {
     final actual = <String, Quantity>{
       if (acceptSuggested) ...suggested,
       ...observations,
@@ -228,6 +235,13 @@ final class TrainingSet {
       ordinal: ordinal,
       suggested: suggested,
       sources: sources,
+      timing:
+          timingResult ??
+          (timing == null
+              ? null
+              : actual[timing!.metric]?.compareTo(actuals[timing!.metric]!) == 0
+              ? timing
+              : timing!.edited()),
       status: SetStatus.completed,
       actuals: actual,
       contentVersion: contentVersion + 1,
@@ -258,6 +272,7 @@ final class TrainingSet {
     'sources': {for (final e in sources.entries) e.key: e.value.toJson()},
     'status': status.name,
     'actuals': metricsToJson(actuals),
+    if (timing != null) 'timing': timing!.toJson(),
     'contentVersion': contentVersion,
   };
 }

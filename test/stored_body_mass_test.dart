@@ -263,13 +263,13 @@ void storedBodyMassTests() {
       final resolved = canonicalJson(
         (await service.resolve(_query())).toJson(),
       );
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 6);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 7);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/export.json',
         ))['format'],
-        'bodytmi-logical-export/6',
+        'bodytmi-logical-export/7',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/export.json');
       try {
@@ -349,7 +349,9 @@ void storedBodyMassTests() {
       await ProgramService(store).create('run', 'program', 1, instant(1));
       await ProgramService(store).start('run', 1, 'session', instant(1));
       final original = (await store.archive()).toJson();
-      final legacy = Map<String, Object?>.from(original)..remove('bodyMass');
+      final legacy = Map<String, Object?>.from(original)
+        ..remove('bodyMass')
+        ..remove('timers');
       final envelope = <String, Object?>{
         'format': 'bodytmi-logical-export/3',
         'applicationVersion': '0.1.0',
@@ -369,6 +371,7 @@ void storedBodyMassTests() {
       final raw = sqlite3.open('$dir/db.sqlite');
       try {
         raw.execute('DROP TABLE body_mass_records');
+        raw.execute('DROP TABLE timing_activities');
         raw.execute('PRAGMA user_version = 3');
         validateSchema(
           raw.select(
@@ -399,7 +402,7 @@ void storedBodyMassTests() {
       }
       final upgraded = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(upgraded.userVersion, 6);
+        equal(upgraded.userVersion, 7);
       } finally {
         upgraded.close();
       }

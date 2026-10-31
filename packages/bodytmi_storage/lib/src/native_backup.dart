@@ -98,7 +98,7 @@ final class NativeBackup {
       'database',
     });
     if (manifest['format'] != _format ||
-        !{1, 2, 3, 4, 5, 6}.contains(manifest['databaseSchemaVersion'])) {
+        !{1, 2, 3, 4, 5, 6, 7}.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
     requiredString(manifest, 'applicationVersion');
@@ -190,7 +190,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2, 3, 4, 5, 6}.contains(db.userVersion) ||
+      if (!{1, 2, 3, 4, 5, 6, 7}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -212,6 +212,7 @@ final class NativeBackup {
         'sessions',
         if (db.userVersion >= 2) 'progression_decisions',
         if (db.userVersion >= 4) 'body_mass_records',
+        if (db.userVersion >= 7) 'timing_activities',
         if (db.userVersion >= 3) ...[
           'program_revisions',
           'program_runs',
@@ -265,6 +266,8 @@ final class NativeBackup {
           final session = sessionFromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 7 && session.sets.any((s) => s.timing != null))
+            invalid('Timing results require schema v7.');
           final revision = db.select(
             'SELECT snapshot FROM revisions WHERE template_id = ? AND number = ?',
             [session.revision.definition.id, session.revision.number],
@@ -411,6 +414,23 @@ final class NativeBackup {
           for (final row in db.select('SELECT snapshot FROM sessions'))
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ], massRecords);
+      }
+      if (db.userVersion >= 7) {
+        final timers = <TimingActivity>[];
+        for (final row in db.select('SELECT * FROM timing_activities')) {
+          final t = TimingActivity.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (t.id != row['id'] ||
+              t.sessionId != row['session_id'] ||
+              t.setId != row['set_id'])
+            invalid('Timing row identity mismatch.');
+          timers.add(t);
+        }
+        validateTimingData(timers, [
+          for (final row in db.select('SELECT snapshot FROM sessions'))
+            sessionFromJson(jsonDecode(row['snapshot'] as String)),
+        ]);
       }
       return db.userVersion;
     } finally {

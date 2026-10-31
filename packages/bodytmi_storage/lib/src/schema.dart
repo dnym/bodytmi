@@ -35,6 +35,12 @@ const schemaV4 = {
       'CREATE TABLE "body_mass_records" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
 };
 
+const schemaV7 = {
+  ...schemaV4,
+  'timing_activities':
+      'CREATE TABLE "timing_activities" ("id" TEXT NOT NULL, "session_id" TEXT NOT NULL REFERENCES sessions (id), "set_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -42,6 +48,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   4 => schemaV4,
   5 => schemaV4, // Same tables; v5 adds frozen body-mass session payloads.
   6 => schemaV4, // Same tables; v6 adds pinned effective-mass models.
+  7 => schemaV7,
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

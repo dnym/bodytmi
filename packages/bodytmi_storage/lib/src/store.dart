@@ -10,7 +10,8 @@ import 'database.dart'
         ProgramRevision,
         ProgramRun,
         ProgramReceipt,
-        BodyMassRecord;
+        BodyMassRecord,
+        TimingActivity;
 import 'native_backup.dart';
 import 'schema.dart';
 
@@ -51,7 +52,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 6) {
+            if (native.userVersion > 7) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -112,7 +113,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 6);
+    validateSchema(schema.map((row) => row.data), 7);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -121,7 +122,8 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_runs), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM session_programs), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0)
-           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_mass_records), 0) AS bytes
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_mass_records), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
       invalid('Logical export exceeds the 64 MiB resource limit.');
@@ -287,6 +289,34 @@ final class TrainingStore implements TrainingRepository {
             runId: binding.runId,
             ordinal: binding.ordinal,
             snapshot: _snapshot(binding.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<TimingActivity>> timingActivities() async {
+    final result = <TimingActivity>[];
+    for (final row in await _db.select(_db.timingActivities).get()) {
+      final timer = TimingActivity.fromJson(jsonDecode(row.snapshot));
+      if (timer.id != row.id ||
+          timer.sessionId != row.sessionId ||
+          timer.setId != row.setId)
+        invalid('Timing row identity mismatch.');
+      result.add(timer);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveTimingActivity(TimingActivity timer) async {
+    await _db
+        .into(_db.timingActivities)
+        .insertOnConflictUpdate(
+          TimingActivitiesCompanion.insert(
+            id: timer.id,
+            sessionId: timer.sessionId,
+            setId: timer.setId,
+            snapshot: _snapshot(timer.toJson()),
           ),
         );
   }

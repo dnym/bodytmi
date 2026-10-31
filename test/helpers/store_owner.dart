@@ -7,7 +7,41 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 2 && args[1].startsWith('mass-')) {
+    if (args.length == 2 &&
+        (args[1].startsWith('clock-') ||
+            args[1].startsWith('confirm-timing-'))) {
+      Future<void> action() async {
+        final service = TimingService(store);
+        var t = await service.show('clock');
+        final at = DateTime.utc(2026, 10, 1, 12);
+        if (args[1].startsWith('clock-')) {
+          t = await service.resume(t.id, t.version, 'crashed-epoch', at);
+          await service.advance(t.id, t.version, 'crashed-epoch', 15000, at);
+        } else {
+          final session = (await store.session(t.sessionId))!;
+          await service.confirm(
+            t.id,
+            t.version,
+            session.contentVersion,
+            at,
+            {},
+            acceptSuggested: true,
+          );
+        }
+      }
+
+      if (args[1].endsWith('rollback')) {
+        await store.transaction(() async {
+          await action();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await store.transaction(action);
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 2 && args[1].startsWith('mass-')) {
       Future<void> write() async {
         final service = StoredBodyMassService(store);
         final one = await service.show('one');

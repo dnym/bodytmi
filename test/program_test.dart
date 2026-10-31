@@ -453,14 +453,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          6,
+          7,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/6',
+          'bodytmi-logical-export/7',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
@@ -817,6 +817,7 @@ void programTests() {
           'sessionPrograms',
           'programReceipts',
           'bodyMass',
+          'timers',
         ])
           data.remove(key);
         final envelope = <String, Object?>{

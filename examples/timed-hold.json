@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "hold-clock-001",
+  "sessionId": "hold-001",
+  "setId": "practice[0]/hang",
+  "metric": "duration",
+  "plan": {
+    "preparationMilliseconds": 10000,
+    "effortMilliseconds": 30000,
+    "restMilliseconds": 30000,
+    "overrun": "stop",
+    "nearEndMilliseconds": 5000
+  },
+  "at": "2026-10-31T09:00:00+01:00"
+}

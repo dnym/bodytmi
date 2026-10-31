@@ -1,8 +1,21 @@
+import 'timing_runner.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
 
 const storedCommandNames = [
+  'timer start',
+  'timer show',
+  'timer list',
+  'timer resume',
+  'timer advance',
+  'timer pause',
+  'timer end-effort',
+  'timer recover',
+  'timer stop',
+  'timer discard',
+  'timer confirm',
+  'timer run',
   'store publish',
   'store revision',
   'store start',
@@ -50,6 +63,36 @@ Future<Map<String, Object?>> executeStored(
   if (request['schemaVersion'] != 1)
     invalid('Request schemaVersion must be 1.');
   final fields = switch (command) {
+    'timer start' => {'id', 'sessionId', 'setId', 'metric', 'plan', 'at'},
+    'timer show' => {'id'},
+    'timer list' => <String>{},
+    'timer resume' => {'id', 'expectedVersion', 'ownerId', 'at'},
+    'timer end-effort' => {'id', 'expectedVersion', 'at'},
+    'timer advance' || 'timer pause' => {
+      'id',
+      'expectedVersion',
+      'ownerId',
+      'elapsedMilliseconds',
+      'at',
+    },
+    'timer recover' => {
+      'id',
+      'expectedVersion',
+      'mode',
+      'adjustmentMilliseconds',
+      'at',
+    },
+    'timer stop' ||
+    'timer discard' => {'id', 'expectedVersion', 'at', 'confirm'},
+    'timer confirm' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'at',
+      'actuals',
+      'acceptSuggested',
+    },
+    'timer run' => {'id', 'expectedVersion', 'runForMilliseconds', 'stream'},
     'store publish' => {'definition', 'expectedRevision'},
     'store revision' => {'templateId', 'revision'},
     'store start' => {
@@ -235,7 +278,97 @@ Future<Map<String, Object?>> executeStored(
     }
 
     Object? data;
+    final timing = TimingService(store);
     switch (command) {
+      case 'timer start':
+        data = (await timing.start(
+          identifier(request, 'id'),
+          identifier(request, 'sessionId'),
+          requiredString(request, 'setId'),
+          identifier(request, 'metric'),
+          TimingPlan.fromJson(request['plan']),
+          parseInstant(request['at'], 'at'),
+        )).toJson();
+      case 'timer list':
+        final all = await store.timingActivities();
+        all.sort((a, b) => a.id.compareTo(b.id));
+        data = [
+          for (final t in all)
+            {...t.toJson(), 'requiresRecovery': t.status == 'running'},
+        ];
+      case 'timer show':
+        final t = await timing.show(identifier(request, 'id'));
+        data = {...t.toJson(), 'requiresRecovery': t.status == 'running'};
+      case 'timer resume':
+        data = (await timing.resume(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          identifier(request, 'ownerId'),
+          parseInstant(request['at'], 'at'),
+        )).toJson();
+      case 'timer advance':
+      case 'timer pause':
+        final sample = integer('elapsedMilliseconds', min: 0);
+        final step = await timing.advance(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          identifier(request, 'ownerId'),
+          sample,
+          parseInstant(request['at'], 'at'),
+          action: command.substring(6),
+        );
+        data = {'timer': step.activity.toJson(), 'cues': step.cues};
+      case 'timer end-effort':
+        data = (await timing.endEffort(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          parseInstant(request['at'], 'at'),
+        )).toJson();
+      case 'timer recover':
+        final mode = request['mode'];
+        if (mode != 'freeze' && mode != 'adjust')
+          invalid('Recovery mode must explicitly be freeze or adjust.');
+        if (mode == 'freeze' && request.containsKey('adjustmentMilliseconds'))
+          invalid('Freeze recovery does not take an adjustment.');
+        data = (await timing.recover(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          parseInstant(request['at'], 'at'),
+          adjustmentMilliseconds: mode == 'adjust'
+              ? integer('adjustmentMilliseconds', min: 0)
+              : null,
+        )).toJson();
+      case 'timer stop':
+      case 'timer discard':
+        data = (await timing.stop(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          parseInstant(request['at'], 'at'),
+          confirm: flag('confirm'),
+          discard: command == 'timer discard',
+        )).toJson();
+      case 'timer confirm':
+        data = (await timing.confirm(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          integer('expectedSessionVersion'),
+          parseInstant(request['at'], 'at'),
+          metricsFromJson(request['actuals'] ?? <String, Object?>{}),
+          acceptSuggested: flag('acceptSuggested'),
+        )).toJson();
+      case 'timer run':
+        final limit = request.containsKey('runForMilliseconds')
+            ? integer('runForMilliseconds')
+            : null;
+        if (limit != null && limit > 86400000)
+          invalid('Foreground run limit exceeds 24 hours.');
+        data = await runTiming(
+          store,
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          runForMilliseconds: limit,
+          stream: flag('stream'),
+        );
       case 'mass record':
       case 'mass update':
         data = (await StoredBodyMassService(store).save(

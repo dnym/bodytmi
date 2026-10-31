@@ -462,7 +462,7 @@ void sessionBodyMassTests() {
       await service.edit(s.id, s.contentVersion, finished);
       await mass.delete('training', 1, confirm: true);
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 6);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 7);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/export.json',
@@ -518,6 +518,7 @@ void sessionBodyMassTests() {
       await _fails(LogicalArchiveFiles.prepare('$dir/forged.json'));
       final raw = sqlite3.open('$dir/native/database.sqlite');
       try {
+        raw.execute('DROP TABLE timing_activities');
         raw.execute('PRAGMA user_version = 4');
       } finally {
         raw.close();
@@ -542,7 +543,7 @@ void sessionBodyMassTests() {
       final doc = <String, Object?>{
         'format': 'bodytmi-logical-export/4',
         'applicationVersion': '0.1.0',
-        'data': original,
+        'data': (Map<String, Object?>.from(original)..remove('timers')),
       };
       doc['sha256'] = sha256
           .convert(utf8.encode(canonicalJson(doc)))
@@ -557,6 +558,7 @@ void sessionBodyMassTests() {
       await store.close();
       final raw = sqlite3.open('$dir/db.sqlite');
       try {
+        raw.execute('DROP TABLE timing_activities');
         raw.execute('PRAGMA user_version = 4');
       } finally {
         raw.close();
@@ -576,7 +578,7 @@ void sessionBodyMassTests() {
       }
       final check = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(check.userVersion, 6);
+        equal(check.userVersion, 7);
       } finally {
         check.close();
       }
