@@ -3,6 +3,7 @@ import 'session_codec.dart';
 import 'canonical_json.dart';
 import 'progression_decision.dart';
 import 'program_service.dart';
+import 'stored_body_mass_service.dart';
 
 /// Full logical representation of the records currently persisted by training.
 /// This is a profile replacement contract, not a neutral external-history import.
@@ -16,7 +17,12 @@ final class TrainingArchive {
     List<ProgramRun> programRuns = const [],
     List<SessionProgramBinding> sessionPrograms = const [],
     List<ProgramReceipt> programReceipts = const [],
-  }) : revisions = List<WorkoutRevision>.unmodifiable(
+    List<BodyMassRecord> bodyMass = const [],
+  }) : bodyMass = List<BodyMassRecord>.unmodifiable(
+         <BodyMassRecord>[...bodyMass]
+           ..sort((a, b) => a.measurement.id.compareTo(b.measurement.id)),
+       ),
+       revisions = List<WorkoutRevision>.unmodifiable(
          <WorkoutRevision>[...revisions]..sort((a, b) {
            final id = a.definition.id.compareTo(b.definition.id);
            return id == 0 ? a.number.compareTo(b.number) : id;
@@ -63,6 +69,7 @@ final class TrainingArchive {
       'programRuns',
       'sessionPrograms',
       'programReceipts',
+      'bodyMass',
     });
     List<Object?> optional(String key) =>
         json.containsKey(key) ? jsonList(json, key) : const [];
@@ -77,6 +84,9 @@ final class TrainingArchive {
       finalizations: [
         for (final item in jsonList(json, 'finalizations'))
           identifier({'id': item}, 'id'),
+      ],
+      bodyMass: [
+        for (final j in optional('bodyMass')) BodyMassRecord.fromJson(j),
       ],
       programRevisions: [
         for (final j in optional('programRevisions'))
@@ -102,6 +112,7 @@ final class TrainingArchive {
     );
   }
 
+  final List<BodyMassRecord> bodyMass;
   final List<WorkoutRevision> revisions;
   final List<TrainingSession> sessions;
   final List<String> finalizations;
@@ -112,6 +123,7 @@ final class TrainingArchive {
   final List<ProgramReceipt> programReceipts;
 
   Map<String, Object?> toJson() => {
+    'bodyMass': [for (final r in bodyMass) r.toJson()],
     'revisions': [for (final r in revisions) r.toJson()],
     'sessions': [for (final s in sessions) s.toJson()],
     'finalizations': finalizations,
@@ -123,6 +135,7 @@ final class TrainingArchive {
   };
 
   Map<String, Object?> get summary => {
+    'bodyMass': bodyMass.length,
     'revisions': revisions.length,
     'sessions': sessions.length,
     'finalizations': finalizations.length,
@@ -134,6 +147,8 @@ final class TrainingArchive {
   };
 
   void _validate() {
+    if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)
+      invalid('Duplicate body-mass observation identity.');
     validateProgramData(
       programs: programRevisions,
       runs: programRuns,

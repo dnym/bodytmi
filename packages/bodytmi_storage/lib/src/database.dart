@@ -76,6 +76,13 @@ class ProgramReceipts extends Table {
   ];
 }
 
+class BodyMassRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DriftDatabase(
   tables: [
     Revisions,
@@ -86,22 +93,23 @@ class ProgramReceipts extends Table {
     ProgramRuns,
     SessionPrograms,
     ProgramReceipts,
+    BodyMassRecords,
   ],
 )
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
-      await customStatement('PRAGMA user_version = 3');
+      await customStatement('PRAGMA user_version = 4');
       await validateMigration();
     }),
     onUpgrade: (m, from, to) async {
-      if (!{1, 2}.contains(from) || to != 3)
+      if (!{1, 2, 3}.contains(from) || to != 4)
         throw StateError('Unsupported database migration $from -> $to.');
       await transaction(() async {
         final schema = await customSelect(
@@ -109,13 +117,16 @@ class TrainingDatabase extends _$TrainingDatabase {
         ).get();
         validateSchema(schema.map((row) => row.data), from);
         if (from == 1) await m.createTable(progressionDecisions);
-        await m.createTable(programRevisions);
-        await m.createTable(programRuns);
-        await m.createTable(sessionPrograms);
-        await m.createTable(programReceipts);
+        if (from < 3) {
+          await m.createTable(programRevisions);
+          await m.createTable(programRuns);
+          await m.createTable(sessionPrograms);
+          await m.createTable(programReceipts);
+        }
+        await m.createTable(bodyMassRecords);
         // Drift also writes this after the callback. Writing it within our
         // transaction prevents a crash leaving new DDL with the old version.
-        await customStatement('PRAGMA user_version = 3');
+        await customStatement('PRAGMA user_version = 4');
         await validateMigration();
       });
     },
@@ -132,7 +143,7 @@ class TrainingDatabase extends _$TrainingDatabase {
     final schema = await customSelect(
       'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
     ).get();
-    validateSchema(schema.map((row) => row.data), 3);
+    validateSchema(schema.map((row) => row.data), 4);
     if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
       throw const BodyTmiException(
         'storage',

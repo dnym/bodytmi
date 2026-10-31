@@ -5,7 +5,12 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'database.dart'
-    hide ProgressionDecision, ProgramRevision, ProgramRun, ProgramReceipt;
+    hide
+        ProgressionDecision,
+        ProgramRevision,
+        ProgramRun,
+        ProgramReceipt,
+        BodyMassRecord;
 import 'native_backup.dart';
 import 'schema.dart';
 
@@ -46,7 +51,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 3) {
+            if (native.userVersion > 4) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -107,7 +112,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 3);
+    validateSchema(schema.map((row) => row.data), 4);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -115,7 +120,8 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_runs), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM session_programs), 0)
-           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0) AS bytes
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_mass_records), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
       invalid('Logical export exceeds the 64 MiB resource limit.');
@@ -281,6 +287,30 @@ final class TrainingStore implements TrainingRepository {
             runId: binding.runId,
             ordinal: binding.ordinal,
             snapshot: _snapshot(binding.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<BodyMassRecord>> bodyMassRecords() async {
+    final result = <BodyMassRecord>[];
+    for (final row in await _db.select(_db.bodyMassRecords).get()) {
+      final record = BodyMassRecord.fromJson(jsonDecode(row.snapshot));
+      if (record.measurement.id != row.id)
+        invalid('Body-mass row identity mismatch.');
+      result.add(record);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveBodyMassRecord(BodyMassRecord record) async {
+    await _db
+        .into(_db.bodyMassRecords)
+        .insertOnConflictUpdate(
+          BodyMassRecordsCompanion.insert(
+            id: record.measurement.id,
+            snapshot: _snapshot(record.toJson()),
           ),
         );
   }

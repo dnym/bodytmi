@@ -4,6 +4,7 @@ import 'training_archive.dart';
 import 'progression_decision.dart';
 import 'program_service.dart';
 import 'canonical_json.dart';
+import 'stored_body_mass_service.dart';
 
 /// One repository transaction is the durability boundary of each operation.
 abstract interface class TrainingRepository {
@@ -15,6 +16,8 @@ abstract interface class TrainingRepository {
   Future<void> saveProgressionDecision(ProgressionDecision decision);
   Future<List<ProgramRevision>> programRevisions();
   Future<void> insertProgramRevision(ProgramRevision revision);
+  Future<List<BodyMassRecord>> bodyMassRecords();
+  Future<void> saveBodyMassRecord(BodyMassRecord record);
   Future<List<ProgramRun>> programRuns();
   Future<void> saveProgramRun(ProgramRun run);
   Future<List<SessionProgramBinding>> sessionPrograms();
@@ -40,6 +43,7 @@ final class StoredTrainingService {
       finalizations: await repository.finalizationIds(),
       progressions: await repository.progressionDecisions(),
       programRevisions: await repository.programRevisions(),
+      bodyMass: await repository.bodyMassRecords(),
       programRuns: await repository.programRuns(),
       sessionPrograms: await repository.sessionPrograms(),
       programReceipts: await repository.programReceipts(),

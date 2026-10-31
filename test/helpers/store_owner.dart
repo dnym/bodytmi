@@ -7,7 +7,30 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 4 && args[1].startsWith('finish-')) {
+    if (args.length == 2 && args[1].startsWith('mass-')) {
+      Future<void> write() async {
+        final service = StoredBodyMassService(store);
+        final one = await service.show('one');
+        final observation = Map<String, Object?>.from(one.measurement.toJson())
+          ..remove('contentVersion');
+        observation['mass'] = {'value': '72', 'unit': 'kg'};
+        await service.save(observation, 1);
+        await service.delete('one', 2, confirm: true);
+        await service.save({...observation, 'id': 'two'}, 0);
+      }
+
+      if (args[1] == 'mass-rollback') {
+        await store.transaction(() async {
+          await write();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await store.transaction(write);
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 4 && args[1].startsWith('finish-')) {
       Future<void> finish() async {
         final s = (await store.session(args[2]))!;
         await StoredTrainingService(store).edit(s.id, s.contentVersion, (

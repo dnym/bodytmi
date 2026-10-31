@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "measurement": {
+    "id": "training-mass-2026-10-31",
+    "context": "clothed-training",
+    "observedAt": "2026-10-31T08:00:00+01:00",
+    "mass": {"value": "75.5", "unit": "kg"}
+  }
+}

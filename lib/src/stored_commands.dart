@@ -31,6 +31,13 @@ const storedCommandNames = [
   'run skip',
   'run pause',
   'run resume',
+  'mass record',
+  'mass update',
+  'mass delete',
+  'mass show',
+  'mass list',
+  'mass trend',
+  'mass resolve',
 ];
 
 /// Filesystem/database construction belongs to the native adapter.
@@ -69,6 +76,20 @@ Future<Map<String, Object?>> executeStored(
       'slotId',
       'expectedVersion',
       'acceptedAt',
+    },
+    'mass record' => {'measurement'},
+    'mass update' => {'measurement', 'expectedVersion'},
+    'mass delete' => {'id', 'expectedVersion', 'confirm'},
+    'mass show' => {'id'},
+    'mass list' => {'context', 'includeDeleted'},
+    'mass trend' => {'context', 'asOf', 'dailyMode'},
+    'mass resolve' => {
+      'context',
+      'asOf',
+      'dailyMode',
+      'override',
+      'staleAfterDays',
+      'warnIfStale',
     },
     'program publish' => {'definition', 'expectedRevision'},
     'program show' => {'programId', 'revision'},
@@ -199,6 +220,42 @@ Future<Map<String, Object?>> executeStored(
 
     Object? data;
     switch (command) {
+      case 'mass record':
+      case 'mass update':
+        data = (await StoredBodyMassService(store).save(
+          jsonObject(request['measurement'], 'measurement'),
+          command == 'mass record' ? 0 : integer('expectedVersion'),
+        )).toJson();
+      case 'mass delete':
+        data = (await StoredBodyMassService(store).delete(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          confirm: flag('confirm'),
+        )).toJson();
+      case 'mass show':
+        data = (await StoredBodyMassService(
+          store,
+        ).show(identifier(request, 'id'))).toJson();
+      case 'mass list':
+        data = [
+          for (final r in await StoredBodyMassService(store).list(
+            context: request.containsKey('context')
+                ? identifier(request, 'context')
+                : null,
+            includeDeleted: flag('includeDeleted'),
+          ))
+            r.toJson(),
+        ];
+      case 'mass trend':
+      case 'mass resolve':
+        final input = {
+          for (final e in request.entries)
+            if (e.key != 'schemaVersion' && e.key != 'database') e.key: e.value,
+        };
+        final service = StoredBodyMassService(store);
+        data = command == 'mass trend'
+            ? (await service.trend(input)).toJson()
+            : (await service.resolve(input)).toJson();
       case 'program publish':
         data = (await programs.publish(
           ProgramDefinition.fromJson(request['definition']),

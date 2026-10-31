@@ -98,7 +98,7 @@ final class NativeBackup {
       'database',
     });
     if (manifest['format'] != _format ||
-        !{1, 2, 3}.contains(manifest['databaseSchemaVersion'])) {
+        !{1, 2, 3, 4}.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
     requiredString(manifest, 'applicationVersion');
@@ -190,7 +190,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2, 3}.contains(db.userVersion) ||
+      if (!{1, 2, 3, 4}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -211,6 +211,7 @@ final class NativeBackup {
         'revisions',
         'sessions',
         if (db.userVersion >= 2) 'progression_decisions',
+        if (db.userVersion >= 4) 'body_mass_records',
         if (db.userVersion >= 3) ...[
           'program_revisions',
           'program_runs',
@@ -386,6 +387,17 @@ final class NativeBackup {
           validateProgressionDecisions(decisions, allSessions, {
             for (final b in bindings) b.sessionId: b.runId,
           });
+        }
+      }
+      if (db.userVersion >= 4) {
+        for (final row in db.select(
+          'SELECT id,snapshot FROM body_mass_records',
+        )) {
+          final record = BodyMassRecord.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (record.measurement.id != row['id'])
+            invalid('Body-mass row identity mismatch.');
         }
       }
       return db.userVersion;

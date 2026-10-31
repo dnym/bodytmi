@@ -29,10 +29,17 @@ const schemaV3 = {
       'CREATE TABLE "program_receipts" ("run_id" TEXT NOT NULL REFERENCES program_runs (id), "ordinal" INTEGER NOT NULL, "operation_key" TEXT NOT NULL, "session_id" TEXT NULL REFERENCES sessions (id), "snapshot" TEXT NOT NULL, PRIMARY KEY ("run_id", "ordinal"), UNIQUE ("run_id", "operation_key"))',
 };
 
+const schemaV4 = {
+  ...schemaV3,
+  'body_mass_records':
+      'CREATE TABLE "body_mass_records" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
   3 => schemaV3,
+  4 => schemaV4,
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

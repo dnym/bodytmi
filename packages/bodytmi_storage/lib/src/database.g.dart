@@ -2096,6 +2096,213 @@ class ProgramReceiptsCompanion extends UpdateCompanion<ProgramReceipt> {
   }
 }
 
+class $BodyMassRecordsTable extends BodyMassRecords
+    with TableInfo<$BodyMassRecordsTable, BodyMassRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BodyMassRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'body_mass_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BodyMassRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BodyMassRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BodyMassRecord(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $BodyMassRecordsTable createAlias(String alias) {
+    return $BodyMassRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class BodyMassRecord extends DataClass implements Insertable<BodyMassRecord> {
+  final String id;
+  final String snapshot;
+  const BodyMassRecord({required this.id, required this.snapshot});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  BodyMassRecordsCompanion toCompanion(bool nullToAbsent) {
+    return BodyMassRecordsCompanion(id: Value(id), snapshot: Value(snapshot));
+  }
+
+  factory BodyMassRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BodyMassRecord(
+      id: serializer.fromJson<String>(json['id']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  BodyMassRecord copyWith({String? id, String? snapshot}) =>
+      BodyMassRecord(id: id ?? this.id, snapshot: snapshot ?? this.snapshot);
+  BodyMassRecord copyWithCompanion(BodyMassRecordsCompanion data) {
+    return BodyMassRecord(
+      id: data.id.present ? data.id.value : this.id,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BodyMassRecord(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BodyMassRecord &&
+          other.id == this.id &&
+          other.snapshot == this.snapshot);
+}
+
+class BodyMassRecordsCompanion extends UpdateCompanion<BodyMassRecord> {
+  final Value<String> id;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const BodyMassRecordsCompanion({
+    this.id = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BodyMassRecordsCompanion.insert({
+    required String id,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       snapshot = Value(snapshot);
+  static Insertable<BodyMassRecord> custom({
+    Expression<String>? id,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BodyMassRecordsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return BodyMassRecordsCompanion(
+      id: id ?? this.id,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BodyMassRecordsCompanion(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
@@ -2114,6 +2321,9 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
   late final $ProgramReceiptsTable programReceipts = $ProgramReceiptsTable(
     this,
   );
+  late final $BodyMassRecordsTable bodyMassRecords = $BodyMassRecordsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2127,6 +2337,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     programRuns,
     sessionPrograms,
     programReceipts,
+    bodyMassRecords,
   ];
 }
 
@@ -4735,6 +4946,168 @@ typedef $$ProgramReceiptsTableProcessedTableManager =
       ProgramReceipt,
       PrefetchHooks Function({bool runId, bool sessionId})
     >;
+typedef $$BodyMassRecordsTableCreateCompanionBuilder =
+    BodyMassRecordsCompanion Function({
+      required String id,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$BodyMassRecordsTableUpdateCompanionBuilder =
+    BodyMassRecordsCompanion Function({
+      Value<String> id,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$BodyMassRecordsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $BodyMassRecordsTable> {
+  $$BodyMassRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BodyMassRecordsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $BodyMassRecordsTable> {
+  $$BodyMassRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BodyMassRecordsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $BodyMassRecordsTable> {
+  $$BodyMassRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$BodyMassRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $BodyMassRecordsTable,
+          BodyMassRecord,
+          $$BodyMassRecordsTableFilterComposer,
+          $$BodyMassRecordsTableOrderingComposer,
+          $$BodyMassRecordsTableAnnotationComposer,
+          $$BodyMassRecordsTableCreateCompanionBuilder,
+          $$BodyMassRecordsTableUpdateCompanionBuilder,
+          (
+            BodyMassRecord,
+            BaseReferences<
+              _$TrainingDatabase,
+              $BodyMassRecordsTable,
+              BodyMassRecord
+            >,
+          ),
+          BodyMassRecord,
+          PrefetchHooks Function()
+        > {
+  $$BodyMassRecordsTableTableManager(
+    _$TrainingDatabase db,
+    $BodyMassRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BodyMassRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BodyMassRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BodyMassRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BodyMassRecordsCompanion(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => BodyMassRecordsCompanion.insert(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$BodyMassRecordsTable, BodyMassRecord>(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $BodyMassRecordsTable,
+                    BodyMassRecord
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BodyMassRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $BodyMassRecordsTable,
+      BodyMassRecord,
+      $$BodyMassRecordsTableFilterComposer,
+      $$BodyMassRecordsTableOrderingComposer,
+      $$BodyMassRecordsTableAnnotationComposer,
+      $$BodyMassRecordsTableCreateCompanionBuilder,
+      $$BodyMassRecordsTableUpdateCompanionBuilder,
+      (
+        BodyMassRecord,
+        BaseReferences<
+          _$TrainingDatabase,
+          $BodyMassRecordsTable,
+          BodyMassRecord
+        >,
+      ),
+      BodyMassRecord,
+      PrefetchHooks Function()
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -4755,4 +5128,6 @@ class $TrainingDatabaseManager {
       $$SessionProgramsTableTableManager(_db, _db.sessionPrograms);
   $$ProgramReceiptsTableTableManager get programReceipts =>
       $$ProgramReceiptsTableTableManager(_db, _db.programReceipts);
+  $$BodyMassRecordsTableTableManager get bodyMassRecords =>
+      $$BodyMassRecordsTableTableManager(_db, _db.bodyMassRecords);
 }

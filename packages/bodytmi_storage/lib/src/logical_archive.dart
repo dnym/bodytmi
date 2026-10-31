@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/3';
+const _format = 'bodytmi-logical-export/4';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -64,6 +64,7 @@ final class LogicalArchiveFiles {
       _format,
       'bodytmi-logical-export/1',
       'bodytmi-logical-export/2',
+      'bodytmi-logical-export/3',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -72,7 +73,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final programData = input['format'] == _format;
+    final massData = input['format'] == _format;
+    final programData =
+        massData || input['format'] == 'bodytmi-logical-export/3';
     const programKeys = {
       'programRevisions',
       'programRuns',
@@ -85,14 +88,18 @@ final class LogicalArchiveFiles {
       'finalizations',
       if (!legacy) 'progressions',
       if (programData) ...programKeys,
+      if (massData) 'bodyMass',
     });
     if (!legacy && !inputData.containsKey('progressions'))
       invalid('Logical format requires progression records.');
     if (programData && programKeys.any((k) => !inputData.containsKey(k)))
       invalid('Logical v3 requires all program sections.');
+    if (massData && !inputData.containsKey('bodyMass'))
+      invalid('Logical v4 requires body-mass records.');
     final archive = TrainingArchive.fromJson(inputData);
     final data = archive.toJson();
     if (legacy) data.remove('progressions');
+    if (!massData) data.remove('bodyMass');
     if (!programData) for (final key in programKeys) data.remove(key);
     if (_checksum({
           'format': input['format'],
@@ -111,11 +118,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV3.values) {
+          for (final ddl in schemaV4.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 3');
+          db.execute('PRAGMA user_version = 4');
           for (final revision in archive.revisions) {
             db.execute(
               'INSERT INTO revisions (template_id, number, snapshot) VALUES (?, ?, ?)',
@@ -173,6 +180,12 @@ final class LogicalArchiveFiles {
                 canonicalJson(r.toJson()),
               ],
             );
+          for (final r in archive.bodyMass) {
+            db.execute(
+              'INSERT INTO body_mass_records(id,snapshot) VALUES (?,?)',
+              [r.measurement.id, canonicalJson(r.toJson())],
+            );
+          }
           db.execute('COMMIT');
         } catch (_) {
           db.execute('ROLLBACK');

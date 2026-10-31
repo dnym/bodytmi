@@ -24,6 +24,8 @@ Future<void> main(List<String> arguments) async {
               'export requires database/destination; validate requires source; restore requires database/source/recoveryDestination/confirm:true. Logical exports are JSON files; recovery backups are directories.',
           'progression':
               'propose requires database/sessionId/slotId/rule; accept requires database/sessionId/slotId/expectedVersion/acceptedAt; show requires database/sessionId/slotId. Stored application currently supports manual double progression.',
+          'bodyMass':
+              'mass record/update/delete/show/list/trend/resolve use stored observations and require database. Updates/deletion require expectedVersion; deletion requires confirm:true. measurement trend/resolve still take explicit measurement arrays.',
           'programs':
               'program publish pins workout revisions; run create permits multiple active runs. run start selects runId; store finish advances its bound occurrence once. Use run show/list for cursor and currentSessionId.',
         }),
