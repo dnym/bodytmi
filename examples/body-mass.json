@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "context": "health",
+  "asOf": "2026-10-10T12:00:00Z",
+  "dailyMode": "mean",
+  "measurements": [
+    {"id":"health-1","context":"health","observedAt":"2026-10-01T08:00:00+02:00","mass":{"value":"80","unit":"kg"}},
+    {"id":"health-2","context":"health","observedAt":"2026-10-02T08:00:00+02:00","mass":{"value":"81","unit":"kg"}},
+    {"id":"health-3","context":"health","observedAt":"2026-10-03T08:00:00+02:00","mass":{"value":"82","unit":"kg"}},
+    {"id":"health-4","context":"health","observedAt":"2026-10-04T08:00:00+02:00","mass":{"value":"83","unit":"kg"}},
+    {"id":"health-5","context":"health","observedAt":"2026-10-05T08:00:00+02:00","mass":{"value":"84","unit":"kg"}},
+    {"id":"health-6","context":"health","observedAt":"2026-10-06T08:00:00+02:00","mass":{"value":"85","unit":"kg"}},
+    {"id":"health-7","context":"health","observedAt":"2026-10-07T08:00:00+02:00","mass":{"value":"86","unit":"kg"}},
+    {"id":"health-8","context":"health","observedAt":"2026-10-08T08:00:00+02:00","mass":{"value":"88","unit":"kg"}},
+    {"id":"training-8","context":"training-clothed","observedAt":"2026-10-08T18:00:00+02:00","mass":{"value":"91","unit":"kg"}}
+  ]
+}

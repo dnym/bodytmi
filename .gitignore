@@ -1,0 +1,8 @@
+.dart_tool/
+build/
+coverage/
+**/.packages
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.owner.lock

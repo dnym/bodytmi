@@ -1,0 +1,7 @@
+name: bodytmi_core
+version: 0.1.0
+publish_to: none
+description: Pure Dart training models and rules.
+resolution: workspace
+environment:
+  sdk: ^3.10.0

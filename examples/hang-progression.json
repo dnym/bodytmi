@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "rule": {
+    "metric": "duration",
+    "minimum": {"value": "10", "unit": "s"},
+    "threshold": {"value": "60", "unit": "s"},
+    "increments": {"mass": {"value": "2.5", "unit": "kg"}},
+    "resets": {"duration": {"value": "10", "unit": "s"}},
+    "maximums": {"mass": {"value": "20", "unit": "kg"}},
+    "coordination": {"mode": "all"}
+  },
+  "current": {"mass": {"value": "0", "unit": "kg"}, "duration": {"value": "60", "unit": "s"}},
+  "results": [
+    {"duration": {"value": "60", "unit": "s"}},
+    {"duration": {"value": "62", "unit": "s"}},
+    {"duration": {"value": "60", "unit": "s"}}
+  ]
+}

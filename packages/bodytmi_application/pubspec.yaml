@@ -1,0 +1,9 @@
+name: bodytmi_application
+version: 0.1.0
+publish_to: none
+description: Interface-independent training use cases and persistence ports.
+resolution: workspace
+environment:
+  sdk: ^3.10.0
+dependencies:
+  bodytmi_core: ^0.1.0

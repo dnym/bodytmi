@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "rule": {
+    "objective": "reps",
+    "lever": "mass",
+    "lower": {"value": "8", "unit": "rep"},
+    "upper": {"value": "12", "unit": "rep"},
+    "objectiveStep": {"value": "1", "unit": "rep"},
+    "leverStep": {"value": "2.5", "unit": "kg"},
+    "maximumLever": {"value": "120", "unit": "kg"},
+    "deloadAfter": 3,
+    "deloadPercent": "10"
+  },
+  "currentSets": [
+    {"reps": {"value": "8", "unit": "rep"}, "mass": {"value": "80", "unit": "kg"}},
+    {"reps": {"value": "8", "unit": "rep"}, "mass": {"value": "80", "unit": "kg"}},
+    {"reps": {"value": "8", "unit": "rep"}, "mass": {"value": "80", "unit": "kg"}}
+  ],
+  "results": [
+    {"reps": {"value": "8", "unit": "rep"}, "mass": {"value": "80", "unit": "kg"}},
+    {"reps": {"value": "8", "unit": "rep"}, "mass": {"value": "80", "unit": "kg"}},
+    {"reps": {"value": "8", "unit": "rep"}, "mass": {"value": "80", "unit": "kg"}}
+  ],
+  "state": {"failedSessions": 0}
+}

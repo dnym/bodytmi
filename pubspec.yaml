@@ -1,0 +1,14 @@
+name: bodytmi
+version: 0.1.0
+publish_to: none
+description: Local-first health and fitness tracking CLI.
+environment:
+  sdk: ^3.10.0
+workspace:
+  - packages/bodytmi_core
+  - packages/bodytmi_application
+dependencies:
+  bodytmi_core: ^0.1.0
+  bodytmi_application: ^0.1.0
+executables:
+  bodytmi:
