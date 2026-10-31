@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/10';
+const _format = 'bodytmi-logical-export/11';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -71,6 +71,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/7',
       'bodytmi-logical-export/8',
       'bodytmi-logical-export/9',
+      'bodytmi-logical-export/10',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -79,7 +80,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final tempoData = input['format'] == _format;
+    final declineData = input['format'] == _format;
+    final tempoData =
+        declineData || input['format'] == 'bodytmi-logical-export/10';
     final groupData =
         tempoData || input['format'] == 'bodytmi-logical-export/9';
     final executionData =
@@ -121,6 +124,8 @@ final class LogicalArchiveFiles {
     if (executionData && !inputData.containsKey('executions'))
       invalid('Logical v8 requires execution records.');
     final archive = TrainingArchive.fromJson(inputData);
+    if (!declineData && archive.progressions.any((d) => d.declinedAt != null))
+      invalid('Progression declines require logical v11.');
     if (!tempoData && archive.timers.any((t) => t.plan.tempo != null))
       invalid('Tempo timing requires logical v10.');
     if (!groupData &&
@@ -171,7 +176,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 10');
+          db.execute('PRAGMA user_version = 11');
           for (final revision in archive.revisions) {
             db.execute(
               'INSERT INTO revisions (template_id, number, snapshot) VALUES (?, ?, ?)',

@@ -132,8 +132,8 @@ final class StoredTrainingService {
     final decisions = (await repository.progressionDecisions()).where(
       (d) =>
           d.runId == runId &&
-          d.acceptedAt != null &&
-          !d.acceptedAt!.isAfter(startedAt) &&
+          d.resolvedAt != null &&
+          !d.resolvedAt!.isAfter(startedAt) &&
           d.session.startedAt.isBefore(startedAt),
     );
     final sets = <TrainingSet>[];
@@ -157,7 +157,7 @@ final class StoredTrainingService {
         continue;
       }
       final rule = DoubleProgressionRule.fromJson(applied.rule);
-      final vector = applied.proposal.nextSets;
+      final vector = applied.nextSets;
       final count = workingCounts[set.slotId];
       if (vector.length != count) _conflict();
       final slot = prescription.definition.slot(set.slotId);

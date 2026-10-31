@@ -130,14 +130,18 @@ Future<void> main(List<String> args) async {
         stdout.writeln('ready');
         await stdin.drain<void>();
       }
-    } else if (args.length == 5 && args[1].startsWith('accept-')) {
+    } else if (args.length == 5 &&
+        (args[1].startsWith('accept-') || args[1].startsWith('decline-'))) {
       Future<void> accept() async {
-        await StoredProgressionService(
-          store,
-        ).accept(args[2], args[3], 1, DateTime.parse(args[4]));
+        final service = StoredProgressionService(store);
+        if (args[1].startsWith('decline-')) {
+          await service.decline(args[2], args[3], 1, DateTime.parse(args[4]));
+        } else {
+          await service.accept(args[2], args[3], 1, DateTime.parse(args[4]));
+        }
       }
 
-      if (args[1] == 'accept-rollback') {
+      if (args[1].endsWith('-rollback')) {
         await store.transaction(() async {
           await accept();
           stdout.writeln('ready');

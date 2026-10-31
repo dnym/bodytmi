@@ -58,6 +58,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   8 => schemaV8,
   9 => schemaV8, // Same tables; v9 adds atomic group-skip receipt payloads.
   10 => schemaV8, // Same tables; v10 adds tempo timing plans.
+  11 => schemaV8, // Same tables; v11 adds terminal progression declines.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

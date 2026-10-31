@@ -15,9 +15,9 @@ final class StoredProgressionService {
     DoubleProgressionRule.fromJson(rule);
     final all = await repository.progressionDecisions();
     final existing = all.where((d) => d.id == '$sessionId/$slotId').firstOrNull;
-    if (existing?.acceptedAt != null) {
+    if (existing?.resolvedAt != null) {
       if (canonicalJson(existing!.rule) != canonicalJson(rule))
-        _conflict('This exposure already applied a different rule.');
+        _conflict('This exposure already resolved a different rule.');
       return existing;
     }
     final session = await StoredTrainingService(repository).session(sessionId);
@@ -43,7 +43,7 @@ final class StoredProgressionService {
       rule: rule,
       previousApplication: before?.id,
       previousSequence: before?.sequence ?? 0,
-      previousFailures: before?.proposal.failedSessions ?? 0,
+      previousFailures: before?.failedSessions ?? 0,
       version: (existing?.version ?? 0) + 1,
       runId: runId,
     );
@@ -80,7 +80,7 @@ final class StoredProgressionService {
         canonicalJson(source.toJson()) !=
             canonicalJson(decision.session.toJson()))
       return true;
-    if (decision.acceptedAt != null) return false;
+    if (decision.resolvedAt != null) return false;
     final latest = latestApplication(
       await repository.progressionDecisions(),
       decision.session.revision.definition.id,
@@ -100,18 +100,46 @@ final class StoredProgressionService {
     if (pending.version != expectedVersion)
       _conflict('Progression decision version changed.');
     if (pending.acceptedAt != null) return pending;
+    if (pending.declinedAt != null)
+      _conflict('This exposure was already declined.');
     if (await stale(pending))
       _conflict('Progression inputs changed; propose again before acceptance.');
     if (pending.previousApplication != null) {
       final base = (await repository.progressionDecisions()).firstWhere(
         (d) => d.id == pending.previousApplication,
       );
-      if (at.isBefore(base.acceptedAt!))
+      if (at.isBefore(base.resolvedAt!))
         invalid('Acceptance cannot precede its base application.');
     }
     final applied = pending.accept(at);
     await repository.saveProgressionDecision(applied);
     return applied;
+  });
+
+  Future<ProgressionDecision> decline(
+    String sessionId,
+    String slotId,
+    int expectedVersion,
+    DateTime at,
+  ) => repository.transaction(() async {
+    final pending = await decision(sessionId, slotId);
+    if (pending.version != expectedVersion)
+      _conflict('Progression decision version changed.');
+    if (pending.declinedAt != null) return pending;
+    if (pending.acceptedAt != null)
+      _conflict('This exposure was already accepted.');
+    if (await stale(pending))
+      _conflict('Progression inputs changed; propose again before declining.');
+    if (pending.previousApplication != null) {
+      final base = (await repository.progressionDecisions()).firstWhere(
+        (d) => d.id == pending.previousApplication,
+      );
+      if (at.isBefore(base.resolvedAt!))
+        invalid('Decline cannot precede its base application.');
+    }
+    final declined = pending.decline(at);
+    await repository.saveProgressionDecision(declined);
+    return declined;
   });
 }
 

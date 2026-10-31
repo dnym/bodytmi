@@ -109,6 +109,7 @@ final class NativeBackup {
           8,
           9,
           10,
+          11,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -201,7 +202,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}.contains(db.userVersion) ||
+      if (!{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -329,6 +330,8 @@ final class NativeBackup {
           final d = ProgressionDecision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 11 && d.declinedAt != null)
+            invalid('Progression declines require schema v11.');
           if (d.session.id != row['session_id'] || d.slotId != row['slot_id'])
             invalid('Progression receipt identity mismatch.');
           decisions.add(d);

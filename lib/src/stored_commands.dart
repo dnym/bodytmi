@@ -48,6 +48,7 @@ const storedCommandNames = [
   'progression propose',
   'progression show',
   'progression accept',
+  'progression decline',
   'program publish',
   'program show',
   'program list',
@@ -201,6 +202,12 @@ Future<Map<String, Object?>> executeStored(
       'slotId',
       'expectedVersion',
       'acceptedAt',
+    },
+    'progression decline' => {
+      'sessionId',
+      'slotId',
+      'expectedVersion',
+      'declinedAt',
     },
     'mass record' => {'measurement'},
     'mass update' => {'measurement', 'expectedVersion'},
@@ -639,6 +646,7 @@ Future<Map<String, Object?>> executeStored(
       case 'progression propose':
       case 'progression show':
       case 'progression accept':
+      case 'progression decline':
         final progression = StoredProgressionService(store);
         final sessionId = identifier(request, 'sessionId');
         final slotId = identifier(request, 'slotId');
@@ -654,15 +662,30 @@ Future<Map<String, Object?>> executeStored(
             integer('expectedVersion'),
             parseInstant(request['acceptedAt'], 'acceptedAt'),
           ),
+          'progression decline' => await progression.decline(
+            sessionId,
+            slotId,
+            integer('expectedVersion'),
+            parseInstant(request['declinedAt'], 'declinedAt'),
+          ),
           _ => await progression.decision(sessionId, slotId),
         };
         final changed = await progression.stale(decision);
         data = {
           'id': decision.id,
           'applied': decision.acceptedAt != null,
+          'status': decision.status,
+          'resolvedState': decision.resolvedAt == null
+              ? null
+              : {
+                  'failedSessions': decision.failedSessions,
+                  'nextSets': [
+                    for (final set in decision.nextSets) metricsToJson(set),
+                  ],
+                },
           'sequence': decision.sequence,
           'inputsChanged': changed,
-          'stale': decision.acceptedAt == null && changed,
+          'stale': decision.resolvedAt == null && changed,
           ...decision.toJson(),
         };
       case 'archive export':

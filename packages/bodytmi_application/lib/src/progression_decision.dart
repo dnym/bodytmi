@@ -13,6 +13,7 @@ final class ProgressionDecision {
     this.previousFailures = 0,
     this.version = 1,
     this.acceptedAt,
+    this.declinedAt,
     this.runId,
   }) : rule = _freeze(rule) as Map<String, Object?> {
     if (session.status != SessionStatus.finalized)
@@ -29,8 +30,9 @@ final class ProgressionDecision {
     );
     if (slots.isEmpty || sets.isEmpty)
       invalid('Progression needs a known slot with working sets.');
-    if (acceptedAt != null && acceptedAt!.isBefore(session.finishedAt!))
-      invalid('Acceptance cannot precede session finalization.');
+    if ((acceptedAt != null && declinedAt != null) ||
+        (resolvedAt != null && resolvedAt!.isBefore(session.finishedAt!)))
+      invalid('A decision needs one resolution, no earlier than finalization.');
     final outcome = proposal.outcome;
     if (acceptedAt != null && (outcome == 'unknown' || outcome == 'review'))
       invalid(
@@ -48,6 +50,7 @@ final class ProgressionDecision {
       'previousFailures',
       'version',
       'acceptedAt',
+      'declinedAt',
       'proposal',
       'runId',
     });
@@ -71,6 +74,9 @@ final class ProgressionDecision {
       acceptedAt: j['acceptedAt'] == null
           ? null
           : parseInstant(j['acceptedAt'], 'acceptedAt'),
+      declinedAt: j.containsKey('declinedAt')
+          ? parseInstant(j['declinedAt'], 'declinedAt')
+          : null,
       runId: j['runId'] == null ? null : identifier(j, 'runId'),
     );
     if (canonicalJson(j['proposal']) !=
@@ -83,10 +89,25 @@ final class ProgressionDecision {
   final Map<String, Object?> rule;
   final String? previousApplication;
   final int previousSequence, previousFailures, version;
-  final DateTime? acceptedAt;
+  final DateTime? acceptedAt, declinedAt;
+  DateTime? get resolvedAt => acceptedAt ?? declinedAt;
+  String get status => acceptedAt != null
+      ? 'accepted'
+      : declinedAt != null
+      ? 'declined'
+      : 'pending';
   final String? runId;
   String get id => '${session.id}/$slotId';
-  int get sequence => previousSequence + (acceptedAt == null ? 0 : 1);
+  int get sequence => previousSequence + (resolvedAt == null ? 0 : 1);
+
+  /// Decline holds targets, but the confirmed exposure's classification still
+  /// resolves exactly once. Declining a deload never grants its counter reset.
+  int get failedSessions => declinedAt != null && proposal.outcome == 'deload'
+      ? previousFailures + 1
+      : proposal.failedSessions;
+  List<Metrics> get nextSets => declinedAt == null
+      ? proposal.nextSets
+      : List.unmodifiable([for (final set in sets) set.suggested]);
   late final ExerciseSlot slot = session.revision.definition.slot(slotId);
   late final String contextKey = canonicalJson([
     runId,
@@ -125,6 +146,19 @@ final class ProgressionDecision {
     previousFailures: previousFailures,
     version: version,
     acceptedAt: at,
+    declinedAt: declinedAt,
+    runId: runId,
+  );
+  ProgressionDecision decline(DateTime at) => ProgressionDecision(
+    session: session,
+    slotId: slotId,
+    rule: rule,
+    previousApplication: previousApplication,
+    previousSequence: previousSequence,
+    previousFailures: previousFailures,
+    version: version,
+    acceptedAt: acceptedAt,
+    declinedAt: at,
     runId: runId,
   );
   Map<String, Object?> toJson() => {
@@ -136,6 +170,7 @@ final class ProgressionDecision {
     'previousFailures': previousFailures,
     'version': version,
     'acceptedAt': acceptedAt?.toUtc().toIso8601String(),
+    if (declinedAt != null) 'declinedAt': declinedAt!.toUtc().toIso8601String(),
     'proposal': proposal.toJson(),
     if (runId != null) 'runId': runId,
   };
@@ -150,7 +185,7 @@ ProgressionDecision? latestApplication(
   ProgressionDecision? latest;
   for (final d in decisions) {
     if (d.runId == runId &&
-        d.acceptedAt != null &&
+        d.resolvedAt != null &&
         d.matches(templateId, slot) &&
         (latest == null || d.sequence > latest.sequence))
       latest = d;
@@ -172,7 +207,7 @@ void validateProgressionDecisions(
     byId[d.id] = d;
     if (d.runId != runBySession[d.session.id])
       invalid('Progression ownership does not match session program binding.');
-    if (d.acceptedAt != null &&
+    if (d.resolvedAt != null &&
         !(sequences.putIfAbsent(d.contextKey, () => <int>{}).add(d.sequence))) {
       invalid('Competing progression writers at one sequence.');
     }
@@ -205,15 +240,15 @@ void validateProgressionDecisions(
           d.previousFailures != 0)
         invalid('Progression base application is missing.');
     } else {
-      if (before.acceptedAt == null ||
+      if (before.resolvedAt == null ||
           !d.sameContext(before) ||
           d.previousSequence != before.sequence ||
-          d.previousFailures != before.proposal.failedSessions ||
+          d.previousFailures != before.failedSessions ||
           canonicalJson(d.rule) != canonicalJson(before.rule))
         invalid('Progression lineage is inconsistent.');
       if (!matchesProgressionBaseline(d, before))
         invalid('Progression baseline is inconsistent.');
-      if (d.acceptedAt != null && d.acceptedAt!.isBefore(before.acceptedAt!))
+      if (d.resolvedAt != null && d.resolvedAt!.isBefore(before.resolvedAt!))
         invalid('Progression application chronology is inconsistent.');
     }
   }
@@ -234,7 +269,7 @@ bool matchesProgressionBaseline(
   ProgressionDecision before,
 ) {
   final rule = DoubleProgressionRule.fromJson(decision.rule);
-  final expected = before.proposal.nextSets;
+  final expected = before.nextSets;
   if (expected.length != decision.sets.length) return false;
   for (var i = 0; i < expected.length; i++) {
     for (final metric in [rule.objective, rule.lever]) {
