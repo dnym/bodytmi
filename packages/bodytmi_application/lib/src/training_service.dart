@@ -8,8 +8,26 @@ final class TrainingService {
     required WorkoutRevision revision,
     required DateTime startedAt,
     List<TrainingSession> history = const [],
+    List<BodyMassMeasurement> bodyMassMeasurements = const [],
+    Map<String, BodyMassOverride> bodyMassOverrides = const {},
   }) {
     identifier({'id': sessionId}, 'id');
+    if (bodyMassOverrides.keys.any(
+      (id) => !revision.definition.slots.any(
+        (s) => s.id == id && s.bodyMass != null,
+      ),
+    ))
+      invalid('Body-mass override names an unconfigured slot.');
+    final massInputs = {
+      for (final slot in revision.definition.slots)
+        if (slot.bodyMass != null)
+          slot.id: BodyMassInputSnapshot.capture(
+            selection: slot.bodyMass!,
+            asOf: startedAt,
+            measurements: bodyMassMeasurements,
+            override: bodyMassOverrides[slot.id],
+          ),
+    };
     if (history.any((s) => s.id == sessionId))
       invalid('Session ID already occurs in supplied history.');
     final compatibleHistory =
@@ -85,8 +103,24 @@ final class TrainingService {
       revision: revision,
       startedAt: startedAt,
       sets: sets,
+      bodyMassInputs: massInputs,
     );
   }
+
+  Map<String, Object?> bodyMassStatus(
+    TrainingSession session,
+    List<BodyMassMeasurement> measurements,
+  ) => {
+    'sessionId': session.id,
+    'contentVersion': session.contentVersion,
+    'inputs': {
+      for (final e in session.bodyMassInputs.entries)
+        e.key: {
+          'captured': e.value.resolution.toJson(),
+          ...e.value.freshness(measurements),
+        },
+    },
+  };
 
   TrainingSession complete(
     TrainingSession session,

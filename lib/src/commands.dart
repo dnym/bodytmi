@@ -8,6 +8,7 @@ const commandNames = [
   'activity expand',
   'session start',
   'session show',
+  'session mass-status',
   'session complete',
   'session skip',
   'session finish',
@@ -50,7 +51,14 @@ final class Commands {
             {'id': occurrence.id, 'activity': occurrence.activity.toJson()},
         ];
       case 'session start':
-        keys({'id', 'revision', 'startedAt', 'history'});
+        keys({
+          'id',
+          'revision',
+          'startedAt',
+          'history',
+          'bodyMassMeasurements',
+          'bodyMassOverrides',
+        });
         final history = request['history'] ?? <Object?>[];
         if (history is! List<Object?>) invalid('history must be an array.');
         data = const TrainingService()
@@ -59,8 +67,25 @@ final class Commands {
               revision: WorkoutRevision.fromJson(request['revision']),
               startedAt: parseInstant(request['startedAt'], 'startedAt'),
               history: [for (final item in history) sessionFromJson(item)],
+              bodyMassMeasurements: [
+                for (final m
+                    in (request.containsKey('bodyMassMeasurements')
+                        ? jsonList(request, 'bodyMassMeasurements')
+                        : <Object?>[]))
+                  BodyMassMeasurement.fromJson(m),
+              ],
+              bodyMassOverrides: bodyMassOverridesFromJson(
+                request['bodyMassOverrides'],
+              ),
             )
             .toJson();
+      case 'session mass-status':
+        keys({'session', 'measurements'});
+        data = const TrainingService()
+            .bodyMassStatus(sessionFromJson(request['session']), [
+              for (final m in jsonList(request, 'measurements'))
+                BodyMassMeasurement.fromJson(m),
+            ]);
       case 'session show':
         keys({'session'});
         data = sessionFromJson(request['session']).toJson();

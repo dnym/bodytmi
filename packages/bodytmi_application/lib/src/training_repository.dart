@@ -73,6 +73,7 @@ final class StoredTrainingService {
     int number,
     DateTime startedAt, {
     ProgramRun? programRun,
+    Map<String, BodyMassOverride> bodyMassOverrides = const {},
   }) => repository.transaction(() async {
     final runId = programRun?.id;
     final prescription = await revision(templateId, number);
@@ -83,7 +84,8 @@ final class StoredTrainingService {
       if (runBySession[id] != runId ||
           existing.revision.definition.id != templateId ||
           existing.revision.number != number ||
-          existing.startedAt != startedAt)
+          existing.startedAt != startedAt ||
+          !sameBodyMassOverrides(existing, bodyMassOverrides))
         _conflict();
       return existing;
     }
@@ -107,6 +109,11 @@ final class StoredTrainingService {
     var next = const TrainingService().start(
       sessionId: id,
       revision: prescription,
+      bodyMassOverrides: bodyMassOverrides,
+      bodyMassMeasurements: [
+        for (final r in await repository.bodyMassRecords())
+          if (!r.deleted) r.measurement,
+      ],
       startedAt: startedAt,
       history: (await repository.sessions())
           .where((s) => runBySession[s.id] == runId)
@@ -176,6 +183,7 @@ final class StoredTrainingService {
       revision: next.revision,
       startedAt: next.startedAt,
       sets: sets,
+      bodyMassInputs: next.bodyMassInputs,
     );
     await repository.insertSession(next);
     if (programRun != null) {
@@ -202,10 +210,18 @@ final class StoredTrainingService {
     final next = change(current);
     if (next.id != current.id ||
         next.startedAt != current.startedAt ||
+        canonicalJson({
+              for (final e in next.bodyMassInputs.entries)
+                e.key: e.value.toJson(),
+            }) !=
+            canonicalJson({
+              for (final e in current.bodyMassInputs.entries)
+                e.key: e.value.toJson(),
+            }) ||
         canonicalJson(next.revision.toJson()) !=
             canonicalJson(current.revision.toJson())) {
       invalid(
-        'Editing results cannot change session identity, start time or pinned prescription.',
+        'Editing results cannot change session identity, start time, pinned prescription or captured body-mass inputs.',
       );
     }
     await repository.updateSession(next);
@@ -216,6 +232,15 @@ final class StoredTrainingService {
     return next;
   });
 }
+
+bool sameBodyMassOverrides(
+  TrainingSession session,
+  Map<String, BodyMassOverride> overrides,
+) =>
+    overrides.keys.every((k) => session.bodyMassInputs.containsKey(k)) &&
+    session.bodyMassInputs.entries.every(
+      (e) => e.value.sameOverride(overrides[e.key]),
+    );
 
 Never _conflict() => throw const BodyTmiException(
   'conflict',

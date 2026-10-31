@@ -96,8 +96,9 @@ final class ProgramService {
     String runId,
     int expectedVersion,
     String sessionId,
-    DateTime at,
-  ) => repository.transaction(() async {
+    DateTime at, {
+    Map<String, BodyMassOverride> bodyMassOverrides = const {},
+  }) => repository.transaction(() async {
     final current = await run(runId);
     final bindings = await repository.sessionPrograms();
     final existing = bindings
@@ -107,7 +108,9 @@ final class ProgramService {
       final session = await StoredTrainingService(
         repository,
       ).session(sessionId);
-      if (existing.runId != runId || session.startedAt != at)
+      if (existing.runId != runId ||
+          session.startedAt != at ||
+          !sameBodyMassOverrides(session, bodyMassOverrides))
         programConflict('Session identity belongs to another occurrence.');
       return session;
     }
@@ -130,6 +133,7 @@ final class ProgramService {
       day.day.revision,
       at,
       programRun: current,
+      bodyMassOverrides: bodyMassOverrides,
     );
   });
   Future<ProgramReceipt> skip(

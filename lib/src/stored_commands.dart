@@ -7,6 +7,7 @@ const storedCommandNames = [
   'store revision',
   'store start',
   'store show',
+  'store mass-status',
   'store complete',
   'store skip',
   'store finish',
@@ -50,8 +51,15 @@ Future<Map<String, Object?>> executeStored(
   final fields = switch (command) {
     'store publish' => {'definition', 'expectedRevision'},
     'store revision' => {'templateId', 'revision'},
-    'store start' => {'id', 'templateId', 'revision', 'startedAt'},
+    'store start' => {
+      'id',
+      'templateId',
+      'revision',
+      'startedAt',
+      'bodyMassOverrides',
+    },
     'store show' => {'id'},
+    'store mass-status' => {'id'},
     'store complete' => {
       'id',
       'expectedVersion',
@@ -97,7 +105,13 @@ Future<Map<String, Object?>> executeStored(
     'run create' => {'id', 'programId', 'revision', 'startedAt', 'loop'},
     'run list' => {'status'},
     'run show' => {'runId'},
-    'run start' => {'runId', 'expectedVersion', 'id', 'startedAt'},
+    'run start' => {
+      'runId',
+      'expectedVersion',
+      'id',
+      'startedAt',
+      'bodyMassOverrides',
+    },
     'run skip' => {'runId', 'expectedVersion', 'requestId', 'skippedAt'},
     'run pause' || 'run resume' => {'runId', 'expectedVersion'},
     _ => invalid('Unknown stored command.'),
@@ -311,6 +325,9 @@ Future<Map<String, Object?>> executeStored(
           integer('expectedVersion'),
           identifier(request, 'id'),
           parseInstant(request['startedAt'], 'startedAt'),
+          bodyMassOverrides: bodyMassOverridesFromJson(
+            request['bodyMassOverrides'],
+          ),
         )).toJson();
       case 'run skip':
         final runId = identifier(request, 'runId');
@@ -376,7 +393,20 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'templateId'),
           integer('revision'),
           parseInstant(request['startedAt'], 'startedAt'),
+          bodyMassOverrides: bodyMassOverridesFromJson(
+            request['bodyMassOverrides'],
+          ),
         )).toJson();
+      case 'store mass-status':
+        data = await store.transaction(
+          () async => const TrainingService().bodyMassStatus(
+            await service.session(identifier(request, 'id')),
+            [
+              for (final r in await store.bodyMassRecords())
+                if (!r.deleted) r.measurement,
+            ],
+          ),
+        );
       case 'store show':
         data = (await service.session(identifier(request, 'id'))).toJson();
       case 'store history':

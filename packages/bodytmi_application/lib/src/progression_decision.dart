@@ -181,6 +181,13 @@ void validateProgressionDecisions(
         s.contentVersion < d.session.contentVersion ||
         s.revision.definition.id != d.session.revision.definition.id ||
         s.revision.number != d.session.revision.number ||
+        canonicalJson({
+              for (final e in s.bodyMassInputs.entries) e.key: e.value.toJson(),
+            }) !=
+            canonicalJson({
+              for (final e in d.session.bodyMassInputs.entries)
+                e.key: e.value.toJson(),
+            }) ||
         canonicalJson(s.revision.toJson()) !=
             canonicalJson(d.session.revision.toJson()))
       invalid('Progression source snapshot is inconsistent.');

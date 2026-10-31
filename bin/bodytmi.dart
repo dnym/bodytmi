@@ -26,6 +26,8 @@ Future<void> main(List<String> arguments) async {
               'propose requires database/sessionId/slotId/rule; accept requires database/sessionId/slotId/expectedVersion/acceptedAt; show requires database/sessionId/slotId. Stored application currently supports manual double progression.',
           'bodyMass':
               'mass record/update/delete/show/list/trend/resolve use stored observations and require database. Updates/deletion require expectedVersion; deletion requires confirm:true. measurement trend/resolve still take explicit measurement arrays.',
+          'sessionBodyMass':
+              'Slots may explicitly configure bodyMass.context and resolver options. Session starts freeze selected inputs; optional bodyMassOverrides maps slot IDs to measurementId or mass overrides. store mass-status takes database/id; session mass-status takes session/measurements. Source changes do not rewrite captured inputs.',
           'programs':
               'program publish pins workout revisions; run create permits multiple active runs. run start selects runId; store finish advances its bound occurrence once. Use run show/list for cursor and currentSessionId.',
         }),

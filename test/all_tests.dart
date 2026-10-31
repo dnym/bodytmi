@@ -1,3 +1,4 @@
+import 'session_body_mass_test.dart';
 import 'stored_body_mass_test.dart';
 import 'program_test.dart';
 import 'stored_progression_test.dart';
@@ -14,6 +15,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  sessionBodyMassTests();
   storedBodyMassTests();
   programTests();
   storedProgressionTests();

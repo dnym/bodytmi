@@ -1,4 +1,5 @@
 import 'activity.dart';
+import 'body_mass_input.dart';
 import 'errors.dart';
 import 'quantity.dart';
 
@@ -11,6 +12,7 @@ final class ExerciseSlot {
     this.setupNote,
     this.targets,
     this.prefillMetrics,
+    this.bodyMass,
   );
 
   factory ExerciseSlot.fromJson(Object? input) {
@@ -23,6 +25,7 @@ final class ExerciseSlot {
       'setupNote',
       'targets',
       'prefill',
+      'bodyMass',
     });
     final targets = metricsFromJson(json['targets']);
     if (targets.isEmpty) invalid('A slot needs at least one target metric.');
@@ -41,6 +44,9 @@ final class ExerciseSlot {
       note as String?,
       targets,
       Set.unmodifiable(prefill.cast<String>()),
+      json['bodyMass'] == null
+          ? null
+          : BodyMassSelection.fromJson(json['bodyMass']),
     );
   }
 
@@ -51,6 +57,7 @@ final class ExerciseSlot {
   final String? setupNote;
   final Metrics targets;
   final Set<String> prefillMetrics;
+  final BodyMassSelection? bodyMass;
 
   bool compatibleWith(ExerciseSlot other) =>
       id == other.id &&
@@ -67,6 +74,7 @@ final class ExerciseSlot {
     if (setupNote != null) 'setupNote': setupNote,
     'targets': metricsToJson(targets),
     'prefill': prefillMetrics.toList(),
+    if (bodyMass != null) 'bodyMass': bodyMass!.toJson(),
   };
 }
 
@@ -252,12 +260,29 @@ final class TrainingSession {
     this.status = SessionStatus.active,
     this.finishedAt,
     this.contentVersion = 1,
-  }) : sets = List.unmodifiable(sets);
+    Map<String, BodyMassInputSnapshot> bodyMassInputs = const {},
+  }) : sets = List.unmodifiable(sets),
+       bodyMassInputs = Map.unmodifiable(bodyMassInputs) {
+    final configured = revision.definition.slots
+        .where((s) => s.bodyMass != null)
+        .toList();
+    if (configured.length != bodyMassInputs.length ||
+        configured.any(
+          (s) =>
+              bodyMassInputs[s.id] == null ||
+              bodyMassInputs[s.id]!.asOf != startedAt ||
+              !bodyMassInputs[s.id]!.sameSelection(s.bodyMass!),
+        ))
+      invalid(
+        'Session body-mass inputs do not match its pinned slots and start time.',
+      );
+  }
   final String id;
   final WorkoutRevision revision;
   final DateTime startedAt;
   final DateTime? finishedAt;
   final List<TrainingSet> sets;
+  final Map<String, BodyMassInputSnapshot> bodyMassInputs;
   final SessionStatus status;
   final int contentVersion;
 
@@ -272,6 +297,7 @@ final class TrainingSession {
       status: status,
       finishedAt: finishedAt,
       contentVersion: contentVersion + 1,
+      bodyMassInputs: bodyMassInputs,
     );
   }
 
@@ -286,6 +312,7 @@ final class TrainingSession {
       revision: revision,
       startedAt: startedAt,
       sets: sets,
+      bodyMassInputs: bodyMassInputs,
       status: SessionStatus.finalized,
       finishedAt: at,
       contentVersion: contentVersion + 1,
@@ -308,5 +335,9 @@ final class TrainingSession {
     'status': status.name,
     'contentVersion': contentVersion,
     'sets': [for (final set in sets) set.toJson()],
+    if (bodyMassInputs.isNotEmpty)
+      'bodyMassInputs': {
+        for (final e in bodyMassInputs.entries) e.key: e.value.toJson(),
+      },
   };
 }

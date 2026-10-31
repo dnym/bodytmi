@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "bodyweight-practice",
+    "name": "Timed hold practice",
+    "slots": [
+      {
+        "id": "hold",
+        "exercise": "dead-hang",
+        "implementation": "fixed-bar",
+        "equipment": "practice-bar",
+        "targets": {
+          "addedMass": {"value": "0", "unit": "kg"},
+          "duration": {"value": "30", "unit": "s"}
+        },
+        "bodyMass": {"context": "clothed-training", "dailyMode": "mean"}
+      }
+    ],
+    "plan": {
+      "id": "practice", "type": "repeat", "count": 3,
+      "child": {"id": "hang", "type": "effort", "slot": "hold"}
+    }
+  }
+}

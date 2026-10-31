@@ -9,5 +9,6 @@ export 'src/progression.dart';
 
 export 'src/instant.dart';
 export 'src/body_mass.dart';
+export 'src/body_mass_input.dart';
 export 'src/double_progression.dart';
 export 'src/program.dart';

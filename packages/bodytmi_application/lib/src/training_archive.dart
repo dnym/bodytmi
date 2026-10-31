@@ -149,6 +149,7 @@ final class TrainingArchive {
   void _validate() {
     if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)
       invalid('Duplicate body-mass observation identity.');
+    validateBodyMassInputReferences(sessions, bodyMass);
     validateProgramData(
       programs: programRevisions,
       runs: programRuns,
@@ -213,4 +214,27 @@ final class TrainingArchive {
       }
     }
   }
+}
+
+/// Corrected/deleted current records may differ from their historical snapshots.
+/// Equal versions must still identify exactly the same source content.
+void validateBodyMassInputReferences(
+  List<TrainingSession> sessions,
+  List<BodyMassRecord> records,
+) {
+  final byId = {for (final r in records) r.measurement.id: r};
+  for (final s in sessions)
+    for (final binding in s.bodyMassInputs.values)
+      for (final m in binding.measurements) {
+        final current = byId[m.id];
+        if (current == null ||
+            current.measurement.contentVersion < m.contentVersion ||
+            (current.measurement.contentVersion == m.contentVersion &&
+                (current.deleted ||
+                    canonicalJson(current.measurement.toJson()) !=
+                        canonicalJson(m.toJson()))))
+          invalid(
+            'Session body-mass source identity, content or version is inconsistent.',
+          );
+      }
 }

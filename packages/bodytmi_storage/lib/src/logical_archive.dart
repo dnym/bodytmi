@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/4';
+const _format = 'bodytmi-logical-export/5';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -65,6 +65,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/1',
       'bodytmi-logical-export/2',
       'bodytmi-logical-export/3',
+      'bodytmi-logical-export/4',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -73,7 +74,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final massData = input['format'] == _format;
+    final inputDataV5 = input['format'] == _format;
+    final massData =
+        inputDataV5 || input['format'] == 'bodytmi-logical-export/4';
     final programData =
         massData || input['format'] == 'bodytmi-logical-export/3';
     const programKeys = {
@@ -97,6 +100,11 @@ final class LogicalArchiveFiles {
     if (massData && !inputData.containsKey('bodyMass'))
       invalid('Logical v4 requires body-mass records.');
     final archive = TrainingArchive.fromJson(inputData);
+    if (!inputDataV5 &&
+        archive.revisions.any(
+          (r) => r.definition.slots.any((s) => s.bodyMass != null),
+        ))
+      invalid('Body-mass session bindings require logical format v5.');
     final data = archive.toJson();
     if (legacy) data.remove('progressions');
     if (!massData) data.remove('bodyMass');
@@ -122,7 +130,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 4');
+          db.execute('PRAGMA user_version = 5');
           for (final revision in archive.revisions) {
             db.execute(
               'INSERT INTO revisions (template_id, number, snapshot) VALUES (?, ?, ?)',

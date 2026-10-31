@@ -51,7 +51,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 4) {
+            if (native.userVersion > 5) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -112,7 +112,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 4);
+    validateSchema(schema.map((row) => row.data), 5);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -366,7 +366,7 @@ final class TrainingStore implements TrainingRepository {
           RevisionsCompanion.insert(
             templateId: revision.definition.id,
             number: revision.number,
-            snapshot: jsonEncode(revision.toJson()),
+            snapshot: _snapshot(revision.toJson()),
           ),
         );
   }
@@ -400,18 +400,15 @@ final class TrainingStore implements TrainingRepository {
         .insert(
           SessionsCompanion.insert(
             id: session.id,
-            snapshot: jsonEncode(session.toJson()),
+            snapshot: _snapshot(session.toJson()),
           ),
         );
   }
 
   @override
   Future<void> updateSession(TrainingSession session) async {
-    await (_db.update(
-      _db.sessions,
-    )..where((s) => s.id.equals(session.id))).write(
-      SessionsCompanion(snapshot: Value(jsonEncode(session.toJson()))),
-    );
+    await (_db.update(_db.sessions)..where((s) => s.id.equals(session.id)))
+        .write(SessionsCompanion(snapshot: Value(_snapshot(session.toJson()))));
   }
 
   @override
@@ -450,6 +447,6 @@ Never _busy() => throw const BodyTmiException(
 String _snapshot(Object? value) {
   final json = canonicalJson(value);
   if (utf8.encode(json).length > 8 * 1024 * 1024)
-    invalid('Stored program record exceeds 8 MiB.');
+    invalid('Stored snapshot exceeds 8 MiB.');
   return json;
 }

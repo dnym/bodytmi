@@ -7,6 +7,14 @@ int _positive(Map<String, Object?> json, String key) {
   return value;
 }
 
+Map<String, BodyMassOverride> bodyMassOverridesFromJson(Object? input) => {
+  for (final e in jsonObject(
+    input ?? <String, Object?>{},
+    'bodyMassOverrides',
+  ).entries)
+    e.key: BodyMassOverride.fromJson(e.value),
+};
+
 TrainingSession sessionFromJson(Object? input) {
   final json = jsonObject(input, 'session');
   checkKeys(json, {
@@ -18,6 +26,7 @@ TrainingSession sessionFromJson(Object? input) {
     'status',
     'contentVersion',
     'sets',
+    'bodyMassInputs',
   });
   if (json['schemaVersion'] != 1)
     invalid('Unsupported session schema version.');
@@ -118,6 +127,13 @@ TrainingSession sessionFromJson(Object? input) {
     revision: revision,
     startedAt: startedAt,
     sets: sets,
+    bodyMassInputs: {
+      for (final e in jsonObject(
+        json['bodyMassInputs'] ?? <String, Object?>{},
+        'bodyMassInputs',
+      ).entries)
+        e.key: BodyMassInputSnapshot.fromJson(e.value),
+    },
     status: status,
     finishedAt: finishedAt,
     contentVersion: _positive(json, 'contentVersion'),

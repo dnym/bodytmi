@@ -98,7 +98,7 @@ final class NativeBackup {
       'database',
     });
     if (manifest['format'] != _format ||
-        !{1, 2, 3, 4}.contains(manifest['databaseSchemaVersion'])) {
+        !{1, 2, 3, 4, 5}.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
     requiredString(manifest, 'applicationVersion');
@@ -190,7 +190,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2, 3, 4}.contains(db.userVersion) ||
+      if (!{1, 2, 3, 4, 5}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -238,6 +238,9 @@ final class NativeBackup {
           final revision = WorkoutRevision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 5 &&
+              revision.definition.slots.any((s) => s.bodyMass != null))
+            invalid('Body-mass session bindings require schema v5.');
           if (template != row['template_id']) {
             template = row['template_id'] as String;
             number = 0;
@@ -390,6 +393,7 @@ final class NativeBackup {
         }
       }
       if (db.userVersion >= 4) {
+        final massRecords = <BodyMassRecord>[];
         for (final row in db.select(
           'SELECT id,snapshot FROM body_mass_records',
         )) {
@@ -398,7 +402,12 @@ final class NativeBackup {
           );
           if (record.measurement.id != row['id'])
             invalid('Body-mass row identity mismatch.');
+          massRecords.add(record);
         }
+        validateBodyMassInputReferences([
+          for (final row in db.select('SELECT snapshot FROM sessions'))
+            sessionFromJson(jsonDecode(row['snapshot'] as String)),
+        ], massRecords);
       }
       return db.userVersion;
     } finally {
