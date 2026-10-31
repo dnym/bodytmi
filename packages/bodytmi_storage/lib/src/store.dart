@@ -6,6 +6,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'database.dart';
 import 'native_backup.dart';
+import 'schema_v1.dart';
 
 /// A single native owner. Never unlink the lock file: the OS holds ownership.
 final class TrainingStore implements TrainingRepository {
@@ -99,6 +100,23 @@ final class TrainingStore implements TrainingRepository {
     return NativeBackup.create(path, destination);
   }
 
+  Future<TrainingArchive> archive() => _db.transaction(() async {
+    final schema = await _db
+        .customSelect(
+          'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
+        )
+        .get();
+    validateSchemaV1(schema.map((row) => row.data));
+    final size = await _db.customSelect('''
+      SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0) AS bytes
+    ''').getSingle();
+    if (size.read<int>('bytes') > 64 * 1024 * 1024) {
+      invalid('Logical export exceeds the 64 MiB resource limit.');
+    }
+    return StoredTrainingService(this).exportArchive();
+  });
+
   /// Terminal operation on this handle; close() releases ownership afterwards.
   /// Replacement is committed by SQLite, rather than renaming a set of WAL files.
   Future<void> restore(
@@ -121,6 +139,24 @@ final class TrainingStore implements TrainingRepository {
   @override
   Future<T> transaction<T>(Future<T> Function() action) =>
       _db.transaction(action);
+  @override
+  Future<List<WorkoutRevision>> revisions() async {
+    final result = <WorkoutRevision>[];
+    for (final row in await _db.select(_db.revisions).get()) {
+      final revision = WorkoutRevision.fromJson(jsonDecode(row.snapshot));
+      if (revision.definition.id != row.templateId ||
+          revision.number != row.number) {
+        invalid('Stored revision identity is inconsistent.');
+      }
+      result.add(revision);
+    }
+    return result;
+  }
+
+  @override
+  Future<List<String>> finalizationIds() async => [
+    for (final row in await _db.select(_db.finalizations).get()) row.sessionId,
+  ];
   @override
   Future<WorkoutRevision?> revision(String templateId, [int? number]) async {
     final query = _db.select(_db.revisions)
@@ -156,12 +192,19 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<TrainingSession>> sessions() async => [
+  Future<List<TrainingSession>> sessions() async {
+    final result = <TrainingSession>[];
     for (final row in await (_db.select(
       _db.sessions,
-    )..orderBy([(s) => OrderingTerm.asc(s.id)])).get())
-      sessionFromJson(jsonDecode(row.snapshot)),
-  ];
+    )..orderBy([(s) => OrderingTerm.asc(s.id)])).get()) {
+      final session = sessionFromJson(jsonDecode(row.snapshot));
+      if (session.id != row.id)
+        invalid('Stored session identity is inconsistent.');
+      result.add(session);
+    }
+    return result;
+  }
+
   @override
   Future<void> insertSession(TrainingSession session) async {
     await _db

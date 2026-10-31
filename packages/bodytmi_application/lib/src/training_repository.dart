@@ -1,10 +1,13 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'training_service.dart';
+import 'training_archive.dart';
 
 /// One repository transaction is the durability boundary of each operation.
 abstract interface class TrainingRepository {
   Future<T> transaction<T>(Future<T> Function() action);
   Future<WorkoutRevision?> revision(String templateId, [int? number]);
+  Future<List<WorkoutRevision>> revisions();
+  Future<List<String>> finalizationIds();
   Future<void> insertRevision(WorkoutRevision revision);
   Future<TrainingSession?> session(String id);
   Future<List<TrainingSession>> sessions();
@@ -16,6 +19,14 @@ abstract interface class TrainingRepository {
 final class StoredTrainingService {
   const StoredTrainingService(this.repository);
   final TrainingRepository repository;
+
+  Future<TrainingArchive> exportArchive() => repository.transaction(
+    () async => TrainingArchive(
+      revisions: await repository.revisions(),
+      sessions: await repository.sessions(),
+      finalizations: await repository.finalizationIds(),
+    ),
+  );
 
   Future<WorkoutRevision> publish(
     WorkoutDefinition definition,

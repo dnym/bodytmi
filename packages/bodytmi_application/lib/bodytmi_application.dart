@@ -8,3 +8,4 @@ export 'src/session_codec.dart';
 export 'package:bodytmi_core/bodytmi_core.dart' show parseInstant;
 export 'src/body_mass_service.dart';
 export 'src/training_repository.dart';
+export 'src/training_archive.dart';

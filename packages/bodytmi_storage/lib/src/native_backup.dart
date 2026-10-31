@@ -7,6 +7,7 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
+import 'schema_v1.dart';
 
 const _format = 'bodytmi-native-backup/1';
 const _maxDatabaseBytes = 512 * 1024 * 1024;
@@ -199,20 +200,7 @@ final class NativeBackup {
       final schema = db.select(
         'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name',
       );
-      // Exact v1 DDL is intentional: unknown schema objects must not be silently
-      // imported or executed. Update with the corresponding versioned migration.
-      const expected = {
-        'finalizations':
-            'CREATE TABLE "finalizations" ("session_id" TEXT NOT NULL REFERENCES sessions (id), PRIMARY KEY ("session_id"))',
-        'revisions':
-            'CREATE TABLE "revisions" ("template_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("template_id", "number"))',
-        'sessions':
-            'CREATE TABLE "sessions" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
-      };
-      if (schema.length != expected.length ||
-          schema.any((r) => expected[r['name']] != r['sql'])) {
-        invalid('Backup database schema does not match supported schema v1.');
-      }
+      validateSchemaV1(schema);
       final integrity = db.select('PRAGMA integrity_check');
       if (integrity.length != 1 ||
           integrity.single.values.single != 'ok' ||
@@ -265,12 +253,12 @@ final class NativeBackup {
           );
           if (session.id != row['id'] ||
               revision.length != 1 ||
-              jsonEncode(
+              canonicalJson(
                     WorkoutRevision.fromJson(
                       jsonDecode(revision.single['snapshot'] as String),
                     ).toJson(),
                   ) !=
-                  jsonEncode(session.revision.toJson())) {
+                  canonicalJson(session.revision.toJson())) {
             invalid('Backup session prescription or identity is inconsistent.');
           }
           if (session.status == SessionStatus.finalized &&

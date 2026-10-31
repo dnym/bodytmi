@@ -20,6 +20,8 @@ Future<void> main(List<String> arguments) async {
               'store commands require a database path in the JSON request. Existing commands use explicit snapshots.',
           'backup':
               'create requires database/destination; validate requires source; restore requires database/source/recoveryDestination/confirm:true. Backup paths are directories.',
+          'archive':
+              'export requires database/destination; validate requires source; restore requires database/source/recoveryDestination/confirm:true. Logical exports are JSON files; recovery backups are directories.',
         }),
       );
       return;

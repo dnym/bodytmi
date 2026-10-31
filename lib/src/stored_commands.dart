@@ -15,6 +15,9 @@ const storedCommandNames = [
   'backup create',
   'backup validate',
   'backup restore',
+  'archive export',
+  'archive validate',
+  'archive restore',
 ];
 
 /// Filesystem/database construction belongs to the native adapter.
@@ -43,6 +46,9 @@ Future<Map<String, Object?>> executeStored(
     'backup create' => {'destination'},
     'backup validate' => {'source'},
     'backup restore' => {'source', 'recoveryDestination', 'confirm'},
+    'archive export' => {'destination'},
+    'archive validate' => {'source'},
+    'archive restore' => {'source', 'recoveryDestination', 'confirm'},
     _ => invalid('Unknown stored command.'),
   };
   checkKeys(request, {'schemaVersion', 'database', ...fields});
@@ -59,6 +65,50 @@ Future<Map<String, Object?>> executeStored(
     return value;
   }
 
+  if (command == 'archive validate') {
+    checkKeys(request, {'schemaVersion', 'source'});
+    final prepared = await LogicalArchiveFiles.prepare(
+      requiredString(request, 'source'),
+    );
+    try {
+      return {'schemaVersion': 1, 'data': prepared.summary};
+    } finally {
+      await prepared.close();
+    }
+  }
+  if (command == 'archive restore') {
+    if (!flag('confirm'))
+      invalid('Restore replaces the profile and requires confirm:true.');
+    final recovery = requiredString(request, 'recoveryDestination');
+    final database = requiredString(request, 'database');
+    final prepared = await LogicalArchiveFiles.prepare(
+      requiredString(request, 'source'),
+    );
+    try {
+      await prepared.checkDestination(database);
+      await prepared.checkDestination(recovery);
+      final store = await TrainingStore.open(database);
+      try {
+        await store.restore(
+          prepared.backup,
+          recoveryDestination: recovery,
+          confirm: true,
+        );
+        return {
+          'schemaVersion': 1,
+          'data': {
+            'restored': true,
+            'recoveryDestination': recovery,
+            ...prepared.summary,
+          },
+        };
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await prepared.close();
+    }
+  }
   if (command == 'backup validate') {
     checkKeys(request, {'schemaVersion', 'source'});
     final prepared = await NativeBackup.prepare(
@@ -106,6 +156,11 @@ Future<Map<String, Object?>> executeStored(
     final service = StoredTrainingService(store);
     Object? data;
     switch (command) {
+      case 'archive export':
+        data = await LogicalArchiveFiles.export(
+          await store.archive(),
+          requiredString(request, 'destination'),
+        );
       case 'backup create':
         data = await store.backup(requiredString(request, 'destination'));
       case 'store publish':
