@@ -81,6 +81,9 @@ final class TimingPlan {
       tempo,
     );
   }
+  factory TimingPlan.fromDuration(Quantity duration) => TimingPlan.fromJson({
+    'effortMilliseconds': _durationMilliseconds(duration),
+  });
   final bool restOnly;
   final int preparationMilliseconds, effortMilliseconds, restMilliseconds;
   final String overrun;
@@ -95,6 +98,63 @@ final class TimingPlan {
     if (restOnly) 'restOnly': true,
     if (tempo != null) 'tempo': tempo!.toJson(),
   };
+}
+
+/// Published per-slot effort guidance. Duration comes from the session target;
+/// authored rest occurrences retain ownership of recovery between efforts.
+final class EffortTimingDefaults {
+  EffortTimingDefaults._(this.metric, this._guidance);
+  factory EffortTimingDefaults.fromJson(Object? input) {
+    final j = jsonObject(input, 'effort timing defaults');
+    checkKeys(j, {
+      'metric',
+      'preparationMilliseconds',
+      'overrun',
+      'nearEndMilliseconds',
+      'tempo',
+    });
+    final metric = identifier(j, 'metric');
+    final probe = TimingPlan.fromJson({
+      for (final e in j.entries)
+        if (e.key != 'metric') e.key: e.value,
+      'effortMilliseconds': 86400000,
+    });
+    return EffortTimingDefaults._(metric, probe);
+  }
+  final String metric;
+  final TimingPlan _guidance;
+  TimingPlan resolve(Metrics suggested) {
+    final duration = suggested[metric];
+    if (duration == null)
+      invalid('Timing defaults reference an unconfigured duration metric.');
+    return TimingPlan.fromJson({
+      ..._guidance.toJson(),
+      'effortMilliseconds': _durationMilliseconds(duration),
+    });
+  }
+
+  Map<String, Object?> toJson() => {
+    'metric': metric,
+    'preparationMilliseconds': _guidance.preparationMilliseconds,
+    'overrun': _guidance.overrun,
+    if (_guidance.nearEndMilliseconds != null)
+      'nearEndMilliseconds': _guidance.nearEndMilliseconds,
+    if (_guidance.tempo != null) 'tempo': _guidance.tempo!.toJson(),
+  };
+}
+
+int _durationMilliseconds(Quantity duration) {
+  if (duration.dimension != Dimension.duration)
+    invalid('Timing metric must be duration.');
+  final milliseconds = duration.value * Decimal.parse('1000');
+  if (!milliseconds.isInteger)
+    invalid(
+      'Timer target must resolve to whole milliseconds or use an explicit timing plan.',
+    );
+  final value = int.tryParse(milliseconds.toString());
+  if (value == null || value < 1 || value > 86400000)
+    invalid('Effort duration must be 1 millisecond through 24 hours.');
+  return value;
 }
 
 /// Result provenance. Later ordinary duration corrections explicitly change mode.

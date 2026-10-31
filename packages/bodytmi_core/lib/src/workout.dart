@@ -16,6 +16,7 @@ final class ExerciseSlot {
     this.prefillMetrics,
     this.bodyMass,
     this.effectiveMass,
+    this.timing,
   );
 
   factory ExerciseSlot.fromJson(Object? input) {
@@ -30,6 +31,7 @@ final class ExerciseSlot {
       'prefill',
       'bodyMass',
       'effectiveMass',
+      'timing',
     });
     final targets = metricsFromJson(json['targets']);
     if (targets.isEmpty) invalid('A slot needs at least one target metric.');
@@ -47,6 +49,10 @@ final class ExerciseSlot {
         ? null
         : EffectiveMassModel.fromJson(json['effectiveMass']);
     effectiveMass?.validateBindings(targets, hasBodyMass: bodyMass != null);
+    final timing = json['timing'] == null
+        ? null
+        : EffortTimingDefaults.fromJson(json['timing']);
+    timing?.resolve(targets);
     return ExerciseSlot._(
       identifier(json, 'id'),
       identifier(json, 'exercise'),
@@ -57,6 +63,7 @@ final class ExerciseSlot {
       Set.unmodifiable(prefill.cast<String>()),
       bodyMass,
       effectiveMass,
+      timing,
     );
   }
 
@@ -69,6 +76,7 @@ final class ExerciseSlot {
   final Set<String> prefillMetrics;
   final BodyMassSelection? bodyMass;
   final EffectiveMassModel? effectiveMass;
+  final EffortTimingDefaults? timing;
 
   bool compatibleWith(ExerciseSlot other) =>
       id == other.id &&
@@ -87,6 +95,7 @@ final class ExerciseSlot {
     'prefill': prefillMetrics.toList(),
     if (bodyMass != null) 'bodyMass': bodyMass!.toJson(),
     if (effectiveMass != null) 'effectiveMass': effectiveMass!.toJson(),
+    if (timing != null) 'timing': timing!.toJson(),
   };
 }
 

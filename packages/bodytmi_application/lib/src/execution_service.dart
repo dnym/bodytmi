@@ -124,6 +124,7 @@ final class ExecutionService {
     final set = s.set(occurrence.id);
     final selected =
         metric ??
+        s.revision.definition.slot(set.slotId).timing?.metric ??
         (set.suggested.entries
                     .where((v) => v.value.dimension == Dimension.duration)
                     .length ==
@@ -139,17 +140,7 @@ final class ExecutionService {
     final q = set.suggested[selected];
     if (q?.dimension != Dimension.duration)
       invalid('Timing metric is not duration.');
-    var chosen = plan;
-    if (chosen == null) {
-      final milliseconds = q!.value * Decimal.parse('1000');
-      if (!milliseconds.isInteger)
-        invalid(
-          'Timer target must resolve to whole milliseconds or use an explicit timing plan.',
-        );
-      chosen = TimingPlan.fromJson({
-        'effortMilliseconds': int.tryParse(milliseconds.toString()),
-      });
-    }
+    final chosen = plan ?? timingPlanFor(s, set.id, selected);
     if (chosen.restOnly || chosen.restMilliseconds != 0)
       invalid(
         'Traversal effort clocks cannot add rest outside the authored rest occurrences.',

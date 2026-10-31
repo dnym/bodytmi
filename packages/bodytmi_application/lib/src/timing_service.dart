@@ -14,17 +14,19 @@ final class TimingService {
     String sessionId,
     String setId,
     String metric,
-    TimingPlan plan,
+    TimingPlan? plan,
     DateTime at,
   ) => repository.transaction(() async {
-    if (plan.restOnly)
+    final s = await StoredTrainingService(repository).session(sessionId);
+    final resolved = plan ?? timingPlanFor(s, setId, metric);
+    if (resolved.restOnly)
       invalid('Use the rest timing operation for a rest occurrence.');
     final next = TimingActivity.create(
       id: id,
       sessionId: sessionId,
       setId: setId,
       metric: metric,
-      plan: plan,
+      plan: resolved,
       at: at,
     );
     final all = await repository.timingActivities();
@@ -34,7 +36,8 @@ final class TimingService {
           existing.setId != setId ||
           existing.metric != metric ||
           existing.toJson()['createdAt'] != next.toJson()['createdAt'] ||
-          canonicalJson(existing.plan.toJson()) != canonicalJson(plan.toJson()))
+          canonicalJson(existing.plan.toJson()) !=
+              canonicalJson(resolved.toJson()))
         _conflict();
       return existing;
     }
@@ -42,7 +45,6 @@ final class TimingService {
       _conflict(
         'Another timing activity is active; explicitly stop/discard it first.',
       );
-    final s = await StoredTrainingService(repository).session(sessionId);
     if (_insideWindow(s, setId))
       invalid('Per-set timing cannot execute scoped time windows yet.');
     if (s.status != SessionStatus.active ||
@@ -253,6 +255,15 @@ final class TimingService {
     await service.edit(session.id, expectedSessionVersion, (_) => updated);
     return next;
   });
+}
+
+TimingPlan timingPlanFor(TrainingSession session, String setId, String metric) {
+  final set = session.set(setId);
+  final defaults = session.revision.definition.slot(set.slotId).timing;
+  if (defaults?.metric == metric) return defaults!.resolve(set.suggested);
+  final duration = set.suggested[metric];
+  if (duration == null) invalid('Timing metric is not configured.');
+  return TimingPlan.fromDuration(duration);
 }
 
 void validateTimingData(

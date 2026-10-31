@@ -9,11 +9,42 @@
         "exercise": "bodyweight-squat",
         "implementation": "bodyweight",
         "targets": {
-          "duration": {"value": "30", "unit": "s"},
-          "reps": {"value": "5", "unit": "rep"}
+          "duration": {
+            "value": "30",
+            "unit": "s"
+          },
+          "reps": {
+            "value": "5",
+            "unit": "rep"
+          }
+        },
+        "timing": {
+          "metric": "duration",
+          "preparationMilliseconds": 10000,
+          "nearEndMilliseconds": 5000,
+          "tempo": {
+            "phases": [
+              {
+                "id": "lower",
+                "milliseconds": 3000
+              },
+              {
+                "id": "hold",
+                "milliseconds": 1000
+              },
+              {
+                "id": "raise",
+                "milliseconds": 2000
+              }
+            ]
+          }
         }
       }
     ],
-    "plan": {"id": "practice", "type": "effort", "slot": "movement"}
+    "plan": {
+      "id": "practice",
+      "type": "effort",
+      "slot": "movement"
+    }
   }
 }

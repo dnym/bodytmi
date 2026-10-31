@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/12';
+const _format = 'bodytmi-logical-export/13';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -73,6 +73,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/9',
       'bodytmi-logical-export/10',
       'bodytmi-logical-export/11',
+      'bodytmi-logical-export/12',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -81,7 +82,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final familyData = input['format'] == _format;
+    final timingDefaultsData = input['format'] == _format;
+    final familyData =
+        timingDefaultsData || input['format'] == 'bodytmi-logical-export/12';
     final declineData =
         familyData || input['format'] == 'bodytmi-logical-export/11';
     final tempoData =
@@ -130,6 +133,11 @@ final class LogicalArchiveFiles {
     if (familyData && !inputData.containsKey('families'))
       invalid('Logical v12 requires family revisions.');
     final archive = TrainingArchive.fromJson(inputData);
+    if (!timingDefaultsData &&
+        archive.revisions.any(
+          (r) => r.definition.slots.any((s) => s.timing != null),
+        ))
+      invalid('Slot timing defaults require logical v13.');
     if (!declineData && archive.progressions.any((d) => d.declinedAt != null))
       invalid('Progression declines require logical v11.');
     if (!tempoData && archive.timers.any((t) => t.plan.tempo != null))
@@ -183,7 +191,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 12');
+          db.execute('PRAGMA user_version = 13');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

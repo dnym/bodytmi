@@ -111,6 +111,7 @@ final class NativeBackup {
           10,
           11,
           12,
+          13,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -203,7 +204,21 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}.contains(db.userVersion) ||
+      if (!{
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+          }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -267,6 +282,9 @@ final class NativeBackup {
           final revision = WorkoutRevision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 13 &&
+              revision.definition.slots.any((s) => s.timing != null))
+            invalid('Slot timing defaults require schema v13.');
           if (db.userVersion < 5 &&
               revision.definition.slots.any((s) => s.bodyMass != null))
             invalid('Body-mass session bindings require schema v5.');

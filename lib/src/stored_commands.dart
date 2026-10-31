@@ -473,7 +473,9 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'sessionId'),
           requiredString(request, 'setId'),
           identifier(request, 'metric'),
-          TimingPlan.fromJson(request['plan']),
+          request.containsKey('plan')
+              ? TimingPlan.fromJson(request['plan'])
+              : null,
           parseInstant(request['at'], 'at'),
         )).toViewJson();
       case 'timer list':

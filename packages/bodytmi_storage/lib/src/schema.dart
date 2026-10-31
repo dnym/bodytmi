@@ -66,6 +66,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   10 => schemaV8, // Same tables; v10 adds tempo timing plans.
   11 => schemaV8, // Same tables; v11 adds terminal progression declines.
   12 => schemaV12,
+  13 => schemaV12, // Same tables; v13 adds pinned slot timing defaults.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',
