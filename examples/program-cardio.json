@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "definition": {
+    "id": "cardio",
+    "name": "Cardio practice block",
+    "plan": {
+      "id": "block", "type": "repeat", "count": 3,
+      "child": {"id": "week", "type": "group", "label": "Practice week", "children": [
+        {"id": "first", "type": "day", "templateId": "cardio-intervals", "revision": 1},
+        {"id": "second", "type": "day", "templateId": "cardio-intervals", "revision": 1}
+      ]}
+    }
+  }
+}

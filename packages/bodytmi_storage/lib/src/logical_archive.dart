@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/2';
+const _format = 'bodytmi-logical-export/3';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -60,25 +60,40 @@ final class LogicalArchiveFiles {
     final sourcePath = await file.resolveSymbolicLinks();
     final input = jsonObject(jsonDecode(await _read(file)), 'logical export');
     checkKeys(input, {'format', 'applicationVersion', 'data', 'sha256'});
-    if (!{_format, 'bodytmi-logical-export/1'}.contains(input['format']))
+    if (!{
+      _format,
+      'bodytmi-logical-export/1',
+      'bodytmi-logical-export/2',
+    }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
     final hash = requiredString(input, 'sha256');
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(hash))
       invalid('Invalid logical export checksum.');
+    final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    if (!legacy &&
-        !jsonObject(input['data'], 'logical data').containsKey('progressions'))
-      invalid('Logical format v2 requires progression records.');
-    if (legacy)
-      checkKeys(jsonObject(input['data'], 'legacy logical data'), {
-        'revisions',
-        'sessions',
-        'finalizations',
-      });
-    final archive = TrainingArchive.fromJson(input['data']);
+    final programData = input['format'] == _format;
+    const programKeys = {
+      'programRevisions',
+      'programRuns',
+      'sessionPrograms',
+      'programReceipts',
+    };
+    checkKeys(inputData, {
+      'revisions',
+      'sessions',
+      'finalizations',
+      if (!legacy) 'progressions',
+      if (programData) ...programKeys,
+    });
+    if (!legacy && !inputData.containsKey('progressions'))
+      invalid('Logical format requires progression records.');
+    if (programData && programKeys.any((k) => !inputData.containsKey(k)))
+      invalid('Logical v3 requires all program sections.');
+    final archive = TrainingArchive.fromJson(inputData);
     final data = archive.toJson();
     if (legacy) data.remove('progressions');
+    if (!programData) for (final key in programKeys) data.remove(key);
     if (_checksum({
           'format': input['format'],
           'applicationVersion': version,
@@ -96,11 +111,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV2.values) {
+          for (final ddl in schemaV3.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 2');
+          db.execute('PRAGMA user_version = 3');
           for (final revision in archive.revisions) {
             db.execute(
               'INSERT INTO revisions (template_id, number, snapshot) VALUES (?, ?, ?)',
@@ -132,6 +147,32 @@ final class LogicalArchiveFiles {
               ],
             );
           }
+          for (final p in archive.programRevisions)
+            db.execute(
+              'INSERT INTO program_revisions(program_id,number,snapshot) VALUES (?,?,?)',
+              [p.definition.id, p.number, canonicalJson(p.toJson())],
+            );
+          for (final r in archive.programRuns)
+            db.execute('INSERT INTO program_runs(id,snapshot) VALUES (?,?)', [
+              r.id,
+              canonicalJson(r.toJson()),
+            ]);
+          for (final b in archive.sessionPrograms)
+            db.execute(
+              'INSERT INTO session_programs(session_id,run_id,ordinal,snapshot) VALUES (?,?,?,?)',
+              [b.sessionId, b.runId, b.ordinal, canonicalJson(b.toJson())],
+            );
+          for (final r in archive.programReceipts)
+            db.execute(
+              'INSERT INTO program_receipts(run_id,ordinal,operation_key,session_id,snapshot) VALUES (?,?,?,?,?)',
+              [
+                r.runId,
+                r.ordinal,
+                r.operationKey,
+                r.sessionId,
+                canonicalJson(r.toJson()),
+              ],
+            );
           db.execute('COMMIT');
         } catch (_) {
           db.execute('ROLLBACK');

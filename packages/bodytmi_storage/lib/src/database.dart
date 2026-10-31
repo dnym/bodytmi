@@ -34,33 +34,88 @@ class ProgressionDecisions extends Table {
   Set<Column> get primaryKey => {sessionId, slotId};
 }
 
+class ProgramRevisions extends Table {
+  TextColumn get programId => text()();
+  IntColumn get number => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {programId, number};
+}
+
+class ProgramRuns extends Table {
+  TextColumn get id => text()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class SessionPrograms extends Table {
+  TextColumn get sessionId => text().references(Sessions, #id)();
+  TextColumn get runId => text().references(ProgramRuns, #id)();
+  IntColumn get ordinal => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {sessionId};
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {runId, ordinal},
+  ];
+}
+
+class ProgramReceipts extends Table {
+  TextColumn get runId => text().references(ProgramRuns, #id)();
+  IntColumn get ordinal => integer()();
+  TextColumn get operationKey => text()();
+  TextColumn get sessionId => text().nullable().references(Sessions, #id)();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {runId, ordinal};
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {runId, operationKey},
+  ];
+}
+
 @DriftDatabase(
-  tables: [Revisions, Sessions, Finalizations, ProgressionDecisions],
+  tables: [
+    Revisions,
+    Sessions,
+    Finalizations,
+    ProgressionDecisions,
+    ProgramRevisions,
+    ProgramRuns,
+    SessionPrograms,
+    ProgramReceipts,
+  ],
 )
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
-      await customStatement('PRAGMA user_version = 2');
+      await customStatement('PRAGMA user_version = 3');
       await validateMigration();
     }),
     onUpgrade: (m, from, to) async {
-      if (from != 1 || to != 2)
+      if (!{1, 2}.contains(from) || to != 3)
         throw StateError('Unsupported database migration $from -> $to.');
       await transaction(() async {
         final schema = await customSelect(
           'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
         ).get();
-        validateSchema(schema.map((row) => row.data), 1);
-        await m.createTable(progressionDecisions);
+        validateSchema(schema.map((row) => row.data), from);
+        if (from == 1) await m.createTable(progressionDecisions);
+        await m.createTable(programRevisions);
+        await m.createTable(programRuns);
+        await m.createTable(sessionPrograms);
+        await m.createTable(programReceipts);
         // Drift also writes this after the callback. Writing it within our
         // transaction prevents a crash leaving new DDL with the old version.
-        await customStatement('PRAGMA user_version = 2');
+        await customStatement('PRAGMA user_version = 3');
         await validateMigration();
       });
     },
@@ -77,7 +132,7 @@ class TrainingDatabase extends _$TrainingDatabase {
     final schema = await customSelect(
       'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
     ).get();
-    validateSchema(schema.map((row) => row.data), 2);
+    validateSchema(schema.map((row) => row.data), 3);
     if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
       throw const BodyTmiException(
         'storage',

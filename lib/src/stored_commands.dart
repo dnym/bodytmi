@@ -21,6 +21,16 @@ const storedCommandNames = [
   'progression propose',
   'progression show',
   'progression accept',
+  'program publish',
+  'program show',
+  'program list',
+  'run create',
+  'run list',
+  'run show',
+  'run start',
+  'run skip',
+  'run pause',
+  'run resume',
 ];
 
 /// Filesystem/database construction belongs to the native adapter.
@@ -60,6 +70,15 @@ Future<Map<String, Object?>> executeStored(
       'expectedVersion',
       'acceptedAt',
     },
+    'program publish' => {'definition', 'expectedRevision'},
+    'program show' => {'programId', 'revision'},
+    'program list' => <String>{},
+    'run create' => {'id', 'programId', 'revision', 'startedAt', 'loop'},
+    'run list' => {'status'},
+    'run show' => {'runId'},
+    'run start' => {'runId', 'expectedVersion', 'id', 'startedAt'},
+    'run skip' => {'runId', 'expectedVersion', 'requestId', 'skippedAt'},
+    'run pause' || 'run resume' => {'runId', 'expectedVersion'},
     _ => invalid('Unknown stored command.'),
   };
   checkKeys(request, {'schemaVersion', 'database', ...fields});
@@ -165,8 +184,89 @@ Future<Map<String, Object?>> executeStored(
   final store = await TrainingStore.open(requiredString(request, 'database'));
   try {
     final service = StoredTrainingService(store);
+    final programs = ProgramService(store);
+    Future<Map<String, Object?>> runView(ProgramRun run) async {
+      final bindings = await store.sessionPrograms();
+      return {
+        ...run.toJson(),
+        'current': run.current?.toJson(),
+        'currentSessionId': bindings
+            .where((b) => b.runId == run.id && b.ordinal == run.cursor)
+            .firstOrNull
+            ?.sessionId,
+      };
+    }
+
     Object? data;
     switch (command) {
+      case 'program publish':
+        data = (await programs.publish(
+          ProgramDefinition.fromJson(request['definition']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'program show':
+        data = (await programs.revision(
+          identifier(request, 'programId'),
+          request['revision'] == null ? null : integer('revision'),
+        )).toJson();
+      case 'program list':
+        final all = await store.programRevisions();
+        all.sort((a, b) {
+          final c = a.definition.id.compareTo(b.definition.id);
+          return c == 0 ? a.number.compareTo(b.number) : c;
+        });
+        data = [for (final p in all) p.toJson()];
+      case 'run create':
+        data = await runView(
+          await programs.create(
+            identifier(request, 'id'),
+            identifier(request, 'programId'),
+            integer('revision'),
+            parseInstant(request['startedAt'], 'startedAt'),
+            loop: request.containsKey('loop') ? flag('loop') : true,
+          ),
+        );
+      case 'run list':
+        final status = request['status'];
+        if (status != null &&
+            !{'active', 'paused', 'completed'}.contains(status))
+          invalid('Unknown run status filter.');
+        final runs = await store.programRuns();
+        runs.sort((a, b) => a.id.compareTo(b.id));
+        data = [
+          for (final r in runs)
+            if (status == null || r.status == status) await runView(r),
+        ];
+      case 'run show':
+        data = await runView(await programs.run(identifier(request, 'runId')));
+      case 'run pause':
+      case 'run resume':
+        data = await runView(
+          await programs.status(
+            identifier(request, 'runId'),
+            integer('expectedVersion'),
+            command == 'run pause' ? 'paused' : 'active',
+          ),
+        );
+      case 'run start':
+        data = (await programs.start(
+          identifier(request, 'runId'),
+          integer('expectedVersion'),
+          identifier(request, 'id'),
+          parseInstant(request['startedAt'], 'startedAt'),
+        )).toJson();
+      case 'run skip':
+        final runId = identifier(request, 'runId');
+        final receipt = await programs.skip(
+          runId,
+          integer('expectedVersion'),
+          identifier(request, 'requestId'),
+          parseInstant(request['skippedAt'], 'skippedAt'),
+        );
+        data = {
+          'receipt': receipt.toJson(),
+          'run': await runView(await programs.run(runId)),
+        };
       case 'progression propose':
       case 'progression show':
       case 'progression accept':

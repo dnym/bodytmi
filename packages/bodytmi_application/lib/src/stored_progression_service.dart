@@ -21,6 +21,10 @@ final class StoredProgressionService {
       return existing;
     }
     final session = await StoredTrainingService(repository).session(sessionId);
+    final runId = (await repository.sessionPrograms())
+        .where((b) => b.sessionId == sessionId)
+        .firstOrNull
+        ?.runId;
     final candidates = session.revision.definition.slots.where(
       (s) => s.id == slotId,
     );
@@ -29,6 +33,7 @@ final class StoredProgressionService {
       all,
       session.revision.definition.id,
       candidates.single,
+      runId: runId,
     );
     if (before != null && canonicalJson(before.rule) != canonicalJson(rule))
       _conflict('Changing an active rule requires explicit reconciliation.');
@@ -40,6 +45,7 @@ final class StoredProgressionService {
       previousSequence: before?.sequence ?? 0,
       previousFailures: before?.proposal.failedSessions ?? 0,
       version: (existing?.version ?? 0) + 1,
+      runId: runId,
     );
     if (before != null && !matchesProgressionBaseline(next, before))
       _conflict(
@@ -64,6 +70,11 @@ final class StoredProgressionService {
   }
 
   Future<bool> stale(ProgressionDecision decision) async {
+    final runId = (await repository.sessionPrograms())
+        .where((b) => b.sessionId == decision.session.id)
+        .firstOrNull
+        ?.runId;
+    if (decision.runId != runId) return true;
     final source = await repository.session(decision.session.id);
     if (source == null ||
         canonicalJson(source.toJson()) !=
@@ -74,6 +85,7 @@ final class StoredProgressionService {
       await repository.progressionDecisions(),
       decision.session.revision.definition.id,
       decision.slot,
+      runId: runId,
     );
     return latest?.id != decision.previousApplication;
   }

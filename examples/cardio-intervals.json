@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "cardio-intervals",
+    "name": "Walk and run intervals",
+    "slots": [
+      {"id": "walk", "exercise": "walking", "implementation": "outdoors", "targets": {"duration": {"value": "90", "unit": "s"}}},
+      {"id": "run", "exercise": "running", "implementation": "outdoors", "targets": {"duration": {"value": "60", "unit": "s"}}}
+    ],
+    "plan": {
+      "id": "intervals", "type": "repeat", "count": 4,
+      "child": {"id": "pair", "type": "sequence", "children": [
+        {"id": "walking", "type": "effort", "slot": "walk"},
+        {"id": "running", "type": "effort", "slot": "run"}
+      ]}
+    }
+  }
+}

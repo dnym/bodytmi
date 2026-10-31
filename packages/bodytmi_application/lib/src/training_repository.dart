@@ -2,6 +2,8 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'training_service.dart';
 import 'training_archive.dart';
 import 'progression_decision.dart';
+import 'program_service.dart';
+import 'canonical_json.dart';
 
 /// One repository transaction is the durability boundary of each operation.
 abstract interface class TrainingRepository {
@@ -11,6 +13,14 @@ abstract interface class TrainingRepository {
   Future<List<String>> finalizationIds();
   Future<List<ProgressionDecision>> progressionDecisions();
   Future<void> saveProgressionDecision(ProgressionDecision decision);
+  Future<List<ProgramRevision>> programRevisions();
+  Future<void> insertProgramRevision(ProgramRevision revision);
+  Future<List<ProgramRun>> programRuns();
+  Future<void> saveProgramRun(ProgramRun run);
+  Future<List<SessionProgramBinding>> sessionPrograms();
+  Future<void> insertSessionProgram(SessionProgramBinding binding);
+  Future<List<ProgramReceipt>> programReceipts();
+  Future<void> insertProgramReceipt(ProgramReceipt receipt);
   Future<void> insertRevision(WorkoutRevision revision);
   Future<TrainingSession?> session(String id);
   Future<List<TrainingSession>> sessions();
@@ -29,6 +39,10 @@ final class StoredTrainingService {
       sessions: await repository.sessions(),
       finalizations: await repository.finalizationIds(),
       progressions: await repository.progressionDecisions(),
+      programRevisions: await repository.programRevisions(),
+      programRuns: await repository.programRuns(),
+      sessionPrograms: await repository.sessionPrograms(),
+      programReceipts: await repository.programReceipts(),
     ),
   );
 
@@ -53,25 +67,50 @@ final class StoredTrainingService {
     String id,
     String templateId,
     int number,
-    DateTime startedAt,
-  ) => repository.transaction(() async {
+    DateTime startedAt, {
+    ProgramRun? programRun,
+  }) => repository.transaction(() async {
+    final runId = programRun?.id;
     final prescription = await revision(templateId, number);
     final existing = await repository.session(id);
+    final bindings = await repository.sessionPrograms();
+    final runBySession = {for (final b in bindings) b.sessionId: b.runId};
     if (existing != null) {
-      if (existing.revision.definition.id != templateId ||
+      if (runBySession[id] != runId ||
+          existing.revision.definition.id != templateId ||
           existing.revision.number != number ||
           existing.startedAt != startedAt)
         _conflict();
       return existing;
     }
+    if (programRun != null) {
+      final current = await ProgramService(repository).run(programRun.id);
+      final day = current.current;
+      if (current.status != 'active' ||
+          canonicalJson(current.toJson()) !=
+              canonicalJson(programRun.toJson()) ||
+          day == null ||
+          day.day.templateId != templateId ||
+          day.day.revision != number ||
+          bindings.any((b) => b.runId == runId && b.ordinal == current.cursor))
+        _conflict();
+      if (startedAt.isBefore(current.startedAt) ||
+          (await repository.programReceipts())
+              .where((r) => r.runId == runId)
+              .any((r) => r.occurredAt.isAfter(startedAt)))
+        invalid('Session precedes program occurrence history.');
+    }
     var next = const TrainingService().start(
       sessionId: id,
       revision: prescription,
       startedAt: startedAt,
-      history: await repository.sessions(),
+      history: (await repository.sessions())
+          .where((s) => runBySession[s.id] == runId)
+          .toList(),
     );
     final decisions = (await repository.progressionDecisions()).where(
       (d) =>
+          d.runId == runId &&
           d.acceptedAt != null &&
           !d.acceptedAt!.isAfter(startedAt) &&
           d.session.startedAt.isBefore(startedAt),
@@ -79,7 +118,12 @@ final class StoredTrainingService {
     final sets = <TrainingSet>[];
     final bySlot = {
       for (final slot in prescription.definition.slots)
-        slot.id: latestApplication(decisions, prescription.definition.id, slot),
+        slot.id: latestApplication(
+          decisions,
+          prescription.definition.id,
+          slot,
+          runId: runId,
+        ),
     };
     final workingCounts = <String, int>{};
     for (final set in next.sets.where((s) => s.role == 'work')) {
@@ -130,6 +174,17 @@ final class StoredTrainingService {
       sets: sets,
     );
     await repository.insertSession(next);
+    if (programRun != null) {
+      await repository.insertSessionProgram(
+        SessionProgramBinding(
+          sessionId: id,
+          runId: programRun.id,
+          ordinal: programRun.cursor,
+          path: programRun.current!.path,
+        ),
+      );
+      await repository.saveProgramRun(programRun.changed());
+    }
     return next;
   });
 
@@ -141,9 +196,19 @@ final class StoredTrainingService {
     final current = await session(id);
     if (current.contentVersion != expectedVersion) _conflict();
     final next = change(current);
+    if (next.id != current.id ||
+        next.startedAt != current.startedAt ||
+        canonicalJson(next.revision.toJson()) !=
+            canonicalJson(current.revision.toJson())) {
+      invalid(
+        'Editing results cannot change session identity, start time or pinned prescription.',
+      );
+    }
     await repository.updateSession(next);
-    if (next.status == SessionStatus.finalized)
+    if (next.status == SessionStatus.finalized) {
       await repository.recordFinalization(id);
+      await ProgramService(repository).finalized(next);
+    }
     return next;
   });
 }

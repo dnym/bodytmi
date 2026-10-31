@@ -13,10 +13,12 @@ final class ProgressionDecision {
     this.previousFailures = 0,
     this.version = 1,
     this.acceptedAt,
+    this.runId,
   }) : rule = _freeze(rule) as Map<String, Object?> {
     if (session.status != SessionStatus.finalized)
       invalid('Progression requires finalized confirmed work.');
     identifier({'id': slotId}, 'id');
+    if (runId != null) identifier({'id': runId}, 'id');
     if (version < 1 ||
         previousSequence < 0 ||
         previousFailures < 0 ||
@@ -47,6 +49,7 @@ final class ProgressionDecision {
       'version',
       'acceptedAt',
       'proposal',
+      'runId',
     });
     int count(String key, int min) {
       final v = j[key];
@@ -68,6 +71,7 @@ final class ProgressionDecision {
       acceptedAt: j['acceptedAt'] == null
           ? null
           : parseInstant(j['acceptedAt'], 'acceptedAt'),
+      runId: j['runId'] == null ? null : identifier(j, 'runId'),
     );
     if (canonicalJson(j['proposal']) !=
         canonicalJson(decision.proposal.toJson()))
@@ -80,10 +84,12 @@ final class ProgressionDecision {
   final String? previousApplication;
   final int previousSequence, previousFailures, version;
   final DateTime? acceptedAt;
+  final String? runId;
   String get id => '${session.id}/$slotId';
   int get sequence => previousSequence + (acceptedAt == null ? 0 : 1);
   late final ExerciseSlot slot = session.revision.definition.slot(slotId);
   late final String contextKey = canonicalJson([
+    runId,
     session.revision.definition.id,
     slot.id,
     slot.exerciseId,
@@ -104,6 +110,7 @@ final class ProgressionDecision {
         failedSessions: previousFailures,
       );
   bool sameContext(ProgressionDecision other) =>
+      runId == other.runId &&
       session.revision.definition.id == other.session.revision.definition.id &&
       slot.compatibleWith(other.slot);
   bool matches(String templateId, ExerciseSlot candidate) =>
@@ -118,6 +125,7 @@ final class ProgressionDecision {
     previousFailures: previousFailures,
     version: version,
     acceptedAt: at,
+    runId: runId,
   );
   Map<String, Object?> toJson() => {
     'session': session.toJson(),
@@ -129,17 +137,20 @@ final class ProgressionDecision {
     'version': version,
     'acceptedAt': acceptedAt?.toUtc().toIso8601String(),
     'proposal': proposal.toJson(),
+    if (runId != null) 'runId': runId,
   };
 }
 
 ProgressionDecision? latestApplication(
   Iterable<ProgressionDecision> decisions,
   String templateId,
-  ExerciseSlot slot,
-) {
+  ExerciseSlot slot, {
+  String? runId,
+}) {
   ProgressionDecision? latest;
   for (final d in decisions) {
-    if (d.acceptedAt != null &&
+    if (d.runId == runId &&
+        d.acceptedAt != null &&
         d.matches(templateId, slot) &&
         (latest == null || d.sequence > latest.sequence))
       latest = d;
@@ -149,8 +160,9 @@ ProgressionDecision? latestApplication(
 
 void validateProgressionDecisions(
   List<ProgressionDecision> decisions,
-  List<TrainingSession> sessions,
-) {
+  List<TrainingSession> sessions, [
+  Map<String, String> runBySession = const {},
+]) {
   final byId = <String, ProgressionDecision>{};
   final sequences = <String, Set<int>>{};
   final current = {for (final s in sessions) s.id: s};
@@ -158,6 +170,8 @@ void validateProgressionDecisions(
     if (byId.containsKey(d.id))
       invalid('Duplicate progression exposure identity.');
     byId[d.id] = d;
+    if (d.runId != runBySession[d.session.id])
+      invalid('Progression ownership does not match session program binding.');
     if (d.acceptedAt != null &&
         !(sequences.putIfAbsent(d.contextKey, () => <int>{}).add(d.sequence))) {
       invalid('Competing progression writers at one sequence.');

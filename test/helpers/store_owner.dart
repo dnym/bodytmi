@@ -7,7 +7,35 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 5 && args[1].startsWith('accept-')) {
+    if (args.length == 4 && args[1].startsWith('finish-')) {
+      Future<void> finish() async {
+        final s = (await store.session(args[2]))!;
+        await StoredTrainingService(store).edit(s.id, s.contentVersion, (
+          session,
+        ) {
+          for (final set in session.sets)
+            session = const TrainingService().complete(
+              session,
+              set.id,
+              const {},
+              acceptSuggested: true,
+            );
+          return session.finish(DateTime.parse(args[3]));
+        });
+      }
+
+      if (args[1] == 'finish-rollback')
+        await store.transaction(() async {
+          await finish();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      else {
+        await finish();
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 5 && args[1].startsWith('accept-')) {
       Future<void> accept() async {
         await StoredProgressionService(
           store,

@@ -98,7 +98,7 @@ final class NativeBackup {
       'database',
     });
     if (manifest['format'] != _format ||
-        !{1, 2}.contains(manifest['databaseSchemaVersion'])) {
+        !{1, 2, 3}.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
     requiredString(manifest, 'applicationVersion');
@@ -190,7 +190,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2}.contains(db.userVersion) ||
+      if (!{1, 2, 3}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -210,7 +210,13 @@ final class NativeBackup {
       for (final table in [
         'revisions',
         'sessions',
-        if (db.userVersion == 2) 'progression_decisions',
+        if (db.userVersion >= 2) 'progression_decisions',
+        if (db.userVersion >= 3) ...[
+          'program_revisions',
+          'program_runs',
+          'session_programs',
+          'program_receipts',
+        ],
       ]) {
         if (db.select(
           'SELECT 1 FROM $table WHERE length(CAST(snapshot AS BLOB)) > ? LIMIT 1',
@@ -293,7 +299,7 @@ final class NativeBackup {
       } finally {
         sessions.close();
       }
-      if (db.userVersion == 2) {
+      if (db.userVersion >= 2) {
         final decisions = <ProgressionDecision>[];
         for (final row in db.select(
           'SELECT session_id,slot_id,snapshot FROM progression_decisions',
@@ -311,7 +317,76 @@ final class NativeBackup {
           ))
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ];
-        validateProgressionDecisions(decisions, sources);
+        if (db.userVersion < 3) {
+          validateProgressionDecisions(decisions, sources);
+        } else {
+          final programs = <ProgramRevision>[];
+          for (final row in db.select('SELECT * FROM program_revisions')) {
+            final p = ProgramRevision.fromJson(
+              jsonDecode(row['snapshot'] as String),
+            );
+            if (p.definition.id != row['program_id'] ||
+                p.number != row['number'])
+              invalid('Program revision row identity mismatch.');
+            programs.add(p);
+          }
+          final runs = <ProgramRun>[];
+          for (final row in db.select('SELECT * FROM program_runs')) {
+            final r = ProgramRun.fromJson(
+              jsonDecode(row['snapshot'] as String),
+            );
+            if (r.id != row['id'])
+              invalid('Program run row identity mismatch.');
+            runs.add(r);
+          }
+          final bindings = <SessionProgramBinding>[];
+          for (final row in db.select('SELECT * FROM session_programs')) {
+            final b = SessionProgramBinding.fromJson(
+              jsonDecode(row['snapshot'] as String),
+            );
+            if (b.sessionId != row['session_id'] ||
+                b.runId != row['run_id'] ||
+                b.ordinal != row['ordinal'])
+              invalid('Program binding row identity mismatch.');
+            bindings.add(b);
+          }
+          final receipts = <ProgramReceipt>[];
+          for (final row in db.select('SELECT * FROM program_receipts')) {
+            final r = ProgramReceipt.fromJson(
+              jsonDecode(row['snapshot'] as String),
+            );
+            if (r.runId != row['run_id'] ||
+                r.ordinal != row['ordinal'] ||
+                r.operationKey != row['operation_key'] ||
+                r.sessionId != row['session_id'])
+              invalid('Program receipt row identity mismatch.');
+            receipts.add(r);
+          }
+          final allSessions = [
+            for (final row in db.select('SELECT snapshot FROM sessions'))
+              sessionFromJson(jsonDecode(row['snapshot'] as String)),
+          ];
+          final allRevisions = [
+            for (final row in db.select('SELECT snapshot FROM revisions'))
+              WorkoutRevision.fromJson(jsonDecode(row['snapshot'] as String)),
+          ];
+          final finalizations = [
+            for (final row in db.select('SELECT session_id FROM finalizations'))
+              row['session_id'] as String,
+          ];
+          validateProgramData(
+            programs: programs,
+            runs: runs,
+            bindings: bindings,
+            receipts: receipts,
+            revisions: allRevisions,
+            sessions: allSessions,
+            finalizations: finalizations,
+          );
+          validateProgressionDecisions(decisions, allSessions, {
+            for (final b in bindings) b.sessionId: b.runId,
+          });
+        }
       }
       return db.userVersion;
     } finally {

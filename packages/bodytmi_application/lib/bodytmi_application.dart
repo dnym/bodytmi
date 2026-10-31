@@ -12,3 +12,4 @@ export 'src/training_archive.dart';
 export 'src/progression_decision.dart';
 export 'src/stored_progression_service.dart';
 export 'src/canonical_json.dart';
+export 'src/program_service.dart';

@@ -2,6 +2,7 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'session_codec.dart';
 import 'canonical_json.dart';
 import 'progression_decision.dart';
+import 'program_service.dart';
 
 /// Full logical representation of the records currently persisted by training.
 /// This is a profile replacement contract, not a neutral external-history import.
@@ -11,6 +12,10 @@ final class TrainingArchive {
     required List<TrainingSession> sessions,
     required List<String> finalizations,
     List<ProgressionDecision> progressions = const [],
+    List<ProgramRevision> programRevisions = const [],
+    List<ProgramRun> programRuns = const [],
+    List<SessionProgramBinding> sessionPrograms = const [],
+    List<ProgramReceipt> programReceipts = const [],
   }) : revisions = List<WorkoutRevision>.unmodifiable(
          <WorkoutRevision>[...revisions]..sort((a, b) {
            final id = a.definition.id.compareTo(b.definition.id);
@@ -24,13 +29,43 @@ final class TrainingArchive {
        progressions = List<ProgressionDecision>.unmodifiable(
          <ProgressionDecision>[...progressions]
            ..sort((a, b) => a.id.compareTo(b.id)),
+       ),
+       programRevisions = List<ProgramRevision>.unmodifiable(
+         <ProgramRevision>[...programRevisions]..sort((a, b) {
+           final d = a.definition.id.compareTo(b.definition.id);
+           return d == 0 ? a.number.compareTo(b.number) : d;
+         }),
+       ),
+       programRuns = List<ProgramRun>.unmodifiable(
+         <ProgramRun>[...programRuns]..sort((a, b) => a.id.compareTo(b.id)),
+       ),
+       sessionPrograms = List<SessionProgramBinding>.unmodifiable(
+         <SessionProgramBinding>[...sessionPrograms]
+           ..sort((a, b) => a.sessionId.compareTo(b.sessionId)),
+       ),
+       programReceipts = List<ProgramReceipt>.unmodifiable(
+         <ProgramReceipt>[...programReceipts]..sort((a, b) {
+           final d = a.runId.compareTo(b.runId);
+           return d == 0 ? a.ordinal.compareTo(b.ordinal) : d;
+         }),
        ) {
     _validate();
   }
 
   factory TrainingArchive.fromJson(Object? input) {
     final json = jsonObject(input, 'logical training data');
-    checkKeys(json, {'revisions', 'sessions', 'finalizations', 'progressions'});
+    checkKeys(json, {
+      'revisions',
+      'sessions',
+      'finalizations',
+      'progressions',
+      'programRevisions',
+      'programRuns',
+      'sessionPrograms',
+      'programReceipts',
+    });
+    List<Object?> optional(String key) =>
+        json.containsKey(key) ? jsonList(json, key) : const [];
     return TrainingArchive(
       revisions: [
         for (final item in jsonList(json, 'revisions'))
@@ -42,6 +77,20 @@ final class TrainingArchive {
       finalizations: [
         for (final item in jsonList(json, 'finalizations'))
           identifier({'id': item}, 'id'),
+      ],
+      programRevisions: [
+        for (final j in optional('programRevisions'))
+          ProgramRevision.fromJson(j),
+      ],
+      programRuns: [
+        for (final j in optional('programRuns')) ProgramRun.fromJson(j),
+      ],
+      sessionPrograms: [
+        for (final j in optional('sessionPrograms'))
+          SessionProgramBinding.fromJson(j),
+      ],
+      programReceipts: [
+        for (final j in optional('programReceipts')) ProgramReceipt.fromJson(j),
       ],
       progressions: [
         for (final item
@@ -57,12 +106,20 @@ final class TrainingArchive {
   final List<TrainingSession> sessions;
   final List<String> finalizations;
   final List<ProgressionDecision> progressions;
+  final List<ProgramRevision> programRevisions;
+  final List<ProgramRun> programRuns;
+  final List<SessionProgramBinding> sessionPrograms;
+  final List<ProgramReceipt> programReceipts;
 
   Map<String, Object?> toJson() => {
     'revisions': [for (final r in revisions) r.toJson()],
     'sessions': [for (final s in sessions) s.toJson()],
     'finalizations': finalizations,
     'progressions': [for (final d in progressions) d.toJson()],
+    'programRevisions': [for (final p in programRevisions) p.toJson()],
+    'programRuns': [for (final r in programRuns) r.toJson()],
+    'sessionPrograms': [for (final b in sessionPrograms) b.toJson()],
+    'programReceipts': [for (final r in programReceipts) r.toJson()],
   };
 
   Map<String, Object?> get summary => {
@@ -70,10 +127,25 @@ final class TrainingArchive {
     'sessions': sessions.length,
     'finalizations': finalizations.length,
     'progressions': progressions.length,
+    'programRevisions': programRevisions.length,
+    'programRuns': programRuns.length,
+    'sessionPrograms': sessionPrograms.length,
+    'programReceipts': programReceipts.length,
   };
 
   void _validate() {
-    validateProgressionDecisions(progressions, sessions);
+    validateProgramData(
+      programs: programRevisions,
+      runs: programRuns,
+      bindings: sessionPrograms,
+      receipts: programReceipts,
+      revisions: revisions,
+      sessions: sessions,
+      finalizations: finalizations,
+    );
+    validateProgressionDecisions(progressions, sessions, {
+      for (final b in sessionPrograms) b.sessionId: b.runId,
+    });
     final byRevision = <String, WorkoutRevision>{};
     final numbers = <String, int>{};
     for (final revision in revisions) {

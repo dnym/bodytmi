@@ -4,7 +4,8 @@ import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'database.dart' hide ProgressionDecision;
+import 'database.dart'
+    hide ProgressionDecision, ProgramRevision, ProgramRun, ProgramReceipt;
 import 'native_backup.dart';
 import 'schema.dart';
 
@@ -45,7 +46,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 2) {
+            if (native.userVersion > 3) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -106,11 +107,15 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 2);
+    validateSchema(schema.map((row) => row.data), 3);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
-           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM progression_decisions), 0) AS bytes
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM progression_decisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_runs), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM session_programs), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
       invalid('Logical export exceeds the 64 MiB resource limit.');
@@ -200,6 +205,112 @@ final class TrainingStore implements TrainingRepository {
             sessionId: decision.session.id,
             slotId: decision.slotId,
             snapshot: snapshot,
+          ),
+        );
+  }
+
+  @override
+  Future<List<ProgramRevision>> programRevisions() async {
+    final result = <ProgramRevision>[];
+    for (final row in await _db.select(_db.programRevisions).get()) {
+      final p = ProgramRevision.fromJson(jsonDecode(row.snapshot));
+      if (p.definition.id != row.programId || p.number != row.number)
+        invalid('Stored program revision identity mismatch.');
+      result.add(p);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> insertProgramRevision(ProgramRevision revision) async {
+    await _db
+        .into(_db.programRevisions)
+        .insert(
+          ProgramRevisionsCompanion.insert(
+            programId: revision.definition.id,
+            number: revision.number,
+            snapshot: _snapshot(revision.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<ProgramRun>> programRuns() async {
+    final result = <ProgramRun>[];
+    for (final row in await _db.select(_db.programRuns).get()) {
+      final r = ProgramRun.fromJson(jsonDecode(row.snapshot));
+      if (r.id != row.id) invalid('Stored run identity mismatch.');
+      result.add(r);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveProgramRun(ProgramRun run) async {
+    await _db
+        .into(_db.programRuns)
+        .insertOnConflictUpdate(
+          ProgramRunsCompanion.insert(
+            id: run.id,
+            snapshot: _snapshot(run.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<SessionProgramBinding>> sessionPrograms() async {
+    final result = <SessionProgramBinding>[];
+    for (final row in await _db.select(_db.sessionPrograms).get()) {
+      final b = SessionProgramBinding.fromJson(jsonDecode(row.snapshot));
+      if (b.sessionId != row.sessionId ||
+          b.runId != row.runId ||
+          b.ordinal != row.ordinal)
+        invalid('Stored session binding identity mismatch.');
+      result.add(b);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> insertSessionProgram(SessionProgramBinding binding) async {
+    await _db
+        .into(_db.sessionPrograms)
+        .insert(
+          SessionProgramsCompanion.insert(
+            sessionId: binding.sessionId,
+            runId: binding.runId,
+            ordinal: binding.ordinal,
+            snapshot: _snapshot(binding.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<ProgramReceipt>> programReceipts() async {
+    final result = <ProgramReceipt>[];
+    for (final row in await _db.select(_db.programReceipts).get()) {
+      final r = ProgramReceipt.fromJson(jsonDecode(row.snapshot));
+      if (r.runId != row.runId ||
+          r.ordinal != row.ordinal ||
+          r.operationKey != row.operationKey ||
+          r.sessionId != row.sessionId)
+        invalid('Stored occurrence receipt identity mismatch.');
+      result.add(r);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> insertProgramReceipt(ProgramReceipt receipt) async {
+    await _db
+        .into(_db.programReceipts)
+        .insert(
+          ProgramReceiptsCompanion.insert(
+            runId: receipt.runId,
+            ordinal: receipt.ordinal,
+            operationKey: receipt.operationKey,
+            sessionId: Value(receipt.sessionId),
+            snapshot: _snapshot(receipt.toJson()),
           ),
         );
   }
@@ -305,3 +416,10 @@ Never _busy() => throw const BodyTmiException(
   'in_use',
   'Database is already owned by another application.',
 );
+
+String _snapshot(Object? value) {
+  final json = canonicalJson(value);
+  if (utf8.encode(json).length > 8 * 1024 * 1024)
+    invalid('Stored program record exceeds 8 MiB.');
+  return json;
+}
