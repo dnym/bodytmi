@@ -13,6 +13,7 @@ const storedCommandNames = [
   'execution complete',
   'execution confirm',
   'execution skip',
+  'execution skip-group',
   'execution run',
   'timer rest',
   'timer start',
@@ -111,6 +112,15 @@ Future<Map<String, Object?>> executeStored(
       'expectedSessionVersion',
       'requestId',
       'at',
+      'confirm',
+    },
+    'execution skip-group' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'requestId',
+      'at',
+      'groupPath',
       'confirm',
     },
     'execution run' => {
@@ -412,6 +422,17 @@ Future<Map<String, Object?>> executeStored(
           runForMilliseconds: limit,
           stream: flag('stream'),
         );
+      case 'execution skip-group':
+        final e = await execution.skipGroup(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          integer('expectedSessionVersion'),
+          identifier(request, 'requestId'),
+          requiredString(request, 'groupPath'),
+          parseInstant(request['at'], 'at'),
+          confirm: flag('confirm'),
+        );
+        data = await execution.view(e.id);
       case 'timer rest':
         data = (await timing.startRest(
           identifier(request, 'id'),

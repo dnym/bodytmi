@@ -56,6 +56,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   6 => schemaV4, // Same tables; v6 adds pinned effective-mass models.
   7 => schemaV7,
   8 => schemaV8,
+  9 => schemaV8, // Same tables; v9 adds atomic group-skip receipt payloads.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

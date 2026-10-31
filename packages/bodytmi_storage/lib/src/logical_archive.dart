@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/8';
+const _format = 'bodytmi-logical-export/9';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -69,6 +69,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/5',
       'bodytmi-logical-export/6',
       'bodytmi-logical-export/7',
+      'bodytmi-logical-export/8',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -77,7 +78,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final executionData = input['format'] == _format;
+    final groupData = input['format'] == _format;
+    final executionData =
+        groupData || input['format'] == 'bodytmi-logical-export/8';
     final timingData =
         executionData || input['format'] == 'bodytmi-logical-export/7';
     final inputDataV6 =
@@ -115,6 +118,15 @@ final class LogicalArchiveFiles {
     if (executionData && !inputData.containsKey('executions'))
       invalid('Logical v8 requires execution records.');
     final archive = TrainingArchive.fromJson(inputData);
+    if (!groupData &&
+        archive.executions.any(
+          (e) => e.receipts.any(
+            (r) =>
+                jsonObject(r['request'], 'execution request')['action'] ==
+                'skip-group',
+          ),
+        ))
+      invalid('Group skipping requires logical v9.');
     if (!executionData && archive.timers.any((t) => t.plan.restOnly))
       invalid('Rest-only timing requires logical v8.');
     if (!inputDataV5 &&
@@ -154,7 +166,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 8');
+          db.execute('PRAGMA user_version = 9');
           for (final revision in archive.revisions) {
             db.execute(
               'INSERT INTO revisions (template_id, number, snapshot) VALUES (?, ?, ?)',

@@ -98,7 +98,17 @@ final class NativeBackup {
       'database',
     });
     if (manifest['format'] != _format ||
-        !{1, 2, 3, 4, 5, 6, 7, 8}.contains(manifest['databaseSchemaVersion'])) {
+        !{
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+        }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
     requiredString(manifest, 'applicationVersion');
@@ -190,7 +200,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{1, 2, 3, 4, 5, 6, 7, 8}.contains(db.userVersion) ||
+      if (!{1, 2, 3, 4, 5, 6, 7, 8, 9}.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -441,6 +451,13 @@ final class NativeBackup {
           final e = WorkoutExecution.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 9 &&
+              e.receipts.any(
+                (r) =>
+                    jsonObject(r['request'], 'execution request')['action'] ==
+                    'skip-group',
+              ))
+            invalid('Group skipping requires schema v9.');
           if (e.id != row['id'] || e.sessionId != row['session_id'])
             invalid('Execution row identity mismatch.');
           executions.add(e);

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "interval-execution-001",
+  "expectedVersion": 1,
+  "expectedSessionVersion": 1,
+  "requestId": "skip-first-round",
+  "groupPath": "outer[0]",
+  "at": "2026-10-31T09:00:00+01:00",
+  "confirm": true
+}

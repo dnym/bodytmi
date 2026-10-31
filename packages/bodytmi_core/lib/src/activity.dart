@@ -168,3 +168,54 @@ final class ActivityOccurrence {
   final String id;
   final Activity activity;
 }
+
+/// Structural group bounds in the finite occurrence stream. A repeat iteration
+/// contains its child, while between-round rest belongs to the enclosing repeat.
+final class ActivityGroupOccurrence {
+  const ActivityGroupOccurrence(this.path, this.start, this.end);
+  final String path;
+  final int start, end;
+  bool contains(int cursor) => start <= cursor && cursor < end;
+  Map<String, Object?> toJson() => {'path': path, 'start': start, 'end': end};
+}
+
+List<ActivityGroupOccurrence> activityGroups(
+  Activity root, {
+  int? containing,
+  Set<String>? paths,
+}) {
+  final groups = <ActivityGroupOccurrence>[];
+  var cursor = 0;
+  void add(String path, int start, int end) {
+    if ((containing == null || start <= containing && containing < end) &&
+        (paths == null || paths.contains(path)))
+      groups.add(ActivityGroupOccurrence(path, start, end));
+  }
+
+  void walk(Activity node, String prefix) {
+    final path = prefix.isEmpty ? node.id : '$prefix/${node.id}';
+    final start = cursor;
+    switch (node) {
+      case Effort() || Rest():
+        if (++cursor > 10000)
+          invalid('Activity traversal exceeds 10000 occurrences.');
+        return;
+      case Sequence(:final items):
+        for (final child in items) walk(child, path);
+      case Repeat(:final count, :final child, :final restBetweenSeconds):
+        for (var i = 0; i < count; i++) {
+          final round = cursor;
+          walk(child, '$path[$i]');
+          add('$path[$i]', round, cursor);
+          if (i + 1 < count && restBetweenSeconds > 0 && ++cursor > 10000)
+            invalid('Activity traversal exceeds 10000 occurrences.');
+        }
+      case TimeWindow():
+        invalid('Scoped window groups are not implemented yet.');
+    }
+    add(path, start, cursor);
+  }
+
+  walk(root, '');
+  return List.unmodifiable(groups);
+}

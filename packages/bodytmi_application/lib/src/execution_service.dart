@@ -61,6 +61,13 @@ final class ExecutionService {
       'cursor': e.cursor,
       'status': e.complete ? 'completed' : 'active',
       'sessionContentVersion': s.contentVersion,
+      'groups': [
+        for (final group in activityGroups(
+          s.revision.definition.plan,
+          containing: e.cursor,
+        ))
+          group.toJson(),
+      ],
       'current': current == null
           ? null
           : {
@@ -287,7 +294,129 @@ final class ExecutionService {
     if (!e.complete && executionPlan(s)[e.cursor].activity is Rest)
       await time(e.id, e.version, at);
   }
+
+  /// Skip only the unacknowledged remainder of a structural occurrence. Existing
+  /// results are preserved; one transaction records every boundary and next rest.
+  Future<WorkoutExecution> skipGroup(
+    String id,
+    int version,
+    int sessionVersion,
+    String requestId,
+    String groupPath,
+    DateTime at, {
+    required bool confirm,
+  }) => repository.transaction(() async {
+    identifier({'id': requestId}, 'id');
+    if (requestId.length > 64)
+      invalid('Group request ID exceeds 64 characters.');
+    if (!confirm) invalid('Skipping a group requires confirm:true.');
+    final e = await show(id);
+    final training = StoredTrainingService(repository);
+    var s = await training.session(e.sessionId);
+    final group = activityGroups(
+      s.revision.definition.plan,
+      paths: {groupPath},
+    ).where((g) => g.path == groupPath).firstOrNull;
+    if (group == null) invalid('Unknown structural group occurrence.');
+    final request = <String, Object?>{
+      'action': 'skip-group',
+      'version': version,
+      'sessionVersion': sessionVersion,
+      'at': at.toUtc().toIso8601String(),
+      'confirm': true,
+      'groupPath': groupPath,
+      'groupStart': version - 1,
+      'groupEnd': group.end,
+      'groupRequestId': requestId,
+    };
+    final old = e.receipts
+        .where((r) => r['requestId'] == requestId)
+        .firstOrNull;
+    if (old != null) {
+      if (canonicalJson(old['request']) != canonicalJson(request)) _conflict();
+      return e;
+    }
+    if (e.version != version ||
+        e.complete ||
+        s.contentVersion != sessionVersion)
+      _conflict();
+    if (s.status != SessionStatus.active ||
+        at.isBefore(s.startedAt) ||
+        !group.contains(e.cursor))
+      invalid('Group does not contain the active cursor.');
+    final plan = executionPlan(s);
+    final remaining = plan.sublist(e.cursor, group.end);
+    final paths = remaining.map((o) => o.id).toSet();
+    final usedRequests = e.receipts.map((r) => r['requestId']).toSet();
+    for (var i = e.cursor; i < group.end; i++) {
+      if (usedRequests.contains(_groupRequestId(requestId, e.cursor, i)))
+        _conflict('A group child request ID is already used.');
+    }
+    final timers = await repository.timingActivities();
+    for (final t in timers) {
+      if (t.sessionId == s.id &&
+          paths.contains(t.setId) &&
+          (t.active || t.status == 'awaitingConfirmation')) {
+        await TimingService(
+          repository,
+        ).stop(t.id, t.version, at, confirm: true, discard: true);
+      }
+    }
+    final planned = s.sets
+        .where(
+          (set) => paths.contains(set.id) && set.status == SetStatus.planned,
+        )
+        .map((set) => set.id)
+        .toSet();
+    if (planned.isNotEmpty) {
+      s = await training.edit(
+        s.id,
+        s.contentVersion,
+        (current) => TrainingSession(
+          id: current.id,
+          revision: current.revision,
+          startedAt: current.startedAt,
+          sets: [
+            for (final set in current.sets)
+              planned.contains(set.id) ? set.skip(confirm: true) : set,
+          ],
+          status: current.status,
+          finishedAt: current.finishedAt,
+          contentVersion: current.contentVersion + 1,
+          bodyMassInputs: current.bodyMassInputs,
+        ),
+      );
+    }
+    final receipts = <Map<String, Object?>>[...e.receipts];
+    for (var i = e.cursor; i < group.end; i++) {
+      final o = plan[i];
+      final set = o.activity is Effort ? s.set(o.id) : null;
+      receipts.add({
+        'ordinal': i,
+        'path': o.id,
+        'kind': set == null ? 'rest' : 'effort',
+        'requestId': _groupRequestId(requestId, e.cursor, i),
+        'request': {...request, 'version': i + 1},
+        'at': request['at'],
+        if (set != null) ...{
+          'setVersion': set.contentVersion,
+          'resultStatus': set.status.name,
+          if (set.timing != null) 'timerId': set.timing!.timerId,
+        },
+      });
+    }
+    final next = WorkoutExecution.fromJson({
+      ...e.toJson(),
+      'receipts': receipts,
+    });
+    await repository.saveExecution(next);
+    await _prepareRest(next, s, at);
+    return next;
+  });
 }
+
+String _groupRequestId(String id, int start, int ordinal) =>
+    ordinal == start ? id : '$id-group-$ordinal';
 
 void _validateManagedClocks(
   WorkoutExecution e,
@@ -339,6 +468,21 @@ void validateExecutionData(
       invalid('Duplicate or orphan workout execution.');
     final plan = executionPlan(s);
     _validateManagedClocks(e, s, timers);
+    final groups = {
+      for (final g in activityGroups(
+        s.revision.definition.plan,
+        paths: {
+          for (final r in e.receipts)
+            if (jsonObject(r['request'], 'execution request')['action'] ==
+                'skip-group')
+              requiredString(
+                jsonObject(r['request'], 'execution request'),
+                'groupPath',
+              ),
+        },
+      ))
+        g.path: g,
+    };
     if (plan.length != e.occurrenceCount ||
         e.createdAt.isBefore(s.startedAt) ||
         (s.status == SessionStatus.finalized && !e.complete))
@@ -349,12 +493,19 @@ void validateExecutionData(
       final rest = o.activity is Rest;
       final request = jsonObject(r['request'], 'execution request');
       final action = request['action'];
+      final groupSkip = action == 'skip-group';
       final keys = {
         'action',
         'version',
         'sessionVersion',
         'at',
-        if (action == 'skip') 'confirm',
+        if (action == 'skip' || groupSkip) 'confirm',
+        if (groupSkip) ...{
+          'groupPath',
+          'groupStart',
+          'groupEnd',
+          'groupRequestId',
+        },
         if (action == 'complete' || action == 'confirm') ...{
           'actuals',
           'acceptSuggested',
@@ -362,7 +513,13 @@ void validateExecutionData(
         if (action == 'confirm') ...{'timerId', 'timerVersion'},
       };
       checkKeys(request, keys);
-      if (!{'advance', 'complete', 'confirm', 'skip'}.contains(action) ||
+      if (!{
+            'advance',
+            'complete',
+            'confirm',
+            'skip',
+            'skip-group',
+          }.contains(action) ||
           request['version'] != ordinal + 1 ||
           request['at'] != r['at'] ||
           request['sessionVersion'] is! int ||
@@ -371,18 +528,58 @@ void validateExecutionData(
           parseInstant(r['at'], 'at').isBefore(s.startedAt) ||
           r['path'] != o.id ||
           r['kind'] != (rest ? 'rest' : 'effort') ||
-          (action == 'skip' && request['confirm'] != true))
+          ((action == 'skip' || groupSkip) && request['confirm'] != true))
         invalid('Execution receipt context is inconsistent.');
+      if (groupSkip) {
+        final start = request['groupStart'], end = request['groupEnd'];
+        final group = groups[request['groupPath']];
+        final batchId = identifier(request, 'groupRequestId');
+        if (batchId.length > 64 ||
+            start is! int ||
+            end is! int ||
+            start < 0 ||
+            start > ordinal ||
+            ordinal >= end ||
+            end > e.cursor ||
+            group == null ||
+            !group.contains(start) ||
+            end != group.end ||
+            r['requestId'] != _groupRequestId(batchId, start, ordinal))
+          invalid('Group skip bounds or request identity are inconsistent.');
+        final first = jsonObject(e.receipts[start]['request'], 'group request');
+        if (canonicalJson({...first, 'version': ordinal + 1}) !=
+            canonicalJson(request))
+          invalid(
+            'Group skip must retain one request across its entire range.',
+          );
+        if (ordinal == start) {
+          for (var i = start; i < end; i++) {
+            final child = jsonObject(
+              e.receipts[i]['request'],
+              'group child request',
+            );
+            if (canonicalJson({...request, 'version': i + 1}) !=
+                canonicalJson(child))
+              invalid(
+                'Group skip receipts must cover the entire remainder atomically.',
+              );
+          }
+        }
+      }
       if (rest) {
-        if (action != 'skip' && action != 'advance')
+        if (action != 'skip' && action != 'advance' && !groupSkip)
           invalid('Rest receipt cannot certify effort.');
         final timer = r['timerId'] == null ? null : timerMap[r['timerId']];
-        if ((timer == null ||
-            !timer.plan.restOnly ||
-            timer.id != 'execution-${e.id}-rest-$ordinal' ||
-            timer.sessionId != s.id ||
-            timer.setId != o.id ||
-            (action == 'advance' ? timer.status != 'completed' : timer.active)))
+        if (groupSkip
+            ? r.containsKey('timerId')
+            : (timer == null ||
+                  !timer.plan.restOnly ||
+                  timer.id != 'execution-${e.id}-rest-$ordinal' ||
+                  timer.sessionId != s.id ||
+                  timer.setId != o.id ||
+                  (action == 'advance'
+                      ? timer.status != 'completed'
+                      : timer.active)))
           invalid('Rest advancement lacks a completed clock.');
       } else {
         final set = s.set(o.id);

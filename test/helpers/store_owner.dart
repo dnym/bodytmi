@@ -7,8 +7,22 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 2 && args[1].startsWith('execution-step-')) {
+    if (args.length == 2 &&
+        (args[1].startsWith('execution-step-') ||
+            args[1].startsWith('execution-group-'))) {
       Future<void> action() async {
+        if (args[1].startsWith('execution-group-')) {
+          await ExecutionService(store).skipGroup(
+            'execution',
+            1,
+            1,
+            'crash-group',
+            'workout/rounds[0]',
+            DateTime.utc(2026, 10, 1, 12),
+            confirm: true,
+          );
+          return;
+        }
         await ExecutionService(store).step(
           'execution',
           1,

@@ -102,7 +102,703 @@ Future<WorkoutExecution> _step(
   );
 }
 
+WorkoutDefinition _groupDefinition() => WorkoutDefinition.fromJson({
+  ..._definition().toJson(),
+  'id': 'groups',
+  'plan': {
+    'id': 'workout',
+    'type': 'sequence',
+    'children': [
+      {
+        'id': 'rounds',
+        'type': 'repeat',
+        'count': 2,
+        'restBetweenSeconds': 1,
+        'child': {
+          'id': 'pair',
+          'type': 'sequence',
+          'children': [
+            {'id': 'hold', 'type': 'effort', 'slot': 'hold'},
+            {'id': 'inner-rest', 'type': 'rest', 'durationSeconds': 1},
+            {'id': 'lift', 'type': 'effort', 'slot': 'lift'},
+          ],
+        },
+      },
+      {'id': 'tail', 'type': 'effort', 'slot': 'lift'},
+    ],
+  },
+});
+Future<WorkoutExecution> _startGroups(TrainingStore store) async {
+  final training = StoredTrainingService(store);
+  await training.publish(_groupDefinition(), 0);
+  await training.start('group-session', 'groups', 1, instant(1));
+  return ExecutionService(
+    store,
+  ).start('execution', 'group-session', instant(1));
+}
+
 void executionTests() {
+  test(
+    'skipping a workout group advances only its selected program on finish, with no progression application',
+    () => _withStore((store, dir) async {
+      final programs = ProgramService(store),
+          executions = ExecutionService(store);
+      for (final id in ['strength', 'cardio']) {
+        await programs.publish(
+          ProgramDefinition.fromJson({
+            'id': id,
+            'name': id,
+            'plan': {
+              'id': 'day',
+              'type': 'day',
+              'templateId': 'traversal',
+              'revision': 1,
+            },
+          }),
+          0,
+        );
+        await programs.create('$id-run', id, 1, instant(1));
+        await programs.start('$id-run', 1, id, instant(1));
+        await _start(store, id: '$id-execution', session: id);
+      }
+      final cardio = canonicalJson((await programs.run('cardio-run')).toJson());
+      await executions.skipGroup(
+        'strength-execution',
+        1,
+        1,
+        'omit-workout',
+        'workout',
+        instant(1),
+        confirm: true,
+      );
+      equal((await programs.run('strength-run')).cursor, 0);
+      equal((await store.progressionDecisions()).length, 0);
+      final training = StoredTrainingService(store);
+      var s = (await store.session('strength'))!;
+      s = await training.edit(
+        s.id,
+        s.contentVersion,
+        (s) => s.finish(instant(1)),
+      );
+      equal((await programs.run('strength-run')).cursor, 1);
+      equal(canonicalJson((await programs.run('cardio-run')).toJson()), cardio);
+      await executions.skipGroup(
+        'strength-execution',
+        1,
+        1,
+        'omit-workout',
+        'workout',
+        instant(1),
+        confirm: true,
+      );
+      await training.edit(s.id, s.contentVersion, (s) => s.finish(instant(1)));
+      equal((await programs.run('strength-run')).cursor, 1);
+      equal((await store.programReceipts()).length, 1);
+      await store.archive();
+    }),
+  );
+
+  test(
+    'v8 profiles migrate unchanged and v9 native/logical restore retains group receipts while old labels reject them',
+    () => _withStore((store, dir) async {
+      final e = await _startGroups(store);
+      final original = canonicalJson((await store.archive()).toJson());
+      await store.backup('$dir/v8');
+      final old = sqlite3.open('$dir/v8/database.sqlite');
+      old.userVersion = 8;
+      old.close();
+      equal(await NativeBackup.validateDatabase('$dir/v8/database.sqlite'), 8);
+      await store.close();
+      final migrated = await TrainingStore.open('$dir/v8/database.sqlite');
+      try {
+        equal(canonicalJson((await migrated.archive()).toJson()), original);
+        equal(
+          (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
+          9,
+        );
+      } finally {
+        await migrated.close();
+      }
+      var active = await TrainingStore.open('$dir/db.sqlite');
+      try {
+        await LogicalArchiveFiles.export(
+          await active.archive(),
+          '$dir/old.json',
+        );
+        final legacy = jsonObject(
+          jsonDecode(await File('$dir/old.json').readAsString()),
+          'legacy',
+        );
+        legacy['format'] = 'bodytmi-logical-export/8';
+        legacy.remove('sha256');
+        legacy['sha256'] = sha256
+            .convert(utf8.encode(canonicalJson(legacy)))
+            .toString();
+        await File('$dir/old.json').writeAsString(jsonEncode(legacy));
+        final oldLogical = await LogicalArchiveFiles.prepare('$dir/old.json');
+        await oldLogical.close();
+        await ExecutionService(active).skipGroup(
+          e.id,
+          1,
+          1,
+          'round',
+          'workout/rounds[0]',
+          instant(1),
+          confirm: true,
+        );
+        final skipped = canonicalJson((await active.archive()).toJson());
+        await active.backup('$dir/native');
+        await LogicalArchiveFiles.export(
+          await active.archive(),
+          '$dir/new.json',
+        );
+        final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
+        try {
+          await active.restore(
+            logical.backup,
+            recoveryDestination: '$dir/recovery-logical',
+            confirm: true,
+          );
+          await active.close();
+          active = await TrainingStore.open('$dir/db.sqlite');
+          equal(canonicalJson((await active.archive()).toJson()), skipped);
+        } finally {
+          await logical.close();
+        }
+        final native = await NativeBackup.prepare('$dir/native');
+        try {
+          await active.restore(
+            native,
+            recoveryDestination: '$dir/recovery-native',
+            confirm: true,
+          );
+          await active.close();
+          active = await TrainingStore.open('$dir/db.sqlite');
+          equal(canonicalJson((await active.archive()).toJson()), skipped);
+        } finally {
+          await native.close();
+        }
+        equal(
+          (await ExecutionService(active).skipGroup(
+            e.id,
+            1,
+            1,
+            'round',
+            'workout/rounds[0]',
+            instant(1),
+            confirm: true,
+          )).cursor,
+          3,
+        );
+        final forged = sqlite3.open('$dir/native/database.sqlite');
+        forged.userVersion = 8;
+        forged.close();
+        rejects(
+          () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
+        );
+        final mislabeled = jsonObject(
+          jsonDecode(await File('$dir/new.json').readAsString()),
+          'export',
+        );
+        mislabeled['format'] = 'bodytmi-logical-export/8';
+        mislabeled.remove('sha256');
+        mislabeled['sha256'] = sha256
+            .convert(utf8.encode(canonicalJson(mislabeled)))
+            .toString();
+        await File('$dir/new.json').writeAsString(jsonEncode(mislabeled));
+        await _fails(LogicalArchiveFiles.prepare('$dir/new.json'));
+      } finally {
+        await active.close();
+      }
+    }),
+  );
+  test(
+    'native CLI exposes structural choices and skips one group with explicit confirmation and stable retries',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-group-cli-');
+      try {
+        Future<Map<String, Object?>> command(
+          String name,
+          Map<String, Object?> input,
+        ) async {
+          final r = await invoke(
+            name.split(' '),
+            jsonEncode({
+              'schemaVersion': 1,
+              'database': '${dir.path}/db.sqlite',
+              ...input,
+            }),
+          );
+          equal(r.code, 0);
+          equal(r.error, '');
+          return jsonObject(
+            jsonObject(jsonDecode(r.output), 'response')['data'],
+            'data',
+          );
+        }
+
+        await command('store publish', {
+          'definition': _groupDefinition().toJson(),
+          'expectedRevision': 0,
+        });
+        await command('store start', {
+          'id': 'session',
+          'templateId': 'groups',
+          'revision': 1,
+          'startedAt': instant(1).toIso8601String(),
+        });
+        var v = await command('execution start', {
+          'id': 'execution',
+          'sessionId': 'session',
+          'at': instant(1).toIso8601String(),
+        });
+        final choices = jsonList(
+          v,
+          'groups',
+        ).map((g) => jsonObject(g, 'group')['path']).toSet();
+        check(choices.contains('workout/rounds[0]'));
+        check(!choices.contains('workout/rounds[1]'));
+        final req = {
+          'id': 'execution',
+          'expectedVersion': 1,
+          'expectedSessionVersion': 1,
+          'requestId': 'skip-round',
+          'groupPath': 'workout/rounds[0]',
+          'at': instant(1).toIso8601String(),
+          'confirm': true,
+        };
+        final denied = await invoke(
+          ['execution', 'skip-group'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': '${dir.path}/db.sqlite',
+            ...req,
+            'confirm': false,
+          }),
+        );
+        check(denied.code != 0);
+        equal(denied.output, '');
+        v = await command('execution skip-group', req);
+        equal(v['cursor'], 3);
+        equal(jsonObject(v['timer'], 'timer')['phase'], 'rest');
+        final retry = await command('execution skip-group', req);
+        jsonEqual(retry, v);
+        final session = await command('store show', {'id': 'session'});
+        equal(
+          jsonList(
+            session,
+            'sets',
+          ).where((s) => jsonObject(s, 'set')['status'] == 'skipped').length,
+          2,
+        );
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'process death commits or rolls back the entire skipped round, boundary receipts and following rest clock',
+    () => _withStore((store, dir) async {
+      await _startGroups(store);
+      await store.close();
+      final binary = await compileNative(
+        'test/helpers/store_owner.dart',
+        '$dir/group-owner',
+      );
+      for (final mode in [
+        'execution-group-rollback',
+        'execution-group-commit',
+      ]) {
+        final child = await Process.start(binary, ['$dir/db.sqlite', mode]);
+        final errors = child.stderr.transform(utf8.decoder).join();
+        try {
+          equal(
+            await child.stdout
+                .transform(utf8.decoder)
+                .transform(const LineSplitter())
+                .first
+                .timeout(const Duration(seconds: 15)),
+            'ready',
+          );
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+          equal(await errors, '');
+        } finally {
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+        }
+        final recovered = await TrainingStore.open('$dir/db.sqlite');
+        try {
+          final service = ExecutionService(recovered);
+          final e = await service.show('execution');
+          final committed = mode.endsWith('commit');
+          equal(e.cursor, committed ? 3 : 0);
+          equal(
+            (await recovered.session(
+              'group-session',
+            ))!.sets.where((s) => s.status == SetStatus.skipped).length,
+            committed ? 2 : 0,
+          );
+          equal((await recovered.timingActivities()).length, committed ? 1 : 0);
+          if (committed) {
+            equal(
+              (await service.skipGroup(
+                e.id,
+                1,
+                1,
+                'crash-group',
+                'workout/rounds[0]',
+                instant(1),
+                confirm: true,
+              )).cursor,
+              3,
+            );
+          }
+          await recovered.archive();
+        } finally {
+          await recovered.close();
+        }
+      }
+    }),
+  );
+
+  test(
+    'group bounds distinguish nested repeat rounds and enclosing recovery',
+    () {
+      final groups = activityGroups(_groupDefinition().plan);
+      final byPath = {for (final g in groups) g.path: g};
+      equal(byPath['workout/rounds[0]']!.start, 0);
+      equal(byPath['workout/rounds[0]']!.end, 3);
+      equal(byPath['workout/rounds[1]']!.start, 4);
+      equal(byPath['workout/rounds']!.end, 7);
+      equal(byPath['workout']!.end, 8);
+      equal(byPath['workout/rounds[0]']!.contains(3), false);
+      rejects(
+        () =>
+            activityGroups(TimeWindow('window', 10, const Effort('e', 'hold'))),
+      );
+    },
+  );
+  test(
+    'skipping a partial round preserves actuals, discards its rest and prepares only the next boundary',
+    () => _withStore((store, dir) async {
+      var e = await _startGroups(store);
+      e = await _step(store, e, 'first', action: 'complete');
+      final before = (await store.session('group-session'))!;
+      final rest = await TimingService(store).show(e.clockId('rest'));
+      final service = ExecutionService(store);
+      final view = await service.view(e.id);
+      check(
+        jsonList(
+          view,
+          'groups',
+        ).any((g) => jsonObject(g, 'group')['path'] == 'workout/rounds[0]'),
+      );
+      e = await service.skipGroup(
+        e.id,
+        e.version,
+        before.contentVersion,
+        'round',
+        'workout/rounds[0]',
+        instant(1),
+        confirm: true,
+      );
+      equal(e.cursor, 3);
+      equal((await TimingService(store).show(rest.id)).status, 'discarded');
+      var s = (await store.session('group-session'))!;
+      equal(s.sets.first.status, SetStatus.completed);
+      jsonEqual(s.sets.first.toJson(), before.sets.first.toJson());
+      equal(s.sets[1].status, SetStatus.skipped);
+      equal((await store.timingActivities()).length, 2);
+      equal(
+        (await TimingService(store).show(e.clockId('rest'))).status,
+        'paused',
+      );
+      s = await StoredTrainingService(store).edit(
+        s.id,
+        s.contentVersion,
+        (session) => const TrainingService().complete(
+          session,
+          session.sets.first.id,
+          {'duration': Quantity('2', 's')},
+          acceptSuggested: true,
+        ),
+      );
+      e = await service.skipGroup(
+        e.id,
+        2,
+        before.contentVersion,
+        'round',
+        'workout/rounds[0]',
+        instant(1),
+        confirm: true,
+      );
+      equal(e.cursor, 3);
+      equal(
+        (await store.session(
+          s.id,
+        ))!.sets.first.actuals['duration']!.value.toString(),
+        '2',
+      );
+      await _fails(
+        service.skipGroup(
+          e.id,
+          2,
+          before.contentVersion,
+          'round',
+          'workout/rounds',
+          instant(1),
+          confirm: true,
+        ),
+      );
+      e = await service.skipGroup(
+        e.id,
+        e.version,
+        s.contentVersion,
+        'remaining-rounds',
+        'workout/rounds',
+        instant(1),
+        confirm: true,
+      );
+      equal(e.cursor, 7);
+      equal(
+        (await store.timingActivities()).length,
+        2,
+      ); // No omitted interior rest clocks.
+      s = (await store.session(s.id))!;
+      equal(s.sets.where((set) => set.status == SetStatus.skipped).length, 3);
+      equal(s.sets.last.status, SetStatus.planned);
+      e = await _step(store, e, 'tail', action: 'complete');
+      equal(e.complete, true);
+      s = (await store.session(s.id))!;
+      await StoredTrainingService(
+        store,
+      ).edit(s.id, s.contentVersion, (s) => s.finish(instant(1)));
+      await store.archive();
+    }),
+  );
+  test(
+    'group skip preserves previously logged future work and neutral skipped results',
+    () => _withStore((store, dir) async {
+      final e = await _startGroups(store);
+      var s = (await store.session(e.sessionId))!;
+      s = await StoredTrainingService(store).edit(
+        s.id,
+        s.contentVersion,
+        (s) => const TrainingService().complete(
+          s,
+          s.sets[1].id,
+          {},
+          acceptSuggested: true,
+        ),
+      );
+      final saved = s.sets[1].toJson();
+      final next = await ExecutionService(store).skipGroup(
+        e.id,
+        e.version,
+        s.contentVersion,
+        'all',
+        'workout',
+        instant(1),
+        confirm: true,
+      );
+      equal(next.complete, true);
+      s = (await store.session(e.sessionId))!;
+      jsonEqual(s.sets[1].toJson(), saved);
+      equal(s.sets.where((set) => set.status == SetStatus.skipped).length, 4);
+      equal((await store.timingActivities()).length, 0);
+      await store.archive();
+    }),
+  );
+  test(
+    'group skip rejects wrong scope, stale versions, missing confirmation and reused child request IDs',
+    () => _withStore((store, dir) async {
+      final service = ExecutionService(store);
+      var e = await _startGroups(store);
+      for (final path in [
+        'workout/round',
+        'workout/rounds[1]',
+        'workout/rounds[0]/pair/hold',
+      ]) {
+        await _fails(
+          service.skipGroup(
+            e.id,
+            1,
+            1,
+            'skip',
+            path,
+            instant(1),
+            confirm: true,
+          ),
+        );
+      }
+      await _fails(
+        service.skipGroup(
+          e.id,
+          1,
+          1,
+          'skip',
+          'workout',
+          instant(1),
+          confirm: false,
+        ),
+      );
+      await _fails(
+        service.skipGroup(
+          e.id,
+          2,
+          1,
+          'skip',
+          'workout',
+          instant(1),
+          confirm: true,
+        ),
+      );
+      await _fails(
+        service.skipGroup(
+          e.id,
+          1,
+          2,
+          'skip',
+          'workout',
+          instant(1),
+          confirm: true,
+        ),
+      );
+      await _fails(
+        service.skipGroup(
+          e.id,
+          1,
+          1,
+          'skip',
+          'workout',
+          instant(1).subtract(const Duration(seconds: 1)),
+          confirm: true,
+        ),
+      );
+      e = await _step(store, e, 'skip-group-2', action: 'complete');
+      await _fails(
+        service.skipGroup(
+          e.id,
+          2,
+          2,
+          'skip',
+          'workout',
+          instant(1),
+          confirm: true,
+        ),
+      );
+      equal((await service.show(e.id)).cursor, 1);
+      equal(
+        (await store.session(e.sessionId))!.sets[1].status,
+        SetStatus.planned,
+      );
+    }),
+  );
+  test(
+    'next-rest clock conflicts roll back discarded review clocks, all results and the entire group cursor',
+    () => _withStore((store, dir) async {
+      final e = await _startGroups(store);
+      final service = ExecutionService(store), timers = TimingService(store);
+      var t = await service.time(e.id, e.version, instant(1));
+      t = await timers.resume(t.id, t.version, 'epoch', instant(1));
+      t = (await timers.advance(
+        t.id,
+        t.version,
+        'epoch',
+        1000,
+        instant(1),
+      )).activity;
+      equal(t.status, 'awaitingConfirmation');
+      await StoredTrainingService(
+        store,
+      ).start('other', 'traversal', 1, instant(1));
+      await timers.start(
+        'other-clock',
+        'other',
+        'workout/hold-set',
+        'duration',
+        TimingPlan.fromJson({'effortMilliseconds': 1000}),
+        instant(1),
+      );
+      final before = canonicalJson((await store.archive()).toJson());
+      await _fails(
+        service.skipGroup(
+          e.id,
+          1,
+          1,
+          'conflict',
+          'workout/rounds[0]',
+          instant(1),
+          confirm: true,
+        ),
+      );
+      equal(canonicalJson((await store.archive()).toJson()), before);
+      await timers.stop(
+        'other-clock',
+        1,
+        instant(1),
+        confirm: true,
+        discard: true,
+      );
+      final next = await service.skipGroup(
+        e.id,
+        1,
+        1,
+        'conflict',
+        'workout/rounds[0]',
+        instant(1),
+        confirm: true,
+      );
+      equal(next.cursor, 3);
+      equal((await timers.show(t.id)).status, 'discarded');
+      await store.archive();
+    }),
+  );
+  test(
+    'aggregate validation rejects truncated, reordered and forged group receipts',
+    () => _withStore((store, dir) async {
+      final e = await _startGroups(store);
+      await ExecutionService(
+        store,
+      ).skipGroup(e.id, 1, 1, 'all', 'workout', instant(1), confirm: true);
+      final base = (await store.archive()).toJson();
+      final mutations = <void Function(List<Object?>)>[
+        (rows) => rows.removeLast(),
+        (rows) => jsonObject(
+          jsonObject(rows.first, 'row')['request'],
+          'request',
+        )['groupPath'] = 'workout/rounds[0]',
+        (rows) => jsonObject(
+          jsonObject(rows[1], 'row')['request'],
+          'request',
+        )['sessionVersion'] = 2,
+        (rows) => jsonObject(rows[1], 'row')['requestId'] = 'forged',
+        (rows) => jsonObject(
+          jsonObject(rows[1], 'row')['request'],
+          'request',
+        )['groupStart'] = 1,
+        (rows) => jsonObject(
+          jsonObject(rows.first, 'row')['request'],
+          'request',
+        )['groupEnd'] = 3,
+        (rows) => jsonObject(
+          jsonObject(rows.first, 'row')['request'],
+          'request',
+        )['confirm'] = false,
+      ];
+      for (final mutate in mutations) {
+        final data = copyJson(base);
+        final execution = jsonObject(
+          jsonList(data, 'executions').single,
+          'execution',
+        );
+        mutate(jsonList(execution, 'receipts'));
+        rejects(() => TrainingArchive.fromJson(data));
+      }
+    }),
+  );
+
   test(
     'the requested nested 3x12 walk/run traversal acknowledges 72 efforts and exactly two outer rests without a trailing rest',
     () => _withStore((store, dir) async {
@@ -533,13 +1229,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 8);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 9);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/8',
+        'bodytmi-logical-export/9',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {

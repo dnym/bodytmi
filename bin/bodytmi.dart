@@ -35,7 +35,7 @@ Future<void> main(List<String> arguments) async {
           'timing':
               'timer start creates a paused per-set clock; timer rest times an authored rest occurrence. timer run uses a foreground monotonic clock. Optional stream:true emits NDJSON cue envelopes before the final response. Ctrl-C pauses; unexpected interruption requires explicit timer recover (freeze/adjust). Effort expiry never logs actuals: timer confirm requires expectedSessionVersion and explicit result review. Scoped windows, tempo and audio are pending.',
           'execution':
-              'execution start/show/list/time/complete/confirm/advance/skip/run traverse finite effort/rest occurrences. Completion or timing review prepares the next authored rest. run advances a rest boundary; timed efforts require explicit review. Actions require execution/session versions and stable requestId; corrections never replay cursor advancement. Scoped windows are not yet supported.',
+              'execution start/show/list/time/complete/confirm/advance/skip/skip-group/run traverse finite effort/rest occurrences. Completion or timing review prepares the next authored rest. run advances a rest boundary; timed efforts require explicit review. Actions require execution/session versions and stable requestId; corrections never replay cursor advancement. skip-group requires an explicit groupPath from the current groups list and confirm:true; it preserves existing results. Scoped windows are not yet supported.',
         }),
       );
       return;
