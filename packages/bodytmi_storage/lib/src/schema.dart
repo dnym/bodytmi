@@ -69,6 +69,8 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   13 => schemaV12, // Same tables; v13 adds pinned slot timing defaults.
   14 =>
     schemaV12, // Same tables; v14 adds durable vector threshold coordination.
+  15 =>
+    schemaV12, // Same tables; v15 adds explicit result aggregation policies.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

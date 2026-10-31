@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "aggregation-practice",
+    "name": "Numeric aggregation practice",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom",
+        "implementation": "custom",
+        "targets": {
+          "mass": {
+            "value": "10",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "8",
+            "unit": "rep"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "warmup",
+          "type": "effort",
+          "slot": "movement",
+          "role": "warmup"
+        },
+        {
+          "id": "work",
+          "type": "repeat",
+          "count": 3,
+          "child": {
+            "id": "set",
+            "type": "effort",
+            "slot": "movement"
+          }
+        }
+      ]
+    }
+  }
+}

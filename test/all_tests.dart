@@ -1,3 +1,4 @@
+import 'aggregation_test.dart';
 import 'stored_threshold_test.dart';
 import 'timing_defaults_test.dart';
 import 'family_test.dart';
@@ -24,6 +25,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  aggregationTests();
   storedThresholdTests();
   timingDefaultsTests();
   familyTests();

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "rule": {
+    "metric": "reps",
+    "minimum": {
+      "value": "15",
+      "unit": "rep"
+    },
+    "threshold": {
+      "value": "18",
+      "unit": "rep"
+    },
+    "increments": {
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      }
+    },
+    "resets": {
+      "reps": {
+        "value": "5",
+        "unit": "rep"
+      }
+    },
+    "aggregation": {
+      "mode": "total"
+    },
+    "deloadAfter": 2,
+    "deloadMetrics": [
+      "mass"
+    ],
+    "failureAggregation": {
+      "mode": "total"
+    }
+  },
+  "current": {
+    "mass": {
+      "value": "10",
+      "unit": "kg"
+    },
+    "reps": {
+      "value": "8",
+      "unit": "rep"
+    }
+  },
+  "results": [
+    {
+      "reps": {
+        "value": "8",
+        "unit": "rep"
+      }
+    },
+    {
+      "reps": {
+        "value": "5",
+        "unit": "rep"
+      }
+    },
+    {
+      "reps": {
+        "value": "5",
+        "unit": "rep"
+      }
+    }
+  ]
+}

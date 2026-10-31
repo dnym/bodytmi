@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "aggregation-session-001",
+  "slotId": "movement",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "reps",
+    "minimum": {
+      "value": "5",
+      "unit": "rep"
+    },
+    "threshold": {
+      "value": "12",
+      "unit": "rep"
+    },
+    "increments": {
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      }
+    },
+    "resets": {
+      "reps": {
+        "value": "5",
+        "unit": "rep"
+      }
+    },
+    "aggregation": {
+      "mode": "last"
+    },
+    "deloadAfter": 2,
+    "deloadMetrics": [
+      "mass"
+    ]
+  }
+}

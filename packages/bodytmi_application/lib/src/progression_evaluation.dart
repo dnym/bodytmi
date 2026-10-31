@@ -10,6 +10,7 @@ final class ProgressionEvaluation {
     this.failedSessions,
     this.cursor,
     this._double,
+    this.assessment,
   );
   factory ProgressionEvaluation.double(DoubleProgressionProposal p) =>
       ProgressionEvaluation._(
@@ -19,6 +20,7 @@ final class ProgressionEvaluation {
         p.failedSessions,
         0,
         p,
+        null,
       );
   factory ProgressionEvaluation.threshold(
     ThresholdRule rule,
@@ -38,32 +40,16 @@ final class ProgressionEvaluation {
           'Stored threshold progression needs a configured performance metric.',
         );
     }
-    // All-required bounds are exactly represented by the minimum observation.
-    // Avoid rescanning every result for each per-set target transformation.
-    Quantity? minimum;
-    var missing = false;
-    for (final set in sets) {
-      final value = set.status == SetStatus.completed
-          ? set.actuals[rule.metric]
-          : null;
-      if (value == null) {
-        missing = true;
-      } else if (minimum == null || value.compareTo(minimum) < 0) {
-        minimum = value;
-      }
-    }
-    final results = <Metrics?>[
-      missing ? null : {rule.metric: minimum!},
+    final results = [
+      for (final s in sets) s.status == SetStatus.completed ? s.actuals : null,
     ];
-    final proposals = [
-      for (final s in sets)
-        rule.evaluate(
-          current: s.suggested,
-          results: results,
-          failedSessions: failures,
-          cursor: cursor,
-        ),
-    ];
+    final missing = results.any((r) => r == null || r[rule.metric] == null);
+    final proposals = rule.evaluateVector(
+      currentSets: [for (final s in sets) s.suggested],
+      results: results,
+      failedSessions: failures,
+      cursor: cursor,
+    );
     final first = proposals.first;
     final changed =
         !missing &&
@@ -100,12 +86,14 @@ final class ProgressionEvaluation {
       changed ? failures : first.failedSessions,
       hold ? cursor : first.cursor,
       null,
+      first.assessment,
     );
   }
   final String outcome, reason;
   final List<Metrics> nextSets;
   final int failedSessions, cursor;
   final DoubleProgressionProposal? _double;
+  final ThresholdAssessment? assessment;
   Map<String, Object?> toJson() =>
       _double?.toJson() ??
       {
@@ -114,5 +102,6 @@ final class ProgressionEvaluation {
         'nextSets': [for (final set in nextSets) metricsToJson(set)],
         'nextState': {'failedSessions': failedSessions, 'cursor': cursor},
         'requiresAcceptance': true,
+        if (assessment != null) 'assessment': assessment!.toJson(),
       };
 }

@@ -1,5 +1,7 @@
 import 'errors.dart';
 import 'quantity.dart';
+import 'result_aggregation.dart';
+export 'result_aggregation.dart';
 
 /// A proposal only: callers must persist approval and an idempotent application
 /// identity before applying nextValues/nextState. Evaluation never mutates input.
@@ -9,19 +11,22 @@ final class ProgressionProposal {
     this.reason,
     Metrics nextValues,
     this.failedSessions,
-    this.cursor,
-  ) : nextValues = Map.unmodifiable(nextValues);
+    this.cursor, {
+    this.assessment,
+  }) : nextValues = Map.unmodifiable(nextValues);
   final String outcome;
   final String reason;
   final Metrics nextValues;
   final int failedSessions;
   final int cursor;
+  final ThresholdAssessment? assessment;
   Map<String, Object?> toJson() => {
     'outcome': outcome,
     'reason': reason,
     'nextValues': metricsToJson(nextValues),
     'nextState': {'failedSessions': failedSessions, 'cursor': cursor},
     'requiresAcceptance': true,
+    if (assessment != null) 'assessment': assessment!.toJson(),
   };
 }
 
@@ -38,11 +43,16 @@ final class ThresholdRule {
     this.deloadAfter,
     this.deloadFactor,
     this.deloadMetrics,
+    this.aggregation,
+    this.failureAggregation,
+    this.hasExplicitAggregation,
   );
 
   factory ThresholdRule.fromJson(Object? input) {
     final json = jsonObject(input, 'rule');
     checkKeys(json, {
+      'aggregation',
+      'failureAggregation',
       'metric',
       'minimum',
       'threshold',
@@ -56,7 +66,7 @@ final class ThresholdRule {
     });
     final min = Quantity.fromJson(json['minimum']);
     final threshold = Quantity.fromJson(json['threshold']);
-    if (min.compareTo(threshold) > 0) invalid('minimum exceeds threshold.');
+    final boundComparison = min.compareTo(threshold);
     final increments = metricsFromJson(json['increments']);
     if (increments.isEmpty) invalid('At least one increment is required.');
     if (increments.values.any((q) => q.value.compareTo(Decimal.zero) <= 0))
@@ -92,6 +102,25 @@ final class ThresholdRule {
     final deload = json['deloadMetrics'] ?? <Object?>[];
     if (deload is! List<Object?> || deload.any((k) => k is! String))
       invalid('deloadMetrics must be strings.');
+    final aggregation = ResultAggregation.fromJson(
+      json.containsKey('aggregation') ? json['aggregation'] : {'mode': 'all'},
+    );
+    final failureAggregation = ResultAggregation.fromJson(
+      json.containsKey('failureAggregation')
+          ? json['failureAggregation']
+          : {'mode': 'all'},
+      failure: true,
+    );
+    if ((aggregation.mode == 'total') == (failureAggregation.mode == 'total') &&
+        boundComparison > 0)
+      invalid('minimum exceeds threshold in the same aggregation scope.');
+    if ((aggregation.mode == 'total' || failureAggregation.mode == 'total') &&
+        !{
+          Dimension.count,
+          Dimension.duration,
+          Dimension.distance,
+        }.contains(min.dimension))
+      invalid('Total aggregation requires count, duration or distance.');
     return ThresholdRule._(
       identifier(json, 'metric'),
       min,
@@ -103,6 +132,9 @@ final class ThresholdRule {
       after,
       Decimal.parse('1') - percent * Decimal.parse('0.01'),
       Set.unmodifiable(deload.cast<String>()),
+      aggregation,
+      failureAggregation,
+      json.containsKey('aggregation') || json.containsKey('failureAggregation'),
     );
   }
 
@@ -116,13 +148,51 @@ final class ThresholdRule {
   final int deloadAfter;
   final Decimal deloadFactor;
   final Set<String> deloadMetrics;
+  final ResultAggregation aggregation, failureAggregation;
+  final bool hasExplicitAggregation;
 
   ProgressionProposal evaluate({
     required Metrics current,
     required List<Metrics?> results,
     int failedSessions = 0,
     int cursor = 0,
+  }) => evaluateVector(
+    currentSets: [current],
+    results: results,
+    failedSessions: failedSessions,
+    cursor: cursor,
+  ).single;
+
+  /// Classify once, then transform each target vector independently. Callers
+  /// applying a vector must hold every set if any one transformation is blocked.
+  List<ProgressionProposal> evaluateVector({
+    required List<Metrics> currentSets,
+    required List<Metrics?> results,
+    int failedSessions = 0,
+    int cursor = 0,
   }) {
+    if (currentSets.isEmpty || currentSets.length > 10000)
+      invalid('Threshold progression needs 1 to 10000 target sets.');
+    final assessment = ThresholdAssessment.evaluate(
+      advancement: aggregation,
+      failure: failureAggregation,
+      metric: metric,
+      minimum: minimum,
+      threshold: threshold,
+      results: results,
+    );
+    return List.unmodifiable([
+      for (final current in currentSets)
+        _evaluate(current, assessment, failedSessions, cursor),
+    ]);
+  }
+
+  ProgressionProposal _evaluate(
+    Metrics current,
+    ThresholdAssessment assessment,
+    int failedSessions,
+    int cursor,
+  ) {
     if (failedSessions < 0 ||
         cursor < 0 ||
         (sequence != null && cursor >= sequence!.length))
@@ -145,8 +215,15 @@ final class ThresholdRule {
       Metrics values,
       int failures,
       int nextCursor,
-    ) => ProgressionProposal(outcome, reason, values, failures, nextCursor);
-    if (results.isEmpty || results.any((r) => r == null || r[metric] == null)) {
+    ) => ProgressionProposal(
+      outcome,
+      reason,
+      values,
+      failures,
+      nextCursor,
+      assessment: hasExplicitAggregation ? assessment : null,
+    );
+    if (assessment.unknown) {
       return proposal(
         'unknown',
         'Required confirmed results are missing or skipped.',
@@ -155,8 +232,7 @@ final class ThresholdRule {
         cursor,
       );
     }
-    final values = [for (final r in results) r![metric]!];
-    if (values.any((v) => v.compareTo(minimum) < 0)) {
+    if (assessment.failed) {
       final failures =
           failedSessions + 1; // one exposure, regardless of failed set count
       if (failures >= deloadAfter && deloadMetrics.isNotEmpty) {
@@ -185,10 +261,12 @@ final class ThresholdRule {
       );
     }
     // Meeting all minimums counts as a successful exposure and resets failures.
-    if (values.any((v) => v.compareTo(threshold) < 0)) {
+    if (!assessment.eligible) {
       return proposal(
         'hold',
-        'Minimums met but not every upper threshold reached.',
+        hasExplicitAggregation
+            ? 'Failure gate passed but advancement aggregation is not met.'
+            : 'Minimums met but not every upper threshold reached.',
         current,
         0,
         cursor,
@@ -226,7 +304,9 @@ final class ThresholdRule {
     }
     return proposal(
       'advance',
-      'Every required upper threshold reached (inclusive).',
+      hasExplicitAggregation
+          ? 'Configured advancement aggregation reached (inclusive).'
+          : 'Every required upper threshold reached (inclusive).',
       next,
       0,
       sequence == null ? cursor : (cursor + 1) % sequence!.length,
