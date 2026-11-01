@@ -12,6 +12,7 @@ final class ProgressionEvaluation {
     this._double,
     this.assessment,
     this.coordination,
+    this.scaleResolutions,
   );
   factory ProgressionEvaluation.double(DoubleProgressionProposal p) =>
       ProgressionEvaluation._(
@@ -23,6 +24,7 @@ final class ProgressionEvaluation {
         p,
         null,
         null,
+        const [],
       );
   factory ProgressionEvaluation.threshold(
     ThresholdRule rule,
@@ -94,6 +96,7 @@ final class ProgressionEvaluation {
       null,
       first.assessment,
       first.coordination,
+      List.unmodifiable([for (final p in proposals) p.scaleResolutions]),
     );
   }
   final String outcome, reason;
@@ -102,6 +105,7 @@ final class ProgressionEvaluation {
   final DoubleProgressionProposal? _double;
   final ThresholdAssessment? assessment;
   final LeverSelection? coordination;
+  final List<List<ScaleResolution>> scaleResolutions;
   Map<String, Object?> toJson() =>
       _double?.toJson() ??
       {
@@ -112,5 +116,15 @@ final class ProgressionEvaluation {
         'requiresAcceptance': true,
         if (assessment != null) 'assessment': assessment!.toJson(),
         if (coordination != null) 'coordination': coordination!.toJson(),
+        if (scaleResolutions.any((r) => r.isNotEmpty))
+          'scaleResolutions': [
+            for (var i = 0; i < scaleResolutions.length; i++)
+              {
+                'ordinal': i,
+                'resolutions': [
+                  for (final r in scaleResolutions[i]) r.toJson(),
+                ],
+              },
+          ],
       };
 }

@@ -2,6 +2,7 @@ import 'errors.dart';
 import 'quantity.dart';
 import 'result_aggregation.dart';
 import 'lever_selection.dart';
+import 'numeric_scale.dart';
 export 'lever_selection.dart';
 export 'result_aggregation.dart';
 
@@ -16,7 +17,9 @@ final class ProgressionProposal {
     this.cursor, {
     this.assessment,
     this.coordination,
-  }) : nextValues = Map.unmodifiable(nextValues);
+    List<ScaleResolution> scaleResolutions = const [],
+  }) : scaleResolutions = List.unmodifiable(scaleResolutions),
+       nextValues = Map.unmodifiable(nextValues);
   final String outcome;
   final String reason;
   final Metrics nextValues;
@@ -24,6 +27,7 @@ final class ProgressionProposal {
   final int cursor;
   final ThresholdAssessment? assessment;
   final LeverSelection? coordination;
+  final List<ScaleResolution> scaleResolutions;
   Map<String, Object?> toJson() => {
     'outcome': outcome,
     'reason': reason,
@@ -32,6 +36,8 @@ final class ProgressionProposal {
     'requiresAcceptance': true,
     if (assessment != null) 'assessment': assessment!.toJson(),
     if (coordination != null) 'coordination': coordination!.toJson(),
+    if (scaleResolutions.isNotEmpty)
+      'scaleResolutions': [for (final r in scaleResolutions) r.toJson()],
   };
 }
 
@@ -57,6 +63,8 @@ final class ThresholdRule {
     this.coordinationMode,
     this.chosenMetric,
     this.priorityOrder,
+    this.scales,
+    this.hasScalePolicy,
   );
 
   factory ThresholdRule.fromJson(Object? input) {
@@ -72,6 +80,7 @@ final class ThresholdRule {
       'maximums',
       'minimums',
       'directions',
+      'scales',
       'coordination',
       'deloadAfter',
       'deloadPercent',
@@ -171,6 +180,24 @@ final class ThresholdRule {
           'Directions must name an increment or deload metric and increase/decrease.',
         );
     }
+    final scaleInput = jsonObject(
+      json.containsKey('scales') ? json['scales'] : <String, Object?>{},
+      'scales',
+    );
+    final scales = <String, ScaleBinding>{};
+    var ticks = 0;
+    for (final entry in scaleInput.entries) {
+      if (!controlled.contains(entry.key))
+        invalid('Scale bindings must name increment or deload metrics.');
+      final binding = ScaleBinding.fromJson(entry.value);
+      if (increments[entry.key] case final Quantity step) {
+        if (step.dimension != binding.scale.unit.dimension)
+          invalid('Scale and increment dimensions differ.');
+      }
+      ticks += binding.scale.ticks.length;
+      if (ticks > 10000) invalid('Rule scale bindings exceed 10000 ticks.');
+      scales[entry.key] = binding;
+    }
     return ThresholdRule._(
       identifier(json, 'metric'),
       min,
@@ -191,6 +218,8 @@ final class ThresholdRule {
       mode as String,
       chosenMetric,
       priorityOrder,
+      Map.unmodifiable(scales),
+      json.containsKey('scales'),
     );
   }
 
@@ -212,6 +241,8 @@ final class ThresholdRule {
   final String coordinationMode;
   final String? chosenMetric;
   final List<String>? priorityOrder;
+  final Map<String, ScaleBinding> scales;
+  final bool hasScalePolicy;
   bool get hasSelectionPolicy => chosenMetric != null || priorityOrder != null;
   bool decreases(String metric) => directions[metric] == 'decrease';
 
@@ -320,9 +351,14 @@ final class ThresholdRule {
     p.cursor,
     assessment: p.assessment,
     coordination: selection,
+    scaleResolutions: p.scaleResolutions,
   );
 
   void _validateCurrent(Metrics current) {
+    for (final entry in scales.entries) {
+      if (current[entry.key]?.dimension != entry.value.scale.unit.dimension)
+        invalid('Scale and current setting dimensions differ.');
+    }
     for (final values in [increments, resets, maximums, minimums]) {
       for (final entry in values.entries) {
         final value = current[entry.key];
@@ -346,6 +382,7 @@ final class ThresholdRule {
     int cursor, {
     String? selectedMetric,
   }) {
+    final scaleResolutions = <ScaleResolution>[];
     ProgressionProposal proposal(
       String outcome,
       String reason,
@@ -359,6 +396,7 @@ final class ThresholdRule {
       failures,
       nextCursor,
       assessment: hasExplicitAggregation ? assessment : null,
+      scaleResolutions: scaleResolutions,
     );
     if (assessment.unknown) {
       return proposal(
@@ -376,7 +414,7 @@ final class ThresholdRule {
         final next = <String, Quantity>{...current};
         for (final key in deloadMetrics) {
           final value = current[key]!;
-          next[key] = Quantity(
+          var target = Quantity(
             (value.value *
                     (decreases(key)
                         ? Decimal.parse('2') - deloadFactor
@@ -384,8 +422,29 @@ final class ThresholdRule {
                 .toString(),
             value.unit.name,
           );
+          if (scales[key] case final ScaleBinding binding) {
+            final resolution = binding.scale
+                .resolve(
+                  target,
+                  binding.deloadRounding,
+                  beyond: value,
+                  direction: decreases(key) ? 'increase' : 'decrease',
+                )
+                .forMetric(key);
+            scaleResolutions.add(resolution);
+            if (resolution.tick == null)
+              return proposal(
+                'blocked',
+                'No available easier tick for $key; hold the entire deload.',
+                current,
+                failures,
+                cursor,
+              );
+            target = resolution.tick!.quantity;
+          }
+          next[key] = target;
         }
-        if (hasNumericPolicy && !_withinBounds(next))
+        if ((hasNumericPolicy || hasScalePolicy) && !_withinBounds(next))
           return proposal(
             'blocked',
             'A lever bound blocks the entire deload; hold all changes.',
@@ -445,7 +504,27 @@ final class ThresholdRule {
           0,
           cursor,
         );
-      final value = Quantity(nextValue.toString(), prior.unit.name);
+      var value = Quantity(nextValue.toString(), prior.unit.name);
+      if (scales[key] case final ScaleBinding binding) {
+        final resolution = binding.scale
+            .resolve(
+              value,
+              binding.rounding,
+              beyond: prior,
+              direction: decreases(key) ? 'decrease' : 'increase',
+            )
+            .forMetric(key);
+        scaleResolutions.add(resolution);
+        if (resolution.tick == null)
+          return proposal(
+            'blocked',
+            'No available harder tick for $key; hold all changes.',
+            current,
+            0,
+            cursor,
+          );
+        value = resolution.tick!.quantity;
+      }
       if (maximums[key] case final Quantity maximum) {
         if (value.compareTo(maximum) > 0)
           return proposal(

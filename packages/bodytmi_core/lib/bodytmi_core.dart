@@ -17,3 +17,5 @@ export 'src/tempo.dart';
 export 'src/execution.dart';
 export 'src/double_progression.dart';
 export 'src/program.dart';
+
+export 'src/numeric_scale.dart';

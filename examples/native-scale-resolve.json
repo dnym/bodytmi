@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "scale": {
+    "id": "native-stack",
+    "unit": "lb",
+    "ticks": [
+      {
+        "id": "p5",
+        "value": "5",
+        "labels": {
+          "lb": "5",
+          "kg": "2.3"
+        }
+      },
+      {
+        "id": "p10",
+        "value": "10",
+        "labels": {
+          "lb": "10",
+          "kg": "4.5"
+        }
+      },
+      {
+        "id": "p15",
+        "value": "15",
+        "labels": {
+          "lb": "15",
+          "kg": "6.8"
+        }
+      }
+    ]
+  },
+  "target": {
+    "value": "10.1",
+    "unit": "lb"
+  },
+  "rounding": "nearest",
+  "beyond": {
+    "value": "10",
+    "unit": "lb"
+  },
+  "direction": "increase"
+}

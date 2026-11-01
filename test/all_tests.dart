@@ -1,3 +1,4 @@
+import 'numeric_scale_test.dart';
 import 'lever_selection_test.dart';
 import 'numeric_direction_test.dart';
 import 'aggregation_test.dart';
@@ -27,6 +28,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  numericScaleTests();
   leverSelectionTests();
   numericDirectionTests();
   aggregationTests();

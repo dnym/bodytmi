@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "scaled-practice",
+    "name": "Native numeric scale practice",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom",
+        "implementation": "custom",
+        "equipment": "stack-a",
+        "targets": {
+          "reps": {
+            "value": "8",
+            "unit": "rep"
+          },
+          "mass": {
+            "value": "10",
+            "unit": "lb"
+          },
+          "assistance": {
+            "value": "10",
+            "unit": "kg"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "warmup",
+          "type": "effort",
+          "slot": "movement",
+          "role": "warmup"
+        },
+        {
+          "id": "work",
+          "type": "repeat",
+          "count": 2,
+          "child": {
+            "id": "set",
+            "type": "effort",
+            "slot": "movement"
+          }
+        }
+      ]
+    }
+  }
+}

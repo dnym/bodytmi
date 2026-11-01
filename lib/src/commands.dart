@@ -4,6 +4,8 @@ import 'analytics_options.dart';
 
 const commandNames = [
   'quantity normalize',
+  'scale validate',
+  'scale resolve',
   'template validate',
   'template publish',
   'activity expand',
@@ -140,6 +142,27 @@ final class Commands {
               ? FamilyRevision.fromJson(request['family'])
               : null,
         );
+      case 'scale validate':
+        keys({'scale'});
+        data = NumericScale.fromJson(request['scale']).toJson();
+      case 'scale resolve':
+        keys({'scale', 'target', 'rounding', 'beyond', 'direction'});
+        final scale = NumericScale.fromJson(request['scale']);
+        data = {
+          'scale': scale.toJson(),
+          'resolution': scale
+              .resolve(
+                Quantity.fromJson(request['target']),
+                NumericScale.roundingPolicy(request['rounding']),
+                beyond: request.containsKey('beyond')
+                    ? Quantity.fromJson(request['beyond'])
+                    : null,
+                direction: request.containsKey('direction')
+                    ? requiredString(request, 'direction')
+                    : null,
+              )
+              .toJson(),
+        };
       case 'family validate':
         keys({'family'});
         data = ExerciseFamily.fromJson(request['family']).toJson();
