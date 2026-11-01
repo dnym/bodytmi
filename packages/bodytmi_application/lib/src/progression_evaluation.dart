@@ -13,6 +13,7 @@ final class ProgressionEvaluation {
     this.assessment,
     this.coordination,
     this.scaleResolutions,
+    this.effortAssessment,
   );
   factory ProgressionEvaluation.double(DoubleProgressionProposal p) =>
       ProgressionEvaluation._(
@@ -25,6 +26,7 @@ final class ProgressionEvaluation {
         null,
         null,
         const [],
+        null,
       );
   factory ProgressionEvaluation.threshold(
     ThresholdRule rule,
@@ -50,7 +52,11 @@ final class ProgressionEvaluation {
     final missing = results.any((r) => r == null || r[rule.metric] == null);
     final proposals = rule.evaluateVector(
       currentSets: [for (final s in sets) s.suggested],
-      results: results,
+      results: [
+        for (final s in sets)
+          s.status == SetStatus.completed ? s.actuals : null,
+      ],
+      observations: [for (final s in sets) s.observations],
       failedSessions: failures,
       cursor: cursor,
     );
@@ -97,6 +103,7 @@ final class ProgressionEvaluation {
       first.assessment,
       first.coordination,
       List.unmodifiable([for (final p in proposals) p.scaleResolutions]),
+      first.effortAssessment,
     );
   }
   final String outcome, reason;
@@ -104,6 +111,7 @@ final class ProgressionEvaluation {
   final int failedSessions, cursor;
   final DoubleProgressionProposal? _double;
   final ThresholdAssessment? assessment;
+  final EffortAssessment? effortAssessment;
   final LeverSelection? coordination;
   final List<List<ScaleResolution>> scaleResolutions;
   Map<String, Object?> toJson() =>
@@ -115,6 +123,8 @@ final class ProgressionEvaluation {
         'nextState': {'failedSessions': failedSessions, 'cursor': cursor},
         'requiresAcceptance': true,
         if (assessment != null) 'assessment': assessment!.toJson(),
+        if (effortAssessment != null)
+          'effortAssessment': effortAssessment!.toJson(),
         if (coordination != null) 'coordination': coordination!.toJson(),
         if (scaleResolutions.any((r) => r.isNotEmpty))
           'scaleResolutions': [

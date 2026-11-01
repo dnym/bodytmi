@@ -21,3 +21,5 @@ export 'src/program.dart';
 export 'src/numeric_scale.dart';
 
 export 'src/set_observations.dart';
+
+export 'src/effort_condition.dart';

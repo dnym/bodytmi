@@ -239,7 +239,7 @@ final class Commands {
           request['session'],
         ).finish(parseInstant(request['finishedAt'], 'finishedAt')).toJson();
       case 'progression evaluate':
-        keys({'rule', 'current', 'results', 'state'});
+        keys({'rule', 'current', 'results', 'state', 'observations'});
         final state = jsonObject(
           request['state'] ?? <String, Object?>{},
           'state',
@@ -256,6 +256,12 @@ final class Commands {
                 for (final r in jsonList(request, 'results'))
                   r == null ? null : metricsFromJson(r),
               ],
+              observations: request.containsKey('observations')
+                  ? [
+                      for (final o in jsonList(request, 'observations'))
+                        o == null ? null : SetObservations.fromJson(o),
+                    ]
+                  : null,
               failedSessions: failures,
               cursor: cursor,
             )

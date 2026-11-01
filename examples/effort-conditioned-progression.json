@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "rule": {
+    "metric": "reps",
+    "minimum": {
+      "value": "6",
+      "unit": "rep"
+    },
+    "threshold": {
+      "value": "8",
+      "unit": "rep"
+    },
+    "increments": {
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      }
+    },
+    "resets": {
+      "reps": {
+        "value": "6",
+        "unit": "rep"
+      }
+    },
+    "coordination": {
+      "mode": "weighted",
+      "order": [
+        "mass",
+        "mass"
+      ]
+    },
+    "deloadAfter": 2,
+    "deloadMetrics": [
+      "mass"
+    ],
+    "advancementEffort": {
+      "rpe": {
+        "scale": "0-10",
+        "maximum": "8"
+      },
+      "rir": {
+        "minimum": "2"
+      }
+    }
+  },
+  "current": {
+    "mass": {
+      "value": "10",
+      "unit": "kg"
+    },
+    "reps": {
+      "value": "8",
+      "unit": "rep"
+    }
+  },
+  "results": [
+    {
+      "mass": {
+        "value": "10",
+        "unit": "kg"
+      },
+      "reps": {
+        "value": "8",
+        "unit": "rep"
+      }
+    },
+    {
+      "mass": {
+        "value": "10",
+        "unit": "kg"
+      },
+      "reps": {
+        "value": "8",
+        "unit": "rep"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "rpe": {
+        "value": "8",
+        "scale": "0-10"
+      },
+      "rir": "2"
+    },
+    {
+      "rpe": {
+        "value": "7.5",
+        "scale": "0-10"
+      },
+      "rir": "2.5"
+    }
+  ],
+  "state": {
+    "failedSessions": 1,
+    "cursor": 1
+  }
+}

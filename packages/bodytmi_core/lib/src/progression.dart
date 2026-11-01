@@ -1,4 +1,6 @@
 import 'errors.dart';
+import 'set_observations.dart';
+import 'effort_condition.dart';
 import 'quantity.dart';
 import 'result_aggregation.dart';
 import 'lever_selection.dart';
@@ -16,6 +18,7 @@ final class ProgressionProposal {
     this.failedSessions,
     this.cursor, {
     this.assessment,
+    this.effortAssessment,
     this.coordination,
     List<ScaleResolution> scaleResolutions = const [],
   }) : scaleResolutions = List.unmodifiable(scaleResolutions),
@@ -26,6 +29,7 @@ final class ProgressionProposal {
   final int failedSessions;
   final int cursor;
   final ThresholdAssessment? assessment;
+  final EffortAssessment? effortAssessment;
   final LeverSelection? coordination;
   final List<ScaleResolution> scaleResolutions;
   Map<String, Object?> toJson() => {
@@ -35,6 +39,8 @@ final class ProgressionProposal {
     'nextState': {'failedSessions': failedSessions, 'cursor': cursor},
     'requiresAcceptance': true,
     if (assessment != null) 'assessment': assessment!.toJson(),
+    if (effortAssessment != null)
+      'effortAssessment': effortAssessment!.toJson(),
     if (coordination != null) 'coordination': coordination!.toJson(),
     if (scaleResolutions.isNotEmpty)
       'scaleResolutions': [for (final r in scaleResolutions) r.toJson()],
@@ -67,6 +73,7 @@ final class ThresholdRule {
     this.hasScalePolicy,
     this.performanceDirection,
     this.hasPerformancePolicy,
+    this.advancementEffort,
   );
 
   factory ThresholdRule.fromJson(Object? input) {
@@ -76,6 +83,7 @@ final class ThresholdRule {
       'failureAggregation',
       'metric',
       'performance',
+      'advancementEffort',
       'minimum',
       'threshold',
       'increments',
@@ -248,6 +256,9 @@ final class ThresholdRule {
       json.containsKey('scales'),
       performanceDirection,
       performance != null,
+      json.containsKey('advancementEffort')
+          ? AdvancementEffort.fromJson(json['advancementEffort'])
+          : null,
     );
   }
 
@@ -273,6 +284,7 @@ final class ThresholdRule {
   final bool hasScalePolicy;
   final String performanceDirection;
   final bool hasPerformancePolicy;
+  final AdvancementEffort? advancementEffort;
   Quantity get failureLimit => minimum;
   Quantity get advancementLimit => threshold;
   bool get hasScaleRanges =>
@@ -287,11 +299,13 @@ final class ThresholdRule {
   ProgressionProposal evaluate({
     required Metrics current,
     required List<Metrics?> results,
+    List<SetObservations?>? observations,
     int failedSessions = 0,
     int cursor = 0,
   }) => evaluateVector(
     currentSets: [current],
     results: results,
+    observations: observations,
     failedSessions: failedSessions,
     cursor: cursor,
   ).single;
@@ -302,6 +316,7 @@ final class ThresholdRule {
   List<ProgressionProposal> evaluateVector({
     required List<Metrics> currentSets,
     required List<Metrics?> results,
+    List<SetObservations?>? observations,
     int failedSessions = 0,
     int cursor = 0,
   }) {
@@ -315,13 +330,28 @@ final class ThresholdRule {
     for (final current in currentSets) {
       _validateCurrent(current);
     }
+    if (results.length > 10000) invalid('Too many aggregation results.');
+    if (observations != null && observations.length != results.length)
+      invalid('Effort observations must match the required result vector.');
+    final reported =
+        observations ?? List<SetObservations?>.filled(results.length, null);
+    for (var i = 0; i < reported.length; i++) {
+      reported[i]?.validateStatus(results[i] == null ? 'skipped' : 'completed');
+    }
+    final eligibleResults = [
+      for (var i = 0; i < results.length; i++)
+        reported[i]?.interrupted == true ? null : results[i],
+    ];
+    final effortAssessment = advancementEffort?.assess(reported, [
+      for (final r in eligibleResults) r?[metric] != null,
+    ]);
     final assessment = ThresholdAssessment.evaluate(
       advancement: aggregation,
       failure: failureAggregation,
       metric: metric,
       minimum: minimum,
       threshold: threshold,
-      results: results,
+      results: eligibleResults,
       direction: performanceDirection,
       explicitPerformance: hasPerformancePolicy,
     );
@@ -333,6 +363,7 @@ final class ThresholdRule {
           failedSessions,
           cursor,
           selectedMetric: selected,
+          effortAssessment: effortAssessment,
         ),
     ];
     if (!hasSelectionPolicy) return List.unmodifiable(evaluate(null));
@@ -342,7 +373,8 @@ final class ThresholdRule {
     final attempts = <LeverCandidate>[];
     for (final metric in candidates) {
       final proposals = evaluate(metric);
-      if (!assessment.eligible) {
+      if (!assessment.eligible ||
+          (effortAssessment != null && effortAssessment.status != 'met')) {
         final selection = LeverSelection(coordinationMode, null, const []);
         return List.unmodifiable([
           for (final p in proposals) _withSelection(p, selection),
@@ -374,6 +406,7 @@ final class ThresholdRule {
               ? assessment
               : null,
           coordination: selection,
+          effortAssessment: effortAssessment,
         ),
     ]);
   }
@@ -388,6 +421,7 @@ final class ThresholdRule {
     p.failedSessions,
     p.cursor,
     assessment: p.assessment,
+    effortAssessment: p.effortAssessment,
     coordination: selection,
     scaleResolutions: p.scaleResolutions,
   );
@@ -419,6 +453,7 @@ final class ThresholdRule {
     int failedSessions,
     int cursor, {
     String? selectedMetric,
+    EffortAssessment? effortAssessment,
   }) {
     final scaleResolutions = <ScaleResolution>[];
     ProgressionProposal proposal(
@@ -437,6 +472,7 @@ final class ThresholdRule {
           ? assessment
           : null,
       scaleResolutions: scaleResolutions,
+      effortAssessment: effortAssessment,
     );
     if (assessment.unknown) {
       return proposal(
@@ -521,6 +557,18 @@ final class ThresholdRule {
             : 'Minimums met but not every upper threshold reached.',
         current,
         0,
+        cursor,
+      );
+    }
+    if (effortAssessment != null && effortAssessment.status != 'met') {
+      final unknown = effortAssessment.status == 'unknown';
+      return proposal(
+        unknown ? 'unknown' : 'hold',
+        unknown
+            ? 'Required advancement effort ratings are missing or use a different RPE scale.'
+            : 'Numeric thresholds met but advancement effort conditions are not met.',
+        current,
+        unknown ? failedSessions : 0,
         cursor,
       );
     }
