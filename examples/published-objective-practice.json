@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "objective-practice",
+    "name": "Published numeric objectives",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom-row",
+        "implementation": "barbell",
+        "equipment": "practice-bar",
+        "targets": {
+          "mass": {
+            "value": "10",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "6",
+            "unit": "rep"
+          },
+          "duration": {
+            "value": "60",
+            "unit": "s"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "warmup",
+          "type": "effort",
+          "slot": "movement",
+          "role": "warmup"
+        },
+        {
+          "id": "work",
+          "type": "repeat",
+          "count": 2,
+          "child": {
+            "id": "set",
+            "type": "effort",
+            "slot": "movement",
+            "targets": {
+              "reps": {
+                "value": "8",
+                "unit": "rep"
+              }
+            },
+            "objectives": {
+              "reps": {
+                "mode": "range",
+                "minimum": {
+                  "value": "6",
+                  "unit": "rep"
+                },
+                "maximum": {
+                  "value": "12",
+                  "unit": "rep"
+                },
+                "upperMeaning": "progressionThreshold"
+              },
+              "duration": {
+                "mode": "range",
+                "minimum": {
+                  "value": "30",
+                  "unit": "s"
+                },
+                "maximum": {
+                  "value": "2",
+                  "unit": "min"
+                },
+                "upperMeaning": "desiredCeiling"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

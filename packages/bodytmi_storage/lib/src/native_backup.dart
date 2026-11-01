@@ -124,6 +124,7 @@ final class NativeBackup {
           23,
           24,
           25,
+          26,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -242,6 +243,7 @@ final class NativeBackup {
             23,
             24,
             25,
+            26,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -306,6 +308,8 @@ final class NativeBackup {
           final revision = WorkoutRevision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 26 && revision.definition.hasTypedObjectives)
+            invalid('Authored numeric objectives require schema v26.');
           if (db.userVersion < 25 && revision.definition.hasMaxEffortObjectives)
             invalid('Max-effort objectives require schema v25.');
           if (db.userVersion < 24 && revision.definition.hasEffortTargets)

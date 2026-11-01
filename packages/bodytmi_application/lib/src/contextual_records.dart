@@ -120,7 +120,12 @@ final class ContextualRecords {
             requiredString(
               jsonObject(series['policy'], 'policy'),
               'id',
-            ).endsWith('/2')
+            ).endsWith('/3')
+            ? 'bodytmi-contextual-records/4'
+            : requiredString(
+                jsonObject(series['policy'], 'policy'),
+                'id',
+              ).endsWith('/2')
             ? 'bodytmi-contextual-records/3'
             : 'bodytmi-contextual-records/2',
         'metric': metric,

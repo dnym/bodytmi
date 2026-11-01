@@ -1,5 +1,6 @@
 import 'errors.dart';
 import 'quantity.dart';
+import 'objective.dart';
 
 Set<String> maxEffortObjectivesFromJson(Object? input) {
   final json = jsonObject(input, 'objectives');
@@ -48,11 +49,12 @@ sealed class Activity {
           if (json.containsKey('targets') &&
               metricsFromJson(json['targets']).isEmpty)
             invalid('Effort target overrides cannot be empty.');
-          return Effort.withObjectives(
+          final objectives = numericObjectivesFromJson(json['objectives']);
+          return Effort.withCriteria(
             id,
             identifier(json, 'slot'),
             role as String,
-            maxEffortObjectivesFromJson(json['objectives']),
+            objectives,
             targets: json.containsKey('targets')
                 ? metricsFromJson(json['targets'])
                 : const {},
@@ -146,10 +148,12 @@ sealed class Activity {
 final class Effort extends Activity {
   const Effort(super.id, this.slotId, [this.role = 'work'])
     : targets = const {},
-      maxEffortMetrics = const {};
+      maxEffortMetrics = const {},
+      criteria = const {};
   Effort.withTargets(super.id, this.slotId, this.role, Metrics targets)
     : targets = Map.unmodifiable(targets),
-      maxEffortMetrics = const {} {
+      maxEffortMetrics = const {},
+      criteria = const {} {
     if (targets.isEmpty) invalid('Effort target overrides cannot be empty.');
   }
   Effort.withObjectives(
@@ -159,7 +163,8 @@ final class Effort extends Activity {
     Set<String> metrics, {
     Metrics targets = const {},
   }) : targets = Map.unmodifiable(targets),
-       maxEffortMetrics = Set.unmodifiable(metrics) {
+       maxEffortMetrics = Set.unmodifiable(metrics),
+       criteria = const {} {
     if (metrics.isEmpty || metrics.length > 100)
       invalid('Objectives need 1 to 100 metrics.');
     for (final key in metrics) identifier({'metric': key}, 'metric');
@@ -168,8 +173,42 @@ final class Effort extends Activity {
         'A max-effort metric cannot also have an effort target override.',
       );
   }
+  Effort.withCriteria(
+    super.id,
+    this.slotId,
+    this.role,
+    Map<String, NumericObjective> objectives, {
+    Metrics targets = const {},
+  }) : targets = Map.unmodifiable(targets),
+       maxEffortMetrics = Set.unmodifiable(
+         objectives.entries
+             .where((e) => e.value.mode == 'maxEffort')
+             .map((e) => e.key),
+       ),
+       criteria = Map.unmodifiable(
+         Map.fromEntries(
+           objectives.entries.where((e) => e.value.mode != 'maxEffort'),
+         ),
+       ) {
+    if (objectives.isEmpty || objectives.length > 100)
+      invalid('Objectives need 1 to 100 metrics.');
+    for (final key in objectives.keys) identifier({'metric': key}, 'metric');
+    if (targets.keys.any(maxEffortMetrics.contains))
+      invalid(
+        'A max-effort metric cannot also have an effort target override.',
+      );
+    if (targets.keys.any((key) => criteria[key]?.mode == 'observe'))
+      invalid(
+        'An observation metric cannot also have an effort target override.',
+      );
+  }
   final Metrics targets;
   final Set<String> maxEffortMetrics;
+  final Map<String, NumericObjective> criteria;
+  Map<String, Object?> get objectivesJson => {
+    ...maxEffortObjectivesToJson(maxEffortMetrics),
+    ...numericObjectivesToJson(criteria),
+  };
 
   /// Authored overrides retain metric ownership and the slot's dimensions.
   Metrics resolveTargets(Metrics defaults) {
@@ -177,13 +216,24 @@ final class Effort extends Activity {
       if (defaults[entry.key]?.dimension != entry.value.dimension)
         invalid('Effort overrides must name compatible slot target metrics.');
     }
+    for (final entry in criteria.entries) {
+      final quantity = targets[entry.key] ?? defaults[entry.key];
+      if (quantity != null && quantity.dimension != entry.value.unit.dimension)
+        invalid('Objective and target dimensions must match.');
+      if (entry.value.mode == 'observe' && targets.containsKey(entry.key))
+        invalid(
+          'An observation metric cannot also have an effort target override.',
+        );
+    }
     for (final key in maxEffortMetrics) {
       if (defaults[key] != null && defaults[key]!.dimension != Dimension.count)
         invalid('Max-effort repetitions require a compatible count metric.');
     }
     return Map.unmodifiable({
       for (final entry in {...defaults, ...targets}.entries)
-        if (!maxEffortMetrics.contains(entry.key)) entry.key: entry.value,
+        if (!maxEffortMetrics.contains(entry.key) &&
+            criteria[entry.key]?.mode != 'observe')
+          entry.key: entry.value,
     });
   }
 
@@ -196,8 +246,8 @@ final class Effort extends Activity {
     'slot': slotId,
     'role': role,
     if (targets.isNotEmpty) 'targets': metricsToJson(targets),
-    if (maxEffortMetrics.isNotEmpty)
-      'objectives': maxEffortObjectivesToJson(maxEffortMetrics),
+    if (maxEffortMetrics.isNotEmpty || criteria.isNotEmpty)
+      'objectives': objectivesJson,
   };
 }
 

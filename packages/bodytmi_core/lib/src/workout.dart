@@ -5,6 +5,7 @@ import 'effective_mass.dart';
 import 'quantity.dart';
 import 'timing.dart';
 import 'set_observations.dart';
+import 'objective.dart';
 
 final class ExerciseSlot {
   ExerciseSlot._(
@@ -121,7 +122,9 @@ final class WorkoutDefinition {
       if (node is Effort) {
         final slot = slots.firstWhere((s) => s.id == node.slotId);
         final resolved = node.resolveTargets(slot.targets);
-        if (resolved.isEmpty && node.maxEffortMetrics.isEmpty)
+        if (resolved.isEmpty &&
+            node.maxEffortMetrics.isEmpty &&
+            node.criteria.isEmpty)
           invalid('Each effort needs targets or explicit objectives.');
         slot.timing?.resolve(resolved);
       }
@@ -129,7 +132,9 @@ final class WorkoutDefinition {
     for (final slot in slots) {
       if (slot.targets.isEmpty &&
           !plan.nodes.whereType<Effort>().any(
-            (e) => e.slotId == slot.id && e.maxEffortMetrics.isNotEmpty,
+            (e) =>
+                e.slotId == slot.id &&
+                (e.maxEffortMetrics.isNotEmpty || e.criteria.isNotEmpty),
           ))
         invalid('A slot needs targets or an explicit effort objective.');
     }
@@ -158,6 +163,9 @@ final class WorkoutDefinition {
 
   bool get hasMaxEffortObjectives =>
       plan.nodes.whereType<Effort>().any((e) => e.maxEffortMetrics.isNotEmpty);
+
+  bool get hasTypedObjectives =>
+      plan.nodes.whereType<Effort>().any((e) => e.criteria.isNotEmpty);
 
   /// Published working targets in the same slot/role ordinal order as sessions.
   List<Metrics> workingTargets(String slotId) => List.unmodifiable([
@@ -239,7 +247,9 @@ final class TrainingSet {
     this.timing,
     SetObservations? observations,
     Set<String> maxEffortMetrics = const {},
-  }) : maxEffortMetrics = Set.unmodifiable(maxEffortMetrics),
+    Map<String, NumericObjective> criteria = const {},
+  }) : criteria = Map.unmodifiable(criteria),
+       maxEffortMetrics = Set.unmodifiable(maxEffortMetrics),
        observations = observations == null || observations.isEmpty
            ? null
            : observations,
@@ -247,6 +257,22 @@ final class TrainingSet {
        sources = Map.unmodifiable(sources),
        actuals = Map.unmodifiable(actuals) {
     this.observations?.validateStatus(status.name);
+    if (this.criteria.length + this.maxEffortMetrics.length > 100)
+      invalid('Too many set objectives.');
+    for (final entry in this.criteria.entries) {
+      identifier({'metric': entry.key}, 'metric');
+      if (entry.value.mode == 'maxEffort' ||
+          this.maxEffortMetrics.contains(entry.key))
+        invalid('Duplicate or invalid objective mode.');
+      final suggestion = this.suggested[entry.key];
+      if (suggestion != null &&
+          (entry.value.mode == 'observe' ||
+              suggestion.dimension != entry.value.unit.dimension))
+        invalid('Suggested quantity conflicts with the objective.');
+      if (status == SetStatus.completed &&
+          this.actuals[entry.key]?.dimension != entry.value.unit.dimension)
+        invalid('Objective requires a compatible actual: ${entry.key}.');
+    }
     for (final metric in this.maxEffortMetrics) {
       identifier({'metric': metric}, 'metric');
       if (this.suggested.containsKey(metric))
@@ -267,6 +293,11 @@ final class TrainingSet {
   final TimedResult? timing;
   final SetObservations? observations;
   final Set<String> maxEffortMetrics;
+  final Map<String, NumericObjective> criteria;
+  Map<String, Object?> get objectivesJson => {
+    ...maxEffortObjectivesToJson(maxEffortMetrics),
+    ...numericObjectivesToJson(criteria),
+  };
   bool get eligibleForPerformance =>
       status == SetStatus.completed && !(observations?.interrupted ?? false);
   final int contentVersion;
@@ -285,6 +316,12 @@ final class TrainingSet {
         invalid('Missing actual metric: ${target.key}.');
       if (actual[target.key]!.dimension != target.value.dimension)
         invalid('Dimension mismatch for ${target.key}.');
+    }
+    for (final entry in criteria.entries) {
+      if (actual[entry.key]?.dimension != entry.value.unit.dimension)
+        invalid(
+          'Objective requires an explicit compatible actual: ${entry.key}.',
+        );
     }
     for (final metric in maxEffortMetrics) {
       if (observations[metric]?.dimension != Dimension.count)
@@ -309,6 +346,7 @@ final class TrainingSet {
       status: SetStatus.completed,
       observations: this.observations,
       maxEffortMetrics: maxEffortMetrics,
+      criteria: criteria,
       actuals: actual,
       contentVersion: contentVersion + 1,
     );
@@ -327,6 +365,7 @@ final class TrainingSet {
       status: SetStatus.skipped,
       observations: observations?.notesOnly,
       maxEffortMetrics: maxEffortMetrics,
+      criteria: criteria,
       contentVersion: contentVersion + 1,
     );
   }
@@ -347,6 +386,7 @@ final class TrainingSet {
       timing: timing,
       observations: replacement,
       maxEffortMetrics: maxEffortMetrics,
+      criteria: criteria,
       contentVersion: contentVersion + 1,
     );
   }
@@ -362,8 +402,8 @@ final class TrainingSet {
     'actuals': metricsToJson(actuals),
     if (timing != null) 'timing': timing!.toJson(),
     if (observations != null) 'observations': observations!.toJson(),
-    if (maxEffortMetrics.isNotEmpty)
-      'objectives': maxEffortObjectivesToJson(maxEffortMetrics),
+    if (maxEffortMetrics.isNotEmpty || criteria.isNotEmpty)
+      'objectives': objectivesJson,
     'contentVersion': contentVersion,
   };
 }

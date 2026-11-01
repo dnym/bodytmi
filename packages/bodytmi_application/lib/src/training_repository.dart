@@ -178,7 +178,15 @@ final class StoredTrainingService {
         _conflict();
       final oldObjectives = applied.sets[set.ordinal].maxEffortMetrics;
       if (oldObjectives.length != set.maxEffortMetrics.length ||
-          !oldObjectives.containsAll(set.maxEffortMetrics))
+          !oldObjectives.containsAll(set.maxEffortMetrics) ||
+          canonicalJson({
+                for (final e in applied.sets[set.ordinal].criteria.entries)
+                  e.key: e.value.semanticJson(),
+              }) !=
+              canonicalJson({
+                for (final e in set.criteria.entries)
+                  e.key: e.value.semanticJson(),
+              }))
         _conflict();
       final slot = prescription.definition.slot(set.slotId);
       for (final metric in applied.controlledMetrics) {
@@ -210,6 +218,7 @@ final class StoredTrainingService {
           ordinal: set.ordinal,
           suggested: suggested,
           maxEffortMetrics: set.maxEffortMetrics,
+          criteria: set.criteria,
           sources: {
             for (final e in set.sources.entries)
               if (!applied.controlledMetrics.contains(e.key)) e.key: e.value,

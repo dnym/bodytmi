@@ -1,5 +1,6 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'training_service.dart';
+import 'canonical_json.dart';
 
 int _positive(Map<String, Object?> json, String key) {
   final value = json[key];
@@ -76,11 +77,18 @@ TrainingSession sessionFromJson(Object? input) {
         row['ordinal'] != expected.ordinal)
       invalid('Set identity does not match the activity plan.');
     final objectives = row.containsKey('objectives')
-        ? maxEffortObjectivesFromJson(row['objectives'])
-        : <String>{};
-    if (objectives.length != expected.maxEffortMetrics.length ||
-        !objectives.containsAll(expected.maxEffortMetrics))
+        ? numericObjectivesFromJson(row['objectives'])
+        : <String, NumericObjective>{};
+    if (canonicalJson(numericObjectivesToJson(objectives)) !=
+        canonicalJson(expected.objectivesJson))
       invalid('Set objectives do not match the pinned activity.');
+    final maxEffortMetrics = objectives.entries
+        .where((e) => e.value.mode == 'maxEffort')
+        .map((e) => e.key)
+        .toSet();
+    final criteria = Map<String, NumericObjective>.fromEntries(
+      objectives.entries.where((e) => e.value.mode != 'maxEffort'),
+    );
     final suggested = metricsFromJson(row['suggested']);
     if (suggested.keys
             .toSet()
@@ -134,7 +142,8 @@ TrainingSession sessionFromJson(Object? input) {
         ordinal: expected.ordinal,
         suggested: suggested,
         sources: sources,
-        maxEffortMetrics: objectives,
+        maxEffortMetrics: maxEffortMetrics,
+        criteria: criteria,
         actuals: actuals,
         timing: row['timing'] == null
             ? null

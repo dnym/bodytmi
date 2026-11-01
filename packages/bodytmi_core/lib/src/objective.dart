@@ -89,6 +89,17 @@ final class NumericObjective {
     if (mode == 'observe' || mode == 'maxEffort') 'unit': unit.name,
   };
 
+  /// Comparison policy without entered-unit display provenance.
+  Map<String, Object?> semanticJson() => {
+    'mode': mode,
+    if (lower != null)
+      'lower': {'value': lower!.value.toString(), 'unit': lower!.unit.name},
+    if (upper != null)
+      'upper': {'value': upper!.value.toString(), 'unit': upper!.unit.name},
+    if (upperMeaning != null) 'upperMeaning': upperMeaning,
+    'unit': unit.canonical.name,
+  };
+
   Map<String, Object?> assess(Quantity? actual) {
     if (actual != null && actual.dimension != unit.dimension)
       invalid('Actual quantity has an incompatible objective dimension.');
@@ -170,3 +181,22 @@ final class ObjectiveAssessment {
     };
   }
 }
+
+Map<String, NumericObjective> numericObjectivesFromJson(Object? input) {
+  final json = jsonObject(input, 'objectives');
+  if (json.isEmpty || json.length > 100)
+    invalid('Objectives need 1 to 100 metrics.');
+  return Map.unmodifiable({
+    for (final entry in json.entries)
+      identifier({'metric': entry.key}, 'metric'): NumericObjective.fromJson(
+        entry.value,
+      ),
+  });
+}
+
+Map<String, Object?> numericObjectivesToJson(
+  Map<String, NumericObjective> objectives,
+) => {
+  for (final key in (objectives.keys.toList()..sort()))
+    key: objectives[key]!.toJson(),
+};

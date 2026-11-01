@@ -1,3 +1,4 @@
+import 'published_objective_test.dart';
 import 'objective_assessment_test.dart';
 import 'max_effort_test.dart';
 import 'effort_targets_test.dart';
@@ -36,6 +37,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  publishedObjectiveTests();
   objectiveAssessmentTests();
   maxEffortTests();
   effortTargetsTests();

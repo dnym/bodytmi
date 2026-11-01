@@ -321,6 +321,15 @@ bool matchesProgressionBaseline(
     if (currentObjectives.length != previousObjectives.length ||
         !currentObjectives.containsAll(previousObjectives))
       return false;
+    if (canonicalJson({
+          for (final e in decision.sets[i].criteria.entries)
+            e.key: e.value.semanticJson(),
+        }) !=
+        canonicalJson({
+          for (final e in before.sets[i].criteria.entries)
+            e.key: e.value.semanticJson(),
+        }))
+      return false;
   }
   final currentPlan = decision.session.revision.definition;
   final priorPlan = before.session.revision.definition;

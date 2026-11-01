@@ -462,7 +462,7 @@ void sessionBodyMassTests() {
       await service.edit(s.id, s.contentVersion, finished);
       await mass.delete('training', 1, confirm: true);
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 25);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 26);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/export.json',
@@ -586,7 +586,7 @@ void sessionBodyMassTests() {
       }
       final check = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(check.userVersion, 25);
+        equal(check.userVersion, 26);
       } finally {
         check.close();
       }

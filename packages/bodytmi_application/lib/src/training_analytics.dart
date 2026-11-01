@@ -22,7 +22,8 @@ final class TrainingAnalytics {
         final unit =
             actual?.unit ??
             target?.unit ??
-            (set.maxEffortMetrics.contains(metric) ? Unit.rep : null);
+            (set.maxEffortMetrics.contains(metric) ? Unit.rep : null) ??
+            set.criteria[metric]?.unit.canonical;
         if (unit == null) continue;
         final key = '$metric/${unit.name}';
         final total = totals.putIfAbsent(key, () => _MetricTotal(metric, unit));
@@ -44,7 +45,9 @@ final class TrainingAnalytics {
     final keys = totals.keys.toList()..sort();
     return {
       'policy': {
-        'id': sets.any((s) => s.maxEffortMetrics.isNotEmpty)
+        'id': sets.any((s) => s.criteria.isNotEmpty)
+            ? 'bodytmi-session-summary/3'
+            : sets.any((s) => s.maxEffortMetrics.isNotEmpty)
             ? 'bodytmi-session-summary/2'
             : 'bodytmi-session-summary/1',
         'includeWarmups': includeWarmups,
@@ -93,15 +96,26 @@ final class TrainingAnalytics {
                 ...set.suggested.keys,
                 ...set.actuals.keys,
                 ...set.maxEffortMetrics,
+                ...set.criteria.keys,
               }.toList()..sort()))
                 metric: {
                   'target': set.suggested[metric]?.toJson(),
                   if (set.maxEffortMetrics.contains(metric))
                     'objective': {'mode': 'maxEffort', 'unit': 'rep'},
+                  if (set.criteria.containsKey(metric))
+                    'objective': set.criteria[metric]!.toJson(),
+                  if (set.criteria[metric]?.upperMeaning != null)
+                    'upperReached': set.criteria[metric]!.assess(
+                      set.actuals[metric],
+                    )['upperReached'],
                   'actual': set.actuals[metric]?.toJson(),
                   'relation': set.status == SetStatus.completed
-                      ? set.maxEffortMetrics.contains(metric) &&
-                                set.actuals[metric] != null
+                      ? set.criteria.containsKey(metric)
+                            ? set.criteria[metric]!.assess(
+                                set.actuals[metric],
+                              )['relation']
+                            : set.maxEffortMetrics.contains(metric) &&
+                                  set.actuals[metric] != null
                             ? 'observed'
                             : _relation(
                                 set.suggested[metric],
@@ -147,6 +161,7 @@ final class TrainingAnalytics {
       });
     var points = 0;
     var includesMaxEffort = false;
+    var includesTypedObjective = false;
     final members = family?.family.exercises.toSet();
     for (final session in ordered) {
       if ((!includeActive && session.status != SessionStatus.finalized) ||
@@ -178,6 +193,8 @@ final class TrainingAnalytics {
           continue;
         for (final entry in set.actuals.entries) {
           if (metric != null && entry.key != metric) continue;
+          if (set.criteria.containsKey(entry.key))
+            includesTypedObjective = true;
           if (set.maxEffortMetrics.contains(entry.key))
             includesMaxEffort = true;
           if (++points > 10000)
@@ -216,7 +233,15 @@ final class TrainingAnalytics {
             'target': set.suggested[entry.key]?.toJson(),
             if (set.maxEffortMetrics.contains(entry.key))
               'objective': {'mode': 'maxEffort', 'unit': 'rep'},
-            'relation': set.maxEffortMetrics.contains(entry.key)
+            if (set.criteria.containsKey(entry.key))
+              'objective': set.criteria[entry.key]!.toJson(),
+            if (set.criteria[entry.key]?.upperMeaning != null)
+              'upperReached': set.criteria[entry.key]!.assess(
+                entry.value,
+              )['upperReached'],
+            'relation': set.criteria.containsKey(entry.key)
+                ? set.criteria[entry.key]!.assess(entry.value)['relation']
+                : set.maxEffortMetrics.contains(entry.key)
                 ? 'observed'
                 : _relation(set.suggested[entry.key], entry.value),
           });
@@ -227,10 +252,14 @@ final class TrainingAnalytics {
     return {
       'policy': {
         'id': family == null
-            ? (includesMaxEffort
+            ? (includesTypedObjective
+                  ? 'bodytmi-history-series/3'
+                  : includesMaxEffort
                   ? 'bodytmi-history-series/2'
                   : 'bodytmi-history-series/1')
-            : (includesMaxEffort
+            : (includesTypedObjective
+                  ? 'bodytmi-family-series/3'
+                  : includesMaxEffort
                   ? 'bodytmi-family-series/2'
                   : 'bodytmi-family-series/1'),
         if (family != null) 'family': family.toJson(),

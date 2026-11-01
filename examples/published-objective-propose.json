@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "objective-session-001",
+  "slotId": "movement",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "reps",
+    "minimum": {
+      "value": "6",
+      "unit": "rep"
+    },
+    "threshold": {
+      "value": "8",
+      "unit": "rep"
+    },
+    "increments": {
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      }
+    }
+  }
+}

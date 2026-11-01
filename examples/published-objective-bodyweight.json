@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "objective-bodyweight",
+    "name": "Targetless repetition range",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom-bodyweight",
+        "implementation": "bodyweight",
+        "targets": {}
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "effort",
+      "slot": "movement",
+      "objectives": {
+        "reps": {
+          "mode": "range",
+          "minimum": {
+            "value": "6",
+            "unit": "rep"
+          },
+          "maximum": {
+            "value": "12",
+            "unit": "rep"
+          },
+          "upperMeaning": "desiredCeiling"
+        }
+      }
+    }
+  }
+}

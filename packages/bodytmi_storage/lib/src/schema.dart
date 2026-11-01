@@ -87,6 +87,8 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   24 =>
     schemaV12, // Same tables; v24 adds authored per-effort target overrides.
   25 => schemaV12, // Same tables; v25 adds max-effort repetition objectives.
+  26 =>
+    schemaV12, // Same tables; v26 adds authored numeric objective predicates.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

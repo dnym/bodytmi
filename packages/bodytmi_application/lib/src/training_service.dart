@@ -64,7 +64,8 @@ final class TrainingService {
       if (effort.role != 'warmup') {
         for (final metric in slot.prefillMetrics) {
           if (effort.targets.containsKey(metric) ||
-              effort.maxEffortMetrics.contains(metric))
+              effort.maxEffortMetrics.contains(metric) ||
+              effort.criteria[metric]?.mode == 'observe')
             continue;
           search:
           for (final past in compatibleHistory) {
@@ -79,6 +80,7 @@ final class TrainingService {
                   set.ordinal == ordinal &&
                   set.eligibleForPerformance &&
                   !set.maxEffortMetrics.contains(metric) &&
+                  set.criteria[metric]?.mode != 'observe' &&
                   value != null &&
                   value.dimension == suggested[metric]!.dimension) {
                 suggested[metric] = value;
@@ -102,6 +104,7 @@ final class TrainingService {
           suggested: suggested,
           sources: sources,
           maxEffortMetrics: effort.maxEffortMetrics,
+          criteria: effort.criteria,
         ),
       );
     }
@@ -150,8 +153,8 @@ final class TrainingService {
         'sessionStatus': session.status.name,
         'setStatus': set.status.name,
         'interrupted': set.observations?.interrupted ?? false,
-        if (set.maxEffortMetrics.isNotEmpty)
-          'authoredObjectives': maxEffortObjectivesToJson(set.maxEffortMetrics),
+        if (set.maxEffortMetrics.isNotEmpty || set.criteria.isNotEmpty)
+          'authoredObjectives': set.objectivesJson,
       },
       ...const ObjectiveAssessment().evaluate(objectives, set.actuals),
     };

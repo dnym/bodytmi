@@ -44,8 +44,10 @@ final class ProgressionEvaluation {
     for (final set in sets) {
       final target = set.suggested[rule.metric];
       if ((target == null &&
-              !(set.maxEffortMetrics.contains(rule.metric) &&
-                  rule.minimum.dimension == Dimension.count)) ||
+              !((set.maxEffortMetrics.contains(rule.metric) &&
+                      rule.minimum.dimension == Dimension.count) ||
+                  set.criteria[rule.metric]?.unit.dimension ==
+                      rule.minimum.dimension)) ||
           (target != null && target.dimension != rule.minimum.dimension))
         invalid(
           'Stored threshold progression needs a configured performance metric.',
