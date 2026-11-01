@@ -19,3 +19,5 @@ export 'src/double_progression.dart';
 export 'src/program.dart';
 
 export 'src/numeric_scale.dart';
+
+export 'src/set_observations.dart';

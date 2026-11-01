@@ -65,6 +65,7 @@ TrainingSession sessionFromJson(Object? input) {
       'status',
       'actuals',
       'timing',
+      'observations',
       'contentVersion',
     });
     final expected = baseline.sets[i];
@@ -130,6 +131,9 @@ TrainingSession sessionFromJson(Object? input) {
         timing: row['timing'] == null
             ? null
             : TimedResult.fromJson(row['timing']),
+        observations: row.containsKey('observations')
+            ? SetObservations.fromJson(row['observations'])
+            : null,
         status: setStatus,
         contentVersion: _positive(row, 'contentVersion'),
       ),

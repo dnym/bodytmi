@@ -80,6 +80,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
     schemaV12, // Same tables; v19 adds compact fixed-increment scale ranges.
   20 =>
     schemaV12, // Same tables; v20 adds explicit performance predicate direction.
+  21 => schemaV12, // Same tables; v21 adds explicit set observations.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

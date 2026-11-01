@@ -159,8 +159,7 @@ final class ProgressionDecision {
           DoubleProgressionRule.fromJson(rule).evaluate(
             currentSets: [for (final s in sets) s.suggested],
             results: [
-              for (final s in sets)
-                s.status == SetStatus.completed ? s.actuals : null,
+              for (final s in sets) s.eligibleForPerformance ? s.actuals : null,
             ],
             failedSessions: previousFailures,
           ),

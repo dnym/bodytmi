@@ -1,3 +1,4 @@
+import 'set_observations_test.dart';
 import 'records_test.dart';
 import 'performance_direction_test.dart';
 import 'numeric_scale_test.dart';
@@ -30,6 +31,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  setObservationsTests();
   recordsTests();
   performanceDirectionTests();
   numericScaleTests();

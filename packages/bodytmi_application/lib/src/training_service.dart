@@ -72,7 +72,7 @@ final class TrainingService {
               if (set.slotId == slot.id &&
                   set.role == effort.role &&
                   set.ordinal == ordinal &&
-                  set.status == SetStatus.completed &&
+                  set.eligibleForPerformance &&
                   value != null &&
                   value.dimension == suggested[metric]!.dimension) {
                 suggested[metric] = value;
@@ -129,6 +129,15 @@ final class TrainingService {
     bool acceptSuggested = false,
   }) => session.replaceSet(
     session.set(setId).complete(actuals, acceptSuggested: acceptSuggested),
+  );
+
+  TrainingSession annotate(
+    TrainingSession session,
+    String setId,
+    SetObservations observations, {
+    bool confirm = false,
+  }) => session.replaceSet(
+    session.set(setId).annotate(observations, confirm: confirm),
   );
 
   TrainingSession skip(

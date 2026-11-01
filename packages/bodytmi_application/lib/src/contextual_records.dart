@@ -54,7 +54,9 @@ final class ContextualRecords {
                 .toList()
               ..sort();
         String? reason;
-        if (slot.bodyMass != null || slot.effectiveMass != null) {
+        if (!set.eligibleForPerformance) {
+          reason = 'interrupted-set';
+        } else if (slot.bodyMass != null || slot.effectiveMass != null) {
           reason = 'body-mass-or-derived-load-policy-required';
         } else if (missing.isNotEmpty) {
           reason = 'configured-actuals-missing';
@@ -114,13 +116,14 @@ final class ContextualRecords {
     final keys = groups.keys.toList()..sort();
     return {
       'policy': {
-        'id': 'bodytmi-contextual-records/1',
+        'id': 'bodytmi-contextual-records/2',
         'metric': metric,
         'direction': direction,
         'comparison': 'single-set-all-other-observed-metrics-fixed',
         'scope': 'selected-finalized-history',
         'order': 'session-start/session-id/set-ordinal/set-id',
         'requiresAllConfiguredActuals': true,
+        'interruptedSets': 'excluded',
         'bodyMassAndDerivedLoads': 'excluded',
         'atActuals': metricsToJson(atActuals),
         'includeWarmups': includeWarmups,

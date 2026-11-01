@@ -100,6 +100,8 @@ final class TrainingAnalytics {
                 },
             },
             if (set.timing != null) 'timing': set.timing!.toJson(),
+            if (set.observations != null)
+              'observations': set.observations!.toJson(),
           },
       ],
     };
@@ -194,6 +196,8 @@ final class TrainingAnalytics {
             'sessionStatus': session.status.name,
             'startedAt': session.startedAt.toUtc().toIso8601String(),
             'finishedAt': session.finishedAt?.toUtc().toIso8601String(),
+            if (set.observations != null)
+              'observations': set.observations!.toJson(),
             'actual': entry.value.toJson(),
             'target': set.suggested[entry.key]?.toJson(),
             'relation': _relation(set.suggested[entry.key], entry.value),

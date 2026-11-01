@@ -119,6 +119,7 @@ final class NativeBackup {
           18,
           19,
           20,
+          21,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -232,6 +233,7 @@ final class NativeBackup {
             18,
             19,
             20,
+            21,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -326,6 +328,9 @@ final class NativeBackup {
           final session = sessionFromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 21 &&
+              session.sets.any((s) => s.observations != null))
+            invalid('Set observations require schema v21.');
           if (db.userVersion < 7 && session.sets.any((s) => s.timing != null))
             invalid('Timing results require schema v7.');
           final revision = db.select(
@@ -377,6 +382,9 @@ final class NativeBackup {
           final d = ProgressionDecision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 21 &&
+              d.session.sets.any((s) => s.observations != null))
+            invalid('Frozen set observations require schema v21.');
           if (db.userVersion < 20 &&
               d.ruleType == 'threshold' &&
               ThresholdRule.fromJson(d.rule).hasPerformancePolicy)

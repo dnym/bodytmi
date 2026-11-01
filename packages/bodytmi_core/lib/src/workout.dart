@@ -4,6 +4,7 @@ import 'errors.dart';
 import 'effective_mass.dart';
 import 'quantity.dart';
 import 'timing.dart';
+import 'set_observations.dart';
 
 final class ExerciseSlot {
   ExerciseSlot._(
@@ -208,9 +209,15 @@ final class TrainingSet {
     Metrics actuals = const {},
     this.contentVersion = 1,
     this.timing,
-  }) : suggested = Map.unmodifiable(suggested),
+    SetObservations? observations,
+  }) : observations = observations == null || observations.isEmpty
+           ? null
+           : observations,
+       suggested = Map.unmodifiable(suggested),
        sources = Map.unmodifiable(sources),
-       actuals = Map.unmodifiable(actuals);
+       actuals = Map.unmodifiable(actuals) {
+    this.observations?.validateStatus(status.name);
+  }
   final String id;
   final String slotId;
   final String role;
@@ -220,6 +227,9 @@ final class TrainingSet {
   final SetStatus status;
   final Metrics actuals;
   final TimedResult? timing;
+  final SetObservations? observations;
+  bool get eligibleForPerformance =>
+      status == SetStatus.completed && !(observations?.interrupted ?? false);
   final int contentVersion;
 
   TrainingSet complete(
@@ -252,6 +262,7 @@ final class TrainingSet {
               ? timing
               : timing!.edited()),
       status: SetStatus.completed,
+      observations: this.observations,
       actuals: actual,
       contentVersion: contentVersion + 1,
     );
@@ -268,6 +279,26 @@ final class TrainingSet {
       suggested: suggested,
       sources: sources,
       status: SetStatus.skipped,
+      observations: observations?.notesOnly,
+      contentVersion: contentVersion + 1,
+    );
+  }
+
+  /// Replaces the complete annotation object; explicit confirmation clears it.
+  TrainingSet annotate(SetObservations replacement, {bool confirm = false}) {
+    if (replacement.isEmpty && observations != null && !confirm)
+      invalid('Confirm before clearing set observations.');
+    return TrainingSet(
+      id: id,
+      slotId: slotId,
+      role: role,
+      ordinal: ordinal,
+      suggested: suggested,
+      sources: sources,
+      status: status,
+      actuals: actuals,
+      timing: timing,
+      observations: replacement,
       contentVersion: contentVersion + 1,
     );
   }
@@ -282,6 +313,7 @@ final class TrainingSet {
     'status': status.name,
     'actuals': metricsToJson(actuals),
     if (timing != null) 'timing': timing!.toJson(),
+    if (observations != null) 'observations': observations!.toJson(),
     'contentVersion': contentVersion,
   };
 }

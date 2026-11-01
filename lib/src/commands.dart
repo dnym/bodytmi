@@ -18,6 +18,7 @@ const commandNames = [
   'session mass-status',
   'session effective-load',
   'session complete',
+  'session annotate',
   'session skip',
   'session finish',
   'progression evaluate',
@@ -211,6 +212,16 @@ final class Commands {
               requiredString(request, 'setId'),
               metricsFromJson(request['actuals'] ?? <String, Object?>{}),
               acceptSuggested: _bool(request, 'acceptSuggested'),
+            )
+            .toJson();
+      case 'session annotate':
+        keys({'session', 'setId', 'observations', 'confirm'});
+        data = const TrainingService()
+            .annotate(
+              sessionFromJson(request['session']),
+              requiredString(request, 'setId'),
+              SetObservations.fromJson(request['observations']),
+              confirm: _bool(request, 'confirm'),
             )
             .toJson();
       case 'session skip':

@@ -42,6 +42,7 @@ const storedCommandNames = [
   'store mass-status',
   'store effective-load',
   'store complete',
+  'store annotate',
   'store skip',
   'store finish',
   'store history',
@@ -216,6 +217,13 @@ Future<Map<String, Object?>> executeStored(
       'setId',
       'actuals',
       'acceptSuggested',
+    },
+    'store annotate' => {
+      'id',
+      'expectedVersion',
+      'setId',
+      'observations',
+      'confirm',
     },
     'store skip' => {'id', 'expectedVersion', 'setId', 'confirm'},
     'store finish' => {'id', 'expectedVersion', 'finishedAt'},
@@ -882,6 +890,20 @@ Future<Map<String, Object?>> executeStored(
             setId,
             actuals,
             acceptSuggested: accept,
+          ),
+        )).toJson();
+      case 'store annotate':
+        final setId = requiredString(request, 'setId');
+        final observations = SetObservations.fromJson(request['observations']);
+        final confirm = flag('confirm');
+        data = (await service.edit(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          (s) => const TrainingService().annotate(
+            s,
+            setId,
+            observations,
+            confirm: confirm,
           ),
         )).toJson();
       case 'store skip':

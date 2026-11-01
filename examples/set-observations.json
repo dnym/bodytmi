@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "strength-session-001",
+  "expectedVersion": 5,
+  "setId": "workout/heavy[0]/heavy-set",
+  "observations": {
+    "rpe": {"value": "8.5", "scale": "0-10"},
+    "rir": "1",
+    "notes": "Grip tired; technique remained steady.",
+    "terminationReason": "target-reached"
+  }
+}

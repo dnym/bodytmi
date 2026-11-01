@@ -45,7 +45,7 @@ final class ProgressionEvaluation {
         );
     }
     final results = [
-      for (final s in sets) s.status == SetStatus.completed ? s.actuals : null,
+      for (final s in sets) s.eligibleForPerformance ? s.actuals : null,
     ];
     final missing = results.any((r) => r == null || r[rule.metric] == null);
     final proposals = rule.evaluateVector(
