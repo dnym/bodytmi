@@ -57,10 +57,13 @@ final class TrainingService {
         (v) => v + 1,
         ifAbsent: () => 0,
       );
-      final suggested = <String, Quantity>{...slot.targets};
+      final suggested = <String, Quantity>{
+        ...effort.resolveTargets(slot.targets),
+      };
       final sources = <String, HistorySource>{};
       if (effort.role != 'warmup') {
         for (final metric in slot.prefillMetrics) {
+          if (effort.targets.containsKey(metric)) continue;
           search:
           for (final past in compatibleHistory) {
             final oldSlots = past.revision.definition.slots.where(

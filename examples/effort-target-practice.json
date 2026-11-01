@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "effort-target-practice",
+    "name": "Different targets in one exercise slot",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom-row",
+        "implementation": "barbell",
+        "equipment": "practice-bar",
+        "targets": {
+          "mass": {
+            "value": "50",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "10",
+            "unit": "rep"
+          },
+          "duration": {
+            "value": "10",
+            "unit": "s"
+          }
+        },
+        "prefill": [
+          "mass",
+          "reps"
+        ],
+        "timing": {
+          "metric": "duration",
+          "nearEndMilliseconds": 2000
+        }
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "warmup",
+          "type": "effort",
+          "slot": "movement",
+          "role": "warmup",
+          "targets": {
+            "mass": {
+              "value": "20",
+              "unit": "kg"
+            },
+            "reps": {
+              "value": "5",
+              "unit": "rep"
+            },
+            "duration": {
+              "value": "5",
+              "unit": "s"
+            }
+          }
+        },
+        {
+          "id": "pair",
+          "type": "repeat",
+          "count": 2,
+          "child": {
+            "id": "pair-work",
+            "type": "sequence",
+            "children": [
+              {
+                "id": "heavy",
+                "type": "effort",
+                "slot": "movement",
+                "targets": {
+                  "mass": {
+                    "value": "60",
+                    "unit": "kg"
+                  },
+                  "reps": {
+                    "value": "8",
+                    "unit": "rep"
+                  }
+                }
+              },
+              {
+                "id": "backoff",
+                "type": "effort",
+                "slot": "movement",
+                "targets": {
+                  "mass": {
+                    "value": "90",
+                    "unit": "lb"
+                  },
+                  "reps": {
+                    "value": "12",
+                    "unit": "rep"
+                  },
+                  "duration": {
+                    "value": "8",
+                    "unit": "s"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "ordinary",
+          "type": "effort",
+          "slot": "movement"
+        }
+      ]
+    }
+  }
+}

@@ -314,6 +314,23 @@ bool matchesProgressionBaseline(
   ProgressionDecision decision,
   ProgressionDecision before,
 ) {
+  final currentPlan = decision.session.revision.definition;
+  final priorPlan = before.session.revision.definition;
+  if (currentPlan.hasEffortTargets || priorPlan.hasEffortTargets) {
+    final authored = currentPlan.workingTargets(decision.slotId);
+    final prior = priorPlan.workingTargets(before.slotId);
+    if (authored.length != prior.length) return false;
+    for (var i = 0; i < authored.length; i++) {
+      for (final metric in decision.controlledMetrics) {
+        final value = authored[i][metric], old = prior[i][metric];
+        if (value == null ||
+            old == null ||
+            value.dimension != old.dimension ||
+            value.compareTo(old) != 0)
+          return false;
+      }
+    }
+  }
   final expected = before.nextSets;
   if (expected.length != decision.sets.length) return false;
   for (var i = 0; i < expected.length; i++) {

@@ -153,6 +153,18 @@ final class StoredTrainingService {
     for (final set in next.sets.where((s) => s.role == 'work')) {
       workingCounts.update(set.slotId, (n) => n + 1, ifAbsent: () => 1);
     }
+    final authored = {
+      for (final entry in bySlot.entries)
+        if (entry.value != null)
+          entry.key: prescription.definition.workingTargets(entry.key),
+    };
+    final previousAuthored = {
+      for (final entry in bySlot.entries)
+        if (entry.value != null)
+          entry.key: entry.value!.session.revision.definition.workingTargets(
+            entry.key,
+          ),
+    };
     for (final set in next.sets) {
       final applied = set.role == 'work' ? bySlot[set.slotId] : null;
       if (applied == null) {
@@ -161,13 +173,20 @@ final class StoredTrainingService {
       }
       final vector = applied.nextSets;
       final count = workingCounts[set.slotId];
-      if (vector.length != count) _conflict();
+      if (vector.length != count ||
+          previousAuthored[set.slotId]!.length != count)
+        _conflict();
       final slot = prescription.definition.slot(set.slotId);
       for (final metric in applied.controlledMetrics) {
         if (set.suggested[metric]?.dimension !=
             vector[set.ordinal][metric]!.dimension)
           _conflict();
         if (slot.targets[metric]!.compareTo(applied.slot.targets[metric]!) != 0)
+          _conflict();
+        if (authored[set.slotId]![set.ordinal][metric]!.compareTo(
+              previousAuthored[set.slotId]![set.ordinal][metric]!,
+            ) !=
+            0)
           _conflict();
       }
       final suggested = {

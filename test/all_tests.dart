@@ -1,3 +1,4 @@
+import 'effort_targets_test.dart';
 import 'increment_bands_test.dart';
 import 'effort_conditions_test.dart';
 import 'set_observations_test.dart';
@@ -33,6 +34,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  effortTargetsTests();
   incrementBandsTests();
   effortConditionsTests();
   setObservationsTests();

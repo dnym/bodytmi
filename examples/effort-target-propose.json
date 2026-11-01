@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "target-session-001",
+  "slotId": "movement",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "reps",
+    "minimum": {
+      "value": "8",
+      "unit": "rep"
+    },
+    "threshold": {
+      "value": "12",
+      "unit": "rep"
+    },
+    "aggregation": {
+      "mode": "any"
+    },
+    "increments": {
+      "mass": {
+        "value": "2",
+        "unit": "kg"
+      }
+    }
+  }
+}

@@ -457,7 +457,7 @@ void performanceDirectionTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          23,
+          24,
         );
       } finally {
         await upgraded.close();

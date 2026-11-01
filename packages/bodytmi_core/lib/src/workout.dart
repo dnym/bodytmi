@@ -119,6 +119,11 @@ final class WorkoutDefinition {
       if (!ids.add(node.id)) invalid('Duplicate activity ID: ${node.id}.');
       if (node is Effort && !slotIds.contains(node.slotId))
         invalid('Unknown slot: ${node.slotId}.');
+      if (node is Effort && node.targets.isNotEmpty) {
+        final slot = slots.firstWhere((s) => s.id == node.slotId);
+        final resolved = node.resolveTargets(slot.targets);
+        slot.timing?.resolve(resolved);
+      }
     }
     var count = 0;
     var efforts = 0;
@@ -140,6 +145,22 @@ final class WorkoutDefinition {
   final List<ExerciseSlot> slots;
   final Activity plan;
   ExerciseSlot slot(String id) => slots.firstWhere((slot) => slot.id == id);
+  bool get hasEffortTargets =>
+      plan.nodes.whereType<Effort>().any((e) => e.targets.isNotEmpty);
+
+  /// Published working targets in the same slot/role ordinal order as sessions.
+  List<Metrics> workingTargets(String slotId) => List.unmodifiable([
+    for (final occurrence in plan.occurrences())
+      if (occurrence.activity case Effort(
+        :final role,
+        :final targets,
+        slotId: final id,
+      ) when id == slotId && role == 'work')
+        Map<String, Quantity>.unmodifiable({
+          ...slot(slotId).targets,
+          ...targets,
+        }),
+  ]);
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,

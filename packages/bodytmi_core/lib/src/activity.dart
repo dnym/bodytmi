@@ -1,4 +1,5 @@
 import 'errors.dart';
+import 'quantity.dart';
 
 /// A finite activity plan. Window boundaries are retained, not treated as success.
 sealed class Activity {
@@ -12,10 +13,17 @@ sealed class Activity {
     final id = identifier(json, 'id');
     switch (requiredString(json, 'type')) {
       case 'effort':
-        checkKeys(json, {'id', 'type', 'slot', 'role'});
+        checkKeys(json, {'id', 'type', 'slot', 'role', 'targets'});
         final role = json['role'] ?? 'work';
         if (role != 'work' && role != 'warmup') invalid('Unknown effort role.');
-        return Effort(id, identifier(json, 'slot'), role as String);
+        return json.containsKey('targets')
+            ? Effort.withTargets(
+                id,
+                identifier(json, 'slot'),
+                role as String,
+                metricsFromJson(json['targets']),
+              )
+            : Effort(id, identifier(json, 'slot'), role as String);
       case 'rest':
         checkKeys(json, {'id', 'type', 'durationSeconds'});
         return Rest(id, _positiveInt(json, 'durationSeconds'));
@@ -94,7 +102,23 @@ sealed class Activity {
 }
 
 final class Effort extends Activity {
-  const Effort(super.id, this.slotId, [this.role = 'work']);
+  const Effort(super.id, this.slotId, [this.role = 'work'])
+    : targets = const {};
+  Effort.withTargets(super.id, this.slotId, this.role, Metrics targets)
+    : targets = Map.unmodifiable(targets) {
+    if (targets.isEmpty) invalid('Effort target overrides cannot be empty.');
+  }
+  final Metrics targets;
+
+  /// Authored overrides retain metric ownership and the slot's dimensions.
+  Metrics resolveTargets(Metrics defaults) {
+    for (final entry in targets.entries) {
+      if (defaults[entry.key]?.dimension != entry.value.dimension)
+        invalid('Effort overrides must name compatible slot target metrics.');
+    }
+    return Map.unmodifiable({...defaults, ...targets});
+  }
+
   final String slotId;
   final String role;
   @override
@@ -103,6 +127,7 @@ final class Effort extends Activity {
     'id': id,
     'slot': slotId,
     'role': role,
+    if (targets.isNotEmpty) 'targets': metricsToJson(targets),
   };
 }
 

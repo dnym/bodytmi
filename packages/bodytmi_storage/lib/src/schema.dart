@@ -84,6 +84,8 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   22 => schemaV12, // Same tables; v22 adds advancement effort conditions.
   23 =>
     schemaV12, // Same tables; v23 adds performance-dependent increment bands.
+  24 =>
+    schemaV12, // Same tables; v24 adds authored per-effort target overrides.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',
