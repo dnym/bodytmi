@@ -14,6 +14,7 @@ final class ProgressionEvaluation {
     this.coordination,
     this.scaleResolutions,
     this.effortAssessment,
+    this.incrementBandAssessment,
   );
   factory ProgressionEvaluation.double(DoubleProgressionProposal p) =>
       ProgressionEvaluation._(
@@ -26,6 +27,7 @@ final class ProgressionEvaluation {
         null,
         null,
         const [],
+        null,
         null,
       );
   factory ProgressionEvaluation.threshold(
@@ -104,6 +106,7 @@ final class ProgressionEvaluation {
       first.coordination,
       List.unmodifiable([for (final p in proposals) p.scaleResolutions]),
       first.effortAssessment,
+      first.incrementBandAssessment,
     );
   }
   final String outcome, reason;
@@ -112,6 +115,7 @@ final class ProgressionEvaluation {
   final DoubleProgressionProposal? _double;
   final ThresholdAssessment? assessment;
   final EffortAssessment? effortAssessment;
+  final IncrementBandAssessment? incrementBandAssessment;
   final LeverSelection? coordination;
   final List<List<ScaleResolution>> scaleResolutions;
   Map<String, Object?> toJson() =>
@@ -125,6 +129,8 @@ final class ProgressionEvaluation {
         if (assessment != null) 'assessment': assessment!.toJson(),
         if (effortAssessment != null)
           'effortAssessment': effortAssessment!.toJson(),
+        if (incrementBandAssessment != null)
+          'incrementBandAssessment': incrementBandAssessment!.toJson(),
         if (coordination != null) 'coordination': coordination!.toJson(),
         if (scaleResolutions.any((r) => r.isNotEmpty))
           'scaleResolutions': [

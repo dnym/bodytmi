@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "band-session-001",
+  "slotId": "movement",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "reps",
+    "minimum": {
+      "value": "18",
+      "unit": "rep"
+    },
+    "threshold": {
+      "value": "6",
+      "unit": "rep"
+    },
+    "aggregation": {
+      "mode": "last"
+    },
+    "failureAggregation": {
+      "mode": "total"
+    },
+    "increments": {
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      }
+    },
+    "coordination": {
+      "mode": "weighted",
+      "order": [
+        "mass",
+        "mass"
+      ]
+    },
+    "deloadAfter": 1,
+    "deloadMetrics": [
+      "mass"
+    ],
+    "incrementBands": {
+      "aggregation": {
+        "mode": "last"
+      },
+      "bands": [
+        {
+          "id": "strong",
+          "threshold": {
+            "value": "12",
+            "unit": "rep"
+          },
+          "increments": {
+            "mass": {
+              "value": "2",
+              "unit": "kg"
+            }
+          }
+        },
+        {
+          "id": "stronger",
+          "threshold": {
+            "value": "16",
+            "unit": "rep"
+          },
+          "increments": {
+            "mass": {
+              "value": "3",
+              "unit": "kg"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

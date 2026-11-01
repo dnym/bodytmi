@@ -1,4 +1,5 @@
 import 'errors.dart';
+import 'increment_bands.dart';
 import 'set_observations.dart';
 import 'effort_condition.dart';
 import 'quantity.dart';
@@ -19,6 +20,7 @@ final class ProgressionProposal {
     this.cursor, {
     this.assessment,
     this.effortAssessment,
+    this.incrementBandAssessment,
     this.coordination,
     List<ScaleResolution> scaleResolutions = const [],
   }) : scaleResolutions = List.unmodifiable(scaleResolutions),
@@ -30,6 +32,7 @@ final class ProgressionProposal {
   final int cursor;
   final ThresholdAssessment? assessment;
   final EffortAssessment? effortAssessment;
+  final IncrementBandAssessment? incrementBandAssessment;
   final LeverSelection? coordination;
   final List<ScaleResolution> scaleResolutions;
   Map<String, Object?> toJson() => {
@@ -41,6 +44,8 @@ final class ProgressionProposal {
     if (assessment != null) 'assessment': assessment!.toJson(),
     if (effortAssessment != null)
       'effortAssessment': effortAssessment!.toJson(),
+    if (incrementBandAssessment != null)
+      'incrementBandAssessment': incrementBandAssessment!.toJson(),
     if (coordination != null) 'coordination': coordination!.toJson(),
     if (scaleResolutions.isNotEmpty)
       'scaleResolutions': [for (final r in scaleResolutions) r.toJson()],
@@ -74,6 +79,7 @@ final class ThresholdRule {
     this.performanceDirection,
     this.hasPerformancePolicy,
     this.advancementEffort,
+    this.incrementBands,
   );
 
   factory ThresholdRule.fromJson(Object? input) {
@@ -84,6 +90,7 @@ final class ThresholdRule {
       'metric',
       'performance',
       'advancementEffort',
+      'incrementBands',
       'minimum',
       'threshold',
       'increments',
@@ -259,6 +266,14 @@ final class ThresholdRule {
       json.containsKey('advancementEffort')
           ? AdvancementEffort.fromJson(json['advancementEffort'])
           : null,
+      json.containsKey('incrementBands')
+          ? IncrementBands.fromJson(
+              json['incrementBands'],
+              performanceLimit: min,
+              baseIncrements: increments,
+              direction: performanceDirection,
+            )
+          : null,
     );
   }
 
@@ -285,6 +300,7 @@ final class ThresholdRule {
   final String performanceDirection;
   final bool hasPerformancePolicy;
   final AdvancementEffort? advancementEffort;
+  final IncrementBands? incrementBands;
   Quantity get failureLimit => minimum;
   Quantity get advancementLimit => threshold;
   bool get hasScaleRanges =>
@@ -355,6 +371,11 @@ final class ThresholdRule {
       direction: performanceDirection,
       explicitPerformance: hasPerformancePolicy,
     );
+    final incrementBandAssessment = incrementBands?.assess(
+      assessment,
+      effortAssessment,
+      increments,
+    );
     List<ProgressionProposal> evaluate(String? selected) => [
       for (final current in currentSets)
         _evaluate(
@@ -364,6 +385,7 @@ final class ThresholdRule {
           cursor,
           selectedMetric: selected,
           effortAssessment: effortAssessment,
+          incrementBandAssessment: incrementBandAssessment,
         ),
     ];
     if (!hasSelectionPolicy) return List.unmodifiable(evaluate(null));
@@ -407,6 +429,7 @@ final class ThresholdRule {
               : null,
           coordination: selection,
           effortAssessment: effortAssessment,
+          incrementBandAssessment: incrementBandAssessment,
         ),
     ]);
   }
@@ -422,6 +445,7 @@ final class ThresholdRule {
     p.cursor,
     assessment: p.assessment,
     effortAssessment: p.effortAssessment,
+    incrementBandAssessment: p.incrementBandAssessment,
     coordination: selection,
     scaleResolutions: p.scaleResolutions,
   );
@@ -454,6 +478,7 @@ final class ThresholdRule {
     int cursor, {
     String? selectedMetric,
     EffortAssessment? effortAssessment,
+    IncrementBandAssessment? incrementBandAssessment,
   }) {
     final scaleResolutions = <ScaleResolution>[];
     ProgressionProposal proposal(
@@ -473,6 +498,7 @@ final class ThresholdRule {
           : null,
       scaleResolutions: scaleResolutions,
       effortAssessment: effortAssessment,
+      incrementBandAssessment: incrementBandAssessment,
     );
     if (assessment.unknown) {
       return proposal(
@@ -580,7 +606,7 @@ final class ThresholdRule {
     final next = <String, Quantity>{...current};
     for (final key in selected) {
       final prior = current[key]!;
-      final step = increments[key]!;
+      final step = (incrementBandAssessment?.increments ?? increments)[key]!;
       if (prior.dimension != step.dimension)
         invalid('Increment dimension mismatch.');
       final nextValue = decreases(key)
