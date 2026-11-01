@@ -25,3 +25,5 @@ export 'src/set_observations.dart';
 export 'src/effort_condition.dart';
 
 export 'src/increment_bands.dart';
+
+export 'src/objective.dart';

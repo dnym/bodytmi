@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "objectives": {
+    "mass": {
+      "mode": "minimum",
+      "minimum": {
+        "value": "50",
+        "unit": "kg"
+      }
+    },
+    "reps": {
+      "mode": "range",
+      "minimum": {
+        "value": "6",
+        "unit": "rep"
+      },
+      "maximum": {
+        "value": "12",
+        "unit": "rep"
+      },
+      "upperMeaning": "progressionThreshold"
+    },
+    "duration": {
+      "mode": "maximum",
+      "maximum": {
+        "value": "60",
+        "unit": "s"
+      },
+      "upperMeaning": "stoppingCue"
+    }
+  },
+  "actuals": {
+    "mass": {
+      "value": "120",
+      "unit": "lb"
+    },
+    "reps": {
+      "value": "12",
+      "unit": "rep"
+    },
+    "duration": {
+      "value": "45",
+      "unit": "s"
+    }
+  }
+}

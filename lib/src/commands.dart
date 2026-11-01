@@ -4,6 +4,8 @@ import 'analytics_options.dart';
 
 const commandNames = [
   'quantity normalize',
+  'objective evaluate',
+  'session assess-objectives',
   'scale validate',
   'scale resolve',
   'template validate',
@@ -41,6 +43,19 @@ final class Commands {
       case 'quantity normalize':
         keys({'quantity'});
         data = Quantity.fromJson(request['quantity']).toJson();
+      case 'objective evaluate':
+        keys({'objectives', 'actuals'});
+        data = const ObjectiveAssessment().evaluate(
+          request['objectives'],
+          metricsFromJson(request['actuals'] ?? <String, Object?>{}),
+        );
+      case 'session assess-objectives':
+        keys({'session', 'setId', 'objectives'});
+        data = const TrainingService().assessObjectives(
+          sessionFromJson(request['session']),
+          requiredString(request, 'setId'),
+          request['objectives'],
+        );
       case 'template validate':
         keys({'definition'});
         data = WorkoutDefinition.fromJson(request['definition']).toJson();

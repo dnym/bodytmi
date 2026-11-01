@@ -129,6 +129,34 @@ final class TrainingService {
     },
   };
 
+  /// Assess supplied criteria against current confirmed actuals without editing them.
+  Map<String, Object?> assessObjectives(
+    TrainingSession session,
+    String setId,
+    Object? objectives,
+  ) {
+    final set = session.set(setId);
+    return {
+      'source': {
+        'sessionId': session.id,
+        'sessionContentVersion': session.contentVersion,
+        'templateId': session.revision.definition.id,
+        'revision': session.revision.number,
+        'setId': set.id,
+        'setContentVersion': set.contentVersion,
+        'slotId': set.slotId,
+        'role': set.role,
+        'ordinal': set.ordinal,
+        'sessionStatus': session.status.name,
+        'setStatus': set.status.name,
+        'interrupted': set.observations?.interrupted ?? false,
+        if (set.maxEffortMetrics.isNotEmpty)
+          'authoredObjectives': maxEffortObjectivesToJson(set.maxEffortMetrics),
+      },
+      ...const ObjectiveAssessment().evaluate(objectives, set.actuals),
+    };
+  }
+
   TrainingSession complete(
     TrainingSession session,
     String setId,

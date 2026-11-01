@@ -34,6 +34,7 @@ const storedCommandNames = [
   'store start',
   'store show',
   'store summary',
+  'store assess-objectives',
   'store series',
   'store records',
   'family publish',
@@ -184,6 +185,7 @@ Future<Map<String, Object?>> executeStored(
       'bodyMassOverrides',
     },
     'store show' => {'id'},
+    'store assess-objectives' => {'id', 'setId', 'objectives'},
     'store summary' => {'id', 'includeWarmups', 'sumMetrics'},
     'store records' => {
       'context',
@@ -874,6 +876,14 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final f in all) f.toJson()];
+      case 'store assess-objectives':
+        data = await store.transaction(
+          () async => const TrainingService().assessObjectives(
+            await service.session(identifier(request, 'id')),
+            requiredString(request, 'setId'),
+            request['objectives'],
+          ),
+        );
       case 'store history':
         data = [for (final session in await store.sessions()) session.toJson()];
       case 'store complete':

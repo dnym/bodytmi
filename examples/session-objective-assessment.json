@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "strength-session-001",
+  "setId": "workout/heavy[0]/heavy-set",
+  "objectives": {
+    "mass": {
+      "mode": "minimum",
+      "minimum": {
+        "value": "50",
+        "unit": "kg"
+      }
+    },
+    "reps": {
+      "mode": "range",
+      "minimum": {
+        "value": "6",
+        "unit": "rep"
+      },
+      "maximum": {
+        "value": "12",
+        "unit": "rep"
+      },
+      "upperMeaning": "progressionThreshold"
+    }
+  }
+}
