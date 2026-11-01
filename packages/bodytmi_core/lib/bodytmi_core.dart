@@ -27,3 +27,5 @@ export 'src/effort_condition.dart';
 export 'src/increment_bands.dart';
 
 export 'src/objective.dart';
+
+export 'src/derived_targets.dart';

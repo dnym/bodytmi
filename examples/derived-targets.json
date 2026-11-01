@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "nodes": [
+    {"id": "working", "kind": "scale", "unit": "kg", "input": "trainingMax", "factor": "0.8"},
+    {"id": "warmup", "kind": "scale", "unit": "kg", "input": "working", "factor": "0.5"},
+    {"id": "trainingMax", "kind": "source", "unit": "kg", "sourceId": "squat_training_max", "sourceVersion": 3, "value": {"value": "100", "unit": "kg"}}
+  ]
+}
