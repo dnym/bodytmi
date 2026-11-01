@@ -1,7 +1,7 @@
 import 'errors.dart';
 import 'quantity.dart';
 
-/// Explicit numeric threshold selection. "Best" means the greatest value;
+/// Explicit numeric threshold selection. "Best" follows the performance direction;
 /// "total" means an exact sum of the named metric, never inferred load-volume.
 final class ResultAggregation {
   ResultAggregation._(this.mode, this.count);
@@ -37,13 +37,17 @@ final class ThresholdAssessment {
     this.advancement,
     this.failure,
     this.values,
-    this.belowMinimum,
+    this.failsFailureLimit,
     this.reachesThreshold,
     this.total,
     this.selected,
     this.unknown,
     this.failed,
     this.eligible,
+    this.direction,
+    this.explicitPerformance,
+    this.failureLimit,
+    this.advancementLimit,
   );
   factory ThresholdAssessment.evaluate({
     required ResultAggregation advancement,
@@ -52,7 +56,20 @@ final class ThresholdAssessment {
     required Quantity minimum,
     required Quantity threshold,
     required List<Metrics?> results,
+    String direction = 'higher',
+    bool explicitPerformance = false,
   }) {
+    if (!{'higher', 'lower'}.contains(direction))
+      invalid('Unknown performance direction.');
+    minimum.compareTo(
+      threshold,
+    ); // Always validate compatible bound dimensions.
+    final lower = direction == 'lower';
+    bool fails(Quantity value) =>
+        lower ? value.compareTo(minimum) > 0 : value.compareTo(minimum) < 0;
+    bool qualifies(Quantity value) => lower
+        ? value.compareTo(threshold) <= 0
+        : value.compareTo(threshold) >= 0;
     if (results.length > 10000) invalid('Too many aggregation results.');
     if (results.isNotEmpty &&
         advancement.count != null &&
@@ -72,12 +89,14 @@ final class ThresholdAssessment {
         reaches.add(null);
         continue;
       }
-      below.add(value.compareTo(minimum) < 0);
-      reaches.add(value.compareTo(threshold) >= 0);
+      below.add(fails(value));
+      reaches.add(qualifies(value));
       if (advancement.mode == 'total' || failure.mode == 'total') {
         total = total == null ? value : total.add(value);
       }
-      if (best == null || value.compareTo(best) > 0) best = value;
+      if (best == null ||
+          (lower ? value.compareTo(best) < 0 : value.compareTo(best) > 0))
+        best = value;
     }
     // Partial sums and partial bests must not certify an incomplete exposure.
     final selected = missing
@@ -90,9 +109,7 @@ final class ThresholdAssessment {
           };
     final failed =
         !missing &&
-        (failure.mode == 'total'
-            ? total!.compareTo(minimum) < 0
-            : below.any((v) => v == true));
+        (failure.mode == 'total' ? fails(total!) : below.any((v) => v == true));
     final count = reaches.where((v) => v == true).length;
     final eligible =
         !missing &&
@@ -101,7 +118,7 @@ final class ThresholdAssessment {
           'all' => count == values.length,
           'any' => count > 0,
           'kOfN' => count >= advancement.count!,
-          _ => selected!.compareTo(threshold) >= 0,
+          _ => qualifies(selected!),
         };
     return ThresholdAssessment._(
       advancement,
@@ -114,21 +131,42 @@ final class ThresholdAssessment {
       missing,
       failed,
       eligible,
+      direction,
+      explicitPerformance || lower,
+      minimum,
+      threshold,
     );
   }
   final ResultAggregation advancement, failure;
   final List<Quantity?> values;
-  final List<bool?> belowMinimum, reachesThreshold;
+  final List<bool?> failsFailureLimit, reachesThreshold;
+
+  /// Literal numeric comparison retained for existing core clients.
+  List<bool?> get belowMinimum => List.unmodifiable([
+    for (final v in values) v == null ? null : v.compareTo(failureLimit) < 0,
+  ]);
   final Quantity? total, selected;
   final bool unknown, failed, eligible;
+  final String direction;
+  final bool explicitPerformance;
+  final Quantity failureLimit, advancementLimit;
   Map<String, Object?> toJson() => {
     'advancement': advancement.toJson(),
     'failure': failure.toJson(),
+    if (explicitPerformance)
+      'performance': {
+        'direction': direction,
+        'failureLimit': failureLimit.toJson(),
+        'advancementLimit': advancementLimit.toJson(),
+      },
     'results': [
       for (var i = 0; i < values.length; i++)
         {
           'value': values[i]?.toJson(),
-          'belowMinimum': belowMinimum[i],
+          if (explicitPerformance)
+            'failsFailureLimit': failsFailureLimit[i]
+          else
+            'belowMinimum': failsFailureLimit[i],
           'reachesThreshold': reachesThreshold[i],
         },
     ],

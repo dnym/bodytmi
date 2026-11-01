@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "rule": {
+    "metric": "elapsed",
+    "performance": {
+      "direction": "lower",
+      "failureLimit": {
+        "value": "300",
+        "unit": "s"
+      },
+      "advancementLimit": {
+        "value": "240",
+        "unit": "s"
+      }
+    },
+    "increments": {
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      }
+    },
+    "resets": {
+      "elapsed": {
+        "value": "300",
+        "unit": "s"
+      },
+      "distance": {
+        "value": "1000",
+        "unit": "m"
+      }
+    },
+    "deloadAfter": 2,
+    "deloadMetrics": [
+      "mass"
+    ]
+  },
+  "current": {
+    "elapsed": {
+      "value": "300",
+      "unit": "s"
+    },
+    "mass": {
+      "value": "10",
+      "unit": "kg"
+    },
+    "distance": {
+      "value": "1000",
+      "unit": "m"
+    }
+  },
+  "results": [
+    {
+      "elapsed": {
+        "value": "240",
+        "unit": "s"
+      }
+    },
+    {
+      "elapsed": {
+        "value": "4",
+        "unit": "min"
+      }
+    }
+  ]
+}

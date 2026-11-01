@@ -114,7 +114,7 @@ void tempoTests() {
         equal((await TimingService(migrated).show('clock')).plan.tempo, null);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          19,
+          20,
         );
       } finally {
         await migrated.close();
@@ -417,13 +417,13 @@ void tempoTests() {
       t = await timing.resume(t.id, t.version, 'epoch', instant(1));
       await timing.advance(t.id, t.version, 'epoch', 4500, instant(1));
       final expected = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 19);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 20);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/19',
+        'bodytmi-logical-export/20',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "performance-session-001",
+  "slotId": "movement",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "elapsed",
+    "performance": {
+      "direction": "lower",
+      "failureLimit": {
+        "value": "300",
+        "unit": "s"
+      },
+      "advancementLimit": {
+        "value": "240",
+        "unit": "s"
+      }
+    },
+    "increments": {
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      }
+    },
+    "resets": {
+      "elapsed": {
+        "value": "300",
+        "unit": "s"
+      },
+      "distance": {
+        "value": "1000",
+        "unit": "m"
+      }
+    },
+    "deloadAfter": 2,
+    "deloadMetrics": [
+      "mass"
+    ]
+  }
+}

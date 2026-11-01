@@ -78,6 +78,8 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
     schemaV12, // Same tables; v18 adds frozen native numeric scale bindings.
   19 =>
     schemaV12, // Same tables; v19 adds compact fixed-increment scale ranges.
+  20 =>
+    schemaV12, // Same tables; v20 adds explicit performance predicate direction.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

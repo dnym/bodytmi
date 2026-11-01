@@ -65,6 +65,8 @@ final class ThresholdRule {
     this.priorityOrder,
     this.scales,
     this.hasScalePolicy,
+    this.performanceDirection,
+    this.hasPerformancePolicy,
   );
 
   factory ThresholdRule.fromJson(Object? input) {
@@ -73,6 +75,7 @@ final class ThresholdRule {
       'aggregation',
       'failureAggregation',
       'metric',
+      'performance',
       'minimum',
       'threshold',
       'increments',
@@ -86,8 +89,27 @@ final class ThresholdRule {
       'deloadPercent',
       'deloadMetrics',
     });
-    final min = Quantity.fromJson(json['minimum']);
-    final threshold = Quantity.fromJson(json['threshold']);
+    final performance = json.containsKey('performance')
+        ? jsonObject(json['performance'], 'performance predicate')
+        : null;
+    if (performance != null) {
+      checkKeys(performance, {'direction', 'failureLimit', 'advancementLimit'});
+      if (json.containsKey('minimum') || json.containsKey('threshold'))
+        invalid(
+          'Performance bounds cannot be mixed with legacy minimum/threshold.',
+        );
+    }
+    final performanceDirection = performance == null
+        ? 'higher'
+        : requiredString(performance, 'direction');
+    if (!{'higher', 'lower'}.contains(performanceDirection))
+      invalid('Performance direction must be higher or lower.');
+    final min = Quantity.fromJson(
+      performance == null ? json['minimum'] : performance['failureLimit'],
+    );
+    final threshold = Quantity.fromJson(
+      performance == null ? json['threshold'] : performance['advancementLimit'],
+    );
     final boundComparison = min.compareTo(threshold);
     final increments = metricsFromJson(json['increments']);
     if (increments.isEmpty) invalid('At least one increment is required.');
@@ -150,8 +172,12 @@ final class ThresholdRule {
       failure: true,
     );
     if ((aggregation.mode == 'total') == (failureAggregation.mode == 'total') &&
-        boundComparison > 0)
-      invalid('minimum exceeds threshold in the same aggregation scope.');
+        (performanceDirection == 'higher'
+            ? boundComparison > 0
+            : boundComparison < 0))
+      invalid(
+        'Failure and advancement limits contradict performance direction in the same aggregation scope.',
+      );
     if ((aggregation.mode == 'total' || failureAggregation.mode == 'total') &&
         !{
           Dimension.count,
@@ -220,6 +246,8 @@ final class ThresholdRule {
       priorityOrder,
       Map.unmodifiable(scales),
       json.containsKey('scales'),
+      performanceDirection,
+      performance != null,
     );
   }
 
@@ -243,6 +271,10 @@ final class ThresholdRule {
   final List<String>? priorityOrder;
   final Map<String, ScaleBinding> scales;
   final bool hasScalePolicy;
+  final String performanceDirection;
+  final bool hasPerformancePolicy;
+  Quantity get failureLimit => minimum;
+  Quantity get advancementLimit => threshold;
   bool get hasScaleRanges =>
       scales.values.any((binding) => binding.scale.range != null);
   bool get hasSelectionPolicy => chosenMetric != null || priorityOrder != null;
@@ -290,6 +322,8 @@ final class ThresholdRule {
       minimum: minimum,
       threshold: threshold,
       results: results,
+      direction: performanceDirection,
+      explicitPerformance: hasPerformancePolicy,
     );
     List<ProgressionProposal> evaluate(String? selected) => [
       for (final current in currentSets)
@@ -336,7 +370,9 @@ final class ThresholdRule {
           current,
           0,
           cursor,
-          assessment: hasExplicitAggregation ? assessment : null,
+          assessment: hasExplicitAggregation || hasPerformancePolicy
+              ? assessment
+              : null,
           coordination: selection,
         ),
     ]);
@@ -397,7 +433,9 @@ final class ThresholdRule {
       values,
       failures,
       nextCursor,
-      assessment: hasExplicitAggregation ? assessment : null,
+      assessment: hasExplicitAggregation || hasPerformancePolicy
+          ? assessment
+          : null,
       scaleResolutions: scaleResolutions,
     );
     if (assessment.unknown) {
@@ -476,7 +514,9 @@ final class ThresholdRule {
     if (!assessment.eligible) {
       return proposal(
         'hold',
-        hasExplicitAggregation
+        hasPerformancePolicy
+            ? 'Failure gate passed but advancement predicate is not met.'
+            : hasExplicitAggregation
             ? 'Failure gate passed but advancement aggregation is not met.'
             : 'Minimums met but not every upper threshold reached.',
         current,
@@ -561,7 +601,9 @@ final class ThresholdRule {
       );
     return proposal(
       'advance',
-      hasExplicitAggregation
+      hasPerformancePolicy
+          ? 'Configured advancement predicate reached (inclusive).'
+          : hasExplicitAggregation
           ? 'Configured advancement aggregation reached (inclusive).'
           : 'Every required upper threshold reached (inclusive).',
       next,

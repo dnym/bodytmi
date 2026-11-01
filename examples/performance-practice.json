@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "performance-practice",
+    "name": "Explicit performance predicate practice",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom",
+        "implementation": "custom",
+        "targets": {
+          "elapsed": {
+            "value": "300",
+            "unit": "s"
+          },
+          "mass": {
+            "value": "10",
+            "unit": "kg"
+          },
+          "distance": {
+            "value": "1000",
+            "unit": "m"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "warmup",
+          "type": "effort",
+          "slot": "movement",
+          "role": "warmup"
+        },
+        {
+          "id": "work",
+          "type": "repeat",
+          "count": 2,
+          "child": {
+            "id": "set",
+            "type": "effort",
+            "slot": "movement"
+          }
+        }
+      ]
+    }
+  }
+}
