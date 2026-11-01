@@ -13,6 +13,7 @@ const commandNames = [
   'session show',
   'session summary',
   'history series',
+  'history records',
   'family validate',
   'session mass-status',
   'session effective-load',
@@ -107,6 +108,42 @@ final class Commands {
           sessionFromJson(request['session']),
           includeWarmups: _bool(request, 'includeWarmups'),
           sumMetrics: analyticsSums(request),
+        );
+      case 'history records':
+        keys({
+          'sessions',
+          'runBySession',
+          'context',
+          'metric',
+          'direction',
+          'atActuals',
+          'from',
+          'until',
+          'includeWarmups',
+          'family',
+        });
+        data = const ContextualRecords().evaluate(
+          [for (final s in jsonList(request, 'sessions')) sessionFromJson(s)],
+          metric: identifier(request, 'metric'),
+          direction: requiredString(request, 'direction'),
+          atActuals: metricsFromJson(
+            request['atActuals'] ?? <String, Object?>{},
+          ),
+          runBySession: analyticsBindings(request),
+          context: jsonObject(
+            request['context'] ?? <String, Object?>{},
+            'context',
+          ),
+          from: request.containsKey('from')
+              ? parseInstant(request['from'], 'from')
+              : null,
+          until: request.containsKey('until')
+              ? parseInstant(request['until'], 'until')
+              : null,
+          includeWarmups: _bool(request, 'includeWarmups'),
+          family: request.containsKey('family')
+              ? FamilyRevision.fromJson(request['family'])
+              : null,
         );
       case 'history series':
         keys({

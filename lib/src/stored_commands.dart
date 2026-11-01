@@ -35,6 +35,7 @@ const storedCommandNames = [
   'store show',
   'store summary',
   'store series',
+  'store records',
   'family publish',
   'family show',
   'family list',
@@ -183,6 +184,17 @@ Future<Map<String, Object?>> executeStored(
     },
     'store show' => {'id'},
     'store summary' => {'id', 'includeWarmups', 'sumMetrics'},
+    'store records' => {
+      'context',
+      'metric',
+      'direction',
+      'atActuals',
+      'from',
+      'until',
+      'includeWarmups',
+      'familyId',
+      'familyRevision',
+    },
     'store series' => {
       'context',
       'metric',
@@ -763,6 +775,43 @@ Future<Map<String, Object?>> executeStored(
           await service.session(identifier(request, 'id')),
           includeWarmups: flag('includeWarmups'),
           sumMetrics: analyticsSums(request),
+        );
+      case 'store records':
+        if (request.containsKey('familyRevision') &&
+            !request.containsKey('familyId'))
+          invalid('familyRevision needs familyId.');
+        data = await store.transaction(
+          () async => const ContextualRecords().evaluate(
+            await store.sessions(),
+            metric: identifier(request, 'metric'),
+            direction: requiredString(request, 'direction'),
+            atActuals: metricsFromJson(
+              request['atActuals'] ?? <String, Object?>{},
+            ),
+            runBySession: {
+              for (final b in await store.sessionPrograms())
+                b.sessionId: b.runId,
+            },
+            context: jsonObject(
+              request['context'] ?? <String, Object?>{},
+              'context',
+            ),
+            from: request.containsKey('from')
+                ? parseInstant(request['from'], 'from')
+                : null,
+            until: request.containsKey('until')
+                ? parseInstant(request['until'], 'until')
+                : null,
+            includeWarmups: flag('includeWarmups'),
+            family: request.containsKey('familyId')
+                ? await FamilyService(store).revision(
+                    identifier(request, 'familyId'),
+                    request.containsKey('familyRevision')
+                        ? integer('familyRevision')
+                        : null,
+                  )
+                : null,
+          ),
         );
       case 'store series':
         if (request.containsKey('familyRevision') &&

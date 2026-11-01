@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "metric": "mass",
+  "direction": "higher",
+  "atActuals": {
+    "reps": {
+      "value": "8",
+      "unit": "rep"
+    }
+  },
+  "context": {
+    "slotId": "barbell"
+  }
+}
