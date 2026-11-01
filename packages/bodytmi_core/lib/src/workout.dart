@@ -35,7 +35,6 @@ final class ExerciseSlot {
       'timing',
     });
     final targets = metricsFromJson(json['targets']);
-    if (targets.isEmpty) invalid('A slot needs at least one target metric.');
     final prefill = json['prefill'] ?? <Object?>[];
     if (prefill is! List<Object?> ||
         prefill.any((key) => key is! String || !targets.containsKey(key))) {
@@ -119,11 +118,20 @@ final class WorkoutDefinition {
       if (!ids.add(node.id)) invalid('Duplicate activity ID: ${node.id}.');
       if (node is Effort && !slotIds.contains(node.slotId))
         invalid('Unknown slot: ${node.slotId}.');
-      if (node is Effort && node.targets.isNotEmpty) {
+      if (node is Effort) {
         final slot = slots.firstWhere((s) => s.id == node.slotId);
         final resolved = node.resolveTargets(slot.targets);
+        if (resolved.isEmpty && node.maxEffortMetrics.isEmpty)
+          invalid('Each effort needs targets or explicit objectives.');
         slot.timing?.resolve(resolved);
       }
+    }
+    for (final slot in slots) {
+      if (slot.targets.isEmpty &&
+          !plan.nodes.whereType<Effort>().any(
+            (e) => e.slotId == slot.id && e.maxEffortMetrics.isNotEmpty,
+          ))
+        invalid('A slot needs targets or an explicit effort objective.');
     }
     var count = 0;
     var efforts = 0;
@@ -148,18 +156,17 @@ final class WorkoutDefinition {
   bool get hasEffortTargets =>
       plan.nodes.whereType<Effort>().any((e) => e.targets.isNotEmpty);
 
+  bool get hasMaxEffortObjectives =>
+      plan.nodes.whereType<Effort>().any((e) => e.maxEffortMetrics.isNotEmpty);
+
   /// Published working targets in the same slot/role ordinal order as sessions.
   List<Metrics> workingTargets(String slotId) => List.unmodifiable([
     for (final occurrence in plan.occurrences())
       if (occurrence.activity case Effort(
         :final role,
-        :final targets,
         slotId: final id,
       ) when id == slotId && role == 'work')
-        Map<String, Quantity>.unmodifiable({
-          ...slot(slotId).targets,
-          ...targets,
-        }),
+        (occurrence.activity as Effort).resolveTargets(slot(slotId).targets),
   ]);
   Map<String, Object?> toJson() => {
     'id': id,
@@ -231,13 +238,23 @@ final class TrainingSet {
     this.contentVersion = 1,
     this.timing,
     SetObservations? observations,
-  }) : observations = observations == null || observations.isEmpty
+    Set<String> maxEffortMetrics = const {},
+  }) : maxEffortMetrics = Set.unmodifiable(maxEffortMetrics),
+       observations = observations == null || observations.isEmpty
            ? null
            : observations,
        suggested = Map.unmodifiable(suggested),
        sources = Map.unmodifiable(sources),
        actuals = Map.unmodifiable(actuals) {
     this.observations?.validateStatus(status.name);
+    for (final metric in this.maxEffortMetrics) {
+      identifier({'metric': metric}, 'metric');
+      if (this.suggested.containsKey(metric))
+        invalid('Max-effort metrics cannot have suggested targets.');
+      if (status == SetStatus.completed &&
+          this.actuals[metric]?.dimension != Dimension.count)
+        invalid('Max-effort repetitions require an explicit count actual.');
+    }
   }
   final String id;
   final String slotId;
@@ -249,6 +266,7 @@ final class TrainingSet {
   final Metrics actuals;
   final TimedResult? timing;
   final SetObservations? observations;
+  final Set<String> maxEffortMetrics;
   bool get eligibleForPerformance =>
       status == SetStatus.completed && !(observations?.interrupted ?? false);
   final int contentVersion;
@@ -268,6 +286,12 @@ final class TrainingSet {
       if (actual[target.key]!.dimension != target.value.dimension)
         invalid('Dimension mismatch for ${target.key}.');
     }
+    for (final metric in maxEffortMetrics) {
+      if (observations[metric]?.dimension != Dimension.count)
+        invalid(
+          'Max-effort repetitions require an explicitly supplied count: $metric.',
+        );
+    }
     return TrainingSet(
       id: id,
       slotId: slotId,
@@ -284,6 +308,7 @@ final class TrainingSet {
               : timing!.edited()),
       status: SetStatus.completed,
       observations: this.observations,
+      maxEffortMetrics: maxEffortMetrics,
       actuals: actual,
       contentVersion: contentVersion + 1,
     );
@@ -301,6 +326,7 @@ final class TrainingSet {
       sources: sources,
       status: SetStatus.skipped,
       observations: observations?.notesOnly,
+      maxEffortMetrics: maxEffortMetrics,
       contentVersion: contentVersion + 1,
     );
   }
@@ -320,6 +346,7 @@ final class TrainingSet {
       actuals: actuals,
       timing: timing,
       observations: replacement,
+      maxEffortMetrics: maxEffortMetrics,
       contentVersion: contentVersion + 1,
     );
   }
@@ -335,6 +362,8 @@ final class TrainingSet {
     'actuals': metricsToJson(actuals),
     if (timing != null) 'timing': timing!.toJson(),
     if (observations != null) 'observations': observations!.toJson(),
+    if (maxEffortMetrics.isNotEmpty)
+      'objectives': maxEffortObjectivesToJson(maxEffortMetrics),
     'contentVersion': contentVersion,
   };
 }

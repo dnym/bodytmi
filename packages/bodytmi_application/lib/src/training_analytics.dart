@@ -19,13 +19,13 @@ final class TrainingAnalytics {
     for (final set in sets) {
       for (final metric in metrics) {
         final actual = set.actuals[metric], target = set.suggested[metric];
-        final quantity = actual ?? target;
-        if (quantity == null) continue;
-        final key = '$metric/${quantity.unit.name}';
-        final total = totals.putIfAbsent(
-          key,
-          () => _MetricTotal(metric, quantity.unit),
-        );
+        final unit =
+            actual?.unit ??
+            target?.unit ??
+            (set.maxEffortMetrics.contains(metric) ? Unit.rep : null);
+        if (unit == null) continue;
+        final key = '$metric/${unit.name}';
+        final total = totals.putIfAbsent(key, () => _MetricTotal(metric, unit));
         switch (set.status) {
           case SetStatus.completed:
             if (actual == null) {
@@ -44,7 +44,9 @@ final class TrainingAnalytics {
     final keys = totals.keys.toList()..sort();
     return {
       'policy': {
-        'id': 'bodytmi-session-summary/1',
+        'id': sets.any((s) => s.maxEffortMetrics.isNotEmpty)
+            ? 'bodytmi-session-summary/2'
+            : 'bodytmi-session-summary/1',
         'includeWarmups': includeWarmups,
         'sumMetrics': metrics,
       },
@@ -90,12 +92,21 @@ final class TrainingAnalytics {
               for (final metric in ({
                 ...set.suggested.keys,
                 ...set.actuals.keys,
+                ...set.maxEffortMetrics,
               }.toList()..sort()))
                 metric: {
                   'target': set.suggested[metric]?.toJson(),
+                  if (set.maxEffortMetrics.contains(metric))
+                    'objective': {'mode': 'maxEffort', 'unit': 'rep'},
                   'actual': set.actuals[metric]?.toJson(),
                   'relation': set.status == SetStatus.completed
-                      ? _relation(set.suggested[metric], set.actuals[metric])
+                      ? set.maxEffortMetrics.contains(metric) &&
+                                set.actuals[metric] != null
+                            ? 'observed'
+                            : _relation(
+                                set.suggested[metric],
+                                set.actuals[metric],
+                              )
                       : 'unobserved',
                 },
             },
@@ -135,6 +146,7 @@ final class TrainingAnalytics {
         return date == 0 ? a.id.compareTo(b.id) : date;
       });
     var points = 0;
+    var includesMaxEffort = false;
     final members = family?.family.exercises.toSet();
     for (final session in ordered) {
       if ((!includeActive && session.status != SessionStatus.finalized) ||
@@ -166,6 +178,8 @@ final class TrainingAnalytics {
           continue;
         for (final entry in set.actuals.entries) {
           if (metric != null && entry.key != metric) continue;
+          if (set.maxEffortMetrics.contains(entry.key))
+            includesMaxEffort = true;
           if (++points > 10000)
             invalid(
               'Series exceeds 10000 points; narrow its date/context/metric filters.',
@@ -200,7 +214,11 @@ final class TrainingAnalytics {
               'observations': set.observations!.toJson(),
             'actual': entry.value.toJson(),
             'target': set.suggested[entry.key]?.toJson(),
-            'relation': _relation(set.suggested[entry.key], entry.value),
+            if (set.maxEffortMetrics.contains(entry.key))
+              'objective': {'mode': 'maxEffort', 'unit': 'rep'},
+            'relation': set.maxEffortMetrics.contains(entry.key)
+                ? 'observed'
+                : _relation(set.suggested[entry.key], entry.value),
           });
         }
       }
@@ -209,8 +227,12 @@ final class TrainingAnalytics {
     return {
       'policy': {
         'id': family == null
-            ? 'bodytmi-history-series/1'
-            : 'bodytmi-family-series/1',
+            ? (includesMaxEffort
+                  ? 'bodytmi-history-series/2'
+                  : 'bodytmi-history-series/1')
+            : (includesMaxEffort
+                  ? 'bodytmi-family-series/2'
+                  : 'bodytmi-family-series/1'),
         if (family != null) 'family': family.toJson(),
         'includeWarmups': includeWarmups,
         'includeActive': includeActive,

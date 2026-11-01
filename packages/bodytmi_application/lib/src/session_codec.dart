@@ -66,6 +66,7 @@ TrainingSession sessionFromJson(Object? input) {
       'actuals',
       'timing',
       'observations',
+      'objectives',
       'contentVersion',
     });
     final expected = baseline.sets[i];
@@ -74,6 +75,12 @@ TrainingSession sessionFromJson(Object? input) {
         row['role'] != expected.role ||
         row['ordinal'] != expected.ordinal)
       invalid('Set identity does not match the activity plan.');
+    final objectives = row.containsKey('objectives')
+        ? maxEffortObjectivesFromJson(row['objectives'])
+        : <String>{};
+    if (objectives.length != expected.maxEffortMetrics.length ||
+        !objectives.containsAll(expected.maxEffortMetrics))
+      invalid('Set objectives do not match the pinned activity.');
     final suggested = metricsFromJson(row['suggested']);
     if (suggested.keys
             .toSet()
@@ -127,6 +134,7 @@ TrainingSession sessionFromJson(Object? input) {
         ordinal: expected.ordinal,
         suggested: suggested,
         sources: sources,
+        maxEffortMetrics: objectives,
         actuals: actuals,
         timing: row['timing'] == null
             ? null

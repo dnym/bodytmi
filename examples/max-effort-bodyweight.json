@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "bodyweight-max-effort",
+    "name": "Targetless repetition practice",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom-bodyweight",
+        "implementation": "bodyweight",
+        "targets": {}
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "effort",
+      "slot": "movement",
+      "objectives": {
+        "reps": {
+          "mode": "maxEffort",
+          "unit": "rep"
+        }
+      }
+    }
+  }
+}

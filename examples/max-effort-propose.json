@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "max-effort-session-001",
+  "slotId": "movement",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "reps",
+    "minimum": {
+      "value": "18",
+      "unit": "rep"
+    },
+    "threshold": {
+      "value": "6",
+      "unit": "rep"
+    },
+    "aggregation": {
+      "mode": "last"
+    },
+    "failureAggregation": {
+      "mode": "total"
+    },
+    "increments": {
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      }
+    },
+    "deloadAfter": 1,
+    "deloadMetrics": [
+      "mass"
+    ],
+    "incrementBands": {
+      "aggregation": {
+        "mode": "last"
+      },
+      "bands": [
+        {
+          "id": "bonus",
+          "threshold": {
+            "value": "12",
+            "unit": "rep"
+          },
+          "increments": {
+            "mass": {
+              "value": "2",
+              "unit": "kg"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

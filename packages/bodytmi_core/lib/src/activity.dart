@@ -1,6 +1,27 @@
 import 'errors.dart';
 import 'quantity.dart';
 
+Set<String> maxEffortObjectivesFromJson(Object? input) {
+  final json = jsonObject(input, 'objectives');
+  if (json.isEmpty || json.length > 100)
+    invalid('Objectives need 1 to 100 metrics.');
+  final metrics = <String>{};
+  for (final entry in json.entries) {
+    identifier({'metric': entry.key}, 'metric');
+    final objective = jsonObject(entry.value, 'objective');
+    checkKeys(objective, {'mode', 'unit'});
+    if (objective['mode'] != 'maxEffort' || objective['unit'] != 'rep')
+      invalid('This objective requires mode maxEffort and unit rep.');
+    metrics.add(entry.key);
+  }
+  return Set.unmodifiable(metrics);
+}
+
+Map<String, Object?> maxEffortObjectivesToJson(Set<String> metrics) => {
+  for (final key in (metrics.toList()..sort()))
+    key: {'mode': 'maxEffort', 'unit': 'rep'},
+};
+
 /// A finite activity plan. Window boundaries are retained, not treated as success.
 sealed class Activity {
   const Activity(this.id);
@@ -13,9 +34,30 @@ sealed class Activity {
     final id = identifier(json, 'id');
     switch (requiredString(json, 'type')) {
       case 'effort':
-        checkKeys(json, {'id', 'type', 'slot', 'role', 'targets'});
+        checkKeys(json, {
+          'id',
+          'type',
+          'slot',
+          'role',
+          'targets',
+          'objectives',
+        });
         final role = json['role'] ?? 'work';
         if (role != 'work' && role != 'warmup') invalid('Unknown effort role.');
+        if (json.containsKey('objectives')) {
+          if (json.containsKey('targets') &&
+              metricsFromJson(json['targets']).isEmpty)
+            invalid('Effort target overrides cannot be empty.');
+          return Effort.withObjectives(
+            id,
+            identifier(json, 'slot'),
+            role as String,
+            maxEffortObjectivesFromJson(json['objectives']),
+            targets: json.containsKey('targets')
+                ? metricsFromJson(json['targets'])
+                : const {},
+          );
+        }
         return json.containsKey('targets')
             ? Effort.withTargets(
                 id,
@@ -103,12 +145,31 @@ sealed class Activity {
 
 final class Effort extends Activity {
   const Effort(super.id, this.slotId, [this.role = 'work'])
-    : targets = const {};
+    : targets = const {},
+      maxEffortMetrics = const {};
   Effort.withTargets(super.id, this.slotId, this.role, Metrics targets)
-    : targets = Map.unmodifiable(targets) {
+    : targets = Map.unmodifiable(targets),
+      maxEffortMetrics = const {} {
     if (targets.isEmpty) invalid('Effort target overrides cannot be empty.');
   }
+  Effort.withObjectives(
+    super.id,
+    this.slotId,
+    this.role,
+    Set<String> metrics, {
+    Metrics targets = const {},
+  }) : targets = Map.unmodifiable(targets),
+       maxEffortMetrics = Set.unmodifiable(metrics) {
+    if (metrics.isEmpty || metrics.length > 100)
+      invalid('Objectives need 1 to 100 metrics.');
+    for (final key in metrics) identifier({'metric': key}, 'metric');
+    if (targets.keys.any(metrics.contains))
+      invalid(
+        'A max-effort metric cannot also have an effort target override.',
+      );
+  }
   final Metrics targets;
+  final Set<String> maxEffortMetrics;
 
   /// Authored overrides retain metric ownership and the slot's dimensions.
   Metrics resolveTargets(Metrics defaults) {
@@ -116,7 +177,14 @@ final class Effort extends Activity {
       if (defaults[entry.key]?.dimension != entry.value.dimension)
         invalid('Effort overrides must name compatible slot target metrics.');
     }
-    return Map.unmodifiable({...defaults, ...targets});
+    for (final key in maxEffortMetrics) {
+      if (defaults[key] != null && defaults[key]!.dimension != Dimension.count)
+        invalid('Max-effort repetitions require a compatible count metric.');
+    }
+    return Map.unmodifiable({
+      for (final entry in {...defaults, ...targets}.entries)
+        if (!maxEffortMetrics.contains(entry.key)) entry.key: entry.value,
+    });
   }
 
   final String slotId;
@@ -128,6 +196,8 @@ final class Effort extends Activity {
     'slot': slotId,
     'role': role,
     if (targets.isNotEmpty) 'targets': metricsToJson(targets),
+    if (maxEffortMetrics.isNotEmpty)
+      'objectives': maxEffortObjectivesToJson(maxEffortMetrics),
   };
 }
 

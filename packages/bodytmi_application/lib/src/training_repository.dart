@@ -176,12 +176,20 @@ final class StoredTrainingService {
       if (vector.length != count ||
           previousAuthored[set.slotId]!.length != count)
         _conflict();
+      final oldObjectives = applied.sets[set.ordinal].maxEffortMetrics;
+      if (oldObjectives.length != set.maxEffortMetrics.length ||
+          !oldObjectives.containsAll(set.maxEffortMetrics))
+        _conflict();
       final slot = prescription.definition.slot(set.slotId);
       for (final metric in applied.controlledMetrics) {
         if (set.suggested[metric]?.dimension !=
             vector[set.ordinal][metric]!.dimension)
           _conflict();
-        if (slot.targets[metric]!.compareTo(applied.slot.targets[metric]!) != 0)
+        final target = slot.targets[metric],
+            priorTarget = applied.slot.targets[metric];
+        if (target == null ||
+            priorTarget == null ||
+            target.compareTo(priorTarget) != 0)
           _conflict();
         if (authored[set.slotId]![set.ordinal][metric]!.compareTo(
               previousAuthored[set.slotId]![set.ordinal][metric]!,
@@ -201,6 +209,7 @@ final class StoredTrainingService {
           role: set.role,
           ordinal: set.ordinal,
           suggested: suggested,
+          maxEffortMetrics: set.maxEffortMetrics,
           sources: {
             for (final e in set.sources.entries)
               if (!applied.controlledMetrics.contains(e.key)) e.key: e.value,

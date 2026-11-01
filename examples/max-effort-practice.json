@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "max-effort-practice",
+    "name": "Explicit max-effort repetitions",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "custom-row",
+        "implementation": "barbell",
+        "equipment": "practice-bar",
+        "targets": {
+          "mass": {
+            "value": "10",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "6",
+            "unit": "rep"
+          },
+          "duration": {
+            "value": "10",
+            "unit": "s"
+          }
+        },
+        "prefill": [
+          "reps"
+        ]
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "fixed",
+          "type": "repeat",
+          "count": 2,
+          "child": {
+            "id": "set",
+            "type": "effort",
+            "slot": "movement"
+          }
+        },
+        {
+          "id": "last",
+          "type": "effort",
+          "slot": "movement",
+          "objectives": {
+            "reps": {
+              "mode": "maxEffort",
+              "unit": "rep"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

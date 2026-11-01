@@ -116,7 +116,13 @@ final class ContextualRecords {
     final keys = groups.keys.toList()..sort();
     return {
       'policy': {
-        'id': 'bodytmi-contextual-records/2',
+        'id':
+            requiredString(
+              jsonObject(series['policy'], 'policy'),
+              'id',
+            ).endsWith('/2')
+            ? 'bodytmi-contextual-records/3'
+            : 'bodytmi-contextual-records/2',
         'metric': metric,
         'direction': direction,
         'comparison': 'single-set-all-other-observed-metrics-fixed',

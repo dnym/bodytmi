@@ -63,7 +63,9 @@ final class TrainingService {
       final sources = <String, HistorySource>{};
       if (effort.role != 'warmup') {
         for (final metric in slot.prefillMetrics) {
-          if (effort.targets.containsKey(metric)) continue;
+          if (effort.targets.containsKey(metric) ||
+              effort.maxEffortMetrics.contains(metric))
+            continue;
           search:
           for (final past in compatibleHistory) {
             final oldSlots = past.revision.definition.slots.where(
@@ -76,6 +78,7 @@ final class TrainingService {
                   set.role == effort.role &&
                   set.ordinal == ordinal &&
                   set.eligibleForPerformance &&
+                  !set.maxEffortMetrics.contains(metric) &&
                   value != null &&
                   value.dimension == suggested[metric]!.dimension) {
                 suggested[metric] = value;
@@ -98,6 +101,7 @@ final class TrainingService {
           ordinal: ordinal,
           suggested: suggested,
           sources: sources,
+          maxEffortMetrics: effort.maxEffortMetrics,
         ),
       );
     }
