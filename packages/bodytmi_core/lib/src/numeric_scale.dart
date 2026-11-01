@@ -15,13 +15,63 @@ final class ScaleTick {
   };
 }
 
+/// Compact author declaration of a finite native selector. Generated identities
+/// are positional and deterministic, not inferred from a mutable inventory.
+final class FixedScaleRange {
+  FixedScaleRange._(this.start, this.step, this.count, this.idPrefix);
+  factory FixedScaleRange.fromJson(Object? input, Unit unit) {
+    final j = jsonObject(input, 'fixed scale range');
+    checkKeys(j, {'start', 'step', 'count', 'idPrefix'});
+    final start = requiredString(j, 'start');
+    final step = requiredString(j, 'step');
+    Quantity(start, unit.name);
+    if (Quantity(step, unit.name).value.compareTo(Decimal.zero) <= 0)
+      invalid('A fixed scale step must be positive.');
+    final count = j['count'];
+    if (count is! int || count < 1 || count > 1000)
+      invalid('A fixed scale range needs 1 to 1000 positions.');
+    final prefix = identifier({
+      'id': j.containsKey('idPrefix') ? j['idPrefix'] : 'tick',
+    }, 'id');
+    if (prefix.length > 96)
+      invalid('Fixed scale identity prefix exceeds 96 characters.');
+    return FixedScaleRange._(start, step, count, prefix);
+  }
+  final String start, step, idPrefix;
+  final int count;
+  Map<String, Object?> toJson() => {
+    'start': start,
+    'step': step,
+    'count': count,
+    'idPrefix': idPrefix,
+  };
+}
+
 final class NumericScale {
-  NumericScale._(this.id, this.unit, this.ticks);
+  NumericScale._(this.id, this.unit, this.ticks, this.range);
   factory NumericScale.fromJson(Object? input) {
     final j = jsonObject(input, 'numeric scale');
-    checkKeys(j, {'id', 'unit', 'ticks'});
+    checkKeys(j, {'id', 'unit', 'ticks', 'range'});
+    if (j.containsKey('ticks') == j.containsKey('range'))
+      invalid('A numeric scale needs exactly one of ticks or range.');
     final unit = Unit.parse(requiredString(j, 'unit'));
-    final inputTicks = jsonList(j, 'ticks');
+    final range = j.containsKey('range')
+        ? FixedScaleRange.fromJson(j['range'], unit)
+        : null;
+    final List<Object?> inputTicks;
+    if (range == null) {
+      inputTicks = jsonList(j, 'ticks');
+    } else {
+      final start = Decimal.parse(range.start),
+          step = Decimal.parse(range.step);
+      inputTicks = [
+        for (var i = 0; i < range.count; i++)
+          {
+            'id': '${range.idPrefix}-$i',
+            'value': (start + step * Decimal.parse('$i')).toString(),
+          },
+      ];
+    }
     if (inputTicks.isEmpty || inputTicks.length > 1000)
       invalid('A numeric scale needs 1 to 1000 ticks.');
     final ticks = <ScaleTick>[];
@@ -53,15 +103,22 @@ final class NumericScale {
         ),
       );
     }
-    return NumericScale._(identifier(j, 'id'), unit, List.unmodifiable(ticks));
+    return NumericScale._(
+      identifier(j, 'id'),
+      unit,
+      List.unmodifiable(ticks),
+      range,
+    );
   }
   final String id;
   final Unit unit;
   final List<ScaleTick> ticks;
+  final FixedScaleRange? range;
   Map<String, Object?> toJson() => {
     'id': id,
     'unit': unit.name,
-    'ticks': [for (final tick in ticks) tick.toJson()],
+    if (range == null) 'ticks': [for (final tick in ticks) tick.toJson()],
+    if (range != null) 'range': range!.toJson(),
   };
 
   static String roundingPolicy(Object? input) {

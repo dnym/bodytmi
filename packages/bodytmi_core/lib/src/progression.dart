@@ -243,6 +243,8 @@ final class ThresholdRule {
   final List<String>? priorityOrder;
   final Map<String, ScaleBinding> scales;
   final bool hasScalePolicy;
+  bool get hasScaleRanges =>
+      scales.values.any((binding) => binding.scale.range != null);
   bool get hasSelectionPolicy => chosenMetric != null || priorityOrder != null;
   bool decreases(String metric) => directions[metric] == 'decrease';
 

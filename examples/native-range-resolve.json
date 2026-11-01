@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "scale": {
+    "id": "fixed-stack",
+    "unit": "lb",
+    "range": {
+      "start": "5",
+      "step": "2.5",
+      "count": 7,
+      "idPrefix": "position"
+    }
+  },
+  "target": {
+    "value": "10.1",
+    "unit": "lb"
+  },
+  "rounding": "nearest",
+  "beyond": {
+    "value": "10",
+    "unit": "lb"
+  },
+  "direction": "increase"
+}

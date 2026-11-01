@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/18';
+const _format = 'bodytmi-logical-export/19';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -79,6 +79,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/15',
       'bodytmi-logical-export/16',
       'bodytmi-logical-export/17',
+      'bodytmi-logical-export/18',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -87,7 +88,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final scaleData = input['format'] == _format;
+    final rangeData = input['format'] == _format;
+    final scaleData =
+        rangeData || input['format'] == 'bodytmi-logical-export/18';
     final selectionData =
         scaleData || input['format'] == 'bodytmi-logical-export/17';
     final numericPolicyData =
@@ -148,6 +151,13 @@ final class LogicalArchiveFiles {
     if (familyData && !inputData.containsKey('families'))
       invalid('Logical v12 requires family revisions.');
     final archive = TrainingArchive.fromJson(inputData);
+    if (!rangeData &&
+        archive.progressions.any(
+          (d) =>
+              d.ruleType == 'threshold' &&
+              ThresholdRule.fromJson(d.rule).hasScaleRanges,
+        ))
+      invalid('Fixed-increment scale ranges require logical v19.');
     if (!scaleData &&
         archive.progressions.any(
           (d) =>
@@ -237,7 +247,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 18');
+          db.execute('PRAGMA user_version = 19');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

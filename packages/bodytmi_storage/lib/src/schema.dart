@@ -76,6 +76,8 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   17 => schemaV12, // Same tables; v17 adds chosen/priority vector coordination.
   18 =>
     schemaV12, // Same tables; v18 adds frozen native numeric scale bindings.
+  19 =>
+    schemaV12, // Same tables; v19 adds compact fixed-increment scale ranges.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

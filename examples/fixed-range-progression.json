@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "rule": {
+    "metric": "reps",
+    "minimum": {
+      "value": "5",
+      "unit": "rep"
+    },
+    "threshold": {
+      "value": "8",
+      "unit": "rep"
+    },
+    "increments": {
+      "mass": {
+        "value": "0.1",
+        "unit": "lb"
+      },
+      "assistance": {
+        "value": "1",
+        "unit": "kg"
+      }
+    },
+    "directions": {
+      "assistance": "decrease"
+    },
+    "minimums": {
+      "assistance": {
+        "value": "0",
+        "unit": "kg"
+      }
+    },
+    "resets": {
+      "reps": {
+        "value": "5",
+        "unit": "rep"
+      }
+    },
+    "coordination": {
+      "mode": "priority",
+      "order": [
+        "mass",
+        "assistance"
+      ]
+    },
+    "scales": {
+      "mass": {
+        "scale": {
+          "id": "fixed-stack",
+          "unit": "lb",
+          "range": {
+            "start": "5",
+            "step": "2.5",
+            "count": 7,
+            "idPrefix": "position"
+          }
+        },
+        "rounding": "nearest",
+        "deloadRounding": "atMost"
+      }
+    },
+    "deloadAfter": 2,
+    "deloadMetrics": [
+      "mass",
+      "assistance"
+    ]
+  },
+  "current": {
+    "reps": {
+      "value": "8",
+      "unit": "rep"
+    },
+    "mass": {
+      "value": "10",
+      "unit": "lb"
+    },
+    "assistance": {
+      "value": "10",
+      "unit": "kg"
+    }
+  },
+  "results": [
+    {
+      "reps": {
+        "value": "8",
+        "unit": "rep"
+      }
+    },
+    {
+      "reps": {
+        "value": "8",
+        "unit": "rep"
+      }
+    }
+  ]
+}

@@ -158,6 +158,7 @@ Future<ProgressionDecision> _propose(
 ).propose(id, 'movement', rule, ruleType: 'threshold');
 
 void numericScaleTests() {
+  fixedRangeTests();
   test(
     'native scales retain one tick identity with exact canonical quantity and independent approximate printed labels',
     () {
@@ -663,7 +664,7 @@ void numericScaleTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          18,
+          19,
         );
       } finally {
         await upgraded.close();
@@ -889,6 +890,458 @@ void numericScaleTests() {
               )).proposal.coordination!.selectedMetric,
               'assistance',
             );
+          }
+          await recovered.archive();
+        } finally {
+          await recovered.close();
+        }
+      }
+    }),
+  );
+}
+
+Map<String, Object?> _range({
+  String start = '5',
+  String step = '2.5',
+  int count = 7,
+}) => {
+  'id': 'fixed-stack',
+  'unit': 'lb',
+  'range': {
+    'start': start,
+    'step': step,
+    'count': count,
+    'idPrefix': 'position',
+  },
+};
+
+void fixedRangeTests() {
+  test(
+    'fixed native ranges preserve their compact declaration and generate exact deterministic positions without conversion drift',
+    () {
+      final s = NumericScale.fromJson(_range());
+      equal(s.ticks.length, 7);
+      equal(s.ticks.first.id, 'position-0');
+      equal(s.ticks.last.id, 'position-6');
+      equal(s.ticks[2].quantity.enteredValue, '10');
+      equal(s.ticks[2].quantity.enteredUnit, Unit.lb);
+      equal(s.ticks[1].quantity.value.toString(), '3.401942775');
+      equal(s.ticks.last.quantity.enteredValue, '20');
+      equal(s.ticks[1].labels.length, 0);
+      equal(canonicalJson(s.toJson()), canonicalJson(_range()));
+      equal(
+        canonicalJson(NumericScale.fromJson(s.toJson()).toJson()),
+        canonicalJson(s.toJson()),
+      );
+      final zero = NumericScale.fromJson({
+        'id': 'rep-selector',
+        'unit': 'rep',
+        'range': {'start': '0', 'step': '1', 'count': 3},
+      });
+      equal(zero.ticks.first.id, 'tick-0');
+      equal(zero.ticks.last.quantity.value.toString(), '2');
+      equal(
+        (zero.toJson()['range'] as Map<String, Object?>)['idPrefix'],
+        'tick',
+      );
+    },
+  );
+  test(
+    'fixed ranges reject ambiguous representations, invalid arithmetic/counts/identities and unrepresentable generated quantities',
+    () {
+      for (final range in <Object?>[
+        null,
+        {'start': 5, 'step': '1', 'count': 2},
+        {'start': '-1', 'step': '1', 'count': 2},
+        {'start': '5', 'step': '0', 'count': 2},
+        {'start': '5', 'step': '-1', 'count': 2},
+        {'start': '5', 'step': '1', 'count': 0},
+        {'start': '5', 'step': '1', 'count': 1001},
+        {'start': '5', 'step': '1', 'count': 1.5},
+        {'start': '5', 'step': '1', 'count': '2'},
+        {'start': '5', 'step': '1', 'count': 2, 'idPrefix': null},
+        {'start': '5', 'step': '1', 'count': 2, 'idPrefix': 'bad/path'},
+        {'start': '5', 'step': '1', 'count': 2, 'idPrefix': 'a' * 97},
+        {'start': '5', 'step': '1', 'count': 2, 'end': '6'},
+      ]) {
+        rejects(() => NumericScale.fromJson({..._range(), 'range': range}));
+      }
+      rejects(() => NumericScale.fromJson({..._range(), 'ticks': <Object?>[]}));
+      rejects(() => NumericScale.fromJson({'id': 'none', 'unit': 'lb'}));
+      rejects(
+        () => NumericScale.fromJson({..._range(step: '0.5'), 'unit': 'rep'}),
+      );
+      rejects(
+        () =>
+            NumericScale.fromJson(_range(start: '9' * 80, step: '1', count: 2)),
+      );
+      final single = NumericScale.fromJson(_range(count: 1));
+      equal(single.ticks.length, 1);
+      final limit = NumericScale.fromJson(
+        _range(start: '0', step: '0.1', count: 1000),
+      );
+      equal(limit.ticks.last.quantity.enteredValue, '99.9');
+    },
+  );
+  test(
+    'generated fixed positions resolve identically to an equivalent explicit tick declaration for every rounding and direction',
+    () {
+      final fixed = NumericScale.fromJson(_range());
+      final explicit = NumericScale.fromJson({
+        'id': fixed.id,
+        'unit': fixed.unit.name,
+        'ticks': [for (final t in fixed.ticks) t.toJson()],
+      });
+      for (var i = 0; i <= 50; i++) {
+        final target = Quantity('${i ~/ 2}.${i.isEven ? 0 : 5}', 'lb');
+        for (final rounding in ['nearest', 'atMost', 'atLeast']) {
+          for (final (beyond, direction) in <(String?, String?)>[
+            (null, null),
+            ('10', 'increase'),
+            ('10', 'decrease'),
+          ]) {
+            final b = beyond == null ? null : Quantity(beyond, 'lb');
+            equal(
+              canonicalJson(
+                fixed
+                    .resolve(target, rounding, beyond: b, direction: direction)
+                    .toJson(),
+              ),
+              canonicalJson(
+                explicit
+                    .resolve(target, rounding, beyond: b, direction: direction)
+                    .toJson(),
+              ),
+            );
+          }
+        }
+      }
+      final p = _eval(_rule(scale: _range()));
+      equal(p.scaleResolutions.single.tick!.id, 'position-3');
+      equal(p.nextValues['mass']!.enteredValue, '12.5');
+      final deload = _eval(
+        _rule(scale: _range()),
+        current: p.nextValues,
+        reps: '1',
+        failures: 1,
+      );
+      equal(deload.outcome, 'deload');
+      equal(deload.nextValues['mass']!.enteredValue, '10');
+    },
+  );
+  test(
+    'stored fixed-range advances, scale exhaustion and declines retain generated identities and independent run targets',
+    () => _withStore((store, dir) async {
+      final programs = ProgramService(store);
+      await programs.publish(
+        ProgramDefinition.fromJson({
+          'id': 'shared',
+          'name': 'Separate fixed settings',
+          'plan': {
+            'id': 'day',
+            'type': 'day',
+            'templateId': 'scaled',
+            'revision': 1,
+          },
+        }),
+        0,
+      );
+      for (final run in ['strength', 'cardio'])
+        await programs.create(run, 'shared', 1, instant(1));
+      final rule = _rule(scale: _range());
+      final service = StoredProgressionService(store);
+      for (var day = 1; day <= 4; day++) {
+        final s = await _finish(store, 's$day', day, run: 'strength');
+        final p = await _propose(store, s.id, rule);
+        equal(
+          p.proposal.scaleResolutions.first.single.tick!.id,
+          'position-${day + 2}',
+        );
+        await service.accept(s.id, 'movement', p.version, _at(day));
+      }
+      final cardio = await _finish(store, 'cardio', 5, run: 'cardio');
+      final c = await _propose(store, cardio.id, _rule());
+      final cd = await service.accept(cardio.id, 'movement', c.version, _at(5));
+      equal(cd.nextSets.first['mass']!.enteredValue, '15');
+      final exhausted = await _finish(store, 'exhausted', 6, run: 'strength');
+      equal(exhausted.sets.first.suggested['mass']!.enteredValue, '10');
+      equal(exhausted.sets.last.suggested['mass']!.enteredValue, '20');
+      final p = await _propose(store, exhausted.id, rule);
+      equal(p.proposal.coordination!.selectedMetric, 'assistance');
+      final d = await service.decline(
+        exhausted.id,
+        'movement',
+        p.version,
+        _at(6),
+      );
+      equal(d.nextSets.first['assistance']!.value.toString(), '10');
+      await StoredTrainingService(store).edit(
+        exhausted.id,
+        exhausted.contentVersion,
+        (s) => const TrainingService().complete(s, s.sets.last.id, {
+          'reps': Quantity('1', 'rep'),
+        }, acceptSuggested: true),
+      );
+      equal((await _propose(store, exhausted.id, rule)).status, 'declined');
+      final next = await _finish(store, 'next', 7, run: 'strength');
+      final q = await _propose(store, next.id, rule);
+      final applied = await service.accept(
+        next.id,
+        'movement',
+        q.version,
+        _at(7),
+      );
+      equal(applied.nextSets.first['assistance']!.value.toString(), '9');
+      final forged = copyJson(applied.toJson());
+      final binding =
+          ((forged['rule'] as Map<String, Object?>)['scales']
+                  as Map<String, Object?>)['mass']
+              as Map<String, Object?>;
+      (((binding['scale'] as Map<String, Object?>)['range'])
+              as Map<String, Object?>)['step'] =
+          '5';
+      rejects(() => ProgressionDecision.fromJson(forged));
+      await store.archive();
+    }),
+  );
+  test(
+    'v18 explicit-tick receipts migrate unchanged while v19 portability preserves pending fixed-range provenance and rejects legacy labels',
+    () => _withStore((store, dir) async {
+      final s = await _finish(store, 'one', 1);
+      await _propose(store, s.id, _rule());
+      final before = canonicalJson((await store.archive()).toJson());
+      await store.backup('$dir/old');
+      await store.close();
+      final old = sqlite3.open('$dir/old/database.sqlite');
+      old.userVersion = 18;
+      old.close();
+      equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 18);
+      final upgraded = await TrainingStore.open('$dir/old/database.sqlite');
+      try {
+        equal(canonicalJson((await upgraded.archive()).toJson()), before);
+        equal(
+          (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
+          19,
+        );
+      } finally {
+        await upgraded.close();
+      }
+      final active = await TrainingStore.open('$dir/db.sqlite');
+      try {
+        Future<void> relabel(String file) async {
+          final j = jsonObject(
+            jsonDecode(await File(file).readAsString()),
+            'logical',
+          );
+          j['format'] = 'bodytmi-logical-export/18';
+          j.remove('sha256');
+          j['sha256'] = sha256
+              .convert(utf8.encode(canonicalJson(j)))
+              .toString();
+          await File(file).writeAsString(jsonEncode(j));
+        }
+
+        await LogicalArchiveFiles.export(
+          await active.archive(),
+          '$dir/legacy.json',
+        );
+        await relabel('$dir/legacy.json');
+        final legacy = await LogicalArchiveFiles.prepare('$dir/legacy.json');
+        try {
+          equal(canonicalJson(legacy.archive.toJson()), before);
+        } finally {
+          await legacy.close();
+        }
+        final p = await _propose(active, s.id, _rule(scale: _range()));
+        final expected = canonicalJson((await active.archive()).toJson());
+        await active.backup('$dir/native');
+        await LogicalArchiveFiles.export(
+          await active.archive(),
+          '$dir/logical.json',
+        );
+        await active.close();
+        for (final kind in ['native', 'logical']) {
+          final prepared = kind == 'native'
+              ? await NativeBackup.prepare('$dir/native')
+              : (await LogicalArchiveFiles.prepare('$dir/logical.json')).backup;
+          final target = await TrainingStore.open('$dir/$kind.sqlite');
+          try {
+            await target.restore(
+              prepared,
+              recoveryDestination: '$dir/$kind-recovery',
+              confirm: true,
+            );
+          } finally {
+            await target.close();
+            await prepared.close();
+          }
+          final restored = await TrainingStore.open('$dir/$kind.sqlite');
+          try {
+            equal(canonicalJson((await restored.archive()).toJson()), expected);
+            final service = StoredProgressionService(restored);
+            final d = await service.accept(s.id, 'movement', p.version, _at(1));
+            equal(
+              d.proposal.scaleResolutions.last.single.tick!.id,
+              'position-3',
+            );
+            equal(d.nextSets.first['mass']!.enteredValue, '12.5');
+            equal(
+              canonicalJson(
+                (await service.accept(
+                  s.id,
+                  'movement',
+                  p.version,
+                  _at(1),
+                )).toJson(),
+              ),
+              canonicalJson(d.toJson()),
+            );
+          } finally {
+            await restored.close();
+          }
+        }
+        final forged = sqlite3.open('$dir/native/database.sqlite');
+        forged.userVersion = 18;
+        forged.close();
+        rejects(
+          () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
+        );
+        await relabel('$dir/logical.json');
+        await _fails(LogicalArchiveFiles.prepare('$dir/logical.json'));
+      } finally {
+        await active.close();
+      }
+    }),
+  );
+  test(
+    'native CLI round-trips compact ranges and rejects malformed ranges without internal errors',
+    () => _withStore((store, dir) async {
+      final s = await _finish(store, 'one', 1);
+      await store.close();
+      Future<Map<String, Object?>> cmd(
+        String action,
+        Map<String, Object?> request,
+      ) async {
+        final r = await invoke(
+          action.split(' '),
+          jsonEncode({'schemaVersion': 1, ...request}),
+        );
+        equal(r.code, 0);
+        equal(r.error, '');
+        return jsonObject(
+          jsonObject(jsonDecode(r.output), 'response')['data'],
+          'data',
+        );
+      }
+
+      final scale = await cmd('scale validate', {'scale': _range()});
+      equal(canonicalJson(scale), canonicalJson(_range()));
+      check(!scale.containsKey('ticks'));
+      final resolved = await cmd('scale resolve', {
+        'scale': _range(),
+        'target': {'value': '10.1', 'unit': 'lb'},
+        'rounding': 'nearest',
+        'beyond': {'value': '10', 'unit': 'lb'},
+        'direction': 'increase',
+      });
+      equal(
+        jsonObject(
+          jsonObject(resolved['resolution'], 'resolution')['tick'],
+          'tick',
+        )['id'],
+        'position-3',
+      );
+      final request = {
+        'database': '$dir/db.sqlite',
+        'sessionId': s.id,
+        'slotId': 'movement',
+      };
+      final stored = await cmd('progression propose', {
+        ...request,
+        'ruleType': 'threshold',
+        'rule': _rule(scale: _range()),
+      });
+      final proof =
+          (jsonObject(stored['proposal'], 'proposal')['scaleResolutions']
+                      as List<Object?>)
+                  .first
+              as Map<String, Object?>;
+      final tick =
+          (((proof['resolutions'] as List<Object?>).first
+                  as Map<String, Object?>)['tick'])
+              as Map<String, Object?>;
+      equal(tick['id'], 'position-3');
+      final bad = await invoke(
+        ['scale', 'validate'],
+        jsonEncode({
+          'schemaVersion': 1,
+          'scale': {
+            ..._range(),
+            'range': {'start': '5', 'step': '0', 'count': 3},
+          },
+        }),
+      );
+      check(bad.code != 0);
+      equal(bad.output, '');
+      check(!bad.error.contains('internal'));
+    }),
+  );
+  test(
+    'process death around fixed-range acceptance preserves deterministic position identity and exactly-once application',
+    () => _withStore((store, dir) async {
+      await _finish(store, 'one', 1);
+      await _propose(store, 'one', _rule(scale: _range()));
+      await store.close();
+      final binary = await compileNative(
+        'test/helpers/store_owner.dart',
+        '$dir/owner',
+      );
+      for (final mode in ['accept-rollback', 'accept-commit']) {
+        final child = await Process.start(binary, [
+          '$dir/db.sqlite',
+          mode,
+          'one',
+          'movement',
+          _at(1).toIso8601String(),
+        ]);
+        final errors = child.stderr.transform(utf8.decoder).join();
+        try {
+          equal(
+            await child.stdout
+                .transform(utf8.decoder)
+                .transform(const LineSplitter())
+                .first
+                .timeout(const Duration(seconds: 15)),
+            'ready',
+          );
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+          equal(await errors, '');
+        } finally {
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+        }
+        final recovered = await TrainingStore.open('$dir/db.sqlite');
+        try {
+          final service = StoredProgressionService(recovered);
+          final p = await service.decision('one', 'movement');
+          equal(p.status, mode.endsWith('commit') ? 'accepted' : 'pending');
+          equal(
+            p.proposal.scaleResolutions.first.single.tick!.id,
+            'position-3',
+          );
+          if (p.acceptedAt != null) {
+            equal(
+              (await service.accept(
+                'one',
+                'movement',
+                p.version,
+                _at(1),
+              )).sequence,
+              1,
+            );
+            final next = await _finish(recovered, 'two', 2);
+            equal(next.sets.last.suggested['mass']!.enteredValue, '12.5');
           }
           await recovered.archive();
         } finally {

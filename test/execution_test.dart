@@ -215,7 +215,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          18,
+          19,
         );
       } finally {
         await migrated.close();
@@ -1233,13 +1233,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 18);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 19);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/18',
+        'bodytmi-logical-export/19',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
