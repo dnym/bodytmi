@@ -1,3 +1,4 @@
+import 'derived_target_snapshot_test.dart';
 import 'derived_targets_test.dart';
 import 'published_objective_test.dart';
 import 'objective_assessment_test.dart';
@@ -38,6 +39,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  derivedTargetSnapshotTests();
   derivedTargetsTests();
   publishedObjectiveTests();
   objectiveAssessmentTests();

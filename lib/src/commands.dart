@@ -5,6 +5,8 @@ import 'analytics_options.dart';
 const commandNames = [
   'quantity normalize',
   'target resolve',
+  'target capture',
+  'target status',
   'objective evaluate',
   'session assess-objectives',
   'scale validate',
@@ -47,6 +49,18 @@ final class Commands {
       case 'target resolve':
         keys({'nodes'});
         data = const DerivedTargets().resolve(request['nodes']);
+      case 'target capture':
+        keys({'graph', 'bindings'});
+        data = const DerivedTargetSnapshot().capture(
+          request['graph'],
+          request['bindings'],
+        );
+      case 'target status':
+        keys({'snapshot', 'bindings'});
+        data = const DerivedTargetSnapshot().status(
+          request['snapshot'],
+          request['bindings'],
+        );
       case 'objective evaluate':
         keys({'objectives', 'actuals'});
         data = const ObjectiveAssessment().evaluate(
