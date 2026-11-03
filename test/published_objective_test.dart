@@ -832,6 +832,7 @@ void publishedObjectiveTests() {
       await File('$dir/old.json').writeAsString(jsonEncode(raw));
       await _fails(LogicalArchiveFiles.prepare('$dir/old.json'));
       final db = sqlite3.open('$dir/native/database.sqlite');
+      db.execute('DROP TABLE derived_target_graphs');
       db.userVersion = 25;
       db.close();
       rejects(
@@ -869,6 +870,7 @@ void publishedObjectiveTests() {
         await store.backup('${dir.path}/old');
         await store.close();
         final db = sqlite3.open('${dir.path}/old/database.sqlite');
+        db.execute('DROP TABLE derived_target_graphs');
         db.userVersion = 25;
         db.close();
         equal(
@@ -879,7 +881,7 @@ void publishedObjectiveTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          26,
+          27,
         );
       } finally {
         await store.close();

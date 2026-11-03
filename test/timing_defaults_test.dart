@@ -342,6 +342,7 @@ void timingDefaultsTests() {
       final before = canonicalJson((await store.archive()).toJson());
       await store.backup('$dir/old');
       final old = sqlite3.open('$dir/old/database.sqlite');
+      old.execute('DROP TABLE derived_target_graphs');
       old.userVersion = 12;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 12);
@@ -397,14 +398,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          26,
+          27,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/26',
+          'bodytmi-logical-export/27',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -442,6 +443,7 @@ void timingDefaultsTests() {
         await active.close();
       }
       final forged = sqlite3.open('$dir/native/database.sqlite');
+      forged.execute('DROP TABLE derived_target_graphs');
       forged.userVersion = 12;
       forged.close();
       rejects(

@@ -487,6 +487,7 @@ void aggregationTests() {
       await store.backup('$dir/old');
       await store.close();
       final db = sqlite3.open('$dir/old/database.sqlite');
+      db.execute('DROP TABLE derived_target_graphs');
       db.userVersion = 14;
       db.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 14);
@@ -495,7 +496,7 @@ void aggregationTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          26,
+          27,
         );
       } finally {
         await upgraded.close();
@@ -563,6 +564,7 @@ void aggregationTests() {
           }
         }
         final forged = sqlite3.open('$dir/native/database.sqlite');
+        forged.execute('DROP TABLE derived_target_graphs');
         forged.userVersion = 14;
         forged.close();
         rejects(

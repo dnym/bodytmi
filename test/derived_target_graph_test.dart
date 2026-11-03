@@ -1,0 +1,749 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:bodytmi_application/bodytmi_application.dart';
+import 'package:bodytmi_core/bodytmi_core.dart';
+import 'package:bodytmi_storage/bodytmi_storage.dart';
+import 'package:crypto/crypto.dart';
+import 'package:test/test.dart' show expectLater, throwsA, isA;
+
+import 'fixtures.dart';
+import 'support.dart';
+
+Map<String, Object?> _graph({
+  String id = 'bench-percentages',
+  Map<String, Object?>? bindings,
+  List<Object?>? nodes,
+}) => {
+  'id': id,
+  'name': 'Bench percentage ladder',
+  'nodes':
+      nodes ??
+      [
+        {
+          'id': 'working',
+          'kind': 'scale',
+          'unit': 'kg',
+          'input': 'max',
+          'factor': '0.8',
+        },
+        {'id': 'max', 'kind': 'source', 'unit': 'kg', 'sourceId': 'bench_max'},
+        {
+          'id': 'mass',
+          'kind': 'source',
+          'unit': 'kg',
+          'sourceId': 'training_mass',
+        },
+      ],
+  'bindings':
+      bindings ??
+      {
+        'bench_max': {
+          'kind': 'history',
+          'metric': 'mass',
+          'direction': 'highest',
+          'templateId': 'upper-a',
+          'slotId': 'bench-heavy',
+        },
+        'training_mass': {'kind': 'bodyMass', 'context': 'clothed-training'},
+      },
+};
+
+void derivedTargetGraphTests() {
+  test(
+    'derived target graphs normalize nodes and require an explicit policy per source',
+    () {
+      final graph = DerivedTargetGraph.fromJson(_graph());
+      equal(graph.id, 'bench-percentages');
+      equal(graph.name, 'Bench percentage ladder');
+      equal(graph.sourceIds.join(','), 'bench_max,training_mass');
+      equal(graph.nodes.map((n) => n['id']).join(','), 'mass,max,working');
+      final round = DerivedTargetGraph.fromJson(graph.toJson());
+      jsonEqual(round.toJson(), graph.toJson());
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            nodes: [
+              {
+                'id': 'a',
+                'kind': 'scale',
+                'unit': 'kg',
+                'input': 'b',
+                'factor': '1',
+              },
+              {
+                'id': 'b',
+                'kind': 'scale',
+                'unit': 'kg',
+                'input': 'a',
+                'factor': '1',
+              },
+            ],
+            bindings: {
+              'x': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+              'y': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            nodes: [
+              {
+                'id': 'x',
+                'kind': 'scale',
+                'unit': 'kg',
+                'input': 'missing',
+                'factor': '1',
+              },
+            ],
+            bindings: {
+              'x': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            bindings: {
+              'bench_max': {
+                'kind': 'manual',
+                'version': 0,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+              'training_mass': {'kind': 'bodyMass', 'context': 'x'},
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            bindings: {
+              'bench_max': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'rep'},
+              },
+              'training_mass': {'kind': 'bodyMass', 'context': 'x'},
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            nodes: [
+              {'id': 'x', 'kind': 'source', 'unit': 'rep', 'sourceId': 'x'},
+            ],
+            bindings: {
+              'x': {'kind': 'bodyMass', 'context': 'x'},
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            bindings: {
+              'bench_max': {
+                'kind': 'bodyMass',
+                'context': 'x',
+                'dailyMode': 'smooth',
+              },
+              'training_mass': {'kind': 'bodyMass', 'context': 'x'},
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            bindings: {
+              'bench_max': {
+                'kind': 'history',
+                'metric': 'mass',
+                'direction': 'greatest',
+              },
+              'training_mass': {'kind': 'bodyMass', 'context': 'x'},
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            bindings: {
+              'bench_max': {'kind': 'history', 'metric': 'mass', 'ordinal': -1},
+              'training_mass': {'kind': 'bodyMass', 'context': 'x'},
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            bindings: {
+              'bench_max': {
+                'kind': 'history',
+                'metric': 'mass',
+                'from': 'yesterday',
+              },
+              'training_mass': {'kind': 'bodyMass', 'context': 'x'},
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            bindings: {
+              'bench_max': {'kind': 'mystery'},
+              'training_mass': {'kind': 'bodyMass', 'context': 'x'},
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            bindings: {
+              'bench_max': {'kind': 'bodyMass', 'context': 'x'},
+              'training_mass': {'kind': 'bodyMass', 'context': 'x'},
+              'extra': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+            },
+          ),
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraph.fromJson(
+          _graph(
+            nodes: [
+              for (var i = 0; i < 257; i++)
+                {
+                  'id': 'n$i',
+                  'kind': 'source',
+                  'unit': 'kg',
+                  'sourceId': 's$i',
+                },
+            ],
+            bindings: {
+              for (var i = 0; i < 257; i++)
+                's$i': {
+                  'kind': 'manual',
+                  'version': 1,
+                  'value': {'value': '1', 'unit': 'kg'},
+                },
+            },
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'derived target graph revisions number immutably per graph identity',
+    () {
+      final first = DerivedTargetGraphRevision.publish(
+        DerivedTargetGraph.fromJson(_graph()),
+      );
+      final second = DerivedTargetGraphRevision.publish(
+        DerivedTargetGraph.fromJson(_graph()),
+        previous: first,
+      );
+      equal(first.number, 1);
+      equal(second.number, 2);
+      rejects(
+        () => DerivedTargetGraphRevision.publish(
+          DerivedTargetGraph.fromJson(_graph(id: 'other')),
+          previous: first,
+        ),
+      );
+      rejects(
+        () => DerivedTargetGraphRevision.fromJson({
+          'schemaVersion': 1,
+          'revision': 0,
+          'graph': _graph(),
+        }),
+      );
+      rejects(() => validateDerivedTargetGraphRevisions([first, first]));
+      rejects(() => validateDerivedTargetGraphRevisions([second]));
+    },
+  );
+
+  Future<void> _stored(Future<void> Function(TrainingStore) action) async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-graph-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    try {
+      final rev = revision();
+      await store.insertRevision(rev);
+      var first = start(id: 's-one', day: 1, from: rev);
+      for (final set in first.sets) {
+        first = const TrainingService().complete(first, set.id, {
+          'mass': Quantity('70', 'kg'),
+          'reps': Quantity('8', 'rep'),
+        });
+      }
+      first = first.finish(instant(1).add(const Duration(hours: 1)));
+      await store.insertSession(first);
+      await store.recordFinalization(first.id);
+      var second = start(id: 's-two', day: 3, from: rev);
+      for (final set in second.sets) {
+        second = const TrainingService().complete(second, set.id, {
+          'mass': Quantity('75', 'kg'),
+          'reps': Quantity('6', 'rep'),
+        });
+      }
+      for (final set in second.sets) {
+        if (set.slotId == 'bench-heavy') {
+          second = const TrainingService().annotate(
+            second,
+            set.id,
+            SetObservations.fromJson({
+              'terminationReason': 'interrupted',
+              'notes': 'Stopped early.',
+            }),
+          );
+        }
+      }
+      second = second.finish(instant(3).add(const Duration(hours: 1)));
+      await store.insertSession(second);
+      await store.recordFinalization(second.id);
+      await StoredBodyMassService(store).save({
+        'id': 'mass-a',
+        'context': 'clothed-training',
+        'observedAt': '2026-10-01T08:00:00+00:00',
+        'mass': {'value': '80', 'unit': 'kg'},
+      }, 0);
+      await StoredBodyMassService(store).save({
+        'id': 'mass-b',
+        'context': 'health',
+        'observedAt': '2026-10-02T08:00:00+00:00',
+        'mass': {'value': '79', 'unit': 'kg'},
+      }, 0);
+      await action(store);
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  }
+
+  Map<String, Object?> _nodeValue(Map<String, Object?> resolved, String node) {
+    final nodes =
+        (jsonObject(resolved['resolution'], 'resolution')['nodes']!
+                as List<Object?>)
+            .map((e) => jsonObject(e, 'node'))
+            .toList();
+    return jsonObject(
+      jsonObject(nodes.singleWhere((n) => n['id'] == node)['value'], 'value'),
+      'value',
+    );
+  }
+
+  test(
+    'stored graph publication checks expected revisions and resolves stored sources with provenance',
+    () => _stored((store) async {
+      final service = DerivedTargetGraphService(store);
+      final published = await service.publish(
+        DerivedTargetGraph.fromJson(_graph()),
+        0,
+      );
+      equal(published.number, 1);
+      await expectLater(
+        service.publish(DerivedTargetGraph.fromJson(_graph()), 0),
+        throwsA(isA<BodyTmiException>()),
+      );
+      equal((await service.revision('bench-percentages')).number, 1);
+      equal(
+        (await service.revision('bench-percentages', 1)).graph.id,
+        'bench-percentages',
+      );
+      await expectLater(
+        service.revision('missing'),
+        throwsA(isA<BodyTmiException>()),
+      );
+      equal(
+        (await service.list())
+            .map((g) => '${g.graph.id}:${g.number}')
+            .join(','),
+        'bench-percentages:1',
+      );
+      final resolved = await service.resolve(
+        'bench-percentages',
+        null,
+        DateTime.utc(2026, 10, 30),
+      );
+      equal(resolved['policy'], 'bodytmi-derived-target-graph-resolution/1');
+      final bindings = jsonObject(resolved['bindings'], 'bindings');
+      final history = jsonObject(bindings['bench_max'], 'history');
+      equal(history['status'], 'resolved');
+      // Session content version: start (1) + four completions + finish.
+      equal(history['sourceVersion'], 6);
+      // The interrupted 75 kg set is excluded; the 70 kg confirmed set wins.
+      equal(jsonObject(history['value'], 'value')['value'], '70');
+      equal(
+        jsonObject(history['provenance'], 'provenance')['session'],
+        's-one',
+      );
+      final mass = jsonObject(bindings['training_mass'], 'mass');
+      // The command asOf covers the stored 2026-10-01 observation.
+      equal(mass['status'], 'resolved');
+      equal(jsonObject(mass['value'], 'value')['value'], '80');
+      equal(
+        jsonObject(mass['provenance'], 'provenance')['context'],
+        'clothed-training',
+      );
+    }),
+  );
+
+  test(
+    'graph resolution derives downstream scales from resolved stored sources',
+    () => _stored((store) async {
+      final service = DerivedTargetGraphService(store);
+      final published = await service.publish(
+        DerivedTargetGraph.fromJson(
+          _graph(
+            bindings: {
+              'bench_max': {
+                'kind': 'history',
+                'metric': 'mass',
+                'slotId': 'bench-heavy',
+              },
+              'training_mass': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '80', 'unit': 'kg'},
+              },
+            },
+          ),
+        ),
+        0,
+      );
+      final resolved = await service.resolve(
+        published.graph.id,
+        null,
+        DateTime.utc(2026, 10, 30),
+      );
+      // 80% of the 70 kg confirmed maximum.
+      equal(_nodeValue(resolved, 'working')['value'], '56');
+      equal(
+        jsonObject(
+          jsonObject(resolved['bindings'], 'bindings')['training_mass'],
+          'mass',
+        )['sourceVersion'],
+        1,
+      );
+    }),
+  );
+
+  test(
+    'history bindings honor direction, scope, time bounds and interruption',
+    () => _stored((store) async {
+      final service = DerivedTargetGraphService(store);
+      Map<String, Object?> graph(String id, Map<String, Object?> binding) =>
+          _graph(
+            id: id,
+            bindings: {
+              'bench_max': binding,
+              'training_mass': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+            },
+          );
+
+      final highest = await service.publish(
+        DerivedTargetGraph.fromJson(
+          graph('g-high', {
+            'kind': 'history',
+            'metric': 'mass',
+            'direction': 'highest',
+            'slotId': 'bench-heavy',
+          }),
+        ),
+        0,
+      );
+      final resolved = await service.resolve(
+        highest.graph.id,
+        null,
+        DateTime.utc(2026, 10, 30),
+      );
+      // The interrupted 75 kg set in s-two is excluded; 70 kg wins.
+      equal(_nodeValue(resolved, 'max')['value'], '70');
+      equal(
+        jsonObject(
+          jsonObject(
+            jsonObject(resolved['bindings'], 'bindings')['bench_max'],
+            'binding',
+          )['provenance'],
+          'provenance',
+        )['session'],
+        's-one',
+      );
+
+      final lowest = await service.publish(
+        DerivedTargetGraph.fromJson(
+          graph('g-low', {
+            'kind': 'history',
+            'metric': 'mass',
+            'direction': 'lowest',
+            'slotId': 'bench-heavy',
+          }),
+        ),
+        0,
+      );
+      final lowerResolved = await service.resolve(
+        lowest.graph.id,
+        null,
+        DateTime.utc(2026, 10, 30),
+      );
+      equal(_nodeValue(lowerResolved, 'max')['value'], '70');
+
+      // Scope to a template with no sessions: unresolved, not zero.
+      final scoped = await service.publish(
+        DerivedTargetGraph.fromJson(
+          graph('g-scoped', {
+            'kind': 'history',
+            'metric': 'mass',
+            'templateId': 'absent-template',
+          }),
+        ),
+        0,
+      );
+      final scopedResolved = await service.resolve(
+        scoped.graph.id,
+        null,
+        DateTime.utc(2026, 10, 30),
+      );
+      equal(
+        jsonObject(
+          jsonObject(scopedResolved['bindings'], 'bindings')['bench_max'],
+          'binding',
+        )['status'],
+        'unresolved',
+      );
+
+      // Until excludes s-two (day 3); s-one alone remains.
+      final bounded = await service.publish(
+        DerivedTargetGraph.fromJson(
+          graph('g-bounded', {
+            'kind': 'history',
+            'metric': 'mass',
+            'until': '2026-10-03T00:00:00Z',
+          }),
+        ),
+        0,
+      );
+      final boundedResolved = await service.resolve(
+        bounded.graph.id,
+        null,
+        DateTime.utc(2026, 10, 30),
+      );
+      equal(
+        jsonObject(
+          jsonObject(
+            jsonObject(boundedResolved['bindings'], 'bindings')['bench_max'],
+            'binding',
+          )['provenance'],
+          'provenance',
+        )['session'],
+        's-one',
+      );
+    }),
+  );
+
+  test(
+    'body-mass bindings use the stored resolver with explicit time and context isolation',
+    () => _stored((store) async {
+      final service = DerivedTargetGraphService(store);
+      final published = await service.publish(
+        DerivedTargetGraph.fromJson(
+          _graph(
+            id: 'g-mass',
+            bindings: {
+              'bench_max': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+              'training_mass': {
+                'kind': 'bodyMass',
+                'context': 'clothed-training',
+                'asOf': '2026-10-01T12:00:00Z',
+              },
+            },
+          ),
+        ),
+        0,
+      );
+      final resolved = await service.resolve(
+        published.graph.id,
+        null,
+        DateTime.utc(2026, 10, 30),
+      );
+      final mass = jsonObject(
+        jsonObject(resolved['bindings'], 'bindings')['training_mass'],
+        'mass',
+      );
+      equal(mass['status'], 'resolved');
+      equal(jsonObject(mass['value'], 'value')['value'], '80');
+      // The binding asOf outranks the command asOf.
+      equal(
+        jsonObject(mass['provenance'], 'provenance')['asOf'],
+        '2026-10-01T12:00:00.000Z',
+      );
+      // A context with no observations stays unresolved, not zero.
+      final empty = await service.publish(
+        DerivedTargetGraph.fromJson(
+          _graph(
+            id: 'g-mass-empty',
+            bindings: {
+              'bench_max': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+              'training_mass': {
+                'kind': 'bodyMass',
+                'context': 'health',
+                'asOf': '2026-10-01T12:00:00Z',
+              },
+            },
+          ),
+        ),
+        0,
+      );
+      final emptyResolved = await service.resolve(
+        empty.graph.id,
+        null,
+        DateTime.utc(2026, 10, 30),
+      );
+      equal(
+        jsonObject(
+          jsonObject(emptyResolved['bindings'], 'bindings')['training_mass'],
+          'binding',
+        )['status'],
+        'unresolved',
+      );
+      // Body-mass resolution requires an explicit asOf somewhere.
+      final noTime = await service.publish(
+        DerivedTargetGraph.fromJson(
+          _graph(
+            id: 'g-mass-notime',
+            bindings: {
+              'bench_max': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+              'training_mass': {'kind': 'bodyMass', 'context': 'health'},
+            },
+          ),
+        ),
+        0,
+      );
+      await expectLater(
+        service.resolve(noTime.graph.id),
+        throwsA(isA<BodyTmiException>()),
+      );
+    }),
+  );
+
+  test(
+    'graph portability round-trips through logical v27 and native backups, and old labels reject graphs',
+    () => _stored((store) async {
+      final dbPath = store.path;
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final archive = await store.archive();
+      equal(archive.summary['graphs'], 1);
+      final dir = await Directory.systemTemp.createTemp('bodytmi-graph-io-');
+      try {
+        final path = '${dir.path}/export.json';
+        await LogicalArchiveFiles.export(archive, path);
+        final envelope = jsonObject(
+          jsonDecode(await File(path).readAsString()),
+          'envelope',
+        );
+        equal(envelope['format'], 'bodytmi-logical-export/27');
+        equal(
+          (jsonObject(envelope['data'], 'data')['graphs']! as List<Object?>)
+              .length,
+          1,
+        );
+        final prepared = await LogicalArchiveFiles.prepare(path);
+        try {
+          equal(prepared.archive.graphs.length, 1);
+          await store.restore(
+            prepared.backup,
+            recoveryDestination: '${dir.path}/recovery',
+            confirm: true,
+          );
+        } finally {
+          await prepared.close();
+        }
+        await store.close();
+        final reopened = await TrainingStore.open(dbPath);
+        try {
+          equal(
+            (await DerivedTargetGraphService(
+              reopened,
+            ).revision('bench-percentages')).number,
+            1,
+          );
+        } finally {
+          await reopened.close();
+        }
+        // A v26 label cannot carry the graphs section.
+        final doc = copyJson(envelope);
+        doc['format'] = 'bodytmi-logical-export/26';
+        doc['sha256'] = sha256
+            .convert(
+              utf8.encode(
+                canonicalJson({
+                  for (final entry in doc.entries)
+                    if (entry.key != 'sha256') entry.key: entry.value,
+                }),
+              ),
+            )
+            .toString();
+        final bad = '${dir.path}/old-label.json';
+        await File(bad).writeAsString(jsonEncode(doc));
+        await expectLater(
+          LogicalArchiveFiles.prepare(bad),
+          throwsA(isA<BodyTmiException>()),
+        );
+        final backup = '${dir.path}/backup';
+        await NativeBackup.create(dbPath, backup);
+        final preparedBackup = await NativeBackup.prepare(backup);
+        try {
+          equal(preparedBackup.manifest['databaseSchemaVersion'], 27);
+        } finally {
+          await preparedBackup.close();
+        }
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    }),
+  );
+}

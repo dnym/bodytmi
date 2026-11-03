@@ -53,7 +53,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 26) {
+            if (native.userVersion > 27) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -114,7 +114,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 26);
+    validateSchema(schema.map((row) => row.data), 27);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -126,7 +126,8 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_mass_records), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM workout_executions), 0)
-           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM family_revisions), 0) AS bytes
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM family_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM derived_target_graphs), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
       invalid('Logical export exceeds the 64 MiB resource limit.');
@@ -176,6 +177,37 @@ final class TrainingStore implements TrainingRepository {
         .insert(
           FamilyRevisionsCompanion.insert(
             familyId: revision.family.id,
+            number: revision.number,
+            snapshot: _snapshot(revision.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<DerivedTargetGraphRevision>> derivedTargetGraphRevisions() async {
+    final result = <DerivedTargetGraphRevision>[];
+    for (final row in await _db.select(_db.derivedTargetGraphs).get()) {
+      final revision = DerivedTargetGraphRevision.fromJson(
+        jsonDecode(row.snapshot),
+      );
+      if (revision.graph.id != row.graphId || revision.number != row.number) {
+        invalid('Stored derived target graph identity is inconsistent.');
+      }
+      result.add(revision);
+    }
+    validateDerivedTargetGraphRevisions(result);
+    return result;
+  }
+
+  @override
+  Future<void> insertDerivedTargetGraphRevision(
+    DerivedTargetGraphRevision revision,
+  ) async {
+    await _db
+        .into(_db.derivedTargetGraphs)
+        .insert(
+          DerivedTargetGraphsCompanion.insert(
+            graphId: revision.graph.id,
             number: revision.number,
             snapshot: _snapshot(revision.toJson()),
           ),

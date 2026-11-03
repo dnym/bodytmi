@@ -656,6 +656,7 @@ void numericScaleTests() {
       await store.backup('$dir/old');
       await store.close();
       final old = sqlite3.open('$dir/old/database.sqlite');
+      old.execute('DROP TABLE derived_target_graphs');
       old.userVersion = 17;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 17);
@@ -664,7 +665,7 @@ void numericScaleTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          26,
+          27,
         );
       } finally {
         await upgraded.close();
@@ -741,6 +742,7 @@ void numericScaleTests() {
           }
         }
         final forged = sqlite3.open('$dir/native/database.sqlite');
+        forged.execute('DROP TABLE derived_target_graphs');
         forged.userVersion = 17;
         forged.close();
         rejects(
@@ -1113,6 +1115,7 @@ void fixedRangeTests() {
       await store.backup('$dir/old');
       await store.close();
       final old = sqlite3.open('$dir/old/database.sqlite');
+      old.execute('DROP TABLE derived_target_graphs');
       old.userVersion = 18;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 18);
@@ -1121,7 +1124,7 @@ void fixedRangeTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          26,
+          27,
         );
       } finally {
         await upgraded.close();
@@ -1201,6 +1204,7 @@ void fixedRangeTests() {
           }
         }
         final forged = sqlite3.open('$dir/native/database.sqlite');
+        forged.execute('DROP TABLE derived_target_graphs');
         forged.userVersion = 18;
         forged.close();
         rejects(

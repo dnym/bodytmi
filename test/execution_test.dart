@@ -206,6 +206,7 @@ void executionTests() {
       await store.backup('$dir/v8');
       final old = sqlite3.open('$dir/v8/database.sqlite');
       old.execute('DROP TABLE family_revisions');
+      old.execute('DROP TABLE derived_target_graphs');
       old.userVersion = 8;
       old.close();
       equal(await NativeBackup.validateDatabase('$dir/v8/database.sqlite'), 8);
@@ -215,7 +216,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          26,
+          27,
         );
       } finally {
         await migrated.close();
@@ -294,6 +295,7 @@ void executionTests() {
         );
         final forged = sqlite3.open('$dir/native/database.sqlite');
         forged.execute('DROP TABLE family_revisions');
+        forged.execute('DROP TABLE derived_target_graphs');
         forged.userVersion = 8;
         forged.close();
         rejects(
@@ -1233,13 +1235,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 26);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 27);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/26',
+        'bodytmi-logical-export/27',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -1339,6 +1341,7 @@ void executionTests() {
       try {
         raw.execute('DROP TABLE family_revisions');
         raw.execute('DROP TABLE workout_executions');
+        raw.execute('DROP TABLE derived_target_graphs');
         raw.execute('PRAGMA user_version = 7');
       } finally {
         raw.close();
@@ -1388,6 +1391,7 @@ void executionTests() {
         try {
           forged.execute('DROP TABLE family_revisions');
           forged.execute('DROP TABLE workout_executions');
+          forged.execute('DROP TABLE derived_target_graphs');
           forged.execute('PRAGMA user_version = 7');
         } finally {
           forged.close();

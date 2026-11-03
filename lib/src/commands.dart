@@ -7,6 +7,7 @@ const commandNames = [
   'target resolve',
   'target capture',
   'target status',
+  'graph validate',
   'objective evaluate',
   'session assess-objectives',
   'scale validate',
@@ -61,6 +62,9 @@ final class Commands {
           request['snapshot'],
           request['bindings'],
         );
+      case 'graph validate':
+        keys({'graph'});
+        data = DerivedTargetGraph.fromJson(request['graph']).toJson();
       case 'objective evaluate':
         keys({'objectives', 'actuals'});
         data = const ObjectiveAssessment().evaluate(

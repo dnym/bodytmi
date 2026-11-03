@@ -573,6 +573,7 @@ void leverSelectionTests() {
       await store.backup('$dir/old');
       await store.close();
       final old = sqlite3.open('$dir/old/database.sqlite');
+      old.execute('DROP TABLE derived_target_graphs');
       old.userVersion = 16;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 16);
@@ -581,7 +582,7 @@ void leverSelectionTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          26,
+          27,
         );
       } finally {
         await upgraded.close();
@@ -659,6 +660,7 @@ void leverSelectionTests() {
           }
         }
         final forged = sqlite3.open('$dir/native/database.sqlite');
+        forged.execute('DROP TABLE derived_target_graphs');
         forged.userVersion = 16;
         forged.close();
         rejects(

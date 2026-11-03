@@ -125,6 +125,7 @@ final class NativeBackup {
           24,
           25,
           26,
+          27,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -244,6 +245,7 @@ final class NativeBackup {
             24,
             25,
             26,
+            27,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -269,6 +271,7 @@ final class NativeBackup {
         if (db.userVersion >= 7) 'timing_activities',
         if (db.userVersion >= 8) 'workout_executions',
         if (db.userVersion >= 12) 'family_revisions',
+        if (db.userVersion >= 27) 'derived_target_graphs',
         if (db.userVersion >= 3) ...[
           'program_revisions',
           'program_runs',
@@ -295,6 +298,19 @@ final class NativeBackup {
           families.add(family);
         }
         validateFamilyRevisions(families);
+      }
+      if (db.userVersion >= 27) {
+        final graphs = <DerivedTargetGraphRevision>[];
+        for (final row in db.select('SELECT * FROM derived_target_graphs')) {
+          final graph = DerivedTargetGraphRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (graph.graph.id != row['graph_id'] ||
+              graph.number != row['number'])
+            invalid('Derived target graph row identity mismatch.');
+          graphs.add(graph);
+        }
+        validateDerivedTargetGraphRevisions(graphs);
       }
       final revisions = db.prepare(
         'SELECT template_id, number, snapshot FROM revisions ORDER BY template_id, number',

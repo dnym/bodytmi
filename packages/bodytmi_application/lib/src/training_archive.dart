@@ -23,9 +23,16 @@ final class TrainingArchive {
     List<TimingActivity> timers = const [],
     List<WorkoutExecution> executions = const [],
     List<FamilyRevision> families = const [],
+    List<DerivedTargetGraphRevision> graphs = const [],
   }) : families = List<FamilyRevision>.unmodifiable(
          <FamilyRevision>[...families]..sort((a, b) {
            final id = a.family.id.compareTo(b.family.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       graphs = List<DerivedTargetGraphRevision>.unmodifiable(
+         <DerivedTargetGraphRevision>[...graphs]..sort((a, b) {
+           final id = a.graph.id.compareTo(b.graph.id);
            return id == 0 ? a.number.compareTo(b.number) : id;
          }),
        ),
@@ -91,12 +98,17 @@ final class TrainingArchive {
       'timers',
       'executions',
       'families',
+      'graphs',
     });
     List<Object?> optional(String key) =>
         json.containsKey(key) ? jsonList(json, key) : const [];
     return TrainingArchive(
       families: [
         for (final f in optional('families')) FamilyRevision.fromJson(f),
+      ],
+      graphs: [
+        for (final g in optional('graphs'))
+          DerivedTargetGraphRevision.fromJson(g),
       ],
       revisions: [
         for (final item in jsonList(json, 'revisions'))
@@ -142,6 +154,7 @@ final class TrainingArchive {
 
   final List<WorkoutExecution> executions;
   final List<FamilyRevision> families;
+  final List<DerivedTargetGraphRevision> graphs;
   final List<TimingActivity> timers;
   final List<BodyMassRecord> bodyMass;
   final List<WorkoutRevision> revisions;
@@ -155,6 +168,7 @@ final class TrainingArchive {
 
   Map<String, Object?> toJson() => {
     'families': [for (final f in families) f.toJson()],
+    'graphs': [for (final g in graphs) g.toJson()],
     'executions': [for (final e in executions) e.toJson()],
     'timers': [for (final t in timers) t.toJson()],
     'bodyMass': [for (final r in bodyMass) r.toJson()],
@@ -170,6 +184,7 @@ final class TrainingArchive {
 
   Map<String, Object?> get summary => {
     'families': families.length,
+    'graphs': graphs.length,
     'executions': executions.length,
     'timers': timers.length,
     'bodyMass': bodyMass.length,
@@ -185,6 +200,7 @@ final class TrainingArchive {
 
   void _validate() {
     validateFamilyRevisions(families);
+    validateDerivedTargetGraphRevisions(graphs);
     validateTimingData(timers, sessions);
     validateExecutionData(executions, sessions, timers);
     if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)

@@ -104,6 +104,7 @@ void tempoTests() {
       }
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE family_revisions');
+      old.execute('DROP TABLE derived_target_graphs');
       old.userVersion = 9;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 9);
@@ -114,7 +115,7 @@ void tempoTests() {
         equal((await TimingService(migrated).show('clock')).plan.tempo, null);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          26,
+          27,
         );
       } finally {
         await migrated.close();
@@ -417,13 +418,13 @@ void tempoTests() {
       t = await timing.resume(t.id, t.version, 'epoch', instant(1));
       await timing.advance(t.id, t.version, 'epoch', 4500, instant(1));
       final expected = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 26);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 27);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/26',
+        'bodytmi-logical-export/27',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -469,6 +470,7 @@ void tempoTests() {
       }
       final old = sqlite3.open('$dir/native/database.sqlite');
       old.execute('DROP TABLE family_revisions');
+      old.execute('DROP TABLE derived_target_graphs');
       old.userVersion = 9;
       old.close();
       rejects(

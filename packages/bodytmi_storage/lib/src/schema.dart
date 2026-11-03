@@ -53,6 +53,12 @@ const schemaV12 = {
       'CREATE TABLE "family_revisions" ("family_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("family_id", "number"))',
 };
 
+const schemaV27 = {
+  ...schemaV12,
+  'derived_target_graphs':
+      'CREATE TABLE "derived_target_graphs" ("graph_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("graph_id", "number"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -89,6 +95,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   25 => schemaV12, // Same tables; v25 adds max-effort repetition objectives.
   26 =>
     schemaV12, // Same tables; v26 adds authored numeric objective predicates.
+  27 => schemaV27, // v27 adds published derived target graphs.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

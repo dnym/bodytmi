@@ -40,6 +40,10 @@ const storedCommandNames = [
   'family publish',
   'family show',
   'family list',
+  'graph publish',
+  'graph show',
+  'graph list',
+  'graph resolve',
   'store mass-status',
   'store effective-load',
   'store complete',
@@ -211,6 +215,10 @@ Future<Map<String, Object?>> executeStored(
     'family publish' => {'family', 'expectedRevision'},
     'family show' => {'familyId', 'revision'},
     'family list' => <String>{},
+    'graph publish' => {'graph', 'expectedRevision'},
+    'graph show' => {'graphId', 'revision'},
+    'graph list' => <String>{},
+    'graph resolve' => {'graphId', 'revision', 'asOf'},
     'store mass-status' => {'id'},
     'store effective-load' => {'id'},
     'store complete' => {
@@ -876,6 +884,29 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final f in all) f.toJson()];
+      case 'graph publish':
+        data = (await DerivedTargetGraphService(store).publish(
+          DerivedTargetGraph.fromJson(request['graph']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'graph show':
+        data = (await DerivedTargetGraphService(store).revision(
+          identifier(request, 'graphId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'graph list':
+        data = [
+          for (final g in await DerivedTargetGraphService(store).list())
+            g.toJson(),
+        ];
+      case 'graph resolve':
+        data = await DerivedTargetGraphService(store).resolve(
+          identifier(request, 'graphId'),
+          request.containsKey('revision') ? integer('revision') : null,
+          request.containsKey('asOf')
+              ? parseInstant(request['asOf'], 'asOf')
+              : null,
+        );
       case 'store assess-objectives':
         data = await store.transaction(
           () async => const TrainingService().assessObjectives(

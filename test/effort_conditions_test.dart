@@ -620,6 +620,7 @@ void effortConditionsTests() {
       await store.backup('$dir/old');
       await LogicalArchiveFiles.export(await store.archive(), '$dir/old.json');
       final old = sqlite3.open('$dir/old/database.sqlite');
+      old.execute('DROP TABLE derived_target_graphs');
       old.userVersion = 21;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 21);
@@ -628,7 +629,7 @@ void effortConditionsTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          26,
+          27,
         );
       } finally {
         await upgraded.close();
@@ -686,6 +687,7 @@ void effortConditionsTests() {
       );
       await _fails(LogicalArchiveFiles.prepare('$dir/wrong.json'));
       final wrong = sqlite3.open('$dir/native/database.sqlite');
+      wrong.execute('DROP TABLE derived_target_graphs');
       wrong.userVersion = 21;
       wrong.close();
       rejects(

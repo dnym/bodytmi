@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/26';
+const _format = 'bodytmi-logical-export/27';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -87,6 +87,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/23',
       'bodytmi-logical-export/24',
       'bodytmi-logical-export/25',
+      'bodytmi-logical-export/26',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -95,7 +96,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final typedObjectiveData = input['format'] == _format;
+    final graphData = input['format'] == _format;
+    final typedObjectiveData =
+        graphData || input['format'] == 'bodytmi-logical-export/26';
     final objectiveData =
         typedObjectiveData || input['format'] == 'bodytmi-logical-export/25';
     final effortTargetsData =
@@ -148,6 +151,15 @@ final class LogicalArchiveFiles {
       'sessionPrograms',
       'programReceipts',
     };
+    // An empty graphs section carries no payload and is equivalent to its
+    // absence in v26 and earlier; non-empty graphs remain a v27-only section.
+    final hadGraphs = inputData.containsKey('graphs');
+    if (!graphData) {
+      final graphs = inputData['graphs'];
+      if (graphs is List<Object?> && graphs.isEmpty) {
+        inputData.remove('graphs');
+      }
+    }
     checkKeys(inputData, {
       'revisions',
       'sessions',
@@ -158,6 +170,7 @@ final class LogicalArchiveFiles {
       if (timingData) 'timers',
       if (executionData) 'executions',
       if (familyData) 'families',
+      if (graphData) 'graphs',
     });
     if (!legacy && !inputData.containsKey('progressions'))
       invalid('Logical format requires progression records.');
@@ -171,6 +184,8 @@ final class LogicalArchiveFiles {
       invalid('Logical v8 requires execution records.');
     if (familyData && !inputData.containsKey('families'))
       invalid('Logical v12 requires family revisions.');
+    if (graphData && !inputData.containsKey('graphs'))
+      invalid('Logical v27 requires derived target graph revisions.');
     final archive = TrainingArchive.fromJson(inputData);
     if (!typedObjectiveData &&
         archive.revisions.any((r) => r.definition.hasTypedObjectives))
@@ -282,6 +297,7 @@ final class LogicalArchiveFiles {
     if (!timingData) data.remove('timers');
     if (!executionData) data.remove('executions');
     if (!familyData) data.remove('families');
+    if (!graphData && !hadGraphs) data.remove('graphs');
     if (!programData) for (final key in programKeys) data.remove(key);
     if (_checksum({
           'format': input['format'],
@@ -300,15 +316,21 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV12.values) {
+          for (final ddl in schemaV27.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 26');
+          db.execute('PRAGMA user_version = 27');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
               [family.family.id, family.number, canonicalJson(family.toJson())],
+            );
+          }
+          for (final graph in archive.graphs) {
+            db.execute(
+              'INSERT INTO derived_target_graphs(graph_id,number,snapshot) VALUES (?,?,?)',
+              [graph.graph.id, graph.number, canonicalJson(graph.toJson())],
             );
           }
           for (final revision in archive.revisions) {

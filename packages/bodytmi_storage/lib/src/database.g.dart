@@ -3154,6 +3154,281 @@ class WorkoutExecutionsCompanion extends UpdateCompanion<WorkoutExecution> {
   }
 }
 
+class $DerivedTargetGraphsTable extends DerivedTargetGraphs
+    with
+        TableInfo<$DerivedTargetGraphsTable, StoredDerivedTargetGraphRevision> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DerivedTargetGraphsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _graphIdMeta = const VerificationMeta(
+    'graphId',
+  );
+  @override
+  late final GeneratedColumn<String> graphId = GeneratedColumn<String>(
+    'graph_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [graphId, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'derived_target_graphs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredDerivedTargetGraphRevision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('graph_id')) {
+      context.handle(
+        _graphIdMeta,
+        graphId.isAcceptableOrUnknown(data['graph_id']!, _graphIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_graphIdMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {graphId, number};
+  @override
+  StoredDerivedTargetGraphRevision map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredDerivedTargetGraphRevision(
+      graphId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}graph_id'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $DerivedTargetGraphsTable createAlias(String alias) {
+    return $DerivedTargetGraphsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredDerivedTargetGraphRevision extends DataClass
+    implements Insertable<StoredDerivedTargetGraphRevision> {
+  final String graphId;
+  final int number;
+  final String snapshot;
+  const StoredDerivedTargetGraphRevision({
+    required this.graphId,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['graph_id'] = Variable<String>(graphId);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  DerivedTargetGraphsCompanion toCompanion(bool nullToAbsent) {
+    return DerivedTargetGraphsCompanion(
+      graphId: Value(graphId),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredDerivedTargetGraphRevision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredDerivedTargetGraphRevision(
+      graphId: serializer.fromJson<String>(json['graphId']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'graphId': serializer.toJson<String>(graphId),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredDerivedTargetGraphRevision copyWith({
+    String? graphId,
+    int? number,
+    String? snapshot,
+  }) => StoredDerivedTargetGraphRevision(
+    graphId: graphId ?? this.graphId,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredDerivedTargetGraphRevision copyWithCompanion(
+    DerivedTargetGraphsCompanion data,
+  ) {
+    return StoredDerivedTargetGraphRevision(
+      graphId: data.graphId.present ? data.graphId.value : this.graphId,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredDerivedTargetGraphRevision(')
+          ..write('graphId: $graphId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(graphId, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredDerivedTargetGraphRevision &&
+          other.graphId == this.graphId &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class DerivedTargetGraphsCompanion
+    extends UpdateCompanion<StoredDerivedTargetGraphRevision> {
+  final Value<String> graphId;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const DerivedTargetGraphsCompanion({
+    this.graphId = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DerivedTargetGraphsCompanion.insert({
+    required String graphId,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : graphId = Value(graphId),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredDerivedTargetGraphRevision> custom({
+    Expression<String>? graphId,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (graphId != null) 'graph_id': graphId,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DerivedTargetGraphsCompanion copyWith({
+    Value<String>? graphId,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return DerivedTargetGraphsCompanion(
+      graphId: graphId ?? this.graphId,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (graphId.present) {
+      map['graph_id'] = Variable<String>(graphId.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DerivedTargetGraphsCompanion(')
+          ..write('graphId: $graphId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
@@ -3183,6 +3458,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
   );
   late final $WorkoutExecutionsTable workoutExecutions =
       $WorkoutExecutionsTable(this);
+  late final $DerivedTargetGraphsTable derivedTargetGraphs =
+      $DerivedTargetGraphsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3200,6 +3477,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     bodyMassRecords,
     timingActivities,
     workoutExecutions,
+    derivedTargetGraphs,
   ];
 }
 
@@ -6950,6 +7228,196 @@ typedef $$WorkoutExecutionsTableProcessedTableManager =
       WorkoutExecution,
       PrefetchHooks Function({bool sessionId})
     >;
+typedef $$DerivedTargetGraphsTableCreateCompanionBuilder =
+    DerivedTargetGraphsCompanion Function({
+      required String graphId,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$DerivedTargetGraphsTableUpdateCompanionBuilder =
+    DerivedTargetGraphsCompanion Function({
+      Value<String> graphId,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$DerivedTargetGraphsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $DerivedTargetGraphsTable> {
+  $$DerivedTargetGraphsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get graphId => $composableBuilder(
+    column: $table.graphId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DerivedTargetGraphsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $DerivedTargetGraphsTable> {
+  $$DerivedTargetGraphsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get graphId => $composableBuilder(
+    column: $table.graphId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DerivedTargetGraphsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $DerivedTargetGraphsTable> {
+  $$DerivedTargetGraphsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get graphId =>
+      $composableBuilder(column: $table.graphId, builder: (column) => column);
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$DerivedTargetGraphsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $DerivedTargetGraphsTable,
+          StoredDerivedTargetGraphRevision,
+          $$DerivedTargetGraphsTableFilterComposer,
+          $$DerivedTargetGraphsTableOrderingComposer,
+          $$DerivedTargetGraphsTableAnnotationComposer,
+          $$DerivedTargetGraphsTableCreateCompanionBuilder,
+          $$DerivedTargetGraphsTableUpdateCompanionBuilder,
+          (
+            StoredDerivedTargetGraphRevision,
+            BaseReferences<
+              _$TrainingDatabase,
+              $DerivedTargetGraphsTable,
+              StoredDerivedTargetGraphRevision
+            >,
+          ),
+          StoredDerivedTargetGraphRevision,
+          PrefetchHooks Function()
+        > {
+  $$DerivedTargetGraphsTableTableManager(
+    _$TrainingDatabase db,
+    $DerivedTargetGraphsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DerivedTargetGraphsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DerivedTargetGraphsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DerivedTargetGraphsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> graphId = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DerivedTargetGraphsCompanion(
+                graphId: graphId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String graphId,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => DerivedTargetGraphsCompanion.insert(
+                graphId: graphId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $DerivedTargetGraphsTable,
+                    StoredDerivedTargetGraphRevision
+                  >(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $DerivedTargetGraphsTable,
+                    StoredDerivedTargetGraphRevision
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DerivedTargetGraphsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $DerivedTargetGraphsTable,
+      StoredDerivedTargetGraphRevision,
+      $$DerivedTargetGraphsTableFilterComposer,
+      $$DerivedTargetGraphsTableOrderingComposer,
+      $$DerivedTargetGraphsTableAnnotationComposer,
+      $$DerivedTargetGraphsTableCreateCompanionBuilder,
+      $$DerivedTargetGraphsTableUpdateCompanionBuilder,
+      (
+        StoredDerivedTargetGraphRevision,
+        BaseReferences<
+          _$TrainingDatabase,
+          $DerivedTargetGraphsTable,
+          StoredDerivedTargetGraphRevision
+        >,
+      ),
+      StoredDerivedTargetGraphRevision,
+      PrefetchHooks Function()
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -6978,4 +7446,6 @@ class $TrainingDatabaseManager {
       $$TimingActivitiesTableTableManager(_db, _db.timingActivities);
   $$WorkoutExecutionsTableTableManager get workoutExecutions =>
       $$WorkoutExecutionsTableTableManager(_db, _db.workoutExecutions);
+  $$DerivedTargetGraphsTableTableManager get derivedTargetGraphs =>
+      $$DerivedTargetGraphsTableTableManager(_db, _db.derivedTargetGraphs);
 }

@@ -383,6 +383,7 @@ void setObservationsTests() {
         );
         await store.close();
         final old = sqlite3.open('${dir.path}/legacy/database.sqlite');
+        old.execute('DROP TABLE derived_target_graphs');
         old.userVersion = 20;
         old.close();
         equal(
@@ -393,7 +394,7 @@ void setObservationsTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          26,
+          27,
         );
         final logical = jsonObject(
           jsonDecode(await File('${dir.path}/legacy.json').readAsString()),
@@ -569,6 +570,7 @@ void setObservationsTests() {
         }
         for (final source in ['backup', 'frozen-backup']) {
           final db = sqlite3.open('${dir.path}/$source/database.sqlite');
+          db.execute('DROP TABLE derived_target_graphs');
           db.userVersion = 20;
           db.close();
           rejects(
