@@ -96,6 +96,15 @@ void timingTests() {
       final session = await training.session('session');
       final clock = await _create(store);
       await _fails(
+        training.editTarget(
+          session.id,
+          session.contentVersion,
+          session.sets.single.id,
+          'duration',
+          Quantity('5', 's'),
+        ),
+      );
+      await _fails(
         training.skipSlot(
           session.id,
           session.contentVersion,
@@ -125,6 +134,15 @@ void timingTests() {
       );
       final pending = await _elapsed(store);
       equal(pending.status, 'awaitingConfirmation');
+      await _fails(
+        training.editTarget(
+          session.id,
+          session.contentVersion,
+          session.sets.single.id,
+          'duration',
+          Quantity('5', 's'),
+        ),
+      );
       await _fails(
         training.skipSlot(
           session.id,
@@ -508,7 +526,7 @@ void timingTests() {
         instant(1),
       );
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 35);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 36);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',

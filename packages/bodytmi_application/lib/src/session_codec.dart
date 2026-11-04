@@ -88,6 +88,7 @@ TrainingSession sessionFromJson(Object? input) {
       'ordinal',
       'suggested',
       'sources',
+      'manualTargets',
       'status',
       'actuals',
       'timing',
@@ -165,6 +166,18 @@ TrainingSession sessionFromJson(Object? input) {
         _positive(source, 'contentVersion'),
       );
     }
+    final manualTargets = <String>{};
+    if (row.containsKey('manualTargets')) {
+      for (final value in jsonList(row, 'manualTargets')) {
+        if (value is! String || !manualTargets.add(value)) {
+          invalid('Invalid manual target metrics.');
+        }
+      }
+      if (manualTargets.isEmpty) invalid('Manual targets cannot be empty.');
+      if (_positive(row, 'contentVersion') < 2) {
+        invalid('Manual targets require a later set version.');
+      }
+    }
     sets.add(
       TrainingSet(
         id: expected.id,
@@ -173,6 +186,7 @@ TrainingSession sessionFromJson(Object? input) {
         ordinal: expected.ordinal,
         suggested: suggested,
         sources: sources,
+        manualTargets: manualTargets,
         maxEffortMetrics: maxEffortMetrics,
         criteria: criteria,
         actuals: actuals,

@@ -151,7 +151,8 @@ void validateDerivedPlanSession(
         set.suggested[metric] == null ||
         canonicalJson(set.suggested[metric]!.toJson()) !=
             canonicalJson(target['value']) ||
-        set.sources.containsKey(metric)) {
+        set.sources.containsKey(metric) ||
+        set.manualTargets.contains(metric)) {
       invalid('Session target does not match its captured plan.');
     }
   }

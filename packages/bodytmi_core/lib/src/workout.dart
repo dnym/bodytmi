@@ -242,6 +242,7 @@ final class TrainingSet {
     required this.ordinal,
     required Metrics suggested,
     Map<String, HistorySource> sources = const {},
+    Set<String> manualTargets = const {},
     this.status = SetStatus.planned,
     Metrics actuals = const {},
     this.contentVersion = 1,
@@ -250,6 +251,7 @@ final class TrainingSet {
     Set<String> maxEffortMetrics = const {},
     Map<String, NumericObjective> criteria = const {},
   }) : criteria = Map.unmodifiable(criteria),
+       manualTargets = Set.unmodifiable(manualTargets),
        maxEffortMetrics = Set.unmodifiable(maxEffortMetrics),
        observations = observations == null || observations.isEmpty
            ? null
@@ -257,6 +259,14 @@ final class TrainingSet {
        suggested = Map.unmodifiable(suggested),
        sources = Map.unmodifiable(sources),
        actuals = Map.unmodifiable(actuals) {
+    if (this.manualTargets.any(
+      (key) =>
+          !this.suggested.containsKey(key) || this.sources.containsKey(key),
+    )) {
+      invalid(
+        'Manual targets must identify suggestions without history sources.',
+      );
+    }
     this.observations?.validateStatus(status.name);
     if (this.criteria.length + this.maxEffortMetrics.length > 100)
       invalid('Too many set objectives.');
@@ -289,6 +299,7 @@ final class TrainingSet {
   final int ordinal;
   final Metrics suggested;
   final Map<String, HistorySource> sources;
+  final Set<String> manualTargets;
   final SetStatus status;
   final Metrics actuals;
   final TimedResult? timing;
@@ -337,6 +348,7 @@ final class TrainingSet {
       ordinal: ordinal,
       suggested: suggested,
       sources: sources,
+      manualTargets: manualTargets,
       timing:
           timingResult ??
           (timing == null
@@ -363,6 +375,7 @@ final class TrainingSet {
       ordinal: ordinal,
       suggested: suggested,
       sources: sources,
+      manualTargets: manualTargets,
       status: SetStatus.skipped,
       observations: observations?.notesOnly,
       maxEffortMetrics: maxEffortMetrics,
@@ -382,6 +395,7 @@ final class TrainingSet {
       ordinal: ordinal,
       suggested: suggested,
       sources: sources,
+      manualTargets: manualTargets,
       status: status,
       actuals: actuals,
       timing: timing,
@@ -399,6 +413,8 @@ final class TrainingSet {
     'ordinal': ordinal,
     'suggested': metricsToJson(suggested),
     'sources': {for (final e in sources.entries) e.key: e.value.toJson()},
+    if (manualTargets.isNotEmpty)
+      'manualTargets': (manualTargets.toList()..sort()),
     'status': status.name,
     'actuals': metricsToJson(actuals),
     if (timing != null) 'timing': timing!.toJson(),

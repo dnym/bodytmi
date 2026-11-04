@@ -145,6 +145,15 @@ void executionTests() {
       final training = StoredTrainingService(store);
       final before = await training.session('session');
       await _fails(
+        training.editTarget(
+          before.id,
+          before.contentVersion,
+          before.sets.first.id,
+          before.sets.first.suggested.keys.first,
+          before.sets.first.suggested.values.first,
+        ),
+      );
+      await _fails(
         training.skipSlot(
           before.id,
           before.contentVersion,
@@ -259,7 +268,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          35,
+          36,
         );
       } finally {
         await migrated.close();
@@ -1278,13 +1287,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 35);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 36);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/35',
+        'bodytmi-logical-export/36',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {

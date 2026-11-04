@@ -398,6 +398,7 @@ final class StoredTrainingService {
               suggested: suggested,
               maxEffortMetrics: set.maxEffortMetrics,
               criteria: set.criteria,
+              manualTargets: set.manualTargets,
               sources: {
                 for (final e in set.sources.entries)
                   if (!mapped[set.id]!.containsKey(e.key)) e.key: e.value,
@@ -554,6 +555,41 @@ final class StoredTrainingService {
     if (identical(next, current)) return current;
     await repository.updateSession(next);
     return next;
+  });
+
+  /// Edit a planned target atomically, leaving clock/traversal review explicit.
+  Future<TrainingSession> editTarget(
+    String id,
+    int expectedVersion,
+    String setId,
+    String metric,
+    Quantity value, {
+    bool applyToRemaining = false,
+  }) => repository.transaction(() async {
+    final current = await session(id);
+    if (current.contentVersion != expectedVersion) _conflict();
+    if ((await repository.executions()).any(
+      (e) => e.sessionId == id && !e.complete,
+    )) {
+      invalid('Cannot edit targets during active workout traversal.');
+    }
+    if ((await repository.timingActivities()).any(
+      (t) =>
+          t.sessionId == id && (t.active || t.status == 'awaitingConfirmation'),
+    )) {
+      invalid(
+        'Stop and review or discard the session clock before editing targets.',
+      );
+    }
+    final next = const TrainingService().editTarget(
+      current,
+      setId,
+      metric,
+      value,
+      applyToRemaining: applyToRemaining,
+    );
+    if (identical(current, next)) return current;
+    return edit(id, expectedVersion, (_) => next);
   });
 
   /// Skip unperformed efforts atomically, leaving clock/traversal review explicit.

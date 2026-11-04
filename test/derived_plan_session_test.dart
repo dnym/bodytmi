@@ -127,6 +127,14 @@ void derivedPlanSessionTests() {
         equal(set.suggested['mass']!.value.toString(), '80');
         check(!set.sources.containsKey('mass'));
       }
+      rejects(
+        () => const TrainingService().editTarget(
+          session,
+          session.sets.first.id,
+          'mass',
+          Quantity('90', 'kg'),
+        ),
+      );
       equal(session.derivedPlanInput!.reference.planId, 'bench');
       final skipped = const TrainingService().skipRemaining(
         session,
@@ -228,7 +236,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 35);
+        equal(backup.manifest['databaseSchemaVersion'], 36);
       } finally {
         await backup.close();
       }
@@ -1083,7 +1091,7 @@ void derivedPlanSessionTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 35);
+      equal(NativeBackup.validateDatabase(snapshot), 36);
       final db = sqlite3.open(snapshot);
       db.userVersion = 30;
       db.close();
@@ -1459,7 +1467,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 35);
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 36);
       final db = sqlite3.open('$dir/snapshot.sqlite');
       db.userVersion = 32;
       db.close();
@@ -1561,7 +1569,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 35);
+        equal(reopened.userVersion, 36);
       } finally {
         reopened.close();
       }

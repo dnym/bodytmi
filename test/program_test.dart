@@ -231,6 +231,80 @@ void programTests() {
         final programs = ProgramService(store);
         final training = StoredTrainingService(store);
         var session = await _start(store, 'strength-run', 'partial-session', 1);
+        final original = session;
+        final previousProfile = '${dir.path}/v35.sqlite';
+        await store.snapshot(previousProfile);
+        final oldDb = sqlite3.open(previousProfile);
+        oldDb.userVersion = 35;
+        oldDb.close();
+        equal(NativeBackup.validateDatabase(previousProfile), 35);
+        final migrated = await TrainingStore.open(previousProfile);
+        equal(
+          canonicalJson(
+            (await StoredTrainingService(
+              migrated,
+            ).session(session.id)).toJson(),
+          ),
+          canonicalJson(session.toJson()),
+        );
+        await migrated.close();
+        session = await training.editTarget(
+          session.id,
+          session.contentVersion,
+          session.sets.first.id,
+          'mass',
+          Quantity('67.5', 'kg'),
+          applyToRemaining: true,
+        );
+        check(
+          session.sets
+              .where((s) => s.slotId == session.sets.first.slotId)
+              .every((s) => s.manualTargets.contains('mass')),
+        );
+        await expectLater(
+          training.editTarget(
+            session.id,
+            original.contentVersion,
+            session.sets.first.id,
+            'mass',
+            Quantity('70', 'kg'),
+          ),
+          throwsA(isA<BodyTmiException>()),
+        );
+        equal((await programs.run('strength-run')).cursor, 0);
+        equal((await programs.run('cardio-run')).cursor, 0);
+        await store.backup('${dir.path}/manual-backup');
+        final export = '${dir.path}/manual.json';
+        await LogicalArchiveFiles.export(await store.archive(), export);
+        final editedArchive = await LogicalArchiveFiles.prepare(export);
+        await editedArchive.close();
+        final envelope =
+            jsonDecode(await File(export).readAsString())
+                as Map<String, Object?>;
+        envelope['format'] = 'bodytmi-logical-export/35';
+        envelope['sha256'] = sha256
+            .convert(
+              utf8.encode(
+                canonicalJson({
+                  for (final entry in envelope.entries)
+                    if (entry.key != 'sha256') entry.key: entry.value,
+                }),
+              ),
+            )
+            .toString();
+        final oldExport = '${dir.path}/old-manual.json';
+        await File(oldExport).writeAsString(jsonEncode(envelope));
+        await expectLater(
+          LogicalArchiveFiles.prepare(oldExport),
+          throwsA(isA<BodyTmiException>()),
+        );
+        final snapshot = '${dir.path}/manual.sqlite';
+        await store.snapshot(snapshot);
+        equal(NativeBackup.validateDatabase(snapshot), 36);
+        final oldLabel = sqlite3.open(snapshot);
+        oldLabel.userVersion = 35;
+        oldLabel.close();
+        rejects(() => NativeBackup.validateDatabase(snapshot));
         session = await training.edit(
           session.id,
           session.contentVersion,
@@ -669,14 +743,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          35,
+          36,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/35',
+          'bodytmi-logical-export/36',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
@@ -917,11 +991,38 @@ void programTests() {
           'startedAt': instant(1).toIso8601String(),
         });
         final cardio = sessionFromJson(cardioSession);
+        final firstMetric = cardio.sets.first.suggested.keys.first;
+        final firstValue = cardio.sets.first.suggested[firstMetric]!.toJson();
+        final pureEdit = await invoke(
+          ['session', 'edit-target'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'session': cardioSession,
+            'setId': cardio.sets.first.id,
+            'metric': firstMetric,
+            'value': firstValue,
+            'applyToRemaining': true,
+          }),
+        );
+        equal(pureEdit.code, 0);
+        final storedEdit = await call('store edit-target', {
+          'id': 'cardio-cli',
+          'expectedVersion': cardio.contentVersion,
+          'setId': cardio.sets.first.id,
+          'metric': firstMetric,
+          'value': firstValue,
+          'applyToRemaining': true,
+        });
+        jsonEqual(
+          jsonObject(jsonDecode(pureEdit.output), 'response')['data'],
+          storedEdit,
+        );
+        final editedCardio = sessionFromJson(storedEdit);
         final pureSlot = await invoke(
           ['session', 'skip-slot'],
           jsonEncode({
             'schemaVersion': 1,
-            'session': cardioSession,
+            'session': storedEdit,
             'slotId': cardio.sets.first.slotId,
             'role': 'work',
             'confirm': true,
@@ -930,7 +1031,7 @@ void programTests() {
         equal(pureSlot.code, 0);
         final storedSlot = await call('store skip-slot', {
           'id': 'cardio-cli',
-          'expectedVersion': 1,
+          'expectedVersion': editedCardio.contentVersion,
           'slotId': cardio.sets.first.slotId,
           'role': 'work',
           'confirm': true,

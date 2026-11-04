@@ -6,6 +6,91 @@ import 'support.dart';
 void workflowTests() {
   const service = TrainingService();
   test(
+    'manual target carry preserves completed, authored and manual targets',
+    () {
+      final json = definition().toJson();
+      final plan = json['plan']! as Map<String, Object?>;
+      plan['children'] = [
+        for (final id in ['a', 'b', 'c', 'd'])
+          {'id': id, 'type': 'effort', 'slot': 'bench-heavy'},
+        {
+          'id': 'authored',
+          'type': 'effort',
+          'slot': 'bench-heavy',
+          'targets': {
+            'mass': {'value': '40', 'unit': 'kg'},
+          },
+        },
+        {
+          'id': 'warmup',
+          'type': 'effort',
+          'slot': 'bench-heavy',
+          'role': 'warmup',
+        },
+        {'id': 'other', 'type': 'effort', 'slot': 'bench-light'},
+      ];
+      var s = start(
+        from: WorkoutRevision.publish(WorkoutDefinition.fromJson(json)),
+      );
+      s = service.editTarget(s, s.sets[3].id, 'mass', Quantity('55', 'kg'));
+      s = service.complete(s, s.sets[2].id, {}, acceptSuggested: true);
+      final before = s;
+      s = service.editTarget(
+        s,
+        s.sets[0].id,
+        'mass',
+        Quantity('70', 'kg'),
+        applyToRemaining: true,
+      );
+      equal(s.contentVersion, before.contentVersion + 1);
+      equal(s.sets[0].suggested['mass']!.value.toString(), '70');
+      equal(s.sets[1].suggested['mass']!.value.toString(), '70');
+      for (var i = 2; i < s.sets.length; i++) {
+        equal(
+          canonicalJson(s.sets[i].toJson()),
+          canonicalJson(before.sets[i].toJson()),
+        );
+      }
+      check(s.sets[0].manualTargets.contains('mass'));
+      check(s.sets[1].manualTargets.contains('mass'));
+      check(
+        identical(
+          service.editTarget(
+            s,
+            s.sets[0].id,
+            'mass',
+            Quantity('70', 'kg'),
+            applyToRemaining: true,
+          ),
+          s,
+        ),
+      );
+      rejects(
+        () => service.editTarget(s, s.sets[2].id, 'mass', Quantity('70', 'kg')),
+      );
+      rejects(
+        () => service.editTarget(s, s.sets[0].id, 'mass', Quantity('70', 's')),
+      );
+      rejects(
+        () => service.editTarget(
+          s,
+          s.sets[0].id,
+          'missing',
+          Quantity('1', 'rep'),
+        ),
+      );
+      final decoded = sessionFromJson(s.toJson());
+      equal(canonicalJson(decoded.toJson()), canonicalJson(s.toJson()));
+      final complete = service.complete(
+        s,
+        s.sets[0].id,
+        {},
+        acceptSuggested: true,
+      );
+      check(complete.sets[0].manualTargets.contains('mass'));
+    },
+  );
+  test(
     'skip slot selects planned efforts and preserves other roles and slots',
     () {
       final json = definition().toJson();

@@ -27,6 +27,7 @@ const commandNames = [
   'session effective-load',
   'session complete',
   'session annotate',
+  'session edit-target',
   'session skip',
   'session skip-remaining',
   'session skip-slot',
@@ -286,6 +287,17 @@ final class Commands {
               requiredString(request, 'setId'),
               SetObservations.fromJson(request['observations']),
               confirm: _bool(request, 'confirm'),
+            )
+            .toJson();
+      case 'session edit-target':
+        keys({'session', 'setId', 'metric', 'value', 'applyToRemaining'});
+        data = const TrainingService()
+            .editTarget(
+              sessionFromJson(request['session']),
+              requiredString(request, 'setId'),
+              identifier(request, 'metric'),
+              Quantity.fromJson(request['value']),
+              applyToRemaining: _bool(request, 'applyToRemaining'),
             )
             .toJson();
       case 'session skip-remaining':

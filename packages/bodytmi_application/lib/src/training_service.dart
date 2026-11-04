@@ -288,6 +288,108 @@ final class TrainingService {
     session.set(setId).annotate(observations, confirm: confirm),
   );
 
+  /// Edit one planned suggestion and optionally carry it to compatible later sets.
+  TrainingSession editTarget(
+    TrainingSession session,
+    String setId,
+    String metric,
+    Quantity value, {
+    bool applyToRemaining = false,
+  }) {
+    if (session.status != SessionStatus.active) {
+      invalid('Targets can only be edited in an active session.');
+    }
+    identifier({'metric': metric}, 'metric');
+    final selected = session.set(setId);
+    if (selected.status != SetStatus.planned) {
+      invalid('Only planned effort targets can be edited.');
+    }
+    final old = selected.suggested[metric];
+    if (old == null || old.dimension != value.dimension) {
+      invalid('Target must match an existing suggestion and its dimension.');
+    }
+    final occurrences = {
+      for (final occurrence in session.revision.definition.plan.occurrences())
+        if (occurrence.activity is Effort)
+          occurrence.id: occurrence.activity as Effort,
+    };
+    final derived = <String>{};
+    final input = session.derivedPlanInput;
+    if (input != null) {
+      final plan = DerivedWorkoutPlan.fromJson(input.snapshot['plan']);
+      for (final binding in plan.bindings) {
+        if (binding['metric'] == metric) {
+          derived.add(binding['occurrenceId']! as String);
+        }
+      }
+    }
+    if (derived.contains(setId)) {
+      invalid('A derived plan target must be changed through plan refresh.');
+    }
+    final sourceIndex = session.sets.indexWhere((set) => set.id == setId);
+    var changed = false;
+    final sets = <TrainingSet>[];
+    for (var i = 0; i < session.sets.length; i++) {
+      final set = session.sets[i];
+      final eligible =
+          i == sourceIndex ||
+          (applyToRemaining &&
+              i > sourceIndex &&
+              set.slotId == selected.slotId &&
+              set.role == selected.role &&
+              set.status == SetStatus.planned &&
+              set.suggested[metric]?.dimension == value.dimension &&
+              !set.manualTargets.contains(metric) &&
+              !derived.contains(set.id) &&
+              !occurrences[set.id]!.targets.containsKey(metric) &&
+              !occurrences[set.id]!.criteria.containsKey(metric));
+      if (!eligible ||
+          (set.manualTargets.contains(metric) &&
+              canonicalJson(set.suggested[metric]!.toJson()) ==
+                  canonicalJson(value.toJson()))) {
+        sets.add(set);
+        continue;
+      }
+      final suggested = {...set.suggested, metric: value};
+      session.revision.definition.slot(set.slotId).timing?.resolve(suggested);
+      sets.add(
+        TrainingSet(
+          id: set.id,
+          slotId: set.slotId,
+          role: set.role,
+          ordinal: set.ordinal,
+          suggested: suggested,
+          sources: {
+            for (final e in set.sources.entries)
+              if (e.key != metric) e.key: e.value,
+          },
+          manualTargets: {...set.manualTargets, metric},
+          status: set.status,
+          actuals: set.actuals,
+          timing: set.timing,
+          observations: set.observations,
+          maxEffortMetrics: set.maxEffortMetrics,
+          criteria: set.criteria,
+          contentVersion: set.contentVersion + 1,
+        ),
+      );
+      changed = true;
+    }
+    if (!changed) return session;
+    return TrainingSession(
+      id: session.id,
+      revision: session.revision,
+      startedAt: session.startedAt,
+      sets: sets,
+      status: session.status,
+      finishedAt: session.finishedAt,
+      contentVersion: session.contentVersion + 1,
+      bodyMassInputs: session.bodyMassInputs,
+      initialBodyMassOverrides: session.initialBodyMassOverrides,
+      derivedPlanInput: session.derivedPlanInput,
+    );
+  }
+
   /// Skip only planned efforts; confirmed results and prior skips stay intact.
   TrainingSession skipRemaining(
     TrainingSession session, {
