@@ -128,6 +128,7 @@ final class NativeBackup {
           27,
           28,
           29,
+          30,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -250,6 +251,7 @@ final class NativeBackup {
             27,
             28,
             29,
+            30,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -380,9 +382,22 @@ final class NativeBackup {
         final cursor = sessions.selectCursor();
         while (cursor.moveNext()) {
           final row = cursor.current;
-          final session = sessionFromJson(
+          final sessionJson = jsonObject(
             jsonDecode(row['snapshot'] as String),
+            'session',
           );
+          if (db.userVersion < 30 &&
+              sessionJson['derivedPlanInput'] != null &&
+              jsonObject(
+                sessionJson['derivedPlanInput'],
+                'derived plan input',
+              ).containsKey('bodyMassSources')) {
+            invalid('Derived body mass session inputs require schema v30.');
+          }
+          final session = sessionFromJson(sessionJson);
+          if (db.userVersion < 30 && usesDerivedBodyMass(session)) {
+            invalid('Derived body mass session inputs require schema v30.');
+          }
           if (db.userVersion < 29 && session.derivedPlanInput != null) {
             invalid('Derived session inputs require schema v29.');
           }
@@ -597,7 +612,11 @@ final class NativeBackup {
           );
           runs[binding.sessionId] = binding.runId;
         }
-        validateDerivedPlanReferences(sessions, graphs, runs);
+        final records = [
+          for (final row in db.select('SELECT snapshot FROM body_mass_records'))
+            BodyMassRecord.fromJson(jsonDecode(row['snapshot'] as String)),
+        ];
+        validateDerivedPlanReferences(sessions, graphs, runs, records);
       }
       if (db.userVersion >= 7) {
         final timers = <TimingActivity>[];

@@ -1,5 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
+import 'body_mass_service.dart';
+import 'stored_body_mass_service.dart';
 import 'derived_workout_preview.dart';
 
 /// Validates the self-contained, manually bound plan snapshot of a session.
@@ -68,6 +70,15 @@ void validateDerivedPlanSession(
       !sourceIds.every(bindings.containsKey)) {
     invalid('Captured graph source membership mismatch.');
   }
+  final bodyIds = <String>{};
+  for (final entry in bindings.entries) {
+    if (jsonObject(entry.value, 'source')['kind'] == 'bodyMass')
+      bodyIds.add(entry.key);
+  }
+  if (bodyIds.length != input.bodyMassSources.length ||
+      !bodyIds.every(input.bodyMassSources.containsKey)) {
+    invalid('Captured body mass source membership mismatch.');
+  }
   final resolverNodes = <Map<String, Object?>>[];
   for (final item in nodes) {
     final node = jsonObject(item, 'captured graph node');
@@ -79,13 +90,26 @@ void validateDerivedPlanSession(
       bindings[identifier(node, 'sourceId')],
       'captured source',
     );
-    checkKeys(source, {'kind', 'version', 'value', 'status', 'sourceVersion'});
-    if (source['kind'] != 'manual' ||
-        source['status'] != 'resolved' ||
-        source['version'] != source['sourceVersion']) {
-      invalid(
-        'Stored plan sessions currently require resolved manual sources.',
+    if (source['kind'] == 'manual') {
+      checkKeys(source, {
+        'kind',
+        'version',
+        'value',
+        'status',
+        'sourceVersion',
+      });
+      if (source['status'] != 'resolved' ||
+          source['version'] != source['sourceVersion']) {
+        invalid('Invalid captured manual source.');
+      }
+    } else if (source['kind'] == 'bodyMass') {
+      _validateBodyMassSource(
+        source,
+        input.bodyMassSources[identifier(node, 'sourceId')],
+        session.startedAt,
       );
+    } else {
+      invalid('Stored plan sessions do not yet support history graph sources.');
     }
     resolverNodes.add({
       ...node,
@@ -136,7 +160,11 @@ void validateDerivedPlanReferences(
   List<TrainingSession> sessions,
   List<DerivedTargetGraphRevision> graphs,
   Map<String, String> runs,
+  List<BodyMassRecord> records,
 ) {
+  final recordsById = {
+    for (final record in records) record.measurement.id: record,
+  };
   final byId = {
     for (final graph in graphs) '${graph.graph.id}:${graph.number}': graph,
   };
@@ -175,11 +203,104 @@ void validateDerivedPlanReferences(
     for (final entry in graph.graph.bindings.entries) {
       final expected = entry.value;
       final actual = jsonObject(sources[entry.key], 'source');
-      if (expected['kind'] != 'manual' ||
-          actual['version'] != expected['version'] ||
-          canonicalJson(actual['value']) != canonicalJson(expected['value'])) {
-        invalid('Captured manual source differs from published revision.');
+      if (expected['kind'] == 'manual') {
+        if (actual['kind'] != 'manual' ||
+            actual['version'] != expected['version'] ||
+            canonicalJson(actual['value']) !=
+                canonicalJson(expected['value'])) {
+          invalid('Captured manual source differs from published revision.');
+        }
+      } else if (expected['kind'] == 'bodyMass') {
+        for (final key in expected.keys) {
+          if (!actual.containsKey(key) ||
+              canonicalJson(actual[key]) != canonicalJson(expected[key])) {
+            invalid(
+              'Captured body mass policy differs from published revision.',
+            );
+          }
+        }
+        for (final measurement in input.bodyMassSources[entry.key]!) {
+          final current = recordsById[measurement.id];
+          if (current == null ||
+              current.measurement.contentVersion < measurement.contentVersion ||
+              (current.measurement.contentVersion ==
+                      measurement.contentVersion &&
+                  (current.deleted ||
+                      canonicalJson(current.measurement.toJson()) !=
+                          canonicalJson(measurement.toJson())))) {
+            invalid(
+              'Captured body mass source identity, version or value is invalid.',
+            );
+          }
+        }
+      } else {
+        invalid('Unsupported captured graph source.');
       }
     }
   }
 }
+
+void _validateBodyMassSource(
+  Map<String, Object?> source,
+  List<BodyMassMeasurement>? measurements,
+  DateTime startedAt,
+) {
+  checkKeys(source, {
+    'kind',
+    'context',
+    'asOf',
+    'dailyMode',
+    'staleAfterDays',
+    'warnIfStale',
+    'value',
+    'status',
+    'sourceVersion',
+    'provenance',
+  });
+  if (measurements == null) invalid('Missing captured body mass sources.');
+  final context = identifier(source, 'context');
+  final cutoff = source['asOf'] == null
+      ? startedAt
+      : parseInstant(source['asOf'], 'asOf');
+  if (cutoff.isAfter(startedAt))
+    invalid('Body mass source cutoff is after session start.');
+  for (final m in measurements) {
+    if (m.context != context || m.observedAt.isAfter(cutoff))
+      invalid('Captured body mass source is outside its context or cutoff.');
+  }
+  final resolved = const BodyMassService().resolve({
+    'measurements': [for (final m in measurements) m.toJson()],
+    'context': context,
+    'asOf': cutoff.toUtc().toIso8601String(),
+    'dailyMode': source['dailyMode'],
+    if (source.containsKey('staleAfterDays'))
+      'staleAfterDays': source['staleAfterDays'],
+    if (source.containsKey('warnIfStale')) 'warnIfStale': source['warnIfStale'],
+  });
+  final version = measurements.isEmpty
+      ? null
+      : measurements
+            .map((m) => m.contentVersion)
+            .reduce((a, b) => a > b ? a : b);
+  final provenance = {
+    'context': context,
+    'asOf': cutoff.toUtc().toIso8601String(),
+    'source': resolved.source,
+    if (resolved.sourceObservedAt != null)
+      'observedAt': resolved.sourceObservedAt!.toUtc().toIso8601String(),
+    'stale': resolved.stale,
+    'sourceFingerprint': resolved.sourceFingerprint,
+    'sourceVersionSemantics': 'maximumMeasurementVersionOnly',
+  };
+  if (source['status'] != (resolved.mass == null ? 'unresolved' : 'resolved') ||
+      source.containsKey('sourceVersion') != (version != null) ||
+      source['sourceVersion'] != version ||
+      canonicalJson(source['value']) !=
+          canonicalJson(resolved.mass?.toJson()) ||
+      canonicalJson(source['provenance']) != canonicalJson(provenance)) {
+    invalid('Captured body mass inputs do not match their resolution.');
+  }
+}
+
+bool usesDerivedBodyMass(TrainingSession session) =>
+    session.derivedPlanInput?.bodyMassSources.isNotEmpty ?? false;

@@ -209,7 +209,7 @@ final class TrainingArchive {
     validateBodyMassInputReferences(sessions, bodyMass);
     validateDerivedPlanReferences(sessions, graphs, {
       for (final b in sessionPrograms) b.sessionId: b.runId,
-    });
+    }, bodyMass);
     validateProgramData(
       programs: programRevisions,
       runs: programRuns,

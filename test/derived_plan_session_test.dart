@@ -186,7 +186,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 29);
+        equal(backup.manifest['databaseSchemaVersion'], 30);
       } finally {
         await backup.close();
       }
@@ -381,7 +381,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 29);
+        equal(reopened.userVersion, 30);
       } finally {
         reopened.close();
       }

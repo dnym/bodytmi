@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "graph": {
+    "id": "body-derived",
+    "name": "Explicit training mass example",
+    "nodes": [
+      {
+        "id": "body",
+        "kind": "source",
+        "unit": "kg",
+        "sourceId": "training-mass"
+      },
+      {
+        "id": "work",
+        "kind": "scale",
+        "unit": "kg",
+        "input": "body",
+        "factor": "0.8"
+      }
+    ],
+    "bindings": {
+      "training-mass": {
+        "kind": "bodyMass",
+        "context": "clothed-training"
+      }
+    },
+    "plans": [
+      {
+        "id": "body-plan",
+        "templateId": "upper-a",
+        "revision": 1,
+        "bindings": [
+          {
+            "occurrenceId": "workout/heavy[0]/heavy-set",
+            "metric": "mass",
+            "nodeId": "work"
+          },
+          {
+            "occurrenceId": "workout/heavy[1]/heavy-set",
+            "metric": "mass",
+            "nodeId": "work"
+          },
+          {
+            "occurrenceId": "workout/heavy[2]/heavy-set",
+            "metric": "mass",
+            "nodeId": "work"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/29';
+const _format = 'bodytmi-logical-export/30';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -90,6 +90,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/26',
       'bodytmi-logical-export/27',
       'bodytmi-logical-export/28',
+      'bodytmi-logical-export/29',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -98,7 +99,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final derivedSessionData = input['format'] == _format;
+    final derivedBodyMassData = input['format'] == _format;
+    final derivedSessionData =
+        derivedBodyMassData || input['format'] == 'bodytmi-logical-export/29';
     final planData =
         derivedSessionData || input['format'] == 'bodytmi-logical-export/28';
     final graphData =
@@ -192,7 +195,23 @@ final class LogicalArchiveFiles {
       invalid('Logical v12 requires family revisions.');
     if (graphData && !inputData.containsKey('graphs'))
       invalid('Logical v27 requires derived target graph revisions.');
+    if (!derivedBodyMassData) {
+      for (final item in jsonList(inputData, 'sessions')) {
+        final session = jsonObject(item, 'session');
+        final input = session['derivedPlanInput'];
+        if (input != null &&
+            jsonObject(
+              input,
+              'derived plan input',
+            ).containsKey('bodyMassSources')) {
+          invalid('Derived body mass session inputs require logical v30.');
+        }
+      }
+    }
     final archive = TrainingArchive.fromJson(inputData);
+    if (!derivedBodyMassData && archive.sessions.any(usesDerivedBodyMass)) {
+      invalid('Derived body mass session inputs require logical v30.');
+    }
     if (!derivedSessionData &&
         archive.sessions.any((s) => s.derivedPlanInput != null)) {
       invalid('Derived session inputs require logical v29.');
@@ -333,7 +352,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 29');
+          db.execute('PRAGMA user_version = 30');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

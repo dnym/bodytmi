@@ -294,7 +294,7 @@ void derivedWorkoutPreviewTests() {
   );
 
   test(
-    'schema v27 graphs without workout plans migrate to v29 unchanged',
+    'schema v27 graphs without workout plans migrate to v30 unchanged',
     () => withStore((store) async {
       await DerivedTargetGraphService(
         store,
@@ -310,7 +310,7 @@ void derivedWorkoutPreviewTests() {
         db.userVersion = 27;
         db.close();
         equal(NativeBackup.validateDatabase(path), 27);
-        final export = '${temp.path}/v29.json';
+        final export = '${temp.path}/v30.json';
         await LogicalArchiveFiles.export(await store.archive(), export);
         final document =
             jsonDecode(await File(export).readAsString())
@@ -349,7 +349,7 @@ void derivedWorkoutPreviewTests() {
         }
         final reopened = sqlite3.open(path);
         try {
-          equal(reopened.userVersion, 29);
+          equal(reopened.userVersion, 30);
         } finally {
           reopened.close();
         }
@@ -421,7 +421,7 @@ void derivedWorkoutPreviewTests() {
         );
         final copy = '${temp.path}/snapshot.sqlite';
         await store.snapshot(copy);
-        equal(NativeBackup.validateDatabase(copy), 29);
+        equal(NativeBackup.validateDatabase(copy), 30);
         final db = sqlite3.open(copy);
         db.userVersion = 27;
         db.close();

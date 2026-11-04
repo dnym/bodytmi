@@ -251,14 +251,36 @@ final class StoredTrainingService {
         invalid('Derived plan pins another workout revision.');
       final preview = jsonObject(resolved['preview'], 'derived preview');
       final graph = jsonObject(preview['graphResolution'], 'graph resolution');
-      for (final source in jsonObject(
+      final bodyMassSources = <String, Object?>{};
+      final bodyRecords = await repository.bodyMassRecords();
+      for (final entry in jsonObject(
         graph['bindings'],
         'graph bindings',
-      ).values) {
-        if (jsonObject(source, 'graph source')['kind'] != 'manual') {
+      ).entries) {
+        final source = jsonObject(entry.value, 'graph source');
+        if (source['kind'] == 'history') {
           invalid(
-            'Session plan inputs currently support published manual graph sources only.',
+            'Session plan inputs do not yet support history graph sources.',
           );
+        }
+        if (source['kind'] == 'bodyMass') {
+          final cutoff = source['asOf'] == null
+              ? startedAt
+              : parseInstant(source['asOf'], 'asOf');
+          final selected = [
+            for (final record in bodyRecords)
+              if (!record.deleted &&
+                  record.measurement.context == source['context'] &&
+                  !record.measurement.observedAt.isAfter(cutoff))
+                record.measurement,
+          ];
+          selected.sort((a, b) {
+            final order = a.observedAt.compareTo(b.observedAt);
+            return order != 0 ? order : a.id.compareTo(b.id);
+          });
+          bodyMassSources[entry.key] = [for (final m in selected) m.toJson()];
+        } else if (source['kind'] != 'manual') {
+          invalid('Unsupported session plan source.');
         }
       }
       final rows = {
@@ -319,6 +341,7 @@ final class StoredTrainingService {
       derivedInput = DerivedPlanInput.fromJson({
         'reference': derivedPlan.toJson(),
         'snapshot': resolved,
+        if (bodyMassSources.isNotEmpty) 'bodyMassSources': bodyMassSources,
       });
     }
     next = TrainingSession(
@@ -334,6 +357,7 @@ final class StoredTrainingService {
         [next],
         await repository.derivedTargetGraphRevisions(),
         {if (runId != null) id: runId},
+        await repository.bodyMassRecords(),
       );
     }
     await repository.insertSession(next);
