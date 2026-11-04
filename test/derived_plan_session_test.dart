@@ -63,6 +63,21 @@ Map<String, Object?> _graph({bool manual = true}) => {
   ],
 };
 
+Map<String, Object?> _programWithPlan({
+  String graphId = 'manual-graph',
+  int workoutRevision = 1,
+}) => {
+  'id': 'planned-program',
+  'name': 'Planned program',
+  'plan': {
+    'id': 'day',
+    'type': 'day',
+    'templateId': definition().id,
+    'revision': workoutRevision,
+    'derivedPlan': {'graphId': graphId, 'graphRevision': 1, 'planId': 'bench'},
+  },
+};
+
 void derivedPlanSessionTests() {
   Future<void> withStore(
     Future<void> Function(TrainingStore, String) action,
@@ -187,7 +202,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 32);
+        equal(backup.manifest['databaseSchemaVersion'], 33);
       } finally {
         await backup.close();
       }
@@ -769,7 +784,7 @@ void derivedPlanSessionTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 32);
+      equal(NativeBackup.validateDatabase(snapshot), 33);
       final db = sqlite3.open(snapshot);
       db.userVersion = 30;
       db.close();
@@ -875,6 +890,276 @@ void derivedPlanSessionTests() {
   );
 
   test(
+    'program day automatically selects its pinned plan in independent runs',
+    () => withStore((store, dir) async {
+      final training = StoredTrainingService(store);
+      final graphs = DerivedTargetGraphService(store);
+      final programs = ProgramService(store);
+      await graphs.publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      await programs.publish(ProgramDefinition.fromJson(_programWithPlan()), 0);
+      for (final run in ['strength', 'cardio']) {
+        await programs.create(run, 'planned-program', 1, instant(1));
+        final started = await programs.start(
+          run,
+          1,
+          '$run-session',
+          instant(2),
+        );
+        equal(started.sets.first.suggested['mass']!.value.toString(), '80');
+        sameJson(started.derivedPlanInput!.reference.toJson(), _ref.toJson());
+        final retry = await programs.start(
+          run,
+          1,
+          started.id,
+          instant(2),
+          derivedPlan: _ref,
+        );
+        sameJson(retry.toJson(), started.toJson());
+        await expectLater(
+          programs.start(
+            run,
+            1,
+            started.id,
+            instant(2),
+            derivedPlan: const DerivedPlanRef('different', 1, 'other'),
+          ),
+          throwsA(isA<BodyTmiException>()),
+        );
+      }
+      final changed = _graph();
+      jsonObject(
+        jsonObject(changed['bindings'], 'bindings')['max-source'],
+        'source',
+      )['value'] = {
+        'value': '200',
+        'unit': 'kg',
+      };
+      await graphs.publish(DerivedTargetGraph.fromJson(changed), 1);
+      final first = await training.session('strength-session');
+      await training.edit(first.id, first.contentVersion, finished);
+      final again = await programs.start(
+        'strength',
+        (await programs.run('strength')).contentVersion,
+        'strength-next',
+        instant(3),
+      );
+      equal(again.sets.first.suggested['mass']!.value.toString(), '80');
+      final archive = await store.archive();
+      await LogicalArchiveFiles.export(archive, '$dir/plan.json');
+      final prepared = await LogicalArchiveFiles.prepare('$dir/plan.json');
+      try {
+        equal(
+          prepared.archive.programRevisions.single.definition.plan.nodes
+              .whereType<ProgramDay>()
+              .single
+              .derivedPlan!
+              .graphRevision,
+          1,
+        );
+        await store.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery',
+          confirm: true,
+        );
+        await store.close();
+        final reopened = await TrainingStore.open('$dir/profile.sqlite');
+        try {
+          equal(
+            (await ProgramService(reopened).run('strength'))
+                .program
+                .definition
+                .plan
+                .nodes
+                .whereType<ProgramDay>()
+                .single
+                .derivedPlan!
+                .planId,
+            'bench',
+          );
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await prepared.close();
+      }
+    }),
+  );
+
+  test(
+    'program day pins resolve history separately for each run',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final programs = ProgramService(store);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph(manual: false)), 0);
+      final pinnedDay = jsonObject(_programWithPlan()['plan'], 'day');
+      pinnedDay['id'] = 'derived';
+      await programs.publish(
+        ProgramDefinition.fromJson({
+          'id': 'two-days',
+          'name': 'Two days',
+          'plan': {
+            'id': 'cycle',
+            'type': 'group',
+            'children': [
+              {
+                'id': 'seed',
+                'type': 'day',
+                'templateId': definition().id,
+                'revision': 1,
+              },
+              pinnedDay,
+            ],
+          },
+        }),
+        0,
+      );
+      for (final run in ['strength', 'cardio']) {
+        await programs.create(run, 'two-days', 1, instant(1));
+        final source = await programs.start(run, 1, '$run-source', instant(1));
+        await training.edit(source.id, source.contentVersion, (s) {
+          for (final set in s.sets) {
+            s = const TrainingService().complete(s, set.id, {
+              'mass': Quantity(run == 'strength' ? '100' : '50', 'kg'),
+              'reps': Quantity('5', 'rep'),
+            });
+          }
+          return s.finish(instant(1).add(const Duration(hours: 1)));
+        });
+        final version = (await programs.run(run)).contentVersion;
+        await expectLater(
+          programs.start(
+            run,
+            version,
+            '$run-wrong',
+            instant(2),
+            derivedPlan: const DerivedPlanRef('other', 1, 'other'),
+          ),
+          throwsA(isA<BodyTmiException>()),
+        );
+        check(await store.session('$run-wrong') == null);
+        final planned = await programs.start(
+          run,
+          version,
+          '$run-plan',
+          instant(2),
+        );
+        equal(
+          planned.sets.first.suggested['mass']!.value.toString(),
+          run == 'strength' ? '80' : '40',
+        );
+      }
+      equal((await store.archive()).sessions.length, 4);
+    }),
+  );
+
+  test(
+    'program day plan pins validate publication and archive references',
+    () => withStore((store, _) async {
+      final graphs = DerivedTargetGraphService(store);
+      final programs = ProgramService(store);
+      await expectLater(
+        programs.publish(
+          ProgramDefinition.fromJson(_programWithPlan(graphId: 'missing')),
+          0,
+        ),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await graphs.publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final wrong = _programWithPlan();
+      jsonObject(
+        jsonObject(wrong['plan'], 'day')['derivedPlan'],
+        'plan',
+      )['planId'] = 'unknown';
+      await expectLater(
+        programs.publish(ProgramDefinition.fromJson(wrong), 0),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await programs.publish(ProgramDefinition.fromJson(_programWithPlan()), 0);
+      final doc = copyJson((await store.archive()).toJson());
+      final program = jsonObject(
+        jsonList(doc, 'programRevisions').single,
+        'program',
+      );
+      final plan = jsonObject(
+        jsonObject(program['definition'], 'definition')['plan'],
+        'day',
+      );
+      jsonObject(plan['derivedPlan'], 'derivedPlan')['graphId'] = 'missing';
+      rejects(() => TrainingArchive.fromJson(doc));
+    }),
+  );
+
+  test(
+    'program day plan pins reject older portability labels',
+    () => withStore((store, dir) async {
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      await ProgramService(
+        store,
+      ).publish(ProgramDefinition.fromJson(_programWithPlan()), 0);
+      final archive = await store.archive();
+      await LogicalArchiveFiles.export(archive, '$dir/export.json');
+      final envelope =
+          jsonDecode(await File('$dir/export.json').readAsString())
+              as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/32';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('$dir/old.json').writeAsString(jsonEncode(envelope));
+      await expectLater(
+        LogicalArchiveFiles.prepare('$dir/old.json'),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await store.snapshot('$dir/snapshot.sqlite');
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 33);
+      final db = sqlite3.open('$dir/snapshot.sqlite');
+      db.userVersion = 32;
+      db.close();
+      rejects(() => NativeBackup.validateDatabase('$dir/snapshot.sqlite'));
+    }),
+  );
+
+  test(
+    'v32 program runs migrate without acquiring a derived plan',
+    () => withStore((store, dir) async {
+      final programs = ProgramService(store);
+      final definitionJson = _programWithPlan();
+      jsonObject(definitionJson['plan'], 'day').remove('derivedPlan');
+      await programs.publish(ProgramDefinition.fromJson(definitionJson), 0);
+      await programs.create('old-run', 'planned-program', 1, instant(1));
+      final original = (await programs.run('old-run')).toJson();
+      await store.snapshot('$dir/old.sqlite');
+      final db = sqlite3.open('$dir/old.sqlite');
+      db.userVersion = 32;
+      db.close();
+      final reopened = await TrainingStore.open('$dir/old.sqlite');
+      try {
+        sameJson(
+          (await ProgramService(reopened).run('old-run')).toJson(),
+          original,
+        );
+        final session = await ProgramService(
+          reopened,
+        ).start('old-run', 1, 'old-session', instant(2));
+        check(session.derivedPlanInput == null);
+      } finally {
+        await reopened.close();
+      }
+    }),
+  );
+
+  test(
     'group skip retains frozen plan inputs and permits idempotent finalization',
     () => withStore((store, _) async {
       await DerivedTargetGraphService(
@@ -939,7 +1224,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 32);
+        equal(reopened.userVersion, 33);
       } finally {
         reopened.close();
       }

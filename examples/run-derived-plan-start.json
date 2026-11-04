@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "runId": "strength-run",
+  "expectedVersion": 1,
+  "id": "strength-session",
+  "startedAt": "2026-10-30T12:00:00Z"
+}

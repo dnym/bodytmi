@@ -1,6 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
 import 'training_repository.dart';
+import 'derived_target_graph_service.dart';
 
 final class ProgramService {
   const ProgramService(this.repository);
@@ -38,6 +39,22 @@ final class ProgramService {
       await StoredTrainingService(
         repository,
       ).revision(node.templateId, node.revision);
+      final ref = node.derivedPlan;
+      if (ref != null) {
+        final graph = await DerivedTargetGraphService(
+          repository,
+        ).revision(ref.graphId, ref.graphRevision);
+        final matches = graph.graph.plans.where(
+          (plan) => plan.id == ref.planId,
+        );
+        if (matches.length != 1 ||
+            matches.single.templateId != node.templateId ||
+            matches.single.revision != node.revision) {
+          invalid(
+            'Program day derived plan does not match its workout revision.',
+          );
+        }
+      }
     }
     final next = ProgramRevision.publish(
       definition,
@@ -109,11 +126,20 @@ final class ProgramService {
       final session = await StoredTrainingService(
         repository,
       ).session(sessionId);
+      final pinned = current.program.definition
+          .dayAt(existing.ordinal)
+          .day
+          .derivedPlan;
+      if (pinned != null &&
+          derivedPlan != null &&
+          canonicalJson(pinned.toJson()) != canonicalJson(derivedPlan.toJson()))
+        programConflict('Program day pins another derived plan.');
+      final effectivePlan = pinned ?? derivedPlan;
       if (existing.runId != runId ||
           session.startedAt != at ||
           !sameBodyMassOverrides(session, bodyMassOverrides) ||
           canonicalJson(session.derivedPlanInput?.reference.toJson()) !=
-              canonicalJson(derivedPlan?.toJson()))
+              canonicalJson(effectivePlan?.toJson()))
         programConflict('Session identity belongs to another occurrence.');
       return session;
     }
@@ -130,6 +156,11 @@ final class ProgramService {
         'Current program day already has a session; resume that session.',
       );
     final day = current.current!;
+    final pinned = day.day.derivedPlan;
+    if (pinned != null &&
+        derivedPlan != null &&
+        canonicalJson(pinned.toJson()) != canonicalJson(derivedPlan.toJson()))
+      programConflict('Program day pins another derived plan.');
     return await StoredTrainingService(repository).start(
       sessionId,
       day.day.templateId,
@@ -137,7 +168,7 @@ final class ProgramService {
       at,
       programRun: current,
       bodyMassOverrides: bodyMassOverrides,
-      derivedPlan: derivedPlan,
+      derivedPlan: pinned ?? derivedPlan,
     );
   });
   Future<ProgramReceipt> skip(
@@ -276,7 +307,10 @@ void validateProgramData({
     final day = run.program.definition.dayAt(b.ordinal);
     if (day.path != b.path ||
         day.day.templateId != session.revision.definition.id ||
-        day.day.revision != session.revision.number)
+        day.day.revision != session.revision.number ||
+        (day.day.derivedPlan != null &&
+            canonicalJson(day.day.derivedPlan!.toJson()) !=
+                canonicalJson(session.derivedPlanInput?.reference.toJson())))
       invalid('Program session prescription or path mismatch.');
   }
   for (final s in sessions) {
@@ -337,6 +371,33 @@ void validateProgramData({
       if (rows[i].ordinal != i ||
           (i > 0 && rows[i].occurredAt.isBefore(rows[i - 1].occurredAt)))
         invalid('Program receipt sequence is inconsistent.');
+    }
+  }
+}
+
+/// Check pinned day plans even when no run or session has yet been created.
+void validateProgramPlanReferences(
+  List<ProgramRevision> programs,
+  List<DerivedTargetGraphRevision> graphs,
+) {
+  final byId = {
+    for (final graph in graphs) '${graph.graph.id}:${graph.number}': graph,
+  };
+  for (final program in programs) {
+    for (final day in program.definition.plan.nodes.whereType<ProgramDay>()) {
+      final ref = day.derivedPlan;
+      if (ref == null) continue;
+      final graph = byId['${ref.graphId}:${ref.graphRevision}'];
+      if (graph == null)
+        invalid('Program derived plan graph revision is missing.');
+      final plans = graph.graph.plans.where((plan) => plan.id == ref.planId);
+      if (plans.length != 1 ||
+          plans.single.templateId != day.templateId ||
+          plans.single.revision != day.revision) {
+        invalid(
+          'Program day derived plan does not match its workout revision.',
+        );
+      }
     }
   }
 }

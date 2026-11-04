@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/32';
+const _format = 'bodytmi-logical-export/33';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -93,6 +93,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/29',
       'bodytmi-logical-export/30',
       'bodytmi-logical-export/31',
+      'bodytmi-logical-export/32',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -101,7 +102,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final targetlessSessionData = input['format'] == _format;
+    final programPlanData = input['format'] == _format;
+    final targetlessSessionData =
+        programPlanData || input['format'] == 'bodytmi-logical-export/32';
     final historySessionData =
         targetlessSessionData || input['format'] == 'bodytmi-logical-export/31';
     final derivedBodyMassData =
@@ -215,6 +218,14 @@ final class LogicalArchiveFiles {
       }
     }
     final archive = TrainingArchive.fromJson(inputData);
+    if (!programPlanData &&
+        archive.programRevisions.any(
+          (p) => p.definition.plan.nodes.whereType<ProgramDay>().any(
+            (day) => day.derivedPlan != null,
+          ),
+        )) {
+      invalid('Program day derived plans require logical v33.');
+    }
     if (!targetlessSessionData &&
         archive.sessions.any(usesDerivedTargetlessObjective)) {
       invalid('Derived targetless suggestions require logical v32.');
@@ -365,7 +376,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 32');
+          db.execute('PRAGMA user_version = 33');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

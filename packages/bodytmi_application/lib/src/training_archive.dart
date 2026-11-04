@@ -202,6 +202,7 @@ final class TrainingArchive {
   void _validate() {
     validateFamilyRevisions(families);
     validateDerivedTargetGraphRevisions(graphs);
+    validateProgramPlanReferences(programRevisions, graphs);
     validateTimingData(timers, sessions);
     validateExecutionData(executions, sessions, timers);
     if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)

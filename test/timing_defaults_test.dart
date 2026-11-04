@@ -398,14 +398,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          32,
+          33,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/32',
+          'bodytmi-logical-export/33',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {

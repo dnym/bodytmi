@@ -67,7 +67,7 @@ Future<void> main(List<String> arguments) async {
           'effectiveLoad':
               'Slots may configure an effectiveMass model with explicit bodyMassFraction, addedMass and assistance components. store effective-load takes database/id; session effective-load takes session. Derived suggested/confirmed-actual estimates preserve raw inputs and do not change progression.',
           'programs':
-              'program publish pins workout revisions; run create permits multiple active runs. run start selects runId; store finish advances its bound occurrence once. Use run show/list for cursor and currentSessionId.',
+              'program publish pins workout revisions and may pin a derivedPlan per day; run create permits multiple active runs. Pinned day plans are applied automatically at run start. run start selects runId; store finish advances its bound occurrence once. Use run show/list for cursor and currentSessionId.',
           'analytics':
               'session summary takes session; store summary takes database/id. Optional sumMetrics explicitly selects raw metric sums; warmups are excluded by default. history series takes sessions and optional runBySession; store series reads database history. Series support metric, exact context, inclusive from/exclusive until, includeWarmups and includeActive. Only confirmed results appear; series retain separate slot/setup/equipment/run contexts and source versions.',
           'records':

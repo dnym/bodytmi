@@ -102,6 +102,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   31 => schemaV27, // v31 adds captured history graph inputs.
   32 =>
     schemaV27, // v32 adds derived suggestions for bounded targetless objectives.
+  33 => schemaV27, // v33 allows program days to pin derived plans.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

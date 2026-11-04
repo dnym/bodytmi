@@ -131,6 +131,7 @@ final class NativeBackup {
           30,
           31,
           32,
+          33,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -256,6 +257,7 @@ final class NativeBackup {
             30,
             31,
             32,
+            33,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -525,6 +527,12 @@ final class NativeBackup {
             if (p.definition.id != row['program_id'] ||
                 p.number != row['number'])
               invalid('Program revision row identity mismatch.');
+            if (db.userVersion < 33 &&
+                p.definition.plan.nodes.whereType<ProgramDay>().any(
+                  (day) => day.derivedPlan != null,
+                )) {
+              invalid('Program day derived plans require schema v33.');
+            }
             programs.add(p);
           }
           final runs = <ProgramRun>[];
@@ -627,6 +635,10 @@ final class NativeBackup {
             BodyMassRecord.fromJson(jsonDecode(row['snapshot'] as String)),
         ];
         validateDerivedPlanReferences(sessions, graphs, runs, records);
+        validateProgramPlanReferences([
+          for (final row in db.select('SELECT snapshot FROM program_revisions'))
+            ProgramRevision.fromJson(jsonDecode(row['snapshot'] as String)),
+        ], graphs);
       }
       if (db.userVersion >= 7) {
         final timers = <TimingActivity>[];

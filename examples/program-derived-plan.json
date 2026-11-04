@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "expectedRevision": 0,
+  "definition": {
+    "id": "derived-strength",
+    "name": "Strength with derived targets",
+    "plan": {
+      "id": "upper",
+      "type": "day",
+      "label": "Upper A",
+      "templateId": "upper-a",
+      "revision": 1,
+      "derivedPlan": {
+        "graphId": "bench-percentages",
+        "graphRevision": 1,
+        "planId": "upper-a-ladder"
+      }
+    }
+  }
+}

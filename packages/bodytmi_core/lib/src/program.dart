@@ -1,5 +1,6 @@
 import 'errors.dart';
 import 'instant.dart';
+import 'derived_plan_input.dart';
 
 sealed class ProgramNode {
   const ProgramNode(this.id, this.label);
@@ -14,12 +15,22 @@ sealed class ProgramNode {
       invalid('Program label must be a string.');
     switch (j['type']) {
       case 'day':
-        checkKeys(j, {'id', 'type', 'label', 'templateId', 'revision'});
+        checkKeys(j, {
+          'id',
+          'type',
+          'label',
+          'templateId',
+          'revision',
+          'derivedPlan',
+        });
         return ProgramDay(
           id,
           label as String?,
           identifier(j, 'templateId'),
           positiveProgramInt(j, 'revision'),
+          derivedPlan: j['derivedPlan'] == null
+              ? null
+              : DerivedPlanRef.fromJson(j['derivedPlan']),
         );
       case 'group':
         checkKeys(j, {'id', 'type', 'label', 'children'});
@@ -68,15 +79,23 @@ sealed class ProgramNode {
 }
 
 final class ProgramDay extends ProgramNode {
-  const ProgramDay(super.id, super.label, this.templateId, this.revision);
+  const ProgramDay(
+    super.id,
+    super.label,
+    this.templateId,
+    this.revision, {
+    this.derivedPlan,
+  });
   final String templateId;
   final int revision;
+  final DerivedPlanRef? derivedPlan;
   @override
   Map<String, Object?> toJson() => {
     ...header,
     'type': 'day',
     'templateId': templateId,
     'revision': revision,
+    if (derivedPlan != null) 'derivedPlan': derivedPlan!.toJson(),
   };
 }
 
