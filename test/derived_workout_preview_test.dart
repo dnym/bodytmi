@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
+import 'package:crypto/crypto.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, isA, throwsA;
 
 import 'fixtures.dart';
@@ -74,6 +77,258 @@ void derivedWorkoutPreviewTests() {
     'metric': metric,
     'nodeId': node,
   };
+
+  test(
+    'published workout plans pin valid effort mappings and preview against the selected graph revision',
+    () => withStore((store) async {
+      final workout = revision();
+      final ids = start(
+        from: workout,
+      ).sets.where((s) => s.slotId == 'bench-heavy').map((s) => s.id).toList();
+      Map<String, Object?> plan() => {
+        'id': 'bench-plan',
+        'templateId': workout.definition.id,
+        'revision': 1,
+        'bindings': [
+          binding(ids[1], 'mass', 'working'),
+          binding(ids[0], 'mass', 'warmup'),
+        ],
+      };
+      final spec = _graph();
+      spec['plans'] = [plan()];
+      final graph = DerivedTargetGraph.fromJson(spec);
+      equal(graph.plans.single.bindings.first['occurrenceId'], ids[0]);
+      final service = DerivedTargetGraphService(store);
+      await service.publish(graph, 0);
+      final before = canonicalJson(
+        (await StoredTrainingService(store).exportArchive()).toJson(),
+      );
+      final result = await DerivedWorkoutPreview(store).previewPlan(
+        graphId: graph.id,
+        graphRevision: 1,
+        planId: 'bench-plan',
+        asOf: instant(10),
+      );
+      final preview = jsonObject(result['preview'], 'preview');
+      equal(
+        jsonObject(target(preview, ids[0], 'mass')['value'], 'value')['value'],
+        '50',
+      );
+      equal(
+        jsonObject(target(preview, ids[1], 'mass')['value'], 'value')['value'],
+        '80',
+      );
+      equal(
+        canonicalJson(
+          (await StoredTrainingService(store).exportArchive()).toJson(),
+        ),
+        before,
+      );
+      await service.publish(DerivedTargetGraph.fromJson(_graph()), 1);
+      equal(
+        (await service.revision(graph.id, 1)).graph.plans.single.id,
+        'bench-plan',
+      );
+      await expectLater(
+        DerivedWorkoutPreview(store).previewPlan(
+          graphId: graph.id,
+          graphRevision: 2,
+          planId: 'bench-plan',
+          asOf: instant(10),
+        ),
+        throwsA(isA<BodyTmiException>()),
+      );
+    }),
+  );
+
+  test(
+    'published workout plans reject invalid references, mismatched units and duplicate mappings',
+    () => withStore((store) async {
+      final workout = revision();
+      final id = start(
+        from: workout,
+      ).sets.firstWhere((s) => s.slotId == 'bench-heavy').id;
+      Map<String, Object?> plan(
+        String template,
+        String occurrence,
+        String metric,
+        String node,
+      ) => {
+        'id': 'bad-plan',
+        'templateId': template,
+        'revision': 1,
+        'bindings': [binding(occurrence, metric, node)],
+      };
+      Future<void> reject(Map<String, Object?> plan) async {
+        final spec = _graph();
+        spec['plans'] = [plan];
+        try {
+          await DerivedTargetGraphService(
+            store,
+          ).publish(DerivedTargetGraph.fromJson(spec), 0);
+        } on BodyTmiException {
+          return;
+        }
+        throw StateError('Expected invalid workout plan.');
+      }
+
+      await reject(plan('missing', id, 'mass', 'working'));
+      await reject(
+        plan(workout.definition.id, 'missing-occurrence', 'mass', 'working'),
+      );
+      await reject(plan(workout.definition.id, id, 'mass', 'seconds'));
+      await reject(
+        plan(workout.definition.id, id, 'missing-metric', 'working'),
+      );
+      await reject(plan(workout.definition.id, id, 'mass', 'missing-node'));
+      final duplicate = plan(workout.definition.id, id, 'mass', 'working');
+      duplicate['bindings'] = [
+        binding(id, 'mass', 'working'),
+        binding(id, 'mass', 'warmup'),
+      ];
+      await reject(duplicate);
+      equal((await store.derivedTargetGraphRevisions()).length, 0);
+    }),
+  );
+
+  test(
+    'schema v27 graphs without workout plans migrate to v28 unchanged',
+    () => withStore((store) async {
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final before = canonicalJson((await store.archive()).toJson());
+      final temp = await Directory.systemTemp.createTemp(
+        'bodytmi-plan-migration-',
+      );
+      try {
+        final path = '${temp.path}/v27.sqlite';
+        await store.snapshot(path);
+        final db = sqlite3.open(path);
+        db.userVersion = 27;
+        db.close();
+        equal(NativeBackup.validateDatabase(path), 27);
+        final export = '${temp.path}/v28.json';
+        await LogicalArchiveFiles.export(await store.archive(), export);
+        final document =
+            jsonDecode(await File(export).readAsString())
+                as Map<String, Object?>;
+        document['format'] = 'bodytmi-logical-export/27';
+        document['sha256'] = sha256
+            .convert(
+              utf8.encode(
+                canonicalJson({
+                  for (final e in document.entries)
+                    if (e.key != 'sha256') e.key: e.value,
+                }),
+              ),
+            )
+            .toString();
+        final legacy = '${temp.path}/v27.json';
+        await File(legacy).writeAsString(jsonEncode(document));
+        final prepared = await LogicalArchiveFiles.prepare(legacy);
+        try {
+          equal(prepared.archive.graphs.single.graph.plans.length, 0);
+        } finally {
+          await prepared.close();
+        }
+        await store.close();
+        final upgraded = await TrainingStore.open(path);
+        try {
+          equal(canonicalJson((await upgraded.archive()).toJson()), before);
+          equal(
+            (await DerivedTargetGraphService(
+              upgraded,
+            ).revision('preview-graph')).graph.plans.length,
+            0,
+          );
+        } finally {
+          await upgraded.close();
+        }
+        final reopened = sqlite3.open(path);
+        try {
+          equal(reopened.userVersion, 28);
+        } finally {
+          reopened.close();
+        }
+      } finally {
+        await temp.delete(recursive: true);
+      }
+    }),
+  );
+
+  test(
+    'published workout plans survive portability and old schema labels reject them',
+    () => withStore((store) async {
+      final workout = revision();
+      final id = start(
+        from: workout,
+      ).sets.firstWhere((s) => s.slotId == 'bench-heavy').id;
+      final spec = _graph();
+      spec['plans'] = [
+        {
+          'id': 'plan',
+          'templateId': workout.definition.id,
+          'revision': 1,
+          'bindings': [binding(id, 'mass', 'working')],
+        },
+      ];
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(spec), 0);
+      final archive = await StoredTrainingService(store).exportArchive();
+      rejects(
+        () => TrainingArchive(
+          revisions: [],
+          sessions: [],
+          finalizations: [],
+          graphs: archive.graphs,
+        ),
+      );
+      final temp = await Directory.systemTemp.createTemp(
+        'bodytmi-plan-portability-',
+      );
+      try {
+        final export = '${temp.path}/logical.json';
+        await LogicalArchiveFiles.export(archive, export);
+        final prepared = await LogicalArchiveFiles.prepare(export);
+        try {
+          equal(prepared.archive.graphs.single.graph.plans.single.id, 'plan');
+        } finally {
+          await prepared.close();
+        }
+        final document =
+            jsonDecode(await File(export).readAsString())
+                as Map<String, Object?>;
+        document['format'] = 'bodytmi-logical-export/27';
+        document['sha256'] = sha256
+            .convert(
+              utf8.encode(
+                canonicalJson({
+                  for (final e in document.entries)
+                    if (e.key != 'sha256') e.key: e.value,
+                }),
+              ),
+            )
+            .toString();
+        final old = '${temp.path}/old.json';
+        await File(old).writeAsString(jsonEncode(document));
+        await expectLater(
+          LogicalArchiveFiles.prepare(old),
+          throwsA(isA<BodyTmiException>()),
+        );
+        final copy = '${temp.path}/snapshot.sqlite';
+        await store.snapshot(copy);
+        equal(NativeBackup.validateDatabase(copy), 28);
+        final db = sqlite3.open(copy);
+        db.userVersion = 27;
+        db.close();
+        rejects(() => NativeBackup.validateDatabase(copy));
+      } finally {
+        await temp.delete(recursive: true);
+      }
+    }),
+  );
 
   test(
     'preview status detects backdated input and mapped target changes while retaining pinned revisions',

@@ -228,6 +228,16 @@ final class TrainingArchive {
       numbers[id] = expected;
       byRevision['$id:${revision.number}'] = revision;
     }
+    for (final graph in graphs) {
+      for (final plan in graph.graph.plans) {
+        final workout = byRevision['${plan.templateId}:${plan.revision}'];
+        if (workout == null)
+          invalid(
+            'Derived workout plan references a missing workout revision.',
+          );
+        plan.validate(workout, graph.graph.nodes);
+      }
+    }
     final bySession = <String, TrainingSession>{};
     for (final session in sessions) {
       if (bySession.containsKey(session.id))

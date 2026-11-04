@@ -1,4 +1,5 @@
 import 'derived_targets.dart';
+import 'derived_workout_plan.dart';
 import 'errors.dart';
 import 'instant.dart';
 import 'quantity.dart';
@@ -10,10 +11,16 @@ import 'quantity.dart';
 /// body-mass record, or stored session history). Publishing a graph never
 /// fetches or asserts the currency of any source.
 final class DerivedTargetGraph {
-  DerivedTargetGraph._(this.id, this.name, this.nodes, this.bindings);
+  DerivedTargetGraph._(
+    this.id,
+    this.name,
+    this.nodes,
+    this.bindings,
+    this.plans,
+  );
   factory DerivedTargetGraph.fromJson(Object? input) {
     final json = jsonObject(input, 'derived target graph');
-    checkKeys(json, {'id', 'name', 'nodes', 'bindings'});
+    checkKeys(json, {'id', 'name', 'nodes', 'bindings', 'plans'});
     final id = identifier(json, 'id');
     final name = json['name'];
     if (name != null && name is! String)
@@ -88,12 +95,30 @@ final class DerivedTargetGraph {
         sourceDimensions[entry.key]!,
       );
     }
+    final rawPlans = json.containsKey('plans')
+        ? jsonList(json, 'plans')
+        : <Object?>[];
+    if (rawPlans.length > 1000)
+      invalid('Graph cannot have more than 1000 workout plans.');
+    final plans = [
+      for (final raw in rawPlans) DerivedWorkoutPlan.fromJson(raw),
+    ];
+    if (plans.map((p) => p.id).toSet().length != plans.length)
+      invalid('Duplicate derived workout plan ID.');
+    if (plans.fold<int>(0, (n, p) => n + p.bindings.length) > 10000)
+      invalid('Graph workout plans exceed 10000 bindings.');
+    for (final plan in plans) {
+      if (plan.bindings.any((b) => !nodeIds.contains(b['nodeId'])))
+        invalid('Workout plan references an unknown graph node.');
+    }
+    plans.sort((a, b) => a.id.compareTo(b.id));
     nodes.sort((a, b) => (a['id']! as String).compareTo(b['id']! as String));
     return DerivedTargetGraph._(
       id,
       name as String?,
       List.unmodifiable(nodes),
       Map.unmodifiable(bindings),
+      List.unmodifiable(plans),
     );
   }
 
@@ -206,6 +231,7 @@ final class DerivedTargetGraph {
   final String? name;
   final List<Map<String, Object?>> nodes;
   final Map<String, Map<String, Object?>> bindings;
+  final List<DerivedWorkoutPlan> plans;
 
   List<String> get sourceIds => bindings.keys.toList()..sort();
 
@@ -214,6 +240,7 @@ final class DerivedTargetGraph {
     if (name != null) 'name': name,
     'nodes': nodes,
     'bindings': bindings,
+    if (plans.isNotEmpty) 'plans': [for (final plan in plans) plan.toJson()],
   };
 }
 

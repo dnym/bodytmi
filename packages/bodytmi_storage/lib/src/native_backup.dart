@@ -126,6 +126,7 @@ final class NativeBackup {
           25,
           26,
           27,
+          28,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -246,6 +247,7 @@ final class NativeBackup {
             25,
             26,
             27,
+            28,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -308,6 +310,25 @@ final class NativeBackup {
           if (graph.graph.id != row['graph_id'] ||
               graph.number != row['number'])
             invalid('Derived target graph row identity mismatch.');
+          if (db.userVersion < 28 && graph.graph.plans.isNotEmpty) {
+            invalid('Published workout plans require schema v28.');
+          }
+          for (final plan in graph.graph.plans) {
+            final rows = db.select(
+              'SELECT snapshot FROM revisions WHERE template_id = ? AND number = ?',
+              [plan.templateId, plan.revision],
+            );
+            if (rows.length != 1)
+              invalid(
+                'Derived workout plan references a missing workout revision.',
+              );
+            plan.validate(
+              WorkoutRevision.fromJson(
+                jsonDecode(rows.single['snapshot'] as String),
+              ),
+              graph.graph.nodes,
+            );
+          }
           graphs.add(graph);
         }
         validateDerivedTargetGraphRevisions(graphs);

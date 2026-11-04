@@ -36,6 +36,42 @@ final class DerivedWorkoutPreview {
     return _project(workout, graph, bindings);
   });
 
+  /// Resolves a published mapping against its pinned workout revision.
+  Future<Map<String, Object?>> previewPlan({
+    required String graphId,
+    required int graphRevision,
+    required String planId,
+    required DateTime asOf,
+    String? runId,
+  }) => repository.transaction(() async {
+    identifier({'planId': planId}, 'planId');
+    if (graphRevision < 1) invalid('Graph revision must be positive.');
+    final graph = await DerivedTargetGraphService(
+      repository,
+    ).revision(graphId, graphRevision);
+    final plans = graph.graph.plans.where((p) => p.id == planId);
+    if (plans.isEmpty)
+      throw const BodyTmiException(
+        'not_found',
+        'Derived workout plan not found.',
+      );
+    final plan = plans.single;
+    final result = await preview(
+      templateId: plan.templateId,
+      revision: plan.revision,
+      graphId: graphId,
+      graphRevision: graphRevision,
+      asOf: asOf,
+      runId: runId,
+      bindings: plan.bindings,
+    );
+    return {
+      'policy': 'bodytmi-derived-workout-plan-preview/1',
+      'plan': plan.toJson(),
+      'preview': result,
+    };
+  });
+
   /// Compare a caller-supplied preview with the same pinned workout and graph.
   /// Source evidence is not authenticated and does not authorize session writes.
   Future<Map<String, Object?>> status(

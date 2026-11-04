@@ -509,7 +509,7 @@ void storedProgressionTests() {
         );
         final original = canonicalJson((await store.archive()).toJson());
         final manifest = await store.backup('${dir.path}/native');
-        equal(manifest['databaseSchemaVersion'], 27);
+        equal(manifest['databaseSchemaVersion'], 28);
         await LogicalArchiveFiles.export(
           await store.archive(),
           '${dir.path}/logical.json',
@@ -617,7 +617,7 @@ void storedProgressionTests() {
         }
         final db = sqlite3.open(old);
         try {
-          equal(db.userVersion, 27);
+          equal(db.userVersion, 28);
         } finally {
           db.close();
         }

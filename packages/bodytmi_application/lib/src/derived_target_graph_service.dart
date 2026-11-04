@@ -12,6 +12,12 @@ final class DerivedTargetGraphService {
     DerivedTargetGraph graph,
     int expectedRevision,
   ) => repository.transaction(() async {
+    for (final plan in graph.plans) {
+      final workout = await repository.revision(plan.templateId, plan.revision);
+      if (workout == null)
+        invalid('Derived workout plan references a missing workout revision.');
+      plan.validate(workout, graph.nodes);
+    }
     final all = await repository.derivedTargetGraphRevisions();
     validateDerivedTargetGraphRevisions(all);
     final matches = all.where((r) => r.graph.id == graph.id).toList()

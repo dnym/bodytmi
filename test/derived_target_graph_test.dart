@@ -1094,7 +1094,7 @@ void derivedTargetGraphTests() {
   );
 
   test(
-    'graph portability round-trips through logical v27 and native backups, and old labels reject graphs',
+    'graph portability round-trips through logical v28 and native backups, and old labels reject graphs',
     () => _stored((store) async {
       final dbPath = store.path;
       await DerivedTargetGraphService(
@@ -1110,7 +1110,7 @@ void derivedTargetGraphTests() {
           jsonDecode(await File(path).readAsString()),
           'envelope',
         );
-        equal(envelope['format'], 'bodytmi-logical-export/27');
+        equal(envelope['format'], 'bodytmi-logical-export/28');
         equal(
           (jsonObject(envelope['data'], 'data')['graphs']! as List<Object?>)
               .length,
@@ -1162,7 +1162,7 @@ void derivedTargetGraphTests() {
         await NativeBackup.create(dbPath, backup);
         final preparedBackup = await NativeBackup.prepare(backup);
         try {
-          equal(preparedBackup.manifest['databaseSchemaVersion'], 27);
+          equal(preparedBackup.manifest['databaseSchemaVersion'], 28);
         } finally {
           await preparedBackup.close();
         }

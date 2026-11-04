@@ -46,6 +46,7 @@ const storedCommandNames = [
   'graph resolve',
   'graph status',
   'graph preview',
+  'graph plan-preview',
   'graph preview-status',
   'store mass-status',
   'store effective-load',
@@ -224,6 +225,13 @@ Future<Map<String, Object?>> executeStored(
     'graph resolve' => {'graphId', 'revision', 'asOf', 'runId', 'allRuns'},
     'graph status' => {'snapshot'},
     'graph preview-status' => {'preview'},
+    'graph plan-preview' => {
+      'graphId',
+      'graphRevision',
+      'planId',
+      'asOf',
+      'runId',
+    },
     'graph preview' => {
       'templateId',
       'revision',
@@ -922,6 +930,16 @@ Future<Map<String, Object?>> executeStored(
               : null,
           request.containsKey('runId') ? identifier(request, 'runId') : null,
           flag('allRuns'),
+        );
+      case 'graph plan-preview':
+        data = await DerivedWorkoutPreview(store).previewPlan(
+          graphId: identifier(request, 'graphId'),
+          graphRevision: integer('graphRevision'),
+          planId: identifier(request, 'planId'),
+          asOf: parseInstant(request['asOf'], 'asOf'),
+          runId: request.containsKey('runId')
+              ? identifier(request, 'runId')
+              : null,
         );
       case 'graph preview':
         data = await DerivedWorkoutPreview(store).preview(
