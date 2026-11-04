@@ -67,7 +67,14 @@ final class StoredBodyMassService {
     Map<String, Object?> observation,
     int expectedVersion,
   ) => repository.transaction(() async {
-    checkKeys(observation, {'id', 'context', 'observedAt', 'mass'});
+    checkKeys(observation, {
+      'id',
+      'context',
+      'observedAt',
+      'mass',
+      'source',
+      'notes',
+    });
     if (expectedVersion < 0) invalid('expectedVersion must be nonnegative.');
     final next = BodyMassRecord(
       BodyMassMeasurement.fromJson({

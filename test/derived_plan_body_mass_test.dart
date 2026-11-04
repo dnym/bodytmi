@@ -248,6 +248,100 @@ void derivedPlanBodyMassTests() {
     }),
   );
   test(
+    'captured derived body-mass metadata remains portable after current metadata is cleared',
+    () => withStore((store, dir) async {
+      final mass = StoredBodyMassService(store);
+      final observation = _observation(
+        'm1',
+        'clothed-training',
+        '2026-10-01T08:00:00Z',
+        '80',
+        'kg',
+      );
+      await mass.save({
+        ...observation,
+        'source': 'Scale',
+        'notes': 'Clothed',
+      }, 0);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final session = await StoredTrainingService(store).start(
+        'derived-meta',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      await mass.save(observation, 1);
+      equal(
+        session.derivedPlanInput!.bodyMassSources['body-source']!.single.notes,
+        'Clothed',
+      );
+      final comparison = jsonObject(
+        (await DerivedWorkoutPreview(
+          store,
+        ).sessionStatus(session.id))['comparison'],
+        'comparison',
+      );
+      equal(comparison['changed'], true);
+      check(
+        jsonList(
+          comparison,
+          'targetChanges',
+        ).every((row) => jsonObject(row, 'target change')['changed'] == false),
+      );
+      final archive = await store.archive();
+      check(!archive.bodyMass.single.measurement.hasMetadata);
+      await LogicalArchiveFiles.export(archive, '$dir/derived-meta.json');
+      final prepared = await LogicalArchiveFiles.prepare(
+        '$dir/derived-meta.json',
+      );
+      try {
+        equal(
+          prepared
+              .archive
+              .sessions
+              .single
+              .derivedPlanInput!
+              .bodyMassSources['body-source']!
+              .single
+              .notes,
+          'Clothed',
+        );
+      } finally {
+        await prepared.close();
+      }
+      final envelope =
+          jsonDecode(await File('$dir/derived-meta.json').readAsString())
+              as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/34';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File(
+        '$dir/derived-meta-v34.json',
+      ).writeAsString(jsonEncode(envelope));
+      await expectLater(
+        LogicalArchiveFiles.prepare('$dir/derived-meta-v34.json'),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await store.snapshot('$dir/derived-meta.sqlite');
+      final db = sqlite3.open('$dir/derived-meta.sqlite');
+      db.userVersion = 34;
+      db.close();
+      rejects(() => NativeBackup.validateDatabase('$dir/derived-meta.sqlite'));
+    }),
+  );
+
+  test(
     'body mass plan rejects missing mapped values but permits unused unresolved sources',
     () => withStore((store, _) async {
       final graphs = DerivedTargetGraphService(store);
@@ -346,7 +440,7 @@ void derivedPlanBodyMassTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 34);
+      equal(NativeBackup.validateDatabase(snapshot), 35);
       final db = sqlite3.open(snapshot);
       db.userVersion = 29;
       db.close();

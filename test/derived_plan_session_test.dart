@@ -202,7 +202,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 34);
+        equal(backup.manifest['databaseSchemaVersion'], 35);
       } finally {
         await backup.close();
       }
@@ -784,7 +784,7 @@ void derivedPlanSessionTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 34);
+      equal(NativeBackup.validateDatabase(snapshot), 35);
       final db = sqlite3.open(snapshot);
       db.userVersion = 30;
       db.close();
@@ -1134,7 +1134,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 34);
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 35);
       final db = sqlite3.open('$dir/snapshot.sqlite');
       db.userVersion = 32;
       db.close();
@@ -1236,7 +1236,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 34);
+        equal(reopened.userVersion, 35);
       } finally {
         reopened.close();
       }

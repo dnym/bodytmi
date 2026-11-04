@@ -39,6 +39,77 @@ BodyMassTrend trend(
 
 void bodyMassTests() {
   test(
+    'body-mass source and notes are exact optional metadata and part of source fingerprints',
+    () {
+      final original = BodyMassMeasurement.fromJson({
+        'id': 'mass',
+        'context': 'health',
+        'observedAt': '2026-10-01T08:00:00+02:00',
+        'mass': {'value': '80', 'unit': 'kg'},
+        'source': 'Bathroom scale 🏋️',
+        'notes': 'Morning\nBefore breakfast',
+      });
+      equal(original.toJson()['source'], 'Bathroom scale 🏋️');
+      equal(original.toJson()['notes'], 'Morning\nBefore breakfast');
+      final changed = BodyMassMeasurement.fromJson({
+        ...original.toJson(),
+        'notes': 'Later note',
+      });
+      final before = trend([original]);
+      final after = trend([changed]);
+      equal(
+        before.days.single.trend.value.toString(),
+        after.days.single.trend.value.toString(),
+      );
+      check(
+        canonicalJson(before.sourceFingerprint) !=
+            canonicalJson(after.sourceFingerprint),
+      );
+      final selectedBefore = BodyMassResolution.resolve(
+        trend: before,
+        measurementId: 'mass',
+      );
+      final selectedAfter = BodyMassResolution.resolve(
+        trend: after,
+        measurementId: 'mass',
+      );
+      check(
+        canonicalJson(selectedBefore.sourceFingerprint) !=
+            canonicalJson(selectedAfter.sourceFingerprint),
+      );
+      final manualBefore = BodyMassResolution.resolve(
+        trend: before,
+        manualMass: Quantity('80', 'kg'),
+      );
+      final manualAfter = BodyMassResolution.resolve(
+        trend: after,
+        manualMass: Quantity('80', 'kg'),
+      );
+      equal(
+        canonicalJson(manualBefore.sourceFingerprint),
+        canonicalJson(manualAfter.sourceFingerprint),
+      );
+      for (final bad in [
+        {'source': ''},
+        {'source': null},
+        {'source': 'x' * 257},
+        {'notes': '  '},
+        {'notes': 4},
+        {'notes': 'x' * 4001},
+      ]) {
+        rejects(
+          () => BodyMassMeasurement.fromJson({...original.toJson(), ...bad}),
+        );
+      }
+      final legacy = massObservation(1, '80');
+      check(
+        !legacy.toJson().containsKey('source') &&
+            !legacy.toJson().containsKey('notes'),
+      );
+    },
+  );
+
+  test(
     'Q38 first seven daily values are raw; eighth uses ten-percent difference',
     () {
       final result = trend(exampleMasses());

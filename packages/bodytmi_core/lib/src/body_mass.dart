@@ -11,11 +11,31 @@ final class BodyMassMeasurement {
     this.observedAt,
     this.mass,
     this.contentVersion,
+    this.source,
+    this.notes,
   );
 
   factory BodyMassMeasurement.fromJson(Object? input) {
     final json = jsonObject(input, 'body-mass measurement');
-    checkKeys(json, {'id', 'context', 'observedAt', 'mass', 'contentVersion'});
+    checkKeys(json, {
+      'id',
+      'context',
+      'observedAt',
+      'mass',
+      'contentVersion',
+      'source',
+      'notes',
+    });
+    final source = json.containsKey('source')
+        ? requiredString(json, 'source')
+        : null;
+    final notes = json.containsKey('notes')
+        ? requiredString(json, 'notes')
+        : null;
+    if (source != null && source.length > 256)
+      invalid('Body-mass source must be at most 256 characters.');
+    if (notes != null && notes.length > 4000)
+      invalid('Body-mass notes must be at most 4000 characters.');
     final text = requiredString(json, 'observedAt');
     final mass = Quantity.fromJson(json['mass']);
     _requireMass(mass);
@@ -29,6 +49,8 @@ final class BodyMassMeasurement {
       parseInstant(text, 'observedAt'),
       mass,
       version,
+      source,
+      notes,
     );
   }
 
@@ -38,6 +60,8 @@ final class BodyMassMeasurement {
   final DateTime observedAt;
   final Quantity mass;
   final int contentVersion;
+  final String? source, notes;
+  bool get hasMetadata => source != null || notes != null;
   // Calendar grouping uses the observation's original offset, never this
   // process's current timezone. Timestamp validation fixes the first ten chars.
   String get localDate => observedAtText.substring(0, 10);
@@ -48,6 +72,8 @@ final class BodyMassMeasurement {
     'observedAt': observedAtText,
     'mass': mass.toJson(),
     'contentVersion': contentVersion,
+    if (source != null) 'source': source,
+    if (notes != null) 'notes': notes,
   };
 }
 
@@ -171,6 +197,8 @@ final class BodyMassTrend {
           'contentVersion': m.contentVersion,
           'observedAt': m.observedAtText,
           'massKg': m.mass.value.toString(),
+          if (m.source != null) 'source': m.source,
+          if (m.notes != null) 'notes': m.notes,
         }),
     ]),
   };
@@ -242,6 +270,8 @@ final class BodyMassResolution {
         'contentVersion': measurement.contentVersion,
         'observedAt': measurement.observedAtText,
         'massKg': mass.value.toString(),
+        if (measurement.source != null) 'source': measurement.source,
+        if (measurement.notes != null) 'notes': measurement.notes,
       };
     } else if (trend.days.isNotEmpty) {
       source = 'trend';

@@ -45,6 +45,108 @@ Future<void> _inStore(
 
 void storedBodyMassTests() {
   test(
+    'raw body-mass metadata survives edits, deletion and logical restore',
+    () => _inStore((store, dir) async {
+      final mass = StoredBodyMassService(store);
+      final input = {
+        ..._observation('one', '80'),
+        'source': 'Home scale 🏋️',
+        'notes': 'Morning\nBefore breakfast',
+      };
+      final first = await mass.save(input, 0);
+      jsonEqual((await mass.save(input, 0)).toJson(), first.toJson());
+      final before = await mass.resolve(_query());
+      final changed = {...input, 'notes': 'Changed note'};
+      final updated = await mass.save(changed, 1);
+      final after = await mass.resolve(_query());
+      equal(after.mass!.value.toString(), before.mass!.value.toString());
+      check(
+        canonicalJson(after.sourceFingerprint) !=
+            canonicalJson(before.sourceFingerprint),
+      );
+      equal(updated.measurement.source, 'Home scale 🏋️');
+      equal(updated.measurement.notes, 'Changed note');
+      final deleted = await mass.delete('one', 2, confirm: true);
+      equal(deleted.measurement.notes, 'Changed note');
+      await LogicalArchiveFiles.export(
+        await store.archive(),
+        '$dir/metadata.json',
+      );
+      final prepared = await LogicalArchiveFiles.prepare('$dir/metadata.json');
+      try {
+        await store.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery-metadata',
+          confirm: true,
+        );
+        await store.close();
+        final reopened = await TrainingStore.open('$dir/db.sqlite');
+        try {
+          final record = await StoredBodyMassService(reopened).show('one');
+          equal(record.deleted, true);
+          equal(record.measurement.source, 'Home scale 🏋️');
+          equal(record.measurement.notes, 'Changed note');
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await prepared.close();
+      }
+    }),
+  );
+
+  test(
+    'v34 labels reject retained body-mass metadata and legacy records migrate unchanged',
+    () => _inStore((store, dir) async {
+      final mass = StoredBodyMassService(store);
+      await mass.save(_observation('legacy', '75'), 0);
+      await store.snapshot('$dir/legacy.sqlite');
+      final old = sqlite3.open('$dir/legacy.sqlite');
+      old.userVersion = 34;
+      old.close();
+      final upgraded = await TrainingStore.open('$dir/legacy.sqlite');
+      try {
+        final legacy = await StoredBodyMassService(upgraded).show('legacy');
+        check(!legacy.measurement.toJson().containsKey('source'));
+        check(!legacy.measurement.toJson().containsKey('notes'));
+      } finally {
+        await upgraded.close();
+      }
+      await mass.save({
+        ..._observation('annotated', '80'),
+        'source': 'Scale',
+        'notes': 'Morning',
+      }, 0);
+      await LogicalArchiveFiles.export(
+        await store.archive(),
+        '$dir/export-meta.json',
+      );
+      final envelope =
+          jsonDecode(await File('$dir/export-meta.json').readAsString())
+              as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/34';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('$dir/old-meta.json').writeAsString(jsonEncode(envelope));
+      await _fails(LogicalArchiveFiles.prepare('$dir/old-meta.json'));
+      await store.snapshot('$dir/meta.sqlite');
+      equal(NativeBackup.validateDatabase('$dir/meta.sqlite'), 35);
+      final db = sqlite3.open('$dir/meta.sqlite');
+      db.userVersion = 34;
+      db.close();
+      rejects(() => NativeBackup.validateDatabase('$dir/meta.sqlite'));
+    }),
+  );
+
+  test(
     'stored observations preserve exact entry/offset, retry edits safely and reject stale or reused identities',
     () => _inStore((store, dir) async {
       final service = StoredBodyMassService(store);
@@ -263,13 +365,13 @@ void storedBodyMassTests() {
       final resolved = canonicalJson(
         (await service.resolve(_query())).toJson(),
       );
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 34);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 35);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/export.json',
         ))['format'],
-        'bodytmi-logical-export/34',
+        'bodytmi-logical-export/35',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/export.json');
       try {
@@ -407,7 +509,7 @@ void storedBodyMassTests() {
       }
       final upgraded = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(upgraded.userVersion, 34);
+        equal(upgraded.userVersion, 35);
       } finally {
         upgraded.close();
       }
@@ -502,10 +604,20 @@ void storedBodyMassTests() {
           return jsonObject(jsonDecode(result.output), 'response')['data'];
         }
 
-        await command('record', {'measurement': _observation('one', '70')});
+        await command('record', {
+          'measurement': {
+            ..._observation('one', '70'),
+            'source': 'Scale',
+            'notes': 'Before breakfast',
+          },
+        });
         final updated = jsonObject(
           await command('update', {
-            'measurement': _observation('one', '72'),
+            'measurement': {
+              ..._observation('one', '72'),
+              'source': 'Scale',
+              'notes': 'Corrected',
+            },
             'expectedVersion': 1,
           }),
           'record',
@@ -513,6 +625,10 @@ void storedBodyMassTests() {
         equal(
           jsonObject(updated['measurement'], 'measurement')['contentVersion'],
           2,
+        );
+        equal(
+          jsonObject(updated['measurement'], 'measurement')['notes'],
+          'Corrected',
         );
         final resolved = jsonObject(
           await command('resolve', _query()),

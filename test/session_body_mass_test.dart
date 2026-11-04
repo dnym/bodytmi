@@ -76,6 +76,67 @@ Future<void> _withStore(
 
 void sessionBodyMassTests() {
   test(
+    'captured mass metadata remains frozen and prevents older format relabeling',
+    () => _withStore((store, dir) async {
+      final training = StoredTrainingService(store);
+      final mass = StoredBodyMassService(store);
+      await training.publish(_definition(), 0);
+      final original = {
+        ..._observation(_mass('training', '75')),
+        'source': 'Scale',
+        'notes': 'Morning',
+      };
+      await mass.save(original, 0);
+      final session = await training.start(
+        'metadata-session',
+        definition().id,
+        1,
+        instant(10),
+      );
+      await mass.save(_observation(_mass('training', '75')), 1);
+      final saved = await training.session(session.id);
+      equal(
+        saved.bodyMassInputs['bench-heavy']!.measurements.single.notes,
+        'Morning',
+      );
+      final status = const TrainingService().bodyMassStatus(saved, [
+        (await mass.show('training')).measurement,
+      ]);
+      equal(
+        jsonObject(
+          jsonObject(status['inputs'], 'inputs')['bench-heavy'],
+          'input',
+        )['changed'],
+        true,
+      );
+      final archive = await store.archive();
+      check(!archive.bodyMass.single.measurement.hasMetadata);
+      await LogicalArchiveFiles.export(archive, '$dir/captured-metadata.json');
+      final envelope =
+          jsonDecode(await File('$dir/captured-metadata.json').readAsString())
+              as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/34';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('$dir/captured-v34.json').writeAsString(jsonEncode(envelope));
+      await _fails(LogicalArchiveFiles.prepare('$dir/captured-v34.json'));
+      await store.snapshot('$dir/captured.sqlite');
+      final db = sqlite3.open('$dir/captured.sqlite');
+      db.userVersion = 34;
+      db.close();
+      rejects(() => NativeBackup.validateDatabase('$dir/captured.sqlite'));
+    }),
+  );
+
+  test(
     'body mass rebinding changes only selected slots and retains original overrides',
     () {
       final original = _start(
@@ -469,7 +530,7 @@ void sessionBodyMassTests() {
       await File('$dir/rebind-v33.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/rebind-v33.json'));
       await store.snapshot('$dir/rebind.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/rebind.sqlite'), 34);
+      equal(NativeBackup.validateDatabase('$dir/rebind.sqlite'), 35);
       final raw = sqlite3.open('$dir/rebind.sqlite');
       raw.userVersion = 33;
       raw.close();
@@ -1322,7 +1383,7 @@ void sessionBodyMassTests() {
       await service.edit(s.id, s.contentVersion, finished);
       await mass.delete('training', 1, confirm: true);
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 34);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 35);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/export.json',
@@ -1448,7 +1509,7 @@ void sessionBodyMassTests() {
       }
       final check = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(check.userVersion, 34);
+        equal(check.userVersion, 35);
       } finally {
         check.close();
       }

@@ -133,6 +133,7 @@ final class NativeBackup {
           32,
           33,
           34,
+          35,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -260,6 +261,7 @@ final class NativeBackup {
             32,
             33,
             34,
+            35,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -407,6 +409,9 @@ final class NativeBackup {
             invalid('Body-mass rebind identity requires schema v34.');
           }
           final session = sessionFromJson(sessionJson);
+          if (db.userVersion < 35 && sessionHasBodyMassMetadata(session)) {
+            invalid('Body-mass metadata requires schema v35.');
+          }
           if (db.userVersion < 32 && usesDerivedTargetlessObjective(session)) {
             invalid('Derived targetless suggestions require schema v32.');
           }
@@ -607,6 +612,8 @@ final class NativeBackup {
           final record = BodyMassRecord.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 35 && record.measurement.hasMetadata)
+            invalid('Body-mass metadata requires schema v35.');
           if (record.measurement.id != row['id'])
             invalid('Body-mass row identity mismatch.');
           massRecords.add(record);
