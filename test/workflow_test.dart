@@ -5,6 +5,71 @@ import 'support.dart';
 
 void workflowTests() {
   const service = TrainingService();
+  test(
+    'skip slot selects planned efforts and preserves other roles and slots',
+    () {
+      final json = definition().toJson();
+      ((json['plan']! as Map<String, Object?>)['children']! as List<Object?>)
+          .insert(0, {
+            'id': 'warmup',
+            'type': 'effort',
+            'slot': 'bench-heavy',
+            'role': 'warmup',
+          });
+      var session = start(
+        from: WorkoutRevision.publish(WorkoutDefinition.fromJson(json)),
+      );
+      final work = session.sets.firstWhere(
+        (s) => s.slotId == 'bench-heavy' && s.role == 'work',
+      );
+      session = service.complete(session, work.id, {}, acceptSuggested: true);
+      final before = session;
+      rejects(() => service.skipSlot(session, 'missing', confirm: true));
+      rejects(
+        () => service.skipSlot(
+          session,
+          'bench-heavy',
+          role: 'other',
+          confirm: true,
+        ),
+      );
+      rejects(() => service.skipSlot(session, 'bench-heavy', confirm: false));
+      final skipped = service.skipSlot(
+        session,
+        'bench-heavy',
+        role: 'work',
+        confirm: true,
+      );
+      equal(skipped.contentVersion, before.contentVersion + 1);
+      for (var i = 0; i < before.sets.length; i++) {
+        final old = before.sets[i];
+        final next = skipped.sets[i];
+        if (old.slotId == 'bench-heavy' &&
+            old.role == 'work' &&
+            old.status == SetStatus.planned) {
+          equal(next.status, SetStatus.skipped);
+        } else {
+          equal(canonicalJson(next.toJson()), canonicalJson(old.toJson()));
+        }
+      }
+      check(
+        identical(
+          service.skipSlot(skipped, 'bench-heavy', role: 'work', confirm: true),
+          skipped,
+        ),
+      );
+      final all = service.skipSlot(skipped, 'bench-heavy', confirm: true);
+      equal(all.sets.first.status, SetStatus.skipped);
+      equal(all.sets.last.status, SetStatus.planned);
+      rejects(
+        () => service.skipSlot(
+          service.skipRemaining(all, confirm: true).finish(instant(2)),
+          'bench-heavy',
+          confirm: true,
+        ),
+      );
+    },
+  );
   test('skip remaining preserves completed results and increments once', () {
     var session = start();
     final completedId = session.sets.first.id;

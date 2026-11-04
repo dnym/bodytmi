@@ -916,13 +916,37 @@ void programTests() {
           'id': 'cardio-cli',
           'startedAt': instant(1).toIso8601String(),
         });
+        final cardio = sessionFromJson(cardioSession);
+        final pureSlot = await invoke(
+          ['session', 'skip-slot'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'session': cardioSession,
+            'slotId': cardio.sets.first.slotId,
+            'role': 'work',
+            'confirm': true,
+          }),
+        );
+        equal(pureSlot.code, 0);
+        final storedSlot = await call('store skip-slot', {
+          'id': 'cardio-cli',
+          'expectedVersion': 1,
+          'slotId': cardio.sets.first.slotId,
+          'role': 'work',
+          'confirm': true,
+        });
+        jsonEqual(
+          jsonObject(jsonDecode(pureSlot.output), 'response')['data'],
+          storedSlot,
+        );
+        final afterSlot = sessionFromJson(storedSlot);
         final refused = await invoke(
           ['store', 'skip-remaining'],
           jsonEncode({
             'schemaVersion': 1,
             'database': path,
             'id': 'cardio-cli',
-            'expectedVersion': 1,
+            'expectedVersion': afterSlot.contentVersion,
           }),
         );
         equal(refused.code, 2);
@@ -931,14 +955,14 @@ void programTests() {
           ['session', 'skip-remaining'],
           jsonEncode({
             'schemaVersion': 1,
-            'session': cardioSession,
+            'session': storedSlot,
             'confirm': true,
           }),
         );
         equal(pure.code, 0);
         final stored = await call('store skip-remaining', {
           'id': 'cardio-cli',
-          'expectedVersion': 1,
+          'expectedVersion': afterSlot.contentVersion,
           'confirm': true,
         });
         jsonEqual(

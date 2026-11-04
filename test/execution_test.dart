@@ -145,6 +145,14 @@ void executionTests() {
       final training = StoredTrainingService(store);
       final before = await training.session('session');
       await _fails(
+        training.skipSlot(
+          before.id,
+          before.contentVersion,
+          before.sets.first.slotId,
+          confirm: true,
+        ),
+      );
+      await _fails(
         training.skipRemaining(before.id, before.contentVersion, confirm: true),
       );
       equal((await ExecutionService(store).show(execution.id)).cursor, 0);

@@ -95,6 +95,14 @@ void timingTests() {
       final training = StoredTrainingService(store);
       final session = await training.session('session');
       final clock = await _create(store);
+      await _fails(
+        training.skipSlot(
+          session.id,
+          session.contentVersion,
+          session.sets.single.slotId,
+          confirm: true,
+        ),
+      );
       final other = await training.start(
         'other-session',
         'timed',
@@ -117,6 +125,14 @@ void timingTests() {
       );
       final pending = await _elapsed(store);
       equal(pending.status, 'awaitingConfirmation');
+      await _fails(
+        training.skipSlot(
+          session.id,
+          session.contentVersion,
+          session.sets.single.slotId,
+          confirm: true,
+        ),
+      );
       await _fails(
         training.skipRemaining(
           session.id,

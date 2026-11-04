@@ -561,6 +561,28 @@ final class StoredTrainingService {
     String id,
     int expectedVersion, {
     required bool confirm,
+  }) => _skipPlanned(id, expectedVersion, confirm: confirm);
+
+  Future<TrainingSession> skipSlot(
+    String id,
+    int expectedVersion,
+    String slotId, {
+    String? role,
+    required bool confirm,
+  }) => _skipPlanned(
+    id,
+    expectedVersion,
+    slotId: slotId,
+    role: role,
+    confirm: confirm,
+  );
+
+  Future<TrainingSession> _skipPlanned(
+    String id,
+    int expectedVersion, {
+    String? slotId,
+    String? role,
+    required bool confirm,
   }) => repository.transaction(() async {
     final current = await session(id);
     if (current.contentVersion != expectedVersion) _conflict();
@@ -573,10 +595,14 @@ final class StoredTrainingService {
           t.sessionId == id && (t.active || t.status == 'awaitingConfirmation'),
     ))
       invalid('Stop and review or discard the session clock before skipping.');
-    final next = const TrainingService().skipRemaining(
-      current,
-      confirm: confirm,
-    );
+    final next = slotId == null
+        ? const TrainingService().skipRemaining(current, confirm: confirm)
+        : const TrainingService().skipSlot(
+            current,
+            slotId,
+            role: role,
+            confirm: confirm,
+          );
     if (identical(next, current)) return current;
     return edit(id, expectedVersion, (_) => next);
   });

@@ -29,6 +29,7 @@ const commandNames = [
   'session annotate',
   'session skip',
   'session skip-remaining',
+  'session skip-slot',
   'session finish',
   'progression evaluate',
   'progression double',
@@ -292,6 +293,18 @@ final class Commands {
         data = const TrainingService()
             .skipRemaining(
               sessionFromJson(request['session']),
+              confirm: _bool(request, 'confirm'),
+            )
+            .toJson();
+      case 'session skip-slot':
+        keys({'session', 'slotId', 'role', 'confirm'});
+        data = const TrainingService()
+            .skipSlot(
+              sessionFromJson(request['session']),
+              requiredString(request, 'slotId'),
+              role: request.containsKey('role')
+                  ? requiredString(request, 'role')
+                  : null,
               confirm: _bool(request, 'confirm'),
             )
             .toJson();

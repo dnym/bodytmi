@@ -292,11 +292,40 @@ final class TrainingService {
   TrainingSession skipRemaining(
     TrainingSession session, {
     required bool confirm,
+  }) => _skipPlanned(session, (_) => true, confirm: confirm);
+
+  /// Skip planned efforts in a slot, optionally limited to one effort role.
+  TrainingSession skipSlot(
+    TrainingSession session,
+    String slotId, {
+    String? role,
+    required bool confirm,
+  }) {
+    identifier({'slotId': slotId}, 'slotId');
+    if (!session.revision.definition.slots.any((slot) => slot.id == slotId)) {
+      invalid('Unknown workout slot: $slotId.');
+    }
+    if (role != null && role != 'work' && role != 'warmup') {
+      invalid('Unknown effort role.');
+    }
+    return _skipPlanned(
+      session,
+      (set) => set.slotId == slotId && (role == null || set.role == role),
+      confirm: confirm,
+    );
+  }
+
+  TrainingSession _skipPlanned(
+    TrainingSession session,
+    bool Function(TrainingSet) selected, {
+    required bool confirm,
   }) {
     if (!confirm) invalid('Skipping remaining efforts requires confirm:true.');
     if (session.status != SessionStatus.active)
       invalid('Remaining efforts can only be skipped in an active session.');
-    if (!session.sets.any((set) => set.status == SetStatus.planned))
+    if (!session.sets.any(
+      (set) => set.status == SetStatus.planned && selected(set),
+    ))
       return session;
     return TrainingSession(
       id: session.id,
@@ -304,7 +333,9 @@ final class TrainingService {
       startedAt: session.startedAt,
       sets: [
         for (final set in session.sets)
-          set.status == SetStatus.planned ? set.skip(confirm: true) : set,
+          set.status == SetStatus.planned && selected(set)
+              ? set.skip(confirm: true)
+              : set,
       ],
       bodyMassInputs: session.bodyMassInputs,
       initialBodyMassOverrides: session.initialBodyMassOverrides,
