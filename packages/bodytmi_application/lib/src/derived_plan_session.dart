@@ -108,8 +108,10 @@ void validateDerivedPlanSession(
         input.bodyMassSources[identifier(node, 'sourceId')],
         session.startedAt,
       );
+    } else if (source['kind'] == 'history') {
+      _validateHistorySource(source, session, scope['runId'] as String?);
     } else {
-      invalid('Stored plan sessions do not yet support history graph sources.');
+      invalid('Unsupported captured graph source.');
     }
     resolverNodes.add({
       ...node,
@@ -162,6 +164,7 @@ void validateDerivedPlanReferences(
   Map<String, String> runs,
   List<BodyMassRecord> records,
 ) {
+  final sessionsById = {for (final session in sessions) session.id: session};
   final recordsById = {
     for (final record in records) record.measurement.id: record,
   };
@@ -231,6 +234,58 @@ void validateDerivedPlanReferences(
             invalid(
               'Captured body mass source identity, version or value is invalid.',
             );
+          }
+        }
+      } else if (expected['kind'] == 'history') {
+        for (final key in expected.keys) {
+          if (!actual.containsKey(key) ||
+              canonicalJson(actual[key]) != canonicalJson(expected[key])) {
+            invalid('Captured history policy differs from published revision.');
+          }
+        }
+        final fingerprint = jsonObject(
+          jsonObject(actual['provenance'], 'provenance')['sourceFingerprint'],
+          'fingerprint',
+        );
+        for (final item in jsonList(fingerprint, 'sources')) {
+          final row = jsonObject(item, 'history source');
+          final prior = sessionsById[row['sessionId']];
+          if (prior == null ||
+              prior.id == session.id ||
+              prior.finishedAt == null ||
+              prior.startedAt != parseInstant(row['startedAt'], 'startedAt') ||
+              prior.finishedAt !=
+                  parseInstant(row['finishedAt'], 'finishedAt') ||
+              prior.contentVersion < (row['sessionVersion'] as int) ||
+              runs[prior.id] != row['runId'])
+            invalid('Invalid captured history session reference.');
+          final matches = prior.sets.where((s) => s.id == row['setId']);
+          if (matches.length != 1) invalid('Captured history set is missing.');
+          final set = matches.single;
+          final slot = prior.revision.definition.slot(set.slotId);
+          if (set.slotId != row['slotId'] ||
+              set.role != row['role'] ||
+              set.ordinal != row['ordinal'] ||
+              set.contentVersion < (row['setVersion'] as int) ||
+              (expected['templateId'] != null &&
+                  expected['templateId'] != prior.revision.definition.id) ||
+              (expected['slotId'] != null &&
+                  expected['slotId'] != set.slotId) ||
+              (expected['exerciseId'] != null &&
+                  expected['exerciseId'] != slot.exerciseId) ||
+              (expected['implementationId'] != null &&
+                  expected['implementationId'] != slot.implementation) ||
+              (expected['equipment'] != null &&
+                  expected['equipment'] != slot.equipmentId) ||
+              (expected['setup'] != null &&
+                  expected['setup'] != slot.setupNote))
+            invalid('Invalid captured history context.');
+          if (set.contentVersion == row['setVersion'] &&
+              (set.status != SetStatus.completed ||
+                  (set.observations?.interrupted ?? false) ||
+                  canonicalJson(set.actuals[expected['metric']]?.toJson()) !=
+                      canonicalJson(row['value']))) {
+            invalid('Captured history value does not match its set version.');
           }
         }
       } else {
@@ -304,3 +359,148 @@ void _validateBodyMassSource(
 
 bool usesDerivedBodyMass(TrainingSession session) =>
     session.derivedPlanInput?.bodyMassSources.isNotEmpty ?? false;
+
+void _validateHistorySource(
+  Map<String, Object?> source,
+  TrainingSession session,
+  String? runId,
+) {
+  checkKeys(source, {
+    'kind',
+    'metric',
+    'direction',
+    'templateId',
+    'slotId',
+    'exerciseId',
+    'implementationId',
+    'equipment',
+    'setup',
+    'role',
+    'ordinal',
+    'from',
+    'until',
+    'includeWarmups',
+    'value',
+    'status',
+    'sourceVersion',
+    'provenance',
+  });
+  final provenance = jsonObject(source['provenance'], 'history provenance');
+  checkKeys(provenance, {
+    'metric',
+    'direction',
+    'session',
+    'set',
+    'sourceVersionSemantics',
+    'sourceFingerprint',
+  });
+  final fingerprint = jsonObject(
+    provenance['sourceFingerprint'],
+    'history fingerprint',
+  );
+  checkKeys(fingerprint, {'policy', 'metric', 'direction', 'sources'});
+  if (fingerprint['policy'] != 'bodytmi-history-source/1' ||
+      fingerprint['metric'] != source['metric'] ||
+      fingerprint['direction'] != source['direction'] ||
+      provenance['metric'] != source['metric'] ||
+      provenance['direction'] != source['direction'] ||
+      provenance['sourceVersionSemantics'] != 'selectedSessionVersionOnly')
+    invalid('Invalid history provenance.');
+  final rows = jsonList(fingerprint, 'sources');
+  if (rows.length > 10000) invalid('Too many history sources.');
+  Map<String, Object?>? best;
+  String? previous;
+  for (final item in rows) {
+    final row = jsonObject(item, 'history source');
+    checkKeys(row, {
+      'sessionId',
+      'sessionVersion',
+      'setId',
+      'setVersion',
+      'runId',
+      'startedAt',
+      'finishedAt',
+      'slotId',
+      'role',
+      'ordinal',
+      'value',
+    });
+    final id = identifier(row, 'sessionId');
+    final setId = requiredString(row, 'setId');
+    identifier(row, 'slotId');
+    requiredString(row, 'role');
+    final version = row['sessionVersion'];
+    final setVersion = row['setVersion'];
+    final ordinal = row['ordinal'];
+    if (version is! int ||
+        version < 1 ||
+        setVersion is! int ||
+        setVersion < 1 ||
+        ordinal is! int ||
+        ordinal < 0 ||
+        !row.containsKey('runId') ||
+        row['runId'] != runId)
+      invalid('Invalid captured history identity.');
+    final started = parseInstant(row['startedAt'], 'startedAt');
+    final finished = parseInstant(row['finishedAt'], 'finishedAt');
+    if (!started.isBefore(session.startedAt) ||
+        finished.isBefore(started) ||
+        finished.isAfter(session.startedAt) ||
+        (source['from'] != null &&
+            started.isBefore(parseInstant(source['from'], 'from'))) ||
+        (source['until'] != null &&
+            !started.isBefore(parseInstant(source['until'], 'until'))) ||
+        (source['slotId'] != null && source['slotId'] != row['slotId']) ||
+        (source['role'] != null && source['role'] != row['role']) ||
+        (source['ordinal'] != null && source['ordinal'] != ordinal) ||
+        (source['includeWarmups'] != true && row['role'] == 'warmup'))
+      invalid('Captured history is outside its policy.');
+    final key = '$id\u0000$setId';
+    if (previous != null && previous.compareTo(key) >= 0)
+      invalid('History sources must be unique and ordered.');
+    previous = key;
+    final value = Quantity.fromJson(row['value']);
+    if (best == null) {
+      best = row;
+      continue;
+    }
+    final compare = value.compareTo(Quantity.fromJson(best['value']));
+    final byTime = started.compareTo(
+      parseInstant(best['startedAt'], 'startedAt'),
+    );
+    final byId = id.compareTo(best['sessionId'] as String);
+    final byOrdinal = ordinal.compareTo(best['ordinal'] as int);
+    if ((source['direction'] == 'highest' ? compare : -compare) > 0 ||
+        (compare == 0 &&
+            (byTime < 0 ||
+                (byTime == 0 &&
+                    (byId < 0 ||
+                        (byId == 0 &&
+                            (byOrdinal < 0 ||
+                                (byOrdinal == 0 &&
+                                    setId.compareTo(best['setId'] as String) <
+                                        0))))))))
+      best = row;
+  }
+  if ((source['direction'] != 'highest' && source['direction'] != 'lowest') ||
+      source['status'] != (best == null ? 'unresolved' : 'resolved') ||
+      canonicalJson(source['value']) != canonicalJson(best?['value']) ||
+      source.containsKey('sourceVersion') != (best != null) ||
+      source['sourceVersion'] != best?['sessionVersion'] ||
+      provenance.containsKey('session') != (best != null) ||
+      provenance.containsKey('set') != (best != null) ||
+      provenance['session'] != best?['sessionId'] ||
+      provenance['set'] != best?['setId'])
+    invalid('Captured history selection is invalid.');
+}
+
+bool usesDerivedHistory(TrainingSession session) {
+  final input = session.derivedPlanInput;
+  if (input == null) return false;
+  final preview = jsonObject(input.snapshot['preview'], 'preview');
+  final graph = jsonObject(preview['graphResolution'], 'graph resolution');
+  return jsonObject(
+    graph['bindings'],
+    'bindings',
+  ).values.any((source) => jsonObject(source, 'source')['kind'] == 'history');
+}

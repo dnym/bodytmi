@@ -186,7 +186,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 30);
+        equal(backup.manifest['databaseSchemaVersion'], 31);
       } finally {
         await backup.close();
       }
@@ -317,6 +317,269 @@ void derivedPlanSessionTests() {
   );
 
   test(
+    'history derived targets freeze evidence through correction and logical restore',
+    () => withStore((store, dir) async {
+      final training = StoredTrainingService(store);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph(manual: false)), 0);
+      final source = await training.start(
+        'source',
+        definition().id,
+        1,
+        instant(1),
+      );
+      final completed = await training.edit(
+        source.id,
+        source.contentVersion,
+        finished,
+      );
+      final session = await training.start(
+        'history-plan',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      final graph = jsonObject(
+        jsonObject(
+          session.derivedPlanInput!.snapshot['preview'],
+          'preview',
+        )['graphResolution'],
+        'graph',
+      );
+      final binding = jsonObject(
+        jsonObject(graph['bindings'], 'bindings')['max-source'],
+        'source',
+      );
+      final fingerprint = jsonObject(
+        jsonObject(binding['provenance'], 'provenance')['sourceFingerprint'],
+        'fingerprint',
+      );
+      check(jsonList(fingerprint, 'sources').isNotEmpty);
+      final selected = Quantity.fromJson(binding['value']);
+      equal(
+        session.sets.first.suggested['mass']!.value,
+        (selected.value * Decimal.parse('0.8')),
+      );
+      final edit = await training.edit(
+        completed.id,
+        completed.contentVersion,
+        (s) => const TrainingService().complete(s, s.sets.first.id, {
+          'mass': Quantity('99', 'kg'),
+          'reps': Quantity('5', 'rep'),
+        }),
+      );
+      check(edit.contentVersion > completed.contentVersion);
+      final retry = await training.start(
+        'history-plan',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      sameJson(retry.toJson(), session.toJson());
+      final archive = await store.archive();
+      await LogicalArchiveFiles.export(archive, '$dir/history.json');
+      final prepared = await LogicalArchiveFiles.prepare('$dir/history.json');
+      try {
+        await store.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery',
+          confirm: true,
+        );
+        await store.close();
+        final reopened = await TrainingStore.open('$dir/profile.sqlite');
+        try {
+          sameJson(
+            (await StoredTrainingService(
+              reopened,
+            ).session(session.id)).derivedPlanInput!.toJson(),
+            session.derivedPlanInput!.toJson(),
+          );
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await prepared.close();
+      }
+    }),
+  );
+
+  test(
+    'history derived sessions reject forged evidence',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph(manual: false)), 0);
+      final source = await training.start(
+        'source',
+        definition().id,
+        1,
+        instant(1),
+      );
+      await training.edit(source.id, source.contentVersion, finished);
+      final session = await training.start(
+        'history-plan',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      final forged = copyJson(session.toJson());
+      final input = jsonObject(forged['derivedPlanInput'], 'input');
+      final snapshot = jsonObject(input['snapshot'], 'snapshot');
+      final preview = jsonObject(snapshot['preview'], 'preview');
+      final graph = jsonObject(preview['graphResolution'], 'graph');
+      final binding = jsonObject(
+        jsonObject(graph['bindings'], 'bindings')['max-source'],
+        'binding',
+      );
+      final fingerprint = jsonObject(
+        jsonObject(binding['provenance'], 'provenance')['sourceFingerprint'],
+        'fingerprint',
+      );
+      final row = jsonObject(jsonList(fingerprint, 'sources').first, 'row');
+      row['runId'] = 'forged-run';
+      rejects(() => sessionFromJson(forged));
+      final sameTime = await training.start(
+        'same-time-source',
+        definition().id,
+        1,
+        instant(4),
+      );
+      await training.edit(sameTime.id, sameTime.contentVersion, (s) {
+        for (final set in s.sets) {
+          s = const TrainingService().complete(
+            s,
+            set.id,
+            {},
+            acceptSuggested: true,
+          );
+        }
+        return s.finish(instant(4));
+      });
+      await expectLater(
+        training.start(
+          'same-time-plan',
+          definition().id,
+          1,
+          instant(4),
+          derivedPlan: _ref,
+        ),
+        throwsA(isA<BodyTmiException>()),
+      );
+      check(await store.session('same-time-plan') == null);
+    }),
+  );
+
+  test(
+    'history session evidence stays isolated between active runs',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final programs = ProgramService(store);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph(manual: false)), 0);
+      await programs.publish(
+        ProgramDefinition.fromJson({
+          'id': 'program',
+          'name': 'Program',
+          'plan': {
+            'id': 'day',
+            'type': 'day',
+            'templateId': definition().id,
+            'revision': 1,
+          },
+        }),
+        0,
+      );
+      for (final run in ['strength', 'cardio']) {
+        await programs.create(run, 'program', 1, instant(1));
+        final source = await programs.start(run, 1, '$run-source', instant(1));
+        await training.edit(source.id, source.contentVersion, (session) {
+          for (final set in session.sets) {
+            session = const TrainingService().complete(session, set.id, {
+              'mass': Quantity(run == 'strength' ? '100' : '50', 'kg'),
+              'reps': Quantity('5', 'rep'),
+            });
+          }
+          return session.finish(instant(1).add(const Duration(hours: 1)));
+        });
+      }
+      final a = await programs.start(
+        'strength',
+        (await programs.run('strength')).contentVersion,
+        'strength-next',
+        instant(3),
+        derivedPlan: _ref,
+      );
+      final b = await programs.start(
+        'cardio',
+        (await programs.run('cardio')).contentVersion,
+        'cardio-next',
+        instant(3),
+        derivedPlan: _ref,
+      );
+      equal(a.sets.first.suggested['mass']!.value.toString(), '80');
+      equal(b.sets.first.suggested['mass']!.value.toString(), '40');
+      equal((await store.archive()).sessions.length, 4);
+    }),
+  );
+
+  test(
+    'v30 portability labels reject history-derived session evidence',
+    () => withStore((store, dir) async {
+      final training = StoredTrainingService(store);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph(manual: false)), 0);
+      final source = await training.start(
+        'source',
+        definition().id,
+        1,
+        instant(1),
+      );
+      await training.edit(source.id, source.contentVersion, finished);
+      await training.start(
+        'next',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      final path = '$dir/export.json';
+      await LogicalArchiveFiles.export(await store.archive(), path);
+      final envelope =
+          jsonDecode(await File(path).readAsString()) as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/30';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('$dir/old.json').writeAsString(jsonEncode(envelope));
+      await expectLater(
+        LogicalArchiveFiles.prepare('$dir/old.json'),
+        throwsA(isA<BodyTmiException>()),
+      );
+      final snapshot = '$dir/snapshot.sqlite';
+      await store.snapshot(snapshot);
+      equal(NativeBackup.validateDatabase(snapshot), 31);
+      final db = sqlite3.open(snapshot);
+      db.userVersion = 30;
+      db.close();
+      rejects(() => NativeBackup.validateDatabase(snapshot));
+    }),
+  );
+
+  test(
     'group skip retains frozen plan inputs and permits idempotent finalization',
     () => withStore((store, _) async {
       await DerivedTargetGraphService(
@@ -381,7 +644,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 30);
+        equal(reopened.userVersion, 31);
       } finally {
         reopened.close();
       }

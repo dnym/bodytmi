@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/30';
+const _format = 'bodytmi-logical-export/31';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -91,6 +91,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/27',
       'bodytmi-logical-export/28',
       'bodytmi-logical-export/29',
+      'bodytmi-logical-export/30',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -99,7 +100,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final derivedBodyMassData = input['format'] == _format;
+    final historySessionData = input['format'] == _format;
+    final derivedBodyMassData =
+        historySessionData || input['format'] == 'bodytmi-logical-export/30';
     final derivedSessionData =
         derivedBodyMassData || input['format'] == 'bodytmi-logical-export/29';
     final planData =
@@ -209,6 +212,9 @@ final class LogicalArchiveFiles {
       }
     }
     final archive = TrainingArchive.fromJson(inputData);
+    if (!historySessionData && archive.sessions.any(usesDerivedHistory)) {
+      invalid('Derived history session inputs require logical v31.');
+    }
     if (!derivedBodyMassData && archive.sessions.any(usesDerivedBodyMass)) {
       invalid('Derived body mass session inputs require logical v30.');
     }
@@ -352,7 +358,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 30');
+          db.execute('PRAGMA user_version = 31');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

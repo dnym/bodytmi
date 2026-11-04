@@ -99,6 +99,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   28 => schemaV27, // v28 adds published graph workout plans.
   29 => schemaV27, // v29 adds frozen manually derived session inputs.
   30 => schemaV27, // v30 adds captured body-mass graph inputs.
+  31 => schemaV27, // v31 adds captured history graph inputs.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

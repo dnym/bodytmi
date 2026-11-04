@@ -258,11 +258,6 @@ final class StoredTrainingService {
         'graph bindings',
       ).entries) {
         final source = jsonObject(entry.value, 'graph source');
-        if (source['kind'] == 'history') {
-          invalid(
-            'Session plan inputs do not yet support history graph sources.',
-          );
-        }
         if (source['kind'] == 'bodyMass') {
           final cutoff = source['asOf'] == null
               ? startedAt
@@ -279,7 +274,7 @@ final class StoredTrainingService {
             return order != 0 ? order : a.id.compareTo(b.id);
           });
           bodyMassSources[entry.key] = [for (final m in selected) m.toJson()];
-        } else if (source['kind'] != 'manual') {
+        } else if (source['kind'] != 'manual' && source['kind'] != 'history') {
           invalid('Unsupported session plan source.');
         }
       }
@@ -354,9 +349,9 @@ final class StoredTrainingService {
     );
     if (derivedInput != null) {
       validateDerivedPlanReferences(
-        [next],
+        [...await repository.sessions(), next],
         await repository.derivedTargetGraphRevisions(),
-        {if (runId != null) id: runId},
+        {...runBySession, if (runId != null) id: runId},
         await repository.bodyMassRecords(),
       );
     }
