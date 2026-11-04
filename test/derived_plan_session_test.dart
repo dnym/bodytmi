@@ -426,7 +426,7 @@ void derivedPlanSessionTests() {
   );
 
   test(
-    'history derived sessions reject forged evidence',
+    'history derived sessions reject forged evidence and exclude same-start history',
     () => withStore((store, _) async {
       final training = StoredTrainingService(store);
       await DerivedTargetGraphService(
@@ -479,17 +479,159 @@ void derivedPlanSessionTests() {
         }
         return s.finish(instant(4));
       });
+      final planned = await training.start(
+        'same-time-plan',
+        definition().id,
+        1,
+        instant(4),
+        derivedPlan: _ref,
+      );
+      final captured = jsonObject(
+        jsonObject(
+          jsonObject(
+            planned.derivedPlanInput!.snapshot['preview'],
+            'preview',
+          )['graphResolution'],
+          'graph',
+        )['bindings'],
+        'bindings',
+      );
+      final history = jsonObject(captured['max-source'], 'history');
+      final evidence = jsonObject(
+        jsonObject(history['provenance'], 'provenance')['sourceFingerprint'],
+        'fingerprint',
+      );
+      check(
+        jsonList(evidence, 'sources').every(
+          (row) => jsonObject(row, 'source')['sessionId'] != 'same-time-source',
+        ),
+      );
+      final status = DerivedWorkoutPreview(store);
+      equal(
+        jsonObject(
+          (await status.sessionStatus(planned.id))['comparison'],
+          'comparison',
+        )['changed'],
+        false,
+      );
+      final completed = await training.edit(
+        planned.id,
+        planned.contentVersion,
+        (s) {
+          for (final set in s.sets) {
+            s = const TrainingService().complete(
+              s,
+              set.id,
+              {},
+              acceptSuggested: true,
+            );
+          }
+          return s.finish(instant(4));
+        },
+      );
+      equal(
+        jsonObject(
+          (await status.sessionStatus(completed.id))['comparison'],
+          'comparison',
+        )['changed'],
+        false,
+      );
+      final graphResolution = await DerivedTargetGraphService(
+        store,
+      ).resolve('manual-graph', 1, instant(4));
+      final normal = jsonObject(
+        jsonObject(graphResolution['bindings'], 'bindings')['max-source'],
+        'source',
+      );
+      final normalFingerprint = jsonObject(
+        jsonObject(normal['provenance'], 'provenance')['sourceFingerprint'],
+        'fingerprint',
+      );
+      check(
+        jsonList(normalFingerprint, 'sources').any(
+          (row) => jsonObject(row, 'source')['sessionId'] == 'same-time-source',
+        ),
+      );
+    }),
+  );
+
+  test(
+    'same-start history alone cannot supply a derived target',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph(manual: false)), 0);
+      final source = await training.start(
+        'same',
+        definition().id,
+        1,
+        instant(2),
+      );
+      await training.edit(source.id, source.contentVersion, (s) {
+        for (final set in s.sets) {
+          s = const TrainingService().complete(
+            s,
+            set.id,
+            {},
+            acceptSuggested: true,
+          );
+        }
+        return s.finish(instant(2));
+      });
       await expectLater(
         training.start(
-          'same-time-plan',
+          'missing',
           definition().id,
           1,
-          instant(4),
+          instant(2),
           derivedPlan: _ref,
         ),
         throwsA(isA<BodyTmiException>()),
       );
-      check(await store.session('same-time-plan') == null);
+      check(await store.session('missing') == null);
+    }),
+  );
+
+  test(
+    'history finishing exactly at session start remains eligible',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph(manual: false)), 0);
+      final source = await training.start(
+        'earlier',
+        definition().id,
+        1,
+        instant(1),
+      );
+      await training.edit(source.id, source.contentVersion, (s) {
+        for (final set in s.sets) {
+          s = const TrainingService().complete(
+            s,
+            set.id,
+            {},
+            acceptSuggested: true,
+          );
+        }
+        return s.finish(instant(2));
+      });
+      final planned = await training.start(
+        'next',
+        definition().id,
+        1,
+        instant(2),
+        derivedPlan: _ref,
+      );
+      final comparison = jsonObject(
+        (await DerivedWorkoutPreview(
+          store,
+        ).sessionStatus(planned.id))['comparison'],
+        'comparison',
+      );
+      equal(comparison['changed'], false);
+      check(planned.sets.first.suggested['mass'] != null);
     }),
   );
 

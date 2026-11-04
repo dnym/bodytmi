@@ -17,6 +17,7 @@ final class DerivedWorkoutPreview {
     required DateTime asOf,
     required Object? bindings,
     String? runId,
+    bool strictHistoryStart = false,
   }) => repository.transaction(() async {
     identifier({'templateId': templateId}, 'templateId');
     identifier({'graphId': graphId}, 'graphId');
@@ -32,7 +33,7 @@ final class DerivedWorkoutPreview {
       throw const BodyTmiException('not_found', 'Workout revision not found.');
     final graph = await DerivedTargetGraphService(
       repository,
-    ).resolve(graphId, graphRevision, asOf, runId);
+    ).resolve(graphId, graphRevision, asOf, runId, false, strictHistoryStart);
     return projectCaptured(workout, graph, bindings);
   });
 
@@ -50,7 +51,9 @@ final class DerivedWorkoutPreview {
           'sessionVersion': session.contentVersion,
           'sessionStatus': session.status.name,
           'configured': input != null,
-          'comparison': input == null ? null : await planStatus(input.snapshot),
+          'comparison': input == null
+              ? null
+              : await planStatus(input.snapshot, strictHistoryStart: true),
         };
       });
 
@@ -61,6 +64,7 @@ final class DerivedWorkoutPreview {
     required String planId,
     required DateTime asOf,
     String? runId,
+    bool strictHistoryStart = false,
   }) => repository.transaction(() async {
     identifier({'planId': planId}, 'planId');
     if (graphRevision < 1) invalid('Graph revision must be positive.');
@@ -82,6 +86,7 @@ final class DerivedWorkoutPreview {
       asOf: asOf,
       runId: runId,
       bindings: plan.bindings,
+      strictHistoryStart: strictHistoryStart,
     );
     return {
       'policy': 'bodytmi-derived-workout-plan-preview/1',
@@ -93,8 +98,9 @@ final class DerivedWorkoutPreview {
   /// Revalidates that a preview belongs to the exact published plan before
   /// comparing its source inputs. Caller-provided evidence is not authenticated.
   Future<Map<String, Object?>> planStatus(
-    Object? input,
-  ) => repository.transaction(() async {
+    Object? input, {
+    bool strictHistoryStart = false,
+  }) => repository.transaction(() async {
     final captured = jsonObject(input, 'derived workout plan preview');
     checkKeys(captured, {'policy', 'plan', 'preview'});
     if (captured['policy'] != 'bodytmi-derived-workout-plan-preview/1') {
@@ -128,7 +134,10 @@ final class DerivedWorkoutPreview {
         canonicalJson(preview)) {
       invalid('Workout preview does not match the published plan.');
     }
-    final result = await status(preview);
+    final result = await status(
+      preview,
+      strictHistoryStart: strictHistoryStart,
+    );
     return {
       'policy': 'bodytmi-derived-workout-plan-status/1',
       'graphId': graphId,
@@ -144,8 +153,9 @@ final class DerivedWorkoutPreview {
   /// Compare a caller-supplied preview with the same pinned workout and graph.
   /// Source evidence is not authenticated and does not authorize session writes.
   Future<Map<String, Object?>> status(
-    Object? input,
-  ) => repository.transaction(() async {
+    Object? input, {
+    bool strictHistoryStart = false,
+  }) => repository.transaction(() async {
     final captured = jsonObject(input, 'workout preview');
     checkKeys(captured, {
       'policy',
@@ -196,7 +206,7 @@ final class DerivedWorkoutPreview {
       invalid('Invalid preview bindings.');
     final graphStatus = await DerivedTargetGraphService(
       repository,
-    ).status(graph);
+    ).status(graph, strictHistoryStart: strictHistoryStart);
     final expected = projectCaptured(workout, graph, bindings);
     if (canonicalJson(expected) != canonicalJson(captured)) {
       invalid(
@@ -211,6 +221,7 @@ final class DerivedWorkoutPreview {
       asOf: asOf,
       runId: runId,
       bindings: bindings,
+      strictHistoryStart: strictHistoryStart,
     );
     final capturedRows = {
       for (final row in jsonList(captured, 'occurrences'))

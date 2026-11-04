@@ -245,6 +245,7 @@ final class StoredTrainingService {
         planId: derivedPlan.planId,
         asOf: startedAt,
         runId: runId,
+        strictHistoryStart: true,
       );
       final plan = DerivedWorkoutPlan.fromJson(resolved['plan']);
       if (plan.templateId != templateId || plan.revision != number)

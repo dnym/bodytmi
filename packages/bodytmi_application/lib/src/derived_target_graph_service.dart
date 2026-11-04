@@ -56,7 +56,10 @@ final class DerivedTargetGraphService {
 
   /// Compares a caller-supplied resolution with the same stored revision and scope.
   /// The old source evidence is not authenticated and must not authorize writes.
-  Future<Map<String, Object?>> status(Object? snapshotInput) async {
+  Future<Map<String, Object?>> status(
+    Object? snapshotInput, {
+    bool strictHistoryStart = false,
+  }) async {
     final snapshot = jsonObject(snapshotInput, 'graph resolution snapshot');
     checkKeys(snapshot, {
       'policy',
@@ -89,7 +92,14 @@ final class DerivedTargetGraphService {
     final asOf = scope.containsKey('asOf')
         ? parseInstant(scope['asOf'], 'asOf')
         : null;
-    final current = await resolve(graphId, number, asOf, runId, mode == 'all');
+    final current = await resolve(
+      graphId,
+      number,
+      asOf,
+      runId,
+      mode == 'all',
+      strictHistoryStart,
+    );
     if (canonicalJson(current['graph']) != canonicalJson(graph) ||
         canonicalJson(current['historyScope']) != canonicalJson(scope)) {
       invalid(
@@ -186,7 +196,10 @@ final class DerivedTargetGraphService {
     DateTime? asOf,
     String? runId,
     bool allRuns = false,
+    bool strictHistoryStart = false,
   ]) => repository.transaction(() async {
+    if (strictHistoryStart && asOf == null)
+      invalid('Strict history cutoff requires asOf.');
     if (runId != null) identifier({'runId': runId}, 'runId');
     if (runId != null && allRuns)
       invalid('Choose a run or all runs, not both.');
@@ -274,6 +287,7 @@ final class DerivedTargetGraphService {
             runBySession,
             runId,
             allRuns,
+            strictHistoryStart,
             10000 - historySourceCount,
           );
           historySourceCount +=
@@ -335,6 +349,7 @@ typedef _Selection = (Quantity, int, String, String, DateTime, int);
   Map<String, String> runBySession,
   String? runId,
   bool allRuns,
+  bool strictHistoryStart,
   int remainingSources,
 ) {
   final metric = binding['metric']! as String;
@@ -350,6 +365,7 @@ typedef _Selection = (Quantity, int, String, String, DateTime, int);
   final sources = <Map<String, Object?>>[];
   for (final session in sessions) {
     if (!allRuns && runBySession[session.id] != runId) continue;
+    if (strictHistoryStart && !session.startedAt.isBefore(asOf!)) continue;
     if (asOf != null &&
         (session.finishedAt == null || session.finishedAt!.isAfter(asOf)))
       continue;
