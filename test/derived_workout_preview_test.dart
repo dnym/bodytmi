@@ -79,6 +79,108 @@ void derivedWorkoutPreviewTests() {
   };
 
   test(
+    'published plan status detects source changes and rejects a different valid occurrence mapping',
+    () => withStore((store) async {
+      final workout = revision();
+      final set = start(
+        from: workout,
+      ).sets.firstWhere((s) => s.slotId == 'bench-heavy');
+      final spec = _graph();
+      jsonObject(spec['bindings'], 'bindings')['max_source'] = {
+        'kind': 'bodyMass',
+        'context': 'training',
+      };
+      spec['plans'] = [
+        {
+          'id': 'bench-plan',
+          'templateId': workout.definition.id,
+          'revision': 1,
+          'bindings': [binding(set.id, 'mass', 'working')],
+        },
+      ];
+      final service = DerivedWorkoutPreview(store);
+      final graphs = DerivedTargetGraphService(store);
+      await graphs.publish(DerivedTargetGraph.fromJson(spec), 0);
+      final mass = StoredBodyMassService(store);
+      await mass.save({
+        'id': 'm1',
+        'context': 'training',
+        'observedAt': '2026-10-01T08:00:00Z',
+        'mass': {'value': '80', 'unit': 'kg'},
+      }, 0);
+      final captured = await service.previewPlan(
+        graphId: 'preview-graph',
+        graphRevision: 1,
+        planId: 'bench-plan',
+        asOf: instant(10),
+      );
+      final storedBefore = canonicalJson((await store.archive()).toJson());
+      final unchanged = await service.planStatus(captured);
+      equal(unchanged['policy'], 'bodytmi-derived-workout-plan-status/1');
+      equal(unchanged['changed'], false);
+      equal(canonicalJson((await store.archive()).toJson()), storedBefore);
+      // This alternate preview is internally valid, but not the published plan.
+      final alternate = await service.preview(
+        templateId: workout.definition.id,
+        revision: 1,
+        graphId: 'preview-graph',
+        graphRevision: 1,
+        asOf: instant(10),
+        bindings: [binding(set.id, 'mass', 'warmup')],
+      );
+      equal((await service.status(alternate))['changed'], false);
+      final wrong = copyJson(captured);
+      wrong['preview'] = alternate;
+      await expectLater(
+        service.planStatus(wrong),
+        throwsA(isA<BodyTmiException>()),
+      );
+      final wrongPlan = copyJson(captured);
+      jsonObject(wrongPlan['plan'], 'plan')['id'] = 'not-published';
+      await expectLater(
+        service.planStatus(wrongPlan),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await mass.save({
+        'id': 'm2',
+        'context': 'training',
+        'observedAt': '2026-10-02T08:00:00Z',
+        'mass': {'value': '90', 'unit': 'kg'},
+      }, 0);
+      await graphs.publish(DerivedTargetGraph.fromJson(_graph()), 1);
+      final changed = await service.planStatus(captured);
+      equal(changed['changed'], true);
+      equal(changed['graphRevision'], 1);
+      equal(
+        jsonObject(
+          jsonObject(changed['sources'], 'sources')['max_source'],
+          'source',
+        )['changed'],
+        true,
+      );
+      final target = jsonObject(
+        (changed['targetChanges']! as List<Object?>).single,
+        'target',
+      );
+      equal(target['changed'], true);
+      equal(
+        jsonObject(
+          jsonObject(target['captured'], 'value')['value'],
+          'quantity',
+        )['value'],
+        '64',
+      );
+      equal(
+        jsonObject(
+          jsonObject(target['current'], 'value')['value'],
+          'quantity',
+        )['value'],
+        '72',
+      );
+    }),
+  );
+
+  test(
     'published workout plans pin valid effort mappings and preview against the selected graph revision',
     () => withStore((store) async {
       final workout = revision();

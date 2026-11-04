@@ -72,6 +72,57 @@ final class DerivedWorkoutPreview {
     };
   });
 
+  /// Revalidates that a preview belongs to the exact published plan before
+  /// comparing its source inputs. Caller-provided evidence is not authenticated.
+  Future<Map<String, Object?>> planStatus(
+    Object? input,
+  ) => repository.transaction(() async {
+    final captured = jsonObject(input, 'derived workout plan preview');
+    checkKeys(captured, {'policy', 'plan', 'preview'});
+    if (captured['policy'] != 'bodytmi-derived-workout-plan-preview/1') {
+      invalid('Unsupported derived workout plan preview policy.');
+    }
+    final plan = DerivedWorkoutPlan.fromJson(captured['plan']);
+    final preview = jsonObject(captured['preview'], 'workout preview');
+    final workout = await repository.revision(plan.templateId, plan.revision);
+    if (workout == null)
+      throw const BodyTmiException('not_found', 'Workout revision not found.');
+    final resolution = jsonObject(
+      preview['graphResolution'],
+      'graph resolution',
+    );
+    final graphInfo = jsonObject(resolution['graph'], 'graph');
+    final graphId = identifier(graphInfo, 'id');
+    final graphRevision = graphInfo['number'];
+    if (graphRevision is! int || graphRevision < 1)
+      invalid('Invalid graph revision.');
+    final published = await DerivedTargetGraphService(
+      repository,
+    ).revision(graphId, graphRevision);
+    final matches = published.graph.plans.where((entry) => entry.id == plan.id);
+    if (matches.isEmpty ||
+        canonicalJson(matches.single.toJson()) !=
+            canonicalJson(plan.toJson())) {
+      invalid('Plan preview does not match a published workout plan.');
+    }
+    plan.validate(workout, published.graph.nodes);
+    if (canonicalJson(_project(workout, resolution, plan.bindings)) !=
+        canonicalJson(preview)) {
+      invalid('Workout preview does not match the published plan.');
+    }
+    final result = await status(preview);
+    return {
+      'policy': 'bodytmi-derived-workout-plan-status/1',
+      'graphId': graphId,
+      'graphRevision': graphRevision,
+      'plan': plan.toJson(),
+      'changed': result['changed'],
+      'sources': result['sources'],
+      'targetChanges': result['targetChanges'],
+      'currentPreview': result['currentPreview'],
+    };
+  });
+
   /// Compare a caller-supplied preview with the same pinned workout and graph.
   /// Source evidence is not authenticated and does not authorize session writes.
   Future<Map<String, Object?>> status(
