@@ -136,6 +136,7 @@ final class NativeBackup {
           35,
           36,
           37,
+          38,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -266,6 +267,7 @@ final class NativeBackup {
             35,
             36,
             37,
+            38,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -325,6 +327,12 @@ final class NativeBackup {
           final graph = DerivedTargetGraphRevision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 38 &&
+              graph.graph.nodes.any(
+                (n) => n['kind'] == 'add' || n['kind'] == 'subtract',
+              )) {
+            invalid('Binary derived targets require schema v38.');
+          }
           if (graph.graph.id != row['graph_id'] ||
               graph.number != row['number'])
             invalid('Derived target graph row identity mismatch.');

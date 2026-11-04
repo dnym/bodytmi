@@ -44,6 +44,15 @@ final class DerivedTargetSnapshot {
           'input': identifier(node, 'input'),
           'factor': factor.toString(),
         });
+      } else if (kind == 'add' || kind == 'subtract') {
+        checkKeys(node, {'id', 'kind', 'unit', 'left', 'right'});
+        graph.add({
+          'id': identifier(node, 'id'),
+          'kind': kind,
+          'unit': Unit.parse(requiredString(node, 'unit')).name,
+          'left': identifier(node, 'left'),
+          'right': identifier(node, 'right'),
+        });
       } else {
         invalid('Unknown derived target node kind: $kind.');
       }

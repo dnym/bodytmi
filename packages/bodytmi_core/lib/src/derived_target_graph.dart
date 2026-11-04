@@ -6,7 +6,7 @@ import 'quantity.dart';
 
 /// Reusable scalar dependency graph with explicit per-source binding policies.
 ///
-/// Nodes are the same source/scale graph as [DerivedTargets]; bindings decide
+/// Nodes are the same scalar graph as [DerivedTargets]; bindings decide
 /// how each source is supplied at resolution time (manual value, stored
 /// body-mass record, or stored session history). Publishing a graph never
 /// fetches or asserts the currency of any source.
@@ -64,6 +64,17 @@ final class DerivedTargetGraph {
           'unit': Unit.parse(requiredString(node, 'unit')).name,
           'input': identifier(node, 'input'),
           'factor': factor.toString(),
+        });
+      } else if (kind == 'add' || kind == 'subtract') {
+        checkKeys(node, {'id', 'kind', 'unit', 'left', 'right'});
+        final nodeId = identifier(node, 'id');
+        if (!nodeIds.add(nodeId)) invalid('Duplicate node: $nodeId.');
+        nodes.add({
+          'id': nodeId,
+          'kind': kind,
+          'unit': Unit.parse(requiredString(node, 'unit')).name,
+          'left': identifier(node, 'left'),
+          'right': identifier(node, 'right'),
         });
       } else {
         invalid('Unknown derived target node kind: $kind.');

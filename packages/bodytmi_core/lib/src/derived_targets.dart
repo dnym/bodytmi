@@ -46,6 +46,11 @@ final class DerivedTargets {
         final factor = Decimal.parse(requiredString(node, 'factor'));
         if (factor.compareTo(Decimal.zero) < 0)
           invalid('Scale factor cannot be negative.');
+      } else if (kind == 'add' || kind == 'subtract') {
+        checkKeys(node, {'id', 'kind', 'unit', 'left', 'right'});
+        Unit.parse(requiredString(node, 'unit'));
+        identifier(node, 'left');
+        identifier(node, 'right');
       } else {
         invalid('Unknown derived target node kind: $kind.');
       }
@@ -74,7 +79,7 @@ final class DerivedTargets {
           'value': result?.toJson(),
           'status': result == null ? 'unresolved' : 'resolved',
         });
-      } else {
+      } else if (node['kind'] == 'scale') {
         final dependency = requiredString(node, 'input');
         visit(dependency);
         final upstream = nodes[dependency]!;
@@ -96,6 +101,36 @@ final class DerivedTargets {
           'unit': unit.name,
           'input': dependency,
           'factor': factor.toString(),
+          'value': result?.toJson(),
+          'status': result == null ? 'unresolved' : 'resolved',
+        });
+      } else {
+        final left = identifier(node, 'left');
+        final right = identifier(node, 'right');
+        visit(left);
+        visit(right);
+        if (Unit.parse(requiredString(nodes[left]!, 'unit')).dimension !=
+                unit.dimension ||
+            Unit.parse(requiredString(nodes[right]!, 'unit')).dimension !=
+                unit.dimension) {
+          invalid('Derived target dependency dimension mismatch at $id.');
+        }
+        final a = resolved[left], b = resolved[right];
+        if (a != null && b != null) {
+          final value = node['kind'] == 'add'
+              ? a.value + b.value
+              : a.value - b.value;
+          if (value.compareTo(Decimal.zero) < 0) {
+            invalid('Derived target subtraction cannot be negative at $id.');
+          }
+          result = Quantity(value.toString(), unit.canonical.name);
+        }
+        normalized.add({
+          'id': id,
+          'kind': node['kind'],
+          'unit': unit.name,
+          'left': left,
+          'right': right,
           'value': result?.toJson(),
           'status': result == null ? 'unresolved' : 'resolved',
         });

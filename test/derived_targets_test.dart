@@ -42,6 +42,135 @@ Map<String, Object?> _node(Map<String, Object?> result, String id) => _nodes(
 
 void derivedTargetsTests() {
   test(
+    'binary graph arithmetic uses exact quantities and explicit dependencies',
+    () {
+      final nodes = [
+        _source('maximum', 'rep', _q('8', 'rep'), version: 4),
+        _source('margin', 'rep', _q('1', 'rep'), version: 2),
+        {
+          'id': 'goal',
+          'kind': 'subtract',
+          'unit': 'rep',
+          'left': 'maximum',
+          'right': 'margin',
+        },
+        _scale('volume', 'rep', 'goal', '3'),
+        _source('pounds', 'lb', _q('100', 'lb'), version: 3),
+        _source('plates', 'kg', _q('2.5', 'kg'), version: 1),
+        {
+          'id': 'load',
+          'kind': 'add',
+          'unit': 'kg',
+          'left': 'pounds',
+          'right': 'plates',
+        },
+      ];
+      final result = const DerivedTargets().resolve(nodes);
+      equal(
+        jsonObject(_node(result, 'goal')['value'], 'quantity')['value'],
+        '7',
+      );
+      equal(
+        jsonObject(_node(result, 'volume')['value'], 'quantity')['value'],
+        '21',
+      );
+      equal(
+        jsonObject(_node(result, 'load')['value'], 'quantity')['value'],
+        '47.859237',
+      );
+      jsonEqual(
+        result,
+        const DerivedTargets().resolve(nodes.reversed.toList()),
+      );
+      final snapshot = const DerivedTargetSnapshot().capture(
+        [
+          {'id': 'max', 'kind': 'source', 'unit': 'rep', 'sourceId': 'record'},
+          {
+            'id': 'margin',
+            'kind': 'source',
+            'unit': 'rep',
+            'sourceId': 'margin',
+          },
+          {
+            'id': 'goal',
+            'kind': 'subtract',
+            'unit': 'rep',
+            'left': 'max',
+            'right': 'margin',
+          },
+        ],
+        {
+          'record': {'version': 4, 'value': _q('8', 'rep')},
+          'margin': {'version': 2, 'value': _q('1', 'rep')},
+        },
+      );
+      final status = const DerivedTargetSnapshot().status(snapshot, {
+        'record': {'version': 5, 'value': _q('9', 'rep')},
+        'margin': {'version': 2, 'value': _q('1', 'rep')},
+      });
+      equal(status['changed'], true);
+      equal(
+        jsonObject(
+          _node(jsonObject(status['current'], 'current'), 'goal')['value'],
+          'value',
+        )['value'],
+        '8',
+      );
+    },
+  );
+  test(
+    'binary graph arithmetic validates both branches and propagates missing values',
+    () {
+      Map<String, Object?> binary(
+        String kind,
+        String left,
+        String right, [
+        String unit = 'rep',
+      ]) => {
+        'id': 'result',
+        'kind': kind,
+        'unit': unit,
+        'left': left,
+        'right': right,
+      };
+      final a = _source('a', 'rep', _q('1', 'rep'), version: 1);
+      final b = _source('b', 'rep', _q('2', 'rep'), version: 1);
+      rejects(
+        () => const DerivedTargets().resolve([
+          a,
+          b,
+          binary('subtract', 'a', 'b'),
+        ]),
+      );
+      rejects(
+        () =>
+            const DerivedTargets().resolve([a, binary('add', 'a', 'missing')]),
+      );
+      rejects(
+        () => const DerivedTargets().resolve([a, binary('add', 'a', 'result')]),
+      );
+      rejects(
+        () => const DerivedTargets().resolve([
+          a,
+          _source('b', 'kg', null),
+          binary('add', 'a', 'b'),
+        ]),
+      );
+      final unresolved = const DerivedTargets().resolve([
+        a,
+        _source('b', 'rep', null),
+        binary('subtract', 'a', 'b'),
+      ]);
+      equal(_node(unresolved, 'result')['status'], 'unresolved');
+      equal(_node(unresolved, 'result')['value'], null);
+      final zero = const DerivedTargets().resolve([
+        a,
+        binary('subtract', 'a', 'a'),
+      ]);
+      equal(jsonObject(_node(zero, 'result')['value'], 'value')['value'], '0');
+    },
+  );
+  test(
     'derived targets resolve explicit dependency graphs deterministically with exact units and versions',
     () {
       final nodes = [

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "graph": [
+    {"id": "observed-max", "kind": "source", "unit": "rep", "sourceId": "recorded-max"},
+    {"id": "reserve", "kind": "source", "unit": "rep", "sourceId": "rep-reserve"},
+    {"id": "working-target", "kind": "subtract", "unit": "rep", "left": "observed-max", "right": "reserve"}
+  ],
+  "bindings": {
+    "recorded-max": {"version": 1, "value": {"value": "8", "unit": "rep"}},
+    "rep-reserve": {"version": 1, "value": {"value": "1", "unit": "rep"}}
+  }
+}

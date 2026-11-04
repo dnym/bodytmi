@@ -107,6 +107,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   35 => schemaV27, // v35 adds raw body-mass source and notes.
   36 => schemaV27, // v36 adds manually edited session targets.
   37 => schemaV27, // v37 adds carried actual source identities and versions.
+  38 => schemaV27, // v38 adds binary derived-target arithmetic.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

@@ -111,6 +111,213 @@ void derivedPlanSessionTests() {
   }
 
   test(
+    'binary graph targets survive session capture and portability',
+    () => withStore((store, dir) async {
+      await store.snapshot('$dir/v37.sqlite');
+      final old = sqlite3.open('$dir/v37.sqlite');
+      old.userVersion = 37;
+      old.close();
+      equal(NativeBackup.validateDatabase('$dir/v37.sqlite'), 37);
+      final migrated = await TrainingStore.open('$dir/v37.sqlite');
+      equal(
+        (await StoredTrainingService(
+          migrated,
+        ).revision(definition().id)).number,
+        1,
+      );
+      await migrated.close();
+      final graph = copyJson(_graph());
+      final nodes = graph['nodes']! as List<Object?>;
+      nodes.addAll([
+        {
+          'id': 'offset',
+          'kind': 'source',
+          'unit': 'kg',
+          'sourceId': 'offset-source',
+        },
+        {
+          'id': 'adjusted',
+          'kind': 'subtract',
+          'unit': 'kg',
+          'left': 'work',
+          'right': 'offset',
+        },
+      ]);
+      jsonObject(graph['bindings'], 'bindings')['offset-source'] = {
+        'kind': 'manual',
+        'version': 1,
+        'value': {'value': '2.5', 'unit': 'kg'},
+      };
+      final plan = jsonObject(
+        (graph['plans']! as List<Object?>).single,
+        'plan',
+      );
+      for (final binding in jsonList(plan, 'bindings')) {
+        jsonObject(binding, 'binding')['nodeId'] = 'adjusted';
+      }
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(graph), 0);
+      final service = StoredTrainingService(store);
+      final session = await service.start(
+        'binary-session',
+        definition().id,
+        1,
+        instant(1),
+        derivedPlan: _ref,
+      );
+      for (final set in session.sets.where((s) => s.slotId == 'bench-heavy')) {
+        equal(set.suggested['mass']!.value.toString(), '77.5');
+      }
+      final before = canonicalJson((await store.archive()).toJson());
+      await store.backup('$dir/binary-native');
+      final file = '$dir/binary.json';
+      await LogicalArchiveFiles.export(await store.archive(), file);
+      final prepared = await LogicalArchiveFiles.prepare(file);
+      final dest = await TrainingStore.open('$dir/restore.sqlite');
+      try {
+        await dest.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery',
+          confirm: true,
+        );
+      } finally {
+        await dest.close();
+        await prepared.close();
+      }
+      final restored = await TrainingStore.open('$dir/restore.sqlite');
+      try {
+        equal(canonicalJson((await restored.archive()).toJson()), before);
+      } finally {
+        await restored.close();
+      }
+      final envelope =
+          jsonDecode(await File(file).readAsString()) as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/37';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('$dir/old-binary.json').writeAsString(jsonEncode(envelope));
+      await expectLater(
+        LogicalArchiveFiles.prepare('$dir/old-binary.json'),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await store.snapshot('$dir/binary.sqlite');
+      equal(NativeBackup.validateDatabase('$dir/binary.sqlite'), 38);
+      final oldLabel = sqlite3.open('$dir/binary.sqlite');
+      oldLabel.userVersion = 37;
+      oldLabel.close();
+      rejects(() => NativeBackup.validateDatabase('$dir/binary.sqlite'));
+    }),
+  );
+  test(
+    'a history-backed best repetition result can prescribe one fewer rep',
+    () => withStore((store, _) async {
+      final service = StoredTrainingService(store);
+      var history = await service.start(
+        'rep-history',
+        definition().id,
+        1,
+        instant(1),
+      );
+      history = await service.edit(
+        history.id,
+        history.contentVersion,
+        finished,
+      );
+      final graph = DerivedTargetGraph.fromJson({
+        'id': 'rep-margin',
+        'nodes': [
+          {
+            'id': 'best',
+            'kind': 'source',
+            'unit': 'rep',
+            'sourceId': 'best-reps',
+          },
+          {
+            'id': 'reserve',
+            'kind': 'source',
+            'unit': 'rep',
+            'sourceId': 'rep-reserve',
+          },
+          {
+            'id': 'goal',
+            'kind': 'subtract',
+            'unit': 'rep',
+            'left': 'best',
+            'right': 'reserve',
+          },
+        ],
+        'bindings': {
+          'best-reps': {
+            'kind': 'history',
+            'metric': 'reps',
+            'templateId': definition().id,
+            'slotId': 'bench-heavy',
+          },
+          'rep-reserve': {
+            'kind': 'manual',
+            'version': 1,
+            'value': {'value': '1', 'unit': 'rep'},
+          },
+        },
+        'plans': [
+          {
+            'id': 'bench',
+            'templateId': definition().id,
+            'revision': 1,
+            'bindings': [
+              for (var i = 0; i < 3; i++)
+                {
+                  'occurrenceId': 'workout/heavy[$i]/heavy-set',
+                  'metric': 'reps',
+                  'nodeId': 'goal',
+                },
+            ],
+          },
+        ],
+      });
+      await DerivedTargetGraphService(store).publish(graph, 0);
+      final next = await service.start(
+        'rep-next',
+        definition().id,
+        1,
+        instant(2),
+        derivedPlan: const DerivedPlanRef('rep-margin', 1, 'bench'),
+      );
+      check(
+        next.sets
+            .where((s) => s.slotId == 'bench-heavy')
+            .every((s) => s.suggested['reps']!.value.toString() == '7'),
+      );
+      history = await service.edit(
+        history.id,
+        history.contentVersion,
+        (s) => const TrainingService().complete(s, s.sets.first.id, {
+          'reps': Quantity('9', 'rep'),
+        }, acceptSuggested: true),
+      );
+      equal(
+        (await service.session(
+          next.id,
+        )).sets.first.suggested['reps']!.value.toString(),
+        '7',
+      );
+      final status = await DerivedWorkoutPreview(store).sessionStatus(next.id);
+      equal(jsonObject(status['comparison'], 'comparison')['changed'], true);
+      check(history.sets.first.contentVersion > 1);
+      await store.archive();
+    }),
+  );
+
+  test(
     'manual derived session targets are frozen, retry-safe and survive edits and portability',
     () => withStore((store, dir) async {
       final service = StoredTrainingService(store);
@@ -236,7 +443,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 37);
+        equal(backup.manifest['databaseSchemaVersion'], 38);
       } finally {
         await backup.close();
       }
@@ -1091,7 +1298,7 @@ void derivedPlanSessionTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 37);
+      equal(NativeBackup.validateDatabase(snapshot), 38);
       final db = sqlite3.open(snapshot);
       db.userVersion = 30;
       db.close();
@@ -1467,7 +1674,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 37);
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 38);
       final db = sqlite3.open('$dir/snapshot.sqlite');
       db.userVersion = 32;
       db.close();
@@ -1569,7 +1776,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 37);
+        equal(reopened.userVersion, 38);
       } finally {
         reopened.close();
       }
