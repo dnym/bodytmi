@@ -66,6 +66,56 @@ final class ProgramService {
   Future<ProgramRun> run(String id) async =>
       (await repository.programRuns()).where((r) => r.id == id).firstOrNull ??
       (throw const BodyTmiException('not_found', 'Program run not found.'));
+
+  /// Read the authored days ahead of one run without resolving or advancing it.
+  Future<Map<String, Object?>> schedule(String runId, {int count = 10}) =>
+      repository.transaction(() async {
+        identifier({'runId': runId}, 'runId');
+        if (count < 1 || count > 1000)
+          invalid('Schedule count must be between 1 and 1000.');
+        final current = await run(runId);
+        final cycle = current.program.definition.plan.occurrences().toList();
+        final available = current.loop ? count : cycle.length - current.cursor;
+        final length = available < count ? available : count;
+        final bindings = await repository.sessionPrograms();
+        final currentSession = bindings
+            .where(
+              (binding) =>
+                  binding.runId == runId && binding.ordinal == current.cursor,
+            )
+            .firstOrNull
+            ?.sessionId;
+        return {
+          'policy': 'bodytmi-program-run-schedule/1',
+          'runId': current.id,
+          'programId': current.program.definition.id,
+          'programRevision': current.program.number,
+          'runVersion': current.contentVersion,
+          'status': current.status,
+          'loop': current.loop,
+          'cursor': current.cursor,
+          'cycleLength': cycle.length,
+          'requestedCount': count,
+          'remaining': current.loop ? null : available,
+          'hasMore': current.loop || available > length,
+          'days': [
+            for (var offset = 0; offset < length; offset++)
+              () {
+                final ordinal = current.cursor + offset;
+                final occurrence = cycle[ordinal % cycle.length];
+                return {
+                  'ordinal': ordinal,
+                  'cycle': ordinal ~/ cycle.length,
+                  'index': ordinal % cycle.length,
+                  ...occurrence.toJson(),
+                  if (offset == 0 && currentSession != null)
+                    'sessionId': currentSession,
+                };
+              }(),
+          ],
+        };
+      });
+
   Future<ProgramRun> create(
     String id,
     String programId,

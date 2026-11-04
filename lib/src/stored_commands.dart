@@ -74,6 +74,7 @@ const storedCommandNames = [
   'run create',
   'run list',
   'run show',
+  'run schedule',
   'run start',
   'run skip',
   'run pause',
@@ -306,6 +307,7 @@ Future<Map<String, Object?>> executeStored(
     'run create' => {'id', 'programId', 'revision', 'startedAt', 'loop'},
     'run list' => {'status'},
     'run show' => {'runId'},
+    'run schedule' => {'runId', 'count'},
     'run start' => {
       'runId',
       'expectedVersion',
@@ -690,6 +692,11 @@ Future<Map<String, Object?>> executeStored(
           for (final r in runs)
             if (status == null || r.status == status) await runView(r),
         ];
+      case 'run schedule':
+        data = await programs.schedule(
+          identifier(request, 'runId'),
+          count: request.containsKey('count') ? integer('count') : 10,
+        );
       case 'run show':
         data = await runView(await programs.run(identifier(request, 'runId')));
       case 'run pause':

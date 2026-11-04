@@ -897,8 +897,20 @@ void derivedPlanSessionTests() {
       final programs = ProgramService(store);
       await graphs.publish(DerivedTargetGraph.fromJson(_graph()), 0);
       await programs.publish(ProgramDefinition.fromJson(_programWithPlan()), 0);
+      final initialProgram = await programs.revision('planned-program');
+      final pinned = initialProgram.definition.plan.nodes
+          .whereType<ProgramDay>()
+          .single
+          .derivedPlan;
+      sameJson(pinned!.toJson(), _ref.toJson());
       for (final run in ['strength', 'cardio']) {
         await programs.create(run, 'planned-program', 1, instant(1));
+        final schedule = await programs.schedule(run, count: 1);
+        final scheduleDay = jsonObject(
+          jsonObject(jsonList(schedule, 'days').single, 'entry')['day'],
+          'day',
+        );
+        sameJson(scheduleDay['derivedPlan'], _ref.toJson());
         final started = await programs.start(
           run,
           1,

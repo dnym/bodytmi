@@ -105,6 +105,121 @@ void programTests() {
   );
 
   test(
+    'run schedules show bounded authored days and independent run state without mutation',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-schedule-');
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        await _setup(store);
+        final programs = ProgramService(store);
+        final nested = _program('nested').toJson();
+        nested['plan'] = {
+          'id': 'block',
+          'type': 'repeat',
+          'count': 2,
+          'child': nested['plan'],
+        };
+        await programs.publish(ProgramDefinition.fromJson(nested), 0);
+        await programs.create('nested-run', 'nested', 1, instant(1));
+        final before = canonicalJson((await store.archive()).toJson());
+        final schedule = await programs.schedule('nested-run', count: 6);
+        equal(schedule['policy'], 'bodytmi-program-run-schedule/1');
+        equal(schedule['cycleLength'], 4);
+        equal(schedule['remaining'], null);
+        equal(schedule['hasMore'], true);
+        final days = jsonList(schedule, 'days');
+        equal(jsonObject(days[0], 'day')['path'], 'block[0]/cycle/a');
+        equal(jsonObject(days[3], 'day')['path'], 'block[1]/cycle/b');
+        equal(jsonObject(days[4], 'day')['path'], 'block[0]/cycle/a');
+        equal(jsonObject(days[4], 'day')['cycle'], 1);
+        equal(jsonObject(days[4], 'day')['ordinal'], 4);
+        equal(canonicalJson((await store.archive()).toJson()), before);
+        await _start(store, 'strength-run', 'strength-session', 1);
+        final strength = await programs.schedule('strength-run', count: 1);
+        equal(
+          jsonObject(jsonList(strength, 'days').first, 'day')['sessionId'],
+          'strength-session',
+        );
+        final cardio = await programs.schedule('cardio-run', count: 1);
+        check(
+          !jsonObject(
+            jsonList(cardio, 'days').first,
+            'day',
+          ).containsKey('sessionId'),
+        );
+        final paused = await programs.status(
+          'strength-run',
+          (await programs.run('strength-run')).contentVersion,
+          'paused',
+        );
+        final view = await programs.schedule('strength-run', count: 1);
+        equal(view['status'], 'paused');
+        equal(view['runVersion'], paused.contentVersion);
+        await expectLater(
+          programs.schedule('strength-run', count: 0),
+          throwsA(isA<BodyTmiException>()),
+        );
+        await expectLater(
+          programs.schedule('strength-run', count: 1001),
+          throwsA(isA<BodyTmiException>()),
+        );
+        await expectLater(
+          programs.schedule('missing'),
+          throwsA(isA<BodyTmiException>()),
+        );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'finite run schedules shrink after skips and become empty when complete',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-schedule-finite-',
+      );
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        await StoredTrainingService(store).publish(definition(), 0);
+        final programs = ProgramService(store);
+        await programs.publish(_program('finite'), 0);
+        await programs.create(
+          'finite-run',
+          'finite',
+          1,
+          instant(1),
+          loop: false,
+        );
+        final partial = await programs.schedule('finite-run', count: 1);
+        equal(partial['hasMore'], true);
+        equal(jsonList(partial, 'days').length, 1);
+        final before = await programs.schedule('finite-run', count: 10);
+        equal(before['remaining'], 2);
+        equal(before['hasMore'], false);
+        equal(jsonList(before, 'days').length, 2);
+        await programs.skip('finite-run', 1, 'skip-1', instant(1));
+        final after = await programs.schedule('finite-run', count: 1);
+        equal(after['remaining'], 1);
+        equal(
+          jsonObject(jsonList(after, 'days').single, 'day')['path'],
+          'cycle/b',
+        );
+        await programs.skip('finite-run', 2, 'skip-2', instant(1));
+        final done = await programs.schedule('finite-run');
+        equal(done['status'], 'completed');
+        equal(done['remaining'], 0);
+        equal(done['hasMore'], false);
+        check(jsonList(done, 'days').isEmpty);
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
     'two active runs isolate cursor, raw history and accepted targets despite sharing one workout template',
     () async {
       final dir = await Directory.systemTemp.createTemp(
@@ -623,6 +738,12 @@ void programTests() {
               .length,
           2,
         );
+        final upcoming = jsonObject(
+          await call('run schedule', {'runId': 'strength-run', 'count': 3}),
+          'schedule',
+        );
+        equal(jsonList(upcoming, 'days').length, 3);
+        equal(jsonObject(jsonList(upcoming, 'days')[2], 'day')['cycle'], 1);
         var s = sessionFromJson(
           await call('run start', {
             'runId': 'strength-run',
@@ -636,6 +757,14 @@ void programTests() {
             await call('run show', {'runId': 'strength-run'}),
             'run',
           )['currentSessionId'],
+          'cli',
+        );
+        final bound = jsonObject(
+          await call('run schedule', {'runId': 'strength-run', 'count': 1}),
+          'schedule',
+        );
+        equal(
+          jsonObject(jsonList(bound, 'days').single, 'day')['sessionId'],
           'cli',
         );
         for (final set in s.sets)
