@@ -1,5 +1,6 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'body_mass_service.dart';
+import 'canonical_json.dart';
 import 'training_repository.dart';
 
 /// Durable published graphs and read-only resolution against stored sources.
@@ -46,6 +47,127 @@ final class DerivedTargetGraphService {
         final id = a.graph.id.compareTo(b.graph.id);
         return id == 0 ? a.number.compareTo(b.number) : id;
       });
+
+  /// Compares a caller-supplied resolution with the same stored revision and scope.
+  /// The old source evidence is not authenticated and must not authorize writes.
+  Future<Map<String, Object?>> status(Object? snapshotInput) async {
+    final snapshot = jsonObject(snapshotInput, 'graph resolution snapshot');
+    checkKeys(snapshot, {
+      'policy',
+      'historyScope',
+      'graph',
+      'bindings',
+      'resolution',
+    });
+    if (snapshot['policy'] != 'bodytmi-derived-target-graph-resolution/3') {
+      invalid('Unsupported graph resolution snapshot policy.');
+    }
+    final graph = jsonObject(snapshot['graph'], 'snapshot graph');
+    checkKeys(graph, {'id', 'number', 'name', 'nodes'});
+    final graphId = identifier(graph, 'id');
+    final number = graph['number'];
+    if (number is! int || number < 1) invalid('Invalid graph revision number.');
+    final scope = jsonObject(snapshot['historyScope'], 'history scope');
+    checkKeys(scope, {'mode', 'runId', 'asOf'});
+    final mode = requiredString(scope, 'mode');
+    if (!{'adHoc', 'run', 'all'}.contains(mode))
+      invalid('Invalid history scope.');
+    final String? runId;
+    if (mode == 'run') {
+      runId = identifier(scope, 'runId');
+    } else {
+      if (scope.containsKey('runId'))
+        invalid('Unexpected runId in history scope.');
+      runId = null;
+    }
+    final asOf = scope.containsKey('asOf')
+        ? parseInstant(scope['asOf'], 'asOf')
+        : null;
+    final current = await resolve(graphId, number, asOf, runId, mode == 'all');
+    if (canonicalJson(current['graph']) != canonicalJson(graph) ||
+        canonicalJson(current['historyScope']) != canonicalJson(scope)) {
+      invalid(
+        'Snapshot graph or history scope does not match the published revision.',
+      );
+    }
+    final before = jsonObject(snapshot['bindings'], 'snapshot bindings');
+    final after = jsonObject(current['bindings'], 'current bindings');
+    if (before.length != after.length ||
+        !after.keys.every(before.containsKey)) {
+      invalid('Snapshot source membership does not match the published graph.');
+    }
+    final nodes = <Map<String, Object?>>[];
+    for (final raw in jsonList(graph, 'nodes')) {
+      final node = jsonObject(raw, 'graph node');
+      if (node['kind'] != 'source') {
+        nodes.add(node);
+        continue;
+      }
+      final id = identifier(node, 'sourceId');
+      final captured = jsonObject(before[id], 'captured binding');
+      final latest = jsonObject(after[id], 'current binding');
+      final dynamicKeys = {'value', 'sourceVersion', 'status', 'provenance'};
+      for (final key in latest.keys.where(
+        (key) => !dynamicKeys.contains(key),
+      )) {
+        if (!captured.containsKey(key) ||
+            canonicalJson(captured[key]) != canonicalJson(latest[key])) {
+          invalid(
+            'Snapshot binding policy does not match the published graph.',
+          );
+        }
+      }
+      if (captured.keys.any(
+        (key) => !latest.containsKey(key) && !dynamicKeys.contains(key),
+      )) {
+        invalid('Snapshot binding contains unknown fields.');
+      }
+      final value = captured['value'];
+      if (captured['status'] != (value == null ? 'unresolved' : 'resolved')) {
+        invalid('Snapshot binding status does not match its value.');
+      }
+      if (captured['kind'] == 'manual' &&
+          (canonicalJson(value) != canonicalJson(latest['value']) ||
+              captured['sourceVersion'] != latest['sourceVersion'])) {
+        invalid('Snapshot manual value does not match the published graph.');
+      }
+      if (captured['kind'] == 'history' || captured['kind'] == 'bodyMass') {
+        final provenance = jsonObject(
+          captured['provenance'],
+          'source provenance',
+        );
+        jsonObject(provenance['sourceFingerprint'], 'source fingerprint');
+      }
+      nodes.add({
+        ...node,
+        'sourceVersion': captured['sourceVersion'],
+        'value': value,
+      });
+    }
+    if (canonicalJson(const DerivedTargets().resolve(nodes)) !=
+        canonicalJson(snapshot['resolution'])) {
+      invalid('Snapshot resolution does not match its source values.');
+    }
+    final sources = <String, Object?>{};
+    for (final id in after.keys) {
+      sources[id] = {
+        'changed': canonicalJson(before[id]) != canonicalJson(after[id]),
+        'captured': before[id],
+        'current': after[id],
+      };
+    }
+    return {
+      'policy': 'bodytmi-derived-target-graph-status/1',
+      'graph': current['graph'],
+      'historyScope': current['historyScope'],
+      'changed': sources.values.any(
+        (source) => (source as Map<String, Object?>)['changed'] == true,
+      ),
+      'sources': sources,
+      'capturedResolution': snapshot['resolution'],
+      'currentResolution': current['resolution'],
+    };
+  }
 
   /// Resolves a published graph against stored data without modifying it.
   ///

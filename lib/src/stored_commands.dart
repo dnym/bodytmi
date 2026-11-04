@@ -44,6 +44,7 @@ const storedCommandNames = [
   'graph show',
   'graph list',
   'graph resolve',
+  'graph status',
   'store mass-status',
   'store effective-load',
   'store complete',
@@ -219,6 +220,7 @@ Future<Map<String, Object?>> executeStored(
     'graph show' => {'graphId', 'revision'},
     'graph list' => <String>{},
     'graph resolve' => {'graphId', 'revision', 'asOf', 'runId', 'allRuns'},
+    'graph status' => {'snapshot'},
     'store mass-status' => {'id'},
     'store effective-load' => {'id'},
     'store complete' => {
@@ -909,6 +911,10 @@ Future<Map<String, Object?>> executeStored(
           request.containsKey('runId') ? identifier(request, 'runId') : null,
           flag('allRuns'),
         );
+      case 'graph status':
+        data = await DerivedTargetGraphService(
+          store,
+        ).status(request['snapshot']);
       case 'store assess-objectives':
         data = await store.transaction(
           () async => const TrainingService().assessObjectives(

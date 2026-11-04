@@ -692,6 +692,93 @@ void derivedTargetGraphTests() {
   );
 
   test(
+    'graph status detects changed body mass and non-winning history in the captured revision and scope',
+    () => _stored((store) async {
+      final service = DerivedTargetGraphService(store);
+      final graph = DerivedTargetGraph.fromJson(_graph(id: 'status-graph'));
+      await service.publish(graph, 0);
+      final snapshot = await service.resolve('status-graph', null, instant(10));
+      final original = jsonEncode(snapshot);
+      final same = await service.status(snapshot);
+      equal(same['changed'], false);
+      equal(same['policy'], 'bodytmi-derived-target-graph-status/1');
+      final massService = StoredBodyMassService(store);
+      await massService.save({
+        'id': 'new-mass',
+        'context': 'clothed-training',
+        'observedAt': '2026-10-02T08:00:00Z',
+        'mass': {'value': '85', 'unit': 'kg'},
+      }, 0);
+      final workoutRevision = revision();
+      var session = start(id: 'new-history', day: 4, from: workoutRevision);
+      for (final set in session.sets) {
+        session = const TrainingService().complete(session, set.id, {
+          'mass': Quantity('60', 'kg'),
+          'reps': Quantity('8', 'rep'),
+        });
+      }
+      session = session.finish(instant(4).add(const Duration(hours: 1)));
+      await store.insertSession(session);
+      await store.recordFinalization(session.id);
+      // A later graph revision must not change the captured revision being checked.
+      await service.publish(graph, 1);
+      final changed = await service.status(snapshot);
+      equal(changed['changed'], true);
+      final sources = jsonObject(changed['sources'], 'sources');
+      equal(jsonObject(sources['bench_max'], 'history')['changed'], true);
+      equal(jsonObject(sources['training_mass'], 'mass')['changed'], true);
+      equal(
+        _nodeValue({
+          'resolution': changed['currentResolution'],
+        }, 'max')['value'],
+        '70',
+      );
+      equal(jsonEncode(snapshot), original);
+    }),
+  );
+
+  test(
+    'graph status rejects altered arithmetic, revision, scope and binding policy',
+    () => _stored((store) async {
+      final service = DerivedTargetGraphService(store);
+      await service.publish(
+        DerivedTargetGraph.fromJson(_graph(id: 'status-invalid')),
+        0,
+      );
+      final snapshot = await service.resolve(
+        'status-invalid',
+        null,
+        instant(10),
+      );
+      Future<void> reject(Map<String, Object?> altered) async => expectLater(
+        service.status(altered),
+        throwsA(isA<BodyTmiException>()),
+      );
+      final output = copyJson(snapshot);
+      final nodes =
+          jsonObject(output['resolution'], 'resolution')['nodes']!
+              as List<Object?>;
+      jsonObject(nodes.last, 'node')['value'] = {'value': '999', 'unit': 'kg'};
+      await reject(output);
+      final graph = copyJson(snapshot);
+      jsonObject(graph['graph'], 'graph')['nodes'] = <Object?>[];
+      await reject(graph);
+      final scope = copyJson(snapshot);
+      jsonObject(scope['historyScope'], 'scope')['runId'] = 'other';
+      await reject(scope);
+      final policy = copyJson(snapshot);
+      jsonObject(
+        jsonObject(policy['bindings'], 'bindings')['bench_max'],
+        'source',
+      )['direction'] = 'lowest';
+      await reject(policy);
+      final missing = copyJson(snapshot);
+      jsonObject(missing['bindings'], 'bindings').remove('bench_max');
+      await reject(missing);
+    }),
+  );
+
+  test(
     'stored graph publication checks expected revisions and resolves stored sources with provenance',
     () => _stored((store) async {
       final service = DerivedTargetGraphService(store);
