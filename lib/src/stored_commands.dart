@@ -53,6 +53,7 @@ const storedCommandNames = [
   'store mass-refresh',
   'store mass-rebind',
   'store plan-status',
+  'store plan-refresh',
   'store effective-load',
   'store complete',
   'store annotate',
@@ -258,6 +259,12 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'store plan-status' => {'id'},
+    'store plan-refresh' => {
+      'id',
+      'expectedVersion',
+      'expectedPreview',
+      'confirm',
+    },
     'store effective-load' => {'id'},
     'store complete' => {
       'id',
@@ -828,6 +835,13 @@ Future<Map<String, Object?>> executeStored(
         data = const EffectiveMassService().evaluate(
           await service.session(identifier(request, 'id')),
         );
+      case 'store plan-refresh':
+        data = (await service.refreshPlan(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          expectedPreview: request['expectedPreview'],
+          confirm: flag('confirm'),
+        )).toJson();
       case 'store plan-status':
         data = await DerivedWorkoutPreview(
           store,

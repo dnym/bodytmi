@@ -9,6 +9,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, isA, throwsA;
 
 import 'fixtures.dart';
+import 'cli_test.dart' show invoke;
 import 'support.dart';
 
 const _ref = DerivedPlanRef('mass-graph', 1, 'mass-plan');
@@ -77,6 +78,22 @@ Map<String, Object?> _observation(
   'observedAt': at,
   'mass': {'value': value, 'unit': unit},
 };
+
+Future<TrainingSession> _refreshPlan(
+  TrainingStore store,
+  String id,
+  int version, {
+  required bool confirm,
+}) async {
+  final status = await DerivedWorkoutPreview(store).sessionStatus(id);
+  final comparison = status['comparison'];
+  final preview = comparison == null
+      ? <String, Object?>{}
+      : jsonObject(comparison, 'comparison')['currentPreview'];
+  return StoredTrainingService(
+    store,
+  ).refreshPlan(id, version, expectedPreview: preview, confirm: confirm);
+}
 
 void derivedPlanBodyMassTests() {
   Future<void> withStore(
@@ -338,6 +355,332 @@ void derivedPlanBodyMassTests() {
       db.userVersion = 34;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/derived-meta.sqlite'));
+    }),
+  );
+
+  test(
+    'explicit plan refresh freezes current sources and preserves unowned targets',
+    () => withStore((store, dir) async {
+      final mass = StoredBodyMassService(store);
+      final original = _observation(
+        'm',
+        'clothed-training',
+        '2026-10-01T08:00:00Z',
+        '80',
+        'kg',
+      );
+      await mass.save(original, 0);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final training = StoredTrainingService(store);
+      final session = await training.start(
+        'refresh-plan',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      equal(session.sets.first.suggested['mass']!.value.toString(), '64');
+      final reviewed = jsonObject(
+        (await DerivedWorkoutPreview(
+          store,
+        ).sessionStatus(session.id))['comparison'],
+        'comparison',
+      )['currentPreview'];
+      await mass.save({
+        ...original,
+        'mass': {'value': '90', 'unit': 'kg'},
+      }, 1);
+      final before = canonicalJson((await store.archive()).toJson());
+      await expectLater(
+        training.refreshPlan(
+          session.id,
+          session.contentVersion,
+          expectedPreview: reviewed,
+          confirm: true,
+        ),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await expectLater(
+        _refreshPlan(store, session.id, session.contentVersion, confirm: false),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await expectLater(
+        _refreshPlan(
+          store,
+          session.id,
+          session.contentVersion + 1,
+          confirm: true,
+        ),
+        throwsA(isA<BodyTmiException>()),
+      );
+      equal(canonicalJson((await store.archive()).toJson()), before);
+      final refreshed = await _refreshPlan(
+        store,
+        session.id,
+        session.contentVersion,
+        confirm: true,
+      );
+      equal(refreshed.contentVersion, session.contentVersion + 1);
+      equal(refreshed.sets.first.suggested['mass']!.value.toString(), '72');
+      equal(
+        refreshed.sets.first.contentVersion,
+        session.sets.first.contentVersion + 1,
+      );
+      equal(
+        canonicalJson(refreshed.sets.last.toJson()),
+        canonicalJson(session.sets.last.toJson()),
+      );
+      equal(
+        refreshed
+            .derivedPlanInput!
+            .bodyMassSources['body-source']!
+            .single
+            .mass
+            .value
+            .toString(),
+        '90',
+      );
+      equal(
+        jsonObject(
+          (await DerivedWorkoutPreview(
+            store,
+          ).sessionStatus(refreshed.id))['comparison'],
+          'comparison',
+        )['changed'],
+        false,
+      );
+      final retry = await training.start(
+        session.id,
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      equal(canonicalJson(retry.toJson()), canonicalJson(refreshed.toJson()));
+      equal(
+        (await _refreshPlan(
+          store,
+          refreshed.id,
+          refreshed.contentVersion,
+          confirm: true,
+        )).contentVersion,
+        refreshed.contentVersion,
+      );
+      await expectLater(
+        _refreshPlan(store, session.id, session.contentVersion, confirm: true),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await LogicalArchiveFiles.export(
+        await store.archive(),
+        '$dir/refreshed-plan.json',
+      );
+      final prepared = await LogicalArchiveFiles.prepare(
+        '$dir/refreshed-plan.json',
+      );
+      try {
+        await store.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery-plan-refresh',
+          confirm: true,
+        );
+        await store.close();
+        final reopened = await TrainingStore.open('$dir/profile.sqlite');
+        try {
+          equal(
+            canonicalJson(
+              (await StoredTrainingService(
+                reopened,
+              ).session(session.id)).toJson(),
+            ),
+            canonicalJson(refreshed.toJson()),
+          );
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await prepared.close();
+      }
+    }),
+  );
+
+  test(
+    'native plan refresh rejects stale reviewed previews across processes',
+    () => withStore((store, dir) async {
+      final mass = StoredBodyMassService(store);
+      final observation = _observation(
+        'm',
+        'clothed-training',
+        '2026-10-01T08:00:00Z',
+        '80',
+        'kg',
+      );
+      await mass.save(observation, 0);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final training = StoredTrainingService(store);
+      final session = await training.start(
+        'cli-refresh',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      final reviewed = jsonObject(
+        (await DerivedWorkoutPreview(
+          store,
+        ).sessionStatus(session.id))['comparison'],
+        'comparison',
+      )['currentPreview'];
+      await mass.save({
+        ...observation,
+        'mass': {'value': '90', 'unit': 'kg'},
+      }, 1);
+      await store.close();
+      Future<({int code, String output, String error})> call(
+        String action,
+        Map<String, Object?> data,
+      ) => invoke(
+        action.split(' '),
+        jsonEncode({
+          'schemaVersion': 1,
+          'database': '$dir/profile.sqlite',
+          ...data,
+        }),
+      );
+      final stale = await call('store plan-refresh', {
+        'id': session.id,
+        'expectedVersion': session.contentVersion,
+        'expectedPreview': reviewed,
+        'confirm': true,
+      });
+      equal(stale.code, 5);
+      equal(stale.output, '');
+      final status = await call('store plan-status', {'id': session.id});
+      equal(status.code, 0);
+      final data = jsonObject(
+        jsonObject(jsonDecode(status.output), 'response')['data'],
+        'status',
+      );
+      final current = jsonObject(
+        data['comparison'],
+        'comparison',
+      )['currentPreview'];
+      final fresh = await call('store plan-refresh', {
+        'id': session.id,
+        'expectedVersion': session.contentVersion,
+        'expectedPreview': current,
+        'confirm': true,
+      });
+      equal(fresh.code, 0);
+      final updated = sessionFromJson(
+        jsonObject(jsonDecode(fresh.output), 'response')['data'],
+      );
+      equal(updated.sets.first.suggested['mass']!.value.toString(), '72');
+      final missing = await call('store plan-refresh', {
+        'id': session.id,
+        'expectedVersion': updated.contentVersion,
+        'confirm': true,
+      });
+      equal(missing.code, 2);
+      equal(missing.output, '');
+    }),
+  );
+
+  test(
+    'plan refresh records metadata-only source changes without changing set versions',
+    () => withStore((store, _) async {
+      final mass = StoredBodyMassService(store);
+      final original = _observation(
+        'm',
+        'clothed-training',
+        '2026-10-01T08:00:00Z',
+        '80',
+        'kg',
+      );
+      await mass.save({...original, 'notes': 'Before'}, 0);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final training = StoredTrainingService(store);
+      final session = await training.start(
+        'metadata-plan',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      await mass.save({...original, 'notes': 'After'}, 1);
+      final next = await _refreshPlan(
+        store,
+        session.id,
+        session.contentVersion,
+        confirm: true,
+      );
+      equal(next.contentVersion, session.contentVersion + 1);
+      equal(next.sets.first.contentVersion, session.sets.first.contentVersion);
+      equal(
+        next.sets.first.suggested['mass']!.value.toString(),
+        session.sets.first.suggested['mass']!.value.toString(),
+      );
+      equal(
+        next.derivedPlanInput!.bodyMassSources['body-source']!.single.notes,
+        'After',
+      );
+    }),
+  );
+
+  test(
+    'plan refresh rejects unresolved sources and leaves captured session unchanged',
+    () => withStore((store, _) async {
+      final mass = StoredBodyMassService(store);
+      await mass.save(
+        _observation(
+          'm',
+          'clothed-training',
+          '2026-10-01T08:00:00Z',
+          '80',
+          'kg',
+        ),
+        0,
+      );
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final training = StoredTrainingService(store);
+      final session = await training.start(
+        'unresolved-plan',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      final reviewed = jsonObject(
+        (await DerivedWorkoutPreview(
+          store,
+        ).sessionStatus(session.id))['comparison'],
+        'comparison',
+      )['currentPreview'];
+      await mass.delete('m', 1, confirm: true);
+      final before = canonicalJson((await store.archive()).toJson());
+      try {
+        await training.refreshPlan(
+          session.id,
+          session.contentVersion,
+          expectedPreview: reviewed,
+          confirm: true,
+        );
+        throw StateError('Expected stale preview conflict.');
+      } on BodyTmiException catch (error) {
+        equal(error.code, 'conflict');
+      }
+      await expectLater(
+        _refreshPlan(store, session.id, session.contentVersion, confirm: true),
+        throwsA(isA<BodyTmiException>()),
+      );
+      equal(canonicalJson((await store.archive()).toJson()), before);
     }),
   );
 

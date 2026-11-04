@@ -239,104 +239,16 @@ final class StoredTrainingService {
     DerivedPlanInput? derivedInput;
     var finalSets = sets;
     if (derivedPlan != null) {
-      final resolved = await DerivedWorkoutPreview(repository).previewPlan(
-        graphId: derivedPlan.graphId,
-        graphRevision: derivedPlan.graphRevision,
-        planId: derivedPlan.planId,
-        asOf: startedAt,
+      final resolved = await _resolveSessionPlan(
+        session: next,
+        sets: sets,
+        reference: derivedPlan,
         runId: runId,
-        strictHistoryStart: true,
+        bySlot: bySlot,
+        incrementSetVersions: false,
       );
-      final plan = DerivedWorkoutPlan.fromJson(resolved['plan']);
-      if (plan.templateId != templateId || plan.revision != number)
-        invalid('Derived plan pins another workout revision.');
-      final preview = jsonObject(resolved['preview'], 'derived preview');
-      final graph = jsonObject(preview['graphResolution'], 'graph resolution');
-      final bodyMassSources = <String, Object?>{};
-      final bodyRecords = await repository.bodyMassRecords();
-      for (final entry in jsonObject(
-        graph['bindings'],
-        'graph bindings',
-      ).entries) {
-        final source = jsonObject(entry.value, 'graph source');
-        if (source['kind'] == 'bodyMass') {
-          final cutoff = source['asOf'] == null
-              ? startedAt
-              : parseInstant(source['asOf'], 'asOf');
-          final selected = [
-            for (final record in bodyRecords)
-              if (!record.deleted &&
-                  record.measurement.context == source['context'] &&
-                  !record.measurement.observedAt.isAfter(cutoff))
-                record.measurement,
-          ];
-          selected.sort((a, b) {
-            final order = a.observedAt.compareTo(b.observedAt);
-            return order != 0 ? order : a.id.compareTo(b.id);
-          });
-          bodyMassSources[entry.key] = [for (final m in selected) m.toJson()];
-        } else if (source['kind'] != 'manual' && source['kind'] != 'history') {
-          invalid('Unsupported session plan source.');
-        }
-      }
-      final rows = {
-        for (final value in jsonList(preview, 'occurrences'))
-          requiredString(jsonObject(value, 'occurrence'), 'id'): jsonObject(
-            value,
-            'occurrence',
-          ),
-      };
-      final mapped = <String, Map<String, Quantity>>{};
-      for (final binding in plan.bindings) {
-        final occurrenceId = binding['occurrenceId']! as String;
-        final metric = binding['metric']! as String;
-        final set = sets.firstWhere((item) => item.id == occurrenceId);
-        final applied = set.role == 'work' ? bySlot[set.slotId] : null;
-        if (applied != null && applied.controlledMetrics.contains(metric)) {
-          invalid(
-            'Derived plan conflicts with an accepted progression target; reconciliation is required.',
-          );
-        }
-        final target = jsonObject(
-          jsonObject(rows[occurrenceId]!['targets'], 'targets')[metric],
-          'target',
-        );
-        if (target['status'] != 'resolved' || target['value'] == null)
-          invalid('Derived plan target is unresolved.');
-        mapped.putIfAbsent(occurrenceId, () => <String, Quantity>{})[metric] =
-            Quantity.fromJson(target['value']);
-      }
-      finalSets = [
-        for (final set in sets)
-          if (!mapped.containsKey(set.id))
-            set
-          else
-            () {
-              final suggested = {...set.suggested, ...mapped[set.id]!};
-              prescription.definition
-                  .slot(set.slotId)
-                  .timing
-                  ?.resolve(suggested);
-              return TrainingSet(
-                id: set.id,
-                slotId: set.slotId,
-                role: set.role,
-                ordinal: set.ordinal,
-                suggested: suggested,
-                maxEffortMetrics: set.maxEffortMetrics,
-                criteria: set.criteria,
-                sources: {
-                  for (final e in set.sources.entries)
-                    if (!mapped[set.id]!.containsKey(e.key)) e.key: e.value,
-                },
-              );
-            }(),
-      ];
-      derivedInput = DerivedPlanInput.fromJson({
-        'reference': derivedPlan.toJson(),
-        'snapshot': resolved,
-        if (bodyMassSources.isNotEmpty) 'bodyMassSources': bodyMassSources,
-      });
+      finalSets = resolved.$1;
+      derivedInput = resolved.$2;
     }
     next = TrainingSession(
       id: next.id,
@@ -367,6 +279,220 @@ final class StoredTrainingService {
       );
       await repository.saveProgramRun(programRun.changed());
     }
+    return next;
+  });
+
+  /// Resolve and freeze a pinned plan using the same rules at start and refresh.
+  Future<(List<TrainingSet>, DerivedPlanInput)> _resolveSessionPlan({
+    required TrainingSession session,
+    required List<TrainingSet> sets,
+    required DerivedPlanRef reference,
+    required String? runId,
+    required Map<String, ProgressionDecision?> bySlot,
+    required bool incrementSetVersions,
+    Map<String, Object?>? reviewedPreview,
+  }) async {
+    final prescription = session.revision;
+    final templateId = prescription.definition.id;
+    final number = prescription.number;
+    final startedAt = session.startedAt;
+    var finalSets = sets;
+    final resolved = await DerivedWorkoutPreview(repository).previewPlan(
+      graphId: reference.graphId,
+      graphRevision: reference.graphRevision,
+      planId: reference.planId,
+      asOf: startedAt,
+      runId: runId,
+      strictHistoryStart: true,
+    );
+    if (reviewedPreview != null &&
+        canonicalJson(reviewedPreview) != canonicalJson(resolved['preview'])) {
+      throw const BodyTmiException(
+        'conflict',
+        'Derived plan sources or targets changed since the reviewed preview.',
+      );
+    }
+    final plan = DerivedWorkoutPlan.fromJson(resolved['plan']);
+    if (plan.templateId != templateId || plan.revision != number)
+      invalid('Derived plan pins another workout revision.');
+    final preview = jsonObject(resolved['preview'], 'derived preview');
+    final graph = jsonObject(preview['graphResolution'], 'graph resolution');
+    final bodyMassSources = <String, Object?>{};
+    final bodyRecords = await repository.bodyMassRecords();
+    for (final entry in jsonObject(
+      graph['bindings'],
+      'graph bindings',
+    ).entries) {
+      final source = jsonObject(entry.value, 'graph source');
+      if (source['kind'] == 'bodyMass') {
+        final cutoff = source['asOf'] == null
+            ? startedAt
+            : parseInstant(source['asOf'], 'asOf');
+        final selected = [
+          for (final record in bodyRecords)
+            if (!record.deleted &&
+                record.measurement.context == source['context'] &&
+                !record.measurement.observedAt.isAfter(cutoff))
+              record.measurement,
+        ];
+        selected.sort((a, b) {
+          final order = a.observedAt.compareTo(b.observedAt);
+          return order != 0 ? order : a.id.compareTo(b.id);
+        });
+        bodyMassSources[entry.key] = [for (final m in selected) m.toJson()];
+      } else if (source['kind'] != 'manual' && source['kind'] != 'history') {
+        invalid('Unsupported session plan source.');
+      }
+    }
+    final rows = {
+      for (final value in jsonList(preview, 'occurrences'))
+        requiredString(jsonObject(value, 'occurrence'), 'id'): jsonObject(
+          value,
+          'occurrence',
+        ),
+    };
+    final mapped = <String, Map<String, Quantity>>{};
+    for (final binding in plan.bindings) {
+      final occurrenceId = binding['occurrenceId']! as String;
+      final metric = binding['metric']! as String;
+      final set = sets.firstWhere((item) => item.id == occurrenceId);
+      final applied = set.role == 'work' ? bySlot[set.slotId] : null;
+      if (applied != null && applied.controlledMetrics.contains(metric)) {
+        invalid(
+          'Derived plan conflicts with an accepted progression target; reconciliation is required.',
+        );
+      }
+      final target = jsonObject(
+        jsonObject(rows[occurrenceId]!['targets'], 'targets')[metric],
+        'target',
+      );
+      if (target['status'] != 'resolved' || target['value'] == null)
+        invalid('Derived plan target is unresolved.');
+      mapped.putIfAbsent(occurrenceId, () => <String, Quantity>{})[metric] =
+          Quantity.fromJson(target['value']);
+    }
+    finalSets = [
+      for (final set in sets)
+        if (!mapped.containsKey(set.id))
+          set
+        else
+          () {
+            final suggested = {...set.suggested, ...mapped[set.id]!};
+            if (incrementSetVersions &&
+                canonicalJson(metricsToJson(suggested)) ==
+                    canonicalJson(metricsToJson(set.suggested)) &&
+                !mapped[set.id]!.keys.any(set.sources.containsKey))
+              return set;
+            prescription.definition.slot(set.slotId).timing?.resolve(suggested);
+            return TrainingSet(
+              id: set.id,
+              slotId: set.slotId,
+              role: set.role,
+              ordinal: set.ordinal,
+              status: set.status,
+              actuals: set.actuals,
+              timing: set.timing,
+              observations: set.observations,
+              contentVersion:
+                  set.contentVersion + (incrementSetVersions ? 1 : 0),
+              suggested: suggested,
+              maxEffortMetrics: set.maxEffortMetrics,
+              criteria: set.criteria,
+              sources: {
+                for (final e in set.sources.entries)
+                  if (!mapped[set.id]!.containsKey(e.key)) e.key: e.value,
+              },
+            );
+          }(),
+    ];
+    final derivedInput = DerivedPlanInput.fromJson({
+      'reference': reference.toJson(),
+      'snapshot': resolved,
+      if (bodyMassSources.isNotEmpty) 'bodyMassSources': bodyMassSources,
+    });
+    return (finalSets, derivedInput);
+  }
+
+  /// Re-resolve the same pinned plan before any workout activity begins.
+  Future<TrainingSession> refreshPlan(
+    String id,
+    int expectedVersion, {
+    required Object? expectedPreview,
+    required bool confirm,
+  }) => repository.transaction(() async {
+    if (!confirm) invalid('Refreshing a session plan requires confirm:true.');
+    final reviewedPreview = jsonObject(expectedPreview, 'expectedPreview');
+    final current = await session(id);
+    if (current.contentVersion != expectedVersion) _conflict();
+    if (current.status != SessionStatus.active ||
+        current.sets.any((set) => set.status != SetStatus.planned)) {
+      invalid(
+        'A session plan can only be refreshed before any effort is completed or skipped.',
+      );
+    }
+    if ((await repository.timingActivities()).any((t) => t.sessionId == id) ||
+        (await repository.executions()).any((e) => e.sessionId == id)) {
+      invalid(
+        'A session plan cannot be refreshed after timing or traversal has started.',
+      );
+    }
+    final reference = current.derivedPlanInput?.reference;
+    if (reference == null) invalid('Session has no derived plan to refresh.');
+    final runBySession = {
+      for (final binding in await repository.sessionPrograms())
+        binding.sessionId: binding.runId,
+    };
+    final runId = runBySession[id];
+    final decisions = (await repository.progressionDecisions()).where(
+      (d) =>
+          d.runId == runId &&
+          d.resolvedAt != null &&
+          !d.resolvedAt!.isAfter(current.startedAt) &&
+          d.session.startedAt.isBefore(current.startedAt),
+    );
+    final bySlot = {
+      for (final slot in current.revision.definition.slots)
+        slot.id: latestApplication(
+          decisions,
+          current.revision.definition.id,
+          slot,
+          runId: runId,
+        ),
+    };
+    final result = await _resolveSessionPlan(
+      session: current,
+      sets: current.sets,
+      reference: reference,
+      runId: runId,
+      bySlot: bySlot,
+      incrementSetVersions: true,
+      reviewedPreview: reviewedPreview,
+    );
+    if (canonicalJson(result.$2.toJson()) ==
+            canonicalJson(current.derivedPlanInput!.toJson()) &&
+        canonicalJson([for (final set in result.$1) set.toJson()]) ==
+            canonicalJson([for (final set in current.sets) set.toJson()]))
+      return current;
+    final next = TrainingSession(
+      id: current.id,
+      revision: current.revision,
+      startedAt: current.startedAt,
+      sets: result.$1,
+      bodyMassInputs: current.bodyMassInputs,
+      initialBodyMassOverrides: current.initialBodyMassOverrides,
+      derivedPlanInput: result.$2,
+      status: current.status,
+      finishedAt: current.finishedAt,
+      contentVersion: current.contentVersion + 1,
+    );
+    final sessions = await repository.sessions();
+    validateDerivedPlanReferences(
+      [for (final session in sessions) session.id == id ? next : session],
+      await repository.derivedTargetGraphRevisions(),
+      runBySession,
+      await repository.bodyMassRecords(),
+    );
+    await repository.updateSession(next);
     return next;
   });
 

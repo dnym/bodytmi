@@ -74,6 +74,22 @@ Future<void> _withStore(
   }
 }
 
+Future<TrainingSession> _refreshPlan(
+  TrainingStore store,
+  String id,
+  int version, {
+  required bool confirm,
+}) async {
+  final status = await DerivedWorkoutPreview(store).sessionStatus(id);
+  final comparison = status['comparison'];
+  final preview = comparison == null
+      ? <String, Object?>{}
+      : jsonObject(comparison, 'comparison')['currentPreview'];
+  return StoredTrainingService(
+    store,
+  ).refreshPlan(id, version, expectedPreview: preview, confirm: confirm);
+}
+
 void sessionBodyMassTests() {
   test(
     'captured mass metadata remains frozen and prevents older format relabeling',
@@ -851,6 +867,44 @@ void sessionBodyMassTests() {
           )).toJson(),
         ),
         canonicalJson(after.toJson()),
+      );
+      final rebound = await training.rebindBodyMass(
+        after.id,
+        after.contentVersion,
+        {
+          'bench-heavy': _override({
+            'mass': {'value': '77', 'unit': 'kg'},
+          }),
+        },
+        confirm: true,
+      );
+      final updatedPlan = await _refreshPlan(
+        store,
+        rebound.id,
+        rebound.contentVersion,
+        confirm: true,
+      );
+      equal(updatedPlan.sets.first.suggested['mass']!.value.toString(), '64');
+      equal(
+        updatedPlan.bodyMassInputs['bench-heavy']!.resolution.mass!.value
+            .toString(),
+        '77',
+      );
+      check(
+        updatedPlan.initialBodyMassOverrides != null &&
+            updatedPlan.initialBodyMassOverrides!.isEmpty,
+      );
+      equal(
+        canonicalJson(
+          (await training.start(
+            session.id,
+            definition().id,
+            1,
+            instant(10),
+            derivedPlan: ref,
+          )).toJson(),
+        ),
+        canonicalJson(updatedPlan.toJson()),
       );
       await store.archive();
     }),

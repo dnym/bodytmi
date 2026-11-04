@@ -12,6 +12,22 @@ import 'fixtures.dart';
 import 'cli_test.dart' show invoke;
 import 'support.dart';
 
+Future<TrainingSession> _refreshPlan(
+  TrainingStore store,
+  String id,
+  int version, {
+  required bool confirm,
+}) async {
+  final status = await DerivedWorkoutPreview(store).sessionStatus(id);
+  final comparison = status['comparison'];
+  final preview = comparison == null
+      ? <String, Object?>{}
+      : jsonObject(comparison, 'comparison')['currentPreview'];
+  return StoredTrainingService(
+    store,
+  ).refreshPlan(id, version, expectedPreview: preview, confirm: confirm);
+}
+
 void sameJson(Object? a, Object? b) =>
     equal(canonicalJson(a), canonicalJson(b));
 
@@ -747,7 +763,280 @@ void derivedPlanSessionTests() {
           'targetChanges',
         ).every((row) => jsonObject(row, 'target change')['changed'] == false),
       );
+      final runBefore = canonicalJson((await programs.run('cardio')).toJson());
+      final refreshed = await _refreshPlan(
+        store,
+        b.id,
+        b.contentVersion,
+        confirm: true,
+      );
+      equal(refreshed.contentVersion, b.contentVersion + 1);
+      equal(refreshed.sets.first.contentVersion, b.sets.first.contentVersion);
+      equal(refreshed.sets.first.suggested['mass']!.value.toString(), '40');
+      equal(
+        jsonObject(
+          (await statuses.sessionStatus(refreshed.id))['comparison'],
+          'comparison',
+        )['changed'],
+        false,
+      );
+      equal(
+        canonicalJson((await training.session(a.id)).toJson()),
+        canonicalJson(a.toJson()),
+      );
+      equal(canonicalJson((await programs.run('cardio')).toJson()), runBefore);
+      final currentSource = await training.session(cardioSource.id);
+      final second = currentSource.sets
+          .where((s) => s.slotId == 'bench-heavy')
+          .skip(1)
+          .first;
+      await training.edit(
+        currentSource.id,
+        currentSource.contentVersion,
+        (s) => const TrainingService().complete(s, second.id, {
+          'mass': Quantity('60', 'kg'),
+          'reps': Quantity('5', 'rep'),
+        }),
+      );
+      final refreshedAgain = await _refreshPlan(
+        store,
+        refreshed.id,
+        refreshed.contentVersion,
+        confirm: true,
+      );
+      equal(
+        refreshedAgain.sets.first.suggested['mass']!.value.toString(),
+        '48',
+      );
+      equal(
+        refreshedAgain.sets.first.contentVersion,
+        refreshed.sets.first.contentVersion + 1,
+      );
+      final retry = await programs.start(
+        'cardio',
+        1,
+        b.id,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      sameJson(retry.toJson(), refreshedAgain.toJson());
       equal((await store.archive()).sessions.length, 4);
+    }),
+  );
+
+  test(
+    'plan refresh rejects started work and backdated progression ownership',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final graphs = DerivedTargetGraphService(store);
+      await graphs.publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final ordinary = await training.start(
+        'ordinary-source',
+        definition().id,
+        1,
+        instant(1),
+      );
+      final completed = await training.edit(
+        ordinary.id,
+        ordinary.contentVersion,
+        finished,
+      );
+      final session = await training.start(
+        'planned-before-accept',
+        definition().id,
+        1,
+        instant(3),
+        derivedPlan: _ref,
+      );
+      final progress = StoredProgressionService(store);
+      final proposal = await progress.propose(
+        completed.id,
+        'bench-heavy',
+        jsonObject(example('double-progression')['rule'], 'rule'),
+      );
+      await progress.accept(
+        completed.id,
+        'bench-heavy',
+        proposal.version,
+        instant(2),
+      );
+      final before = canonicalJson((await store.archive()).toJson());
+      await expectLater(
+        _refreshPlan(store, session.id, session.contentVersion, confirm: true),
+        throwsA(isA<BodyTmiException>()),
+      );
+      equal(canonicalJson((await store.archive()).toJson()), before);
+    }),
+  );
+
+  test(
+    'plan refresh is limited to untouched sessions without clocks or traversal',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final noPlan = await training.start(
+        'no-plan-refresh',
+        definition().id,
+        1,
+        instant(1),
+      );
+      await expectLater(
+        _refreshPlan(store, noPlan.id, noPlan.contentVersion, confirm: true),
+        throwsA(isA<BodyTmiException>()),
+      );
+      final used = await training.start(
+        'used-plan',
+        definition().id,
+        1,
+        instant(1),
+        derivedPlan: _ref,
+      );
+      final done = await training.edit(
+        used.id,
+        used.contentVersion,
+        (s) => const TrainingService().complete(
+          s,
+          s.sets.first.id,
+          {},
+          acceptSuggested: true,
+        ),
+      );
+      await expectLater(
+        _refreshPlan(store, done.id, done.contentVersion, confirm: true),
+        throwsA(isA<BodyTmiException>()),
+      );
+      final walked = await training.start(
+        'walked-plan',
+        definition().id,
+        1,
+        instant(1),
+        derivedPlan: _ref,
+      );
+      await ExecutionService(
+        store,
+      ).start('walk-refresh', walked.id, instant(1));
+      await expectLater(
+        _refreshPlan(store, walked.id, walked.contentVersion, confirm: true),
+        throwsA(isA<BodyTmiException>()),
+      );
+    }),
+  );
+
+  test(
+    'plan refresh rejects timing guidance made invalid by changed targets',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final workout = WorkoutDefinition.fromJson(
+        example('tempo-practice')['definition'],
+      );
+      await training.publish(workout, 0);
+      await DerivedTargetGraphService(store).publish(
+        DerivedTargetGraph.fromJson({
+          'id': 'duration-history',
+          'nodes': [
+            {
+              'id': 'duration',
+              'kind': 'source',
+              'unit': 's',
+              'sourceId': 'history',
+            },
+          ],
+          'bindings': {
+            'history': {
+              'kind': 'history',
+              'metric': 'duration',
+              'templateId': workout.id,
+              'slotId': 'movement',
+            },
+          },
+          'plans': [
+            {
+              'id': 'timed',
+              'templateId': workout.id,
+              'revision': 1,
+              'bindings': [
+                {
+                  'occurrenceId': 'practice',
+                  'metric': 'duration',
+                  'nodeId': 'duration',
+                },
+              ],
+            },
+          ],
+        }),
+        0,
+      );
+      final old = await training.start(
+        'duration-source',
+        workout.id,
+        1,
+        instant(1),
+      );
+      final done = await training.edit(old.id, old.contentVersion, finished);
+      final planned = await training.start(
+        'duration-plan',
+        workout.id,
+        1,
+        instant(3),
+        derivedPlan: const DerivedPlanRef('duration-history', 1, 'timed'),
+      );
+      await training.edit(
+        done.id,
+        done.contentVersion,
+        (s) => const TrainingService().complete(s, s.sets.single.id, {
+          'duration': Quantity('4', 's'),
+          'reps': Quantity('5', 'rep'),
+        }),
+      );
+      final before = canonicalJson((await store.archive()).toJson());
+      await expectLater(
+        _refreshPlan(store, planned.id, planned.contentVersion, confirm: true),
+        throwsA(isA<BodyTmiException>()),
+      );
+      equal(canonicalJson((await store.archive()).toJson()), before);
+    }),
+  );
+
+  test(
+    'plan refresh rejects even discarded session clocks',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final workout = definition().toJson();
+      final slot = jsonObject(jsonList(workout, 'slots').first, 'slot');
+      jsonObject(slot['targets'], 'targets')['duration'] = {
+        'value': '30',
+        'unit': 's',
+      };
+      await training.publish(WorkoutDefinition.fromJson(workout), 1);
+      final graph = _graph();
+      jsonObject(jsonList(graph, 'plans').single, 'plan')['revision'] = 2;
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(graph), 0);
+      final session = await training.start(
+        'timed-refresh',
+        definition().id,
+        2,
+        instant(1),
+        derivedPlan: _ref,
+      );
+      final clock = await TimingService(store).start(
+        'refresh-clock',
+        session.id,
+        session.sets.first.id,
+        'duration',
+        null,
+        instant(1),
+      );
+      await TimingService(
+        store,
+      ).stop(clock.id, clock.version, instant(1), confirm: true, discard: true);
+      await expectLater(
+        _refreshPlan(store, session.id, session.contentVersion, confirm: true),
+        throwsA(isA<BodyTmiException>()),
+      );
     }),
   );
 
@@ -1072,6 +1361,32 @@ void derivedPlanSessionTests() {
           run == 'strength' ? '80' : '40',
         );
       }
+      final source = await training.session('cardio-source');
+      final set = source.sets.firstWhere((s) => s.slotId == 'bench-heavy');
+      await training.edit(
+        source.id,
+        source.contentVersion,
+        (s) => const TrainingService().complete(s, set.id, {
+          'mass': Quantity('60', 'kg'),
+          'reps': Quantity('5', 'rep'),
+        }),
+      );
+      final cardio = await training.session('cardio-plan');
+      final refreshed = await _refreshPlan(
+        store,
+        cardio.id,
+        cardio.contentVersion,
+        confirm: true,
+      );
+      equal(refreshed.sets.first.suggested['mass']!.value.toString(), '48');
+      final retry = await programs.start('cardio', 1, cardio.id, instant(2));
+      sameJson(retry.toJson(), refreshed.toJson());
+      equal(
+        (await training.session(
+          'strength-plan',
+        )).sets.first.suggested['mass']!.value.toString(),
+        '80',
+      );
       equal((await store.archive()).sessions.length, 4);
     }),
   );
