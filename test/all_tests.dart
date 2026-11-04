@@ -1,3 +1,4 @@
+import 'derived_targetless_session_test.dart';
 import 'derived_plan_body_mass_test.dart';
 import 'derived_plan_session_test.dart';
 import 'derived_workout_preview_test.dart';
@@ -43,6 +44,7 @@ import 'quantity_test.dart';
 import 'workflow_test.dart';
 
 Future<void> main() async {
+  derivedTargetlessSessionTests();
   derivedPlanBodyMassTests();
   derivedPlanSessionTests();
   derivedWorkoutPreviewTests();

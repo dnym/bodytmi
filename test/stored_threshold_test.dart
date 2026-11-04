@@ -442,7 +442,7 @@ void storedThresholdTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          31,
+          32,
         );
       } finally {
         await upgraded.close();
@@ -459,14 +459,14 @@ void storedThresholdTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          31,
+          32,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/31',
+          'bodytmi-logical-export/32',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {

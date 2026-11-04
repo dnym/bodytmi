@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "definition": {
+    "id": "bounded-example",
+    "name": "Bounded effort",
+    "slots": [
+      {
+        "id": "bench",
+        "exercise": "bench-press",
+        "implementation": "barbell",
+        "targets": {}
+      }
+    ],
+    "plan": {
+      "id": "workout",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "working",
+          "type": "effort",
+          "slot": "bench",
+          "objectives": {
+            "mass": {
+              "mode": "minimum",
+              "minimum": {
+                "value": "40",
+                "unit": "kg"
+              }
+            },
+            "reps": {
+              "mode": "observe",
+              "unit": "rep"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

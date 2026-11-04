@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "graph": {
+    "id": "bounded-example-graph",
+    "nodes": [
+      {
+        "id": "source",
+        "kind": "source",
+        "unit": "kg",
+        "sourceId": "manual"
+      }
+    ],
+    "bindings": {
+      "manual": {
+        "kind": "manual",
+        "version": 1,
+        "value": {
+          "value": "60",
+          "unit": "kg"
+        }
+      }
+    },
+    "plans": [
+      {
+        "id": "bounded-plan",
+        "templateId": "bounded-example",
+        "revision": 1,
+        "bindings": [
+          {
+            "occurrenceId": "workout/working",
+            "metric": "mass",
+            "nodeId": "source"
+          }
+        ]
+      }
+    ]
+  }
+}

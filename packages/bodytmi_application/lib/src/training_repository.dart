@@ -290,8 +290,6 @@ final class StoredTrainingService {
         final occurrenceId = binding['occurrenceId']! as String;
         final metric = binding['metric']! as String;
         final set = sets.firstWhere((item) => item.id == occurrenceId);
-        if (!set.suggested.containsKey(metric))
-          invalid('Session plan metrics require authored numeric targets.');
         final applied = set.role == 'work' ? bySlot[set.slotId] : null;
         if (applied != null && applied.controlledMetrics.contains(metric)) {
           invalid(

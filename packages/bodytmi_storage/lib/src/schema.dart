@@ -100,6 +100,8 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   29 => schemaV27, // v29 adds frozen manually derived session inputs.
   30 => schemaV27, // v30 adds captured body-mass graph inputs.
   31 => schemaV27, // v31 adds captured history graph inputs.
+  32 =>
+    schemaV27, // v32 adds derived suggestions for bounded targetless objectives.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

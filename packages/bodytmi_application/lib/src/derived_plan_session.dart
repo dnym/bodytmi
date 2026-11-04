@@ -504,3 +504,21 @@ bool usesDerivedHistory(TrainingSession session) {
     'bindings',
   ).values.any((source) => jsonObject(source, 'source')['kind'] == 'history');
 }
+
+/// Whether a captured plan supplies a suggestion absent from the authored effort.
+bool usesDerivedTargetlessObjective(TrainingSession session) {
+  if (session.derivedPlanInput == null) return false;
+  final authored = {
+    for (final occurrence in session.revision.definition.plan.occurrences())
+      if (occurrence.activity is Effort)
+        occurrence.id: (occurrence.activity as Effort).resolveTargets(
+          session.revision.definition
+              .slot((occurrence.activity as Effort).slotId)
+              .targets,
+        ),
+  };
+  return session.sets.any(
+    (set) =>
+        set.suggested.keys.any((key) => !authored[set.id]!.containsKey(key)),
+  );
+}

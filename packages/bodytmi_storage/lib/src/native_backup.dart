@@ -130,6 +130,7 @@ final class NativeBackup {
           29,
           30,
           31,
+          32,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -254,6 +255,7 @@ final class NativeBackup {
             29,
             30,
             31,
+            32,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -397,6 +399,9 @@ final class NativeBackup {
             invalid('Derived body mass session inputs require schema v30.');
           }
           final session = sessionFromJson(sessionJson);
+          if (db.userVersion < 32 && usesDerivedTargetlessObjective(session)) {
+            invalid('Derived targetless suggestions require schema v32.');
+          }
           if (db.userVersion < 31 && usesDerivedHistory(session)) {
             invalid('Derived history session inputs require schema v31.');
           }

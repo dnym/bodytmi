@@ -52,6 +52,18 @@ TrainingSession sessionFromJson(Object? input) {
     revision: revision,
     startedAt: startedAt,
   );
+  final derivedInput = json['derivedPlanInput'] == null
+      ? null
+      : DerivedPlanInput.fromJson(json['derivedPlanInput']);
+  final mappedTargets = <String, Set<String>>{};
+  if (derivedInput != null) {
+    final plan = DerivedWorkoutPlan.fromJson(derivedInput.snapshot['plan']);
+    for (final binding in plan.bindings) {
+      mappedTargets
+          .putIfAbsent(binding['occurrenceId']! as String, () => <String>{})
+          .add(binding['metric']! as String);
+    }
+  }
   final items = jsonList(json, 'sets');
   if (items.length != baseline.sets.length)
     invalid('Session efforts do not match its prescription.');
@@ -92,10 +104,16 @@ TrainingSession sessionFromJson(Object? input) {
       objectives.entries.where((e) => e.value.mode != 'maxEffort'),
     );
     final suggested = metricsFromJson(row['suggested']);
-    if (suggested.keys
-            .toSet()
-            .difference(expected.suggested.keys.toSet())
-            .isNotEmpty ||
+    final added = suggested.keys.toSet().difference(
+      expected.suggested.keys.toSet(),
+    );
+    if (added.any((metric) {
+          final criterion = expected.criteria[metric];
+          return criterion == null ||
+              criterion.mode == 'observe' ||
+              suggested[metric]!.dimension != criterion.unit.dimension ||
+              !(mappedTargets[expected.id]?.contains(metric) ?? false);
+        }) ||
         expected.suggested.keys.any(
           (k) => suggested[k]?.dimension != expected.suggested[k]!.dimension,
         ))
@@ -173,9 +191,7 @@ TrainingSession sessionFromJson(Object? input) {
       ).entries)
         e.key: BodyMassInputSnapshot.fromJson(e.value),
     },
-    derivedPlanInput: json['derivedPlanInput'] == null
-        ? null
-        : DerivedPlanInput.fromJson(json['derivedPlanInput']),
+    derivedPlanInput: derivedInput,
     status: status,
     finishedAt: finishedAt,
     contentVersion: _positive(json, 'contentVersion'),
