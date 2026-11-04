@@ -28,6 +28,7 @@ const commandNames = [
   'session complete',
   'session annotate',
   'session skip',
+  'session skip-remaining',
   'session finish',
   'progression evaluate',
   'progression double',
@@ -283,6 +284,14 @@ final class Commands {
               sessionFromJson(request['session']),
               requiredString(request, 'setId'),
               SetObservations.fromJson(request['observations']),
+              confirm: _bool(request, 'confirm'),
+            )
+            .toJson();
+      case 'session skip-remaining':
+        keys({'session', 'confirm'});
+        data = const TrainingService()
+            .skipRemaining(
+              sessionFromJson(request['session']),
               confirm: _bool(request, 'confirm'),
             )
             .toJson();

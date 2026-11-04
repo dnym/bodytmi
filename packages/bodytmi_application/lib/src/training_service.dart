@@ -288,6 +288,33 @@ final class TrainingService {
     session.set(setId).annotate(observations, confirm: confirm),
   );
 
+  /// Skip only planned efforts; confirmed results and prior skips stay intact.
+  TrainingSession skipRemaining(
+    TrainingSession session, {
+    required bool confirm,
+  }) {
+    if (!confirm) invalid('Skipping remaining efforts requires confirm:true.');
+    if (session.status != SessionStatus.active)
+      invalid('Remaining efforts can only be skipped in an active session.');
+    if (!session.sets.any((set) => set.status == SetStatus.planned))
+      return session;
+    return TrainingSession(
+      id: session.id,
+      revision: session.revision,
+      startedAt: session.startedAt,
+      sets: [
+        for (final set in session.sets)
+          set.status == SetStatus.planned ? set.skip(confirm: true) : set,
+      ],
+      bodyMassInputs: session.bodyMassInputs,
+      initialBodyMassOverrides: session.initialBodyMassOverrides,
+      derivedPlanInput: session.derivedPlanInput,
+      status: session.status,
+      finishedAt: session.finishedAt,
+      contentVersion: session.contentVersion + 1,
+    );
+  }
+
   TrainingSession skip(
     TrainingSession session,
     String setId, {

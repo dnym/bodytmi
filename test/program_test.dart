@@ -220,6 +220,107 @@ void programTests() {
   );
 
   test(
+    'skip remaining is neutral, atomic and advances only on explicit finish',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-skip-remaining-',
+      );
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        await _setup(store);
+        final programs = ProgramService(store);
+        final training = StoredTrainingService(store);
+        var session = await _start(store, 'strength-run', 'partial-session', 1);
+        session = await training.edit(
+          session.id,
+          session.contentVersion,
+          (s) => const TrainingService().complete(s, s.sets.first.id, {
+            'mass': Quantity('65', 'kg'),
+          }, acceptSuggested: true),
+        );
+        final completed = canonicalJson(session.sets.first.toJson());
+        final cardioBefore = canonicalJson(
+          (await programs.run('cardio-run')).toJson(),
+        );
+        await expectLater(
+          training.skipRemaining(
+            session.id,
+            session.contentVersion,
+            confirm: false,
+          ),
+          throwsA(isA<BodyTmiException>()),
+        );
+        await expectLater(
+          training.skipRemaining(
+            session.id,
+            session.contentVersion + 1,
+            confirm: true,
+          ),
+          throwsA(isA<BodyTmiException>()),
+        );
+        final skipped = await training.skipRemaining(
+          session.id,
+          session.contentVersion,
+          confirm: true,
+        );
+        equal(skipped.contentVersion, session.contentVersion + 1);
+        equal(canonicalJson(skipped.sets.first.toJson()), completed);
+        check(skipped.sets.skip(1).every((s) => s.status == SetStatus.skipped));
+        equal((await programs.run('strength-run')).cursor, 0);
+        equal(
+          canonicalJson((await programs.run('cardio-run')).toJson()),
+          cardioBefore,
+        );
+        equal((await store.progressionDecisions()).length, 0);
+        final noop = await training.skipRemaining(
+          skipped.id,
+          skipped.contentVersion,
+          confirm: true,
+        );
+        equal(noop.contentVersion, skipped.contentVersion);
+        final done = await training.edit(
+          skipped.id,
+          skipped.contentVersion,
+          (s) => s.finish(_finish(1)),
+        );
+        await training.edit(
+          done.id,
+          done.contentVersion,
+          (s) => s.finish(_finish(1)),
+        );
+        equal((await programs.run('strength-run')).cursor, 1);
+        equal((await programs.run('cardio-run')).cursor, 0);
+        equal(
+          (await store.programReceipts())
+              .where((r) => r.runId == 'strength-run')
+              .length,
+          1,
+        );
+        equal((await store.progressionDecisions()).length, 0);
+        await LogicalArchiveFiles.export(
+          await store.archive(),
+          '${dir.path}/archive.json',
+        );
+        final prepared = await LogicalArchiveFiles.prepare(
+          '${dir.path}/archive.json',
+        );
+        try {
+          equal(
+            prepared.archive.sessions.single.sets.first.actuals['mass']!.value
+                .toString(),
+            '65',
+          );
+        } finally {
+          await prepared.close();
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
     'two active runs isolate cursor, raw history and accepted targets despite sharing one workout template',
     () async {
       final dir = await Directory.systemTemp.createTemp(
@@ -808,6 +909,48 @@ void programTests() {
             'run',
           )['cursor'],
           1,
+        );
+        final cardioSession = await call('run start', {
+          'runId': 'cardio-run',
+          'expectedVersion': 1,
+          'id': 'cardio-cli',
+          'startedAt': instant(1).toIso8601String(),
+        });
+        final refused = await invoke(
+          ['store', 'skip-remaining'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': path,
+            'id': 'cardio-cli',
+            'expectedVersion': 1,
+          }),
+        );
+        equal(refused.code, 2);
+        equal(refused.output, '');
+        final pure = await invoke(
+          ['session', 'skip-remaining'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'session': cardioSession,
+            'confirm': true,
+          }),
+        );
+        equal(pure.code, 0);
+        final stored = await call('store skip-remaining', {
+          'id': 'cardio-cli',
+          'expectedVersion': 1,
+          'confirm': true,
+        });
+        jsonEqual(
+          jsonObject(jsonDecode(pure.output), 'response')['data'],
+          stored,
+        );
+        equal(
+          jsonObject(
+            await call('run show', {'runId': 'cardio-run'}),
+            'run',
+          )['cursor'],
+          0,
         );
       } finally {
         await dir.delete(recursive: true);

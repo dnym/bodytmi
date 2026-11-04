@@ -90,6 +90,58 @@ Future<TimingActivity> _elapsed(
 
 void timingTests() {
   test(
+    'skip remaining requires active and unreviewed clocks to be discarded',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final session = await training.session('session');
+      final clock = await _create(store);
+      final other = await training.start(
+        'other-session',
+        'timed',
+        1,
+        instant(1),
+      );
+      final otherSkipped = await training.skipRemaining(
+        other.id,
+        other.contentVersion,
+        confirm: true,
+      );
+      equal(otherSkipped.sets.single.status, SetStatus.skipped);
+      equal((await TimingService(store).show(clock.id)).status, 'paused');
+      await _fails(
+        training.skipRemaining(
+          session.id,
+          session.contentVersion,
+          confirm: true,
+        ),
+      );
+      final pending = await _elapsed(store);
+      equal(pending.status, 'awaitingConfirmation');
+      await _fails(
+        training.skipRemaining(
+          session.id,
+          session.contentVersion,
+          confirm: true,
+        ),
+      );
+      await TimingService(store).stop(
+        pending.id,
+        pending.version,
+        instant(1),
+        confirm: true,
+        discard: true,
+      );
+      final skipped = await training.skipRemaining(
+        session.id,
+        session.contentVersion,
+        confirm: true,
+      );
+      equal(skipped.sets.single.status, SetStatus.skipped);
+      equal(skipped.contentVersion, session.contentVersion + 1);
+      check(clock.id == pending.id);
+    }),
+  );
+  test(
     'preparation, effort and rest boundaries preserve only effort duration and await confirmation',
     () {
       var t = _clock().resume('epoch', instant(1));

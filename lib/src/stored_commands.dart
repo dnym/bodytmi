@@ -57,6 +57,7 @@ const storedCommandNames = [
   'store complete',
   'store annotate',
   'store skip',
+  'store skip-remaining',
   'store finish',
   'store history',
   'store snapshot',
@@ -273,6 +274,7 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'store skip' => {'id', 'expectedVersion', 'setId', 'confirm'},
+    'store skip-remaining' => {'id', 'expectedVersion', 'confirm'},
     'store finish' => {'id', 'expectedVersion', 'finishedAt'},
     'store history' => <String>{},
     'store snapshot' => {'destination'},
@@ -1047,6 +1049,12 @@ Future<Map<String, Object?>> executeStored(
             observations,
             confirm: confirm,
           ),
+        )).toJson();
+      case 'store skip-remaining':
+        data = (await service.skipRemaining(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          confirm: flag('confirm'),
         )).toJson();
       case 'store skip':
         final setId = requiredString(request, 'setId');

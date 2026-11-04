@@ -112,6 +112,16 @@ void derivedPlanSessionTests() {
         check(!set.sources.containsKey('mass'));
       }
       equal(session.derivedPlanInput!.reference.planId, 'bench');
+      final skipped = const TrainingService().skipRemaining(
+        session,
+        confirm: true,
+      );
+      sameJson(
+        skipped.derivedPlanInput!.toJson(),
+        session.derivedPlanInput!.toJson(),
+      );
+      sameJson(sessionFromJson(skipped.toJson()).toJson(), skipped.toJson());
+
       sameJson(sessionFromJson(session.toJson()).toJson(), session.toJson());
       final changedGraph = _graph();
       jsonObject(

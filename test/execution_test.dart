@@ -139,6 +139,41 @@ Future<WorkoutExecution> _startGroups(TrainingStore store) async {
 
 void executionTests() {
   test(
+    'skip remaining defers to active traversal and preserves its cursor',
+    () => _withStore((store, _) async {
+      final execution = await _start(store);
+      final training = StoredTrainingService(store);
+      final before = await training.session('session');
+      await _fails(
+        training.skipRemaining(before.id, before.contentVersion, confirm: true),
+      );
+      equal((await ExecutionService(store).show(execution.id)).cursor, 0);
+      equal(
+        canonicalJson((await training.session(before.id)).toJson()),
+        canonicalJson(before.toJson()),
+      );
+      final completed = await ExecutionService(store).skipGroup(
+        execution.id,
+        execution.version,
+        before.contentVersion,
+        'skip-all',
+        'workout',
+        instant(1),
+        confirm: true,
+      );
+      check(completed.complete);
+      final skipped = await training.session(before.id);
+      equal(
+        (await training.skipRemaining(
+          skipped.id,
+          skipped.contentVersion,
+          confirm: true,
+        )).contentVersion,
+        skipped.contentVersion,
+      );
+    }),
+  );
+  test(
     'skipping a workout group advances only its selected program on finish, with no progression application',
     () => _withStore((store, dir) async {
       final programs = ProgramService(store),

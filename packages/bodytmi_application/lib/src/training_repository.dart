@@ -430,6 +430,31 @@ final class StoredTrainingService {
     return next;
   });
 
+  /// Skip unperformed efforts atomically, leaving clock/traversal review explicit.
+  Future<TrainingSession> skipRemaining(
+    String id,
+    int expectedVersion, {
+    required bool confirm,
+  }) => repository.transaction(() async {
+    final current = await session(id);
+    if (current.contentVersion != expectedVersion) _conflict();
+    if ((await repository.executions()).any(
+      (e) => e.sessionId == id && !e.complete,
+    ))
+      invalid('Use execution skip-group while workout traversal is active.');
+    if ((await repository.timingActivities()).any(
+      (t) =>
+          t.sessionId == id && (t.active || t.status == 'awaitingConfirmation'),
+    ))
+      invalid('Stop and review or discard the session clock before skipping.');
+    final next = const TrainingService().skipRemaining(
+      current,
+      confirm: confirm,
+    );
+    if (identical(next, current)) return current;
+    return edit(id, expectedVersion, (_) => next);
+  });
+
   Future<TrainingSession> edit(
     String id,
     int expectedVersion,

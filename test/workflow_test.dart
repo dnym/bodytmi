@@ -5,6 +5,40 @@ import 'support.dart';
 
 void workflowTests() {
   const service = TrainingService();
+  test('skip remaining preserves completed results and increments once', () {
+    var session = start();
+    final completedId = session.sets.first.id;
+    session = service.complete(session, completedId, {
+      'mass': Quantity('65', 'kg'),
+    }, acceptSuggested: true);
+    session = service.skip(session, session.sets[1].id, confirm: true);
+    session = service.annotate(
+      session,
+      session.sets.last.id,
+      SetObservations.fromJson({'notes': 'Save for next time'}),
+    );
+    final complete = canonicalJson(session.sets.first.toJson());
+    final earlierSkip = canonicalJson(session.sets[1].toJson());
+    rejects(() => service.skipRemaining(session, confirm: false));
+    final skipped = service.skipRemaining(session, confirm: true);
+    equal(skipped.contentVersion, session.contentVersion + 1);
+    equal(canonicalJson(skipped.sets.first.toJson()), complete);
+    equal(canonicalJson(skipped.sets[1].toJson()), earlierSkip);
+    equal(skipped.sets.last.status, SetStatus.skipped);
+    equal(skipped.sets.last.observations!.notes, 'Save for next time');
+    check(
+      skipped.sets
+          .where((s) => s.status == SetStatus.skipped)
+          .every((s) => s.actuals.isEmpty),
+    );
+    check(identical(service.skipRemaining(skipped, confirm: true), skipped));
+    final finishedSession = skipped.finish(instant(2));
+    rejects(() => service.skipRemaining(finishedSession, confirm: true));
+    equal(
+      canonicalJson(sessionFromJson(skipped.toJson()).toJson()),
+      canonicalJson(skipped.toJson()),
+    );
+  });
   test(
     'same exercise in heavy/light slots keeps independent actuals and sources',
     () {

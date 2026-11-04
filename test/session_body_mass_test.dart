@@ -187,6 +187,21 @@ void sessionBodyMassTests() {
         canonicalJson(sessionFromJson(next.toJson()).toJson()),
         canonicalJson(next.toJson()),
       );
+      final skipped = const TrainingService().skipRemaining(
+        next,
+        confirm: true,
+      );
+      equal(
+        canonicalJson(
+          skipped.initialBodyMassOverrides!.map(
+            (k, v) => MapEntry(k, v.toJson()),
+          ),
+        ),
+        canonicalJson(
+          next.initialBodyMassOverrides!.map((k, v) => MapEntry(k, v.toJson())),
+        ),
+      );
+
       check(
         identical(
           const TrainingService().rebindBodyMass(
