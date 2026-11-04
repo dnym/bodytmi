@@ -75,6 +75,20 @@ Future<void> _withStore(
 
 void effectiveMassTests() {
   test(
+    'effective load follows an explicitly refreshed pre-workout mass snapshot',
+    () {
+      final before = _start();
+      final beforeValue = _value(_estimate(before));
+      final after = const TrainingService().refreshBodyMass(before, [
+        _measurement('80', 2),
+      ], confirm: true);
+      equal(_value(_estimate(before)), beforeValue);
+      check(_value(_estimate(after)) != beforeValue);
+      equal(after.contentVersion, before.contentVersion + 1);
+    },
+  );
+
+  test(
     'effective mass uses explicit fractional body mass, implement count and modeled assistance with exact unit conversion',
     () {
       final model = EffectiveMassModel.fromJson(

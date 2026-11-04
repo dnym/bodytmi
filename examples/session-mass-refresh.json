@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "session-1",
+  "expectedVersion": 1,
+  "confirm": true
+}

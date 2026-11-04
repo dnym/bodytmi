@@ -76,6 +76,405 @@ Future<void> _withStore(
 
 void sessionBodyMassTests() {
   test(
+    'explicit body mass refresh preserves cutoff, overrides and session targets',
+    () {
+      final original = _start(
+        overrides: {
+          'bench-light': _override({
+            'mass': {'value': '68', 'unit': 'kg'},
+          }),
+        },
+      );
+      final inputs = [
+        _mass('training', '80', version: 2),
+        _mass('future', '120', day: 11),
+        _mass('health', '100', context: 'health'),
+      ];
+      rejects(
+        () => const TrainingService().refreshBodyMass(
+          original,
+          inputs,
+          confirm: false,
+        ),
+      );
+      final next = const TrainingService().refreshBodyMass(
+        original,
+        inputs,
+        confirm: true,
+      );
+      equal(next.contentVersion, original.contentVersion + 1);
+      equal(
+        next.bodyMassInputs['bench-heavy']!.resolution.mass!.value.toString(),
+        '80',
+      );
+      equal(
+        next.bodyMassInputs['bench-light']!.resolution.mass!.value.toString(),
+        '68',
+      );
+      equal(next.bodyMassInputs['bench-heavy']!.asOf, original.startedAt);
+      equal(
+        canonicalJson(next.sets.map((s) => s.toJson()).toList()),
+        canonicalJson(original.sets.map((s) => s.toJson()).toList()),
+      );
+      equal(
+        canonicalJson(sessionFromJson(next.toJson()).toJson()),
+        canonicalJson(next.toJson()),
+      );
+      check(
+        identical(
+          const TrainingService().refreshBodyMass(next, inputs, confirm: true),
+          next,
+        ),
+      );
+      final completed = const TrainingService().complete(
+        next,
+        next.sets.first.id,
+        {},
+        acceptSuggested: true,
+      );
+      rejects(
+        () => const TrainingService().refreshBodyMass(
+          completed,
+          inputs,
+          confirm: true,
+        ),
+      );
+      rejects(
+        () => const TrainingService().refreshBodyMass(
+          finished(next),
+          inputs,
+          confirm: true,
+        ),
+      );
+    },
+  );
+
+  test(
+    'stored mass refresh is transactional, versioned and survives logical restore',
+    () => _withStore((store, dir) async {
+      final training = StoredTrainingService(store);
+      final mass = StoredBodyMassService(store);
+      await training.publish(_definition(), 0);
+      await mass.save(_observation(_mass('training', '75')), 0);
+      final session = await training.start(
+        'refresh',
+        definition().id,
+        1,
+        instant(10),
+      );
+      await mass.save(_observation(_mass('training', '80')), 1);
+      await mass.save(_observation(_mass('future', '120', day: 11)), 0);
+      await _fails(
+        training.refreshBodyMass(
+          session.id,
+          session.contentVersion,
+          confirm: false,
+        ),
+      );
+      await _fails(
+        training.refreshBodyMass(
+          session.id,
+          session.contentVersion + 1,
+          confirm: true,
+        ),
+      );
+      final changed = await training.refreshBodyMass(
+        session.id,
+        session.contentVersion,
+        confirm: true,
+      );
+      equal(changed.contentVersion, session.contentVersion + 1);
+      equal(
+        changed.bodyMassInputs['bench-heavy']!.resolution.mass!.value
+            .toString(),
+        '80',
+      );
+      final retryStart = await training.start(
+        'refresh',
+        definition().id,
+        1,
+        instant(10),
+      );
+      equal(
+        canonicalJson(retryStart.toJson()),
+        canonicalJson(changed.toJson()),
+      );
+      final noChange = await training.refreshBodyMass(
+        changed.id,
+        changed.contentVersion,
+        confirm: true,
+      );
+      equal(noChange.contentVersion, changed.contentVersion);
+      await _fails(
+        training.refreshBodyMass(
+          session.id,
+          session.contentVersion,
+          confirm: true,
+        ),
+      );
+      await LogicalArchiveFiles.export(
+        await store.archive(),
+        '$dir/export-refresh.json',
+      );
+      final prepared = await LogicalArchiveFiles.prepare(
+        '$dir/export-refresh.json',
+      );
+      try {
+        await store.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery-refresh',
+          confirm: true,
+        );
+        await store.close();
+        final reopened = await TrainingStore.open('$dir/db.sqlite');
+        try {
+          equal(
+            canonicalJson(
+              (await StoredTrainingService(
+                reopened,
+              ).session(session.id)).toJson(),
+            ),
+            canonicalJson(changed.toJson()),
+          );
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await prepared.close();
+      }
+    }),
+  );
+
+  test(
+    'refresh leaves an independently captured derived plan unchanged',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final mass = StoredBodyMassService(store);
+      await training.publish(_definition(), 0);
+      await mass.save(_observation(_mass('training', '75')), 0);
+      await DerivedTargetGraphService(store).publish(
+        DerivedTargetGraph.fromJson({
+          'id': 'mass-target',
+          'nodes': [
+            {'id': 'body', 'kind': 'source', 'unit': 'kg', 'sourceId': 'mass'},
+            {
+              'id': 'work',
+              'kind': 'scale',
+              'unit': 'kg',
+              'input': 'body',
+              'factor': '0.8',
+            },
+          ],
+          'bindings': {
+            'mass': {'kind': 'bodyMass', 'context': 'clothed-training'},
+          },
+          'plans': [
+            {
+              'id': 'plan',
+              'templateId': definition().id,
+              'revision': 1,
+              'bindings': [
+                {
+                  'occurrenceId': 'workout/heavy[0]/heavy-set',
+                  'metric': 'mass',
+                  'nodeId': 'work',
+                },
+              ],
+            },
+          ],
+        }),
+        0,
+      );
+      final ref = const DerivedPlanRef('mass-target', 1, 'plan');
+      final session = await training.start(
+        'derived-refresh',
+        definition().id,
+        1,
+        instant(10),
+        derivedPlan: ref,
+      );
+      final before = canonicalJson(session.derivedPlanInput!.toJson());
+      await mass.save(_observation(_mass('training', '80')), 1);
+      final after = await training.refreshBodyMass(
+        session.id,
+        session.contentVersion,
+        confirm: true,
+      );
+      equal(canonicalJson(after.derivedPlanInput!.toJson()), before);
+      equal(after.sets.first.suggested['mass']!.value.toString(), '60');
+      equal(
+        after.bodyMassInputs['bench-heavy']!.resolution.mass!.value.toString(),
+        '80',
+      );
+      equal(
+        jsonObject(
+          (await DerivedWorkoutPreview(
+            store,
+          ).sessionStatus(after.id))['comparison'],
+          'comparison',
+        )['changed'],
+        true,
+      );
+      equal(
+        canonicalJson(
+          (await training.start(
+            session.id,
+            definition().id,
+            1,
+            instant(10),
+            derivedPlan: ref,
+          )).toJson(),
+        ),
+        canonicalJson(after.toJson()),
+      );
+      await store.archive();
+    }),
+  );
+
+  test(
+    'refresh changes only the selected active program session',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final mass = StoredBodyMassService(store);
+      final programs = ProgramService(store);
+      await training.publish(_definition(), 0);
+      await mass.save(_observation(_mass('training', '75')), 0);
+      await programs.publish(
+        ProgramDefinition.fromJson({
+          'id': 'program',
+          'name': 'Program',
+          'plan': {
+            'id': 'day',
+            'type': 'day',
+            'templateId': definition().id,
+            'revision': 1,
+          },
+        }),
+        0,
+      );
+      for (final run in ['strength', 'cardio']) {
+        await programs.create(run, 'program', 1, instant(1));
+      }
+      final strength = await programs.start(
+        'strength',
+        1,
+        'strength-session',
+        instant(10),
+      );
+      final cardio = await programs.start(
+        'cardio',
+        1,
+        'cardio-session',
+        instant(10),
+      );
+      final strengthRun = (await programs.run('strength')).toJson();
+      final cardioRun = (await programs.run('cardio')).toJson();
+      await mass.save(_observation(_mass('training', '80')), 1);
+      final refreshed = await training.refreshBodyMass(
+        strength.id,
+        strength.contentVersion,
+        confirm: true,
+      );
+      equal(
+        refreshed.bodyMassInputs['bench-heavy']!.resolution.mass!.value
+            .toString(),
+        '80',
+      );
+      equal(
+        (await training.session(
+          cardio.id,
+        )).bodyMassInputs['bench-heavy']!.resolution.mass!.value.toString(),
+        '75',
+      );
+      jsonEqual((await programs.run('strength')).toJson(), strengthRun);
+      jsonEqual((await programs.run('cardio')).toJson(), cardioRun);
+      final retry = await programs.start(
+        'strength',
+        1,
+        strength.id,
+        instant(10),
+      );
+      equal(canonicalJson(retry.toJson()), canonicalJson(refreshed.toJson()));
+      await store.archive();
+    }),
+  );
+
+  test(
+    'stored mass refresh rejects unavailable overrides and prior timing or traversal',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final mass = StoredBodyMassService(store);
+      final raw = _definition().toJson();
+      final slot = jsonObject(jsonList(raw, 'slots').first, 'slot');
+      jsonObject(slot['targets'], 'targets')['duration'] = {
+        'value': '30',
+        'unit': 's',
+      };
+      await training.publish(WorkoutDefinition.fromJson(raw), 0);
+      await mass.save(_observation(_mass('training', '75')), 0);
+      final selected = await training.start(
+        'selected',
+        definition().id,
+        1,
+        instant(10),
+        bodyMassOverrides: {
+          'bench-heavy': _override({'measurementId': 'training'}),
+        },
+      );
+      await mass.delete('training', 1, confirm: true);
+      await _fails(
+        training.refreshBodyMass(
+          selected.id,
+          selected.contentVersion,
+          confirm: true,
+        ),
+      );
+      equal(
+        canonicalJson((await training.session(selected.id)).toJson()),
+        canonicalJson(selected.toJson()),
+      );
+      final traversed = await training.start(
+        'traversed',
+        definition().id,
+        1,
+        instant(10),
+      );
+      await ExecutionService(store).start('walk', traversed.id, instant(10));
+      await _fails(
+        training.refreshBodyMass(
+          traversed.id,
+          traversed.contentVersion,
+          confirm: true,
+        ),
+      );
+      final timed = await training.start(
+        'timed',
+        definition().id,
+        1,
+        instant(10),
+      );
+      final timer = await TimingService(store).start(
+        'clock',
+        timed.id,
+        timed.sets.first.id,
+        'duration',
+        null,
+        instant(10),
+      );
+      await TimingService(store).stop(
+        timer.id,
+        timer.version,
+        instant(10),
+        confirm: true,
+        discard: true,
+      );
+      await _fails(
+        training.refreshBodyMass(timed.id, timed.contentVersion, confirm: true),
+      );
+    }),
+  );
+
+  test(
     'session body mass is explicitly selected, frozen separately from targets and retained through result edits',
     () {
       final s = _start();
@@ -668,6 +1067,29 @@ void sessionBodyMassTests() {
           true,
         );
         jsonEqual(await command('store show', {'id': 'same'}), stored);
+        final refused = await invoke(
+          ['store', 'mass-refresh'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': '${dir.path}/db.sqlite',
+            'id': 'same',
+            'expectedVersion': 1,
+          }),
+        );
+        equal(refused.code, 2);
+        equal(refused.output, '');
+        final refreshed = await command('store mass-refresh', {
+          'id': 'same',
+          'expectedVersion': 1,
+          'confirm': true,
+        });
+        final pureRefresh = await command('session mass-refresh', {
+          'session': pure,
+          'measurements': [changed.toJson()],
+          'confirm': true,
+        }, stored: false);
+        jsonEqual(refreshed, pureRefresh);
+        equal(jsonObject(refreshed, 'session')['contentVersion'], 2);
       } finally {
         await dir.delete(recursive: true);
       }

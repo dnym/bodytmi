@@ -22,6 +22,7 @@ const commandNames = [
   'history records',
   'family validate',
   'session mass-status',
+  'session mass-refresh',
   'session effective-load',
   'session complete',
   'session annotate',
@@ -130,6 +131,16 @@ final class Commands {
         data = const EffectiveMassService().evaluate(
           sessionFromJson(request['session']),
         );
+      case 'session mass-refresh':
+        keys({'session', 'measurements', 'confirm'});
+        data = const TrainingService().refreshBodyMass(
+          sessionFromJson(request['session']),
+          [
+            for (final m in jsonList(request, 'measurements'))
+              BodyMassMeasurement.fromJson(m),
+          ],
+          confirm: _bool(request, 'confirm'),
+        ).toJson();
       case 'session mass-status':
         keys({'session', 'measurements'});
         data = const TrainingService()

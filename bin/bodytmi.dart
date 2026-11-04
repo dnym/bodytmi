@@ -63,7 +63,7 @@ Future<void> main(List<String> arguments) async {
           'bodyMass':
               'mass record/update/delete/show/list/trend/resolve use stored observations and require database. Updates/deletion require expectedVersion; deletion requires confirm:true. measurement trend/resolve still take explicit measurement arrays.',
           'sessionBodyMass':
-              'Slots may explicitly configure bodyMass.context and resolver options. Session starts freeze selected inputs; optional bodyMassOverrides maps slot IDs to measurementId or mass overrides. store mass-status takes database/id; session mass-status takes session/measurements. Source changes do not rewrite captured inputs.',
+              'Slots may explicitly configure bodyMass.context and resolver options. Session starts freeze selected inputs; optional bodyMassOverrides maps slot IDs to measurementId or mass overrides. store mass-status takes database/id; session mass-status takes session/measurements. Source changes do not rewrite captured inputs. store mass-refresh requires database/id/expectedVersion/confirm:true and explicitly recaptures slot mass at the original start cutoff before work, timing or traversal; session mass-refresh accepts session/measurements/confirm:true. Existing overrides and derived plans stay pinned.',
           'effectiveLoad':
               'Slots may configure an effectiveMass model with explicit bodyMassFraction, addedMass and assistance components. store effective-load takes database/id; session effective-load takes session. Derived suggested/confirmed-actual estimates preserve raw inputs and do not change progression.',
           'programs':

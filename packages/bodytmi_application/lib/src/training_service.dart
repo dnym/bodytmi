@@ -1,4 +1,5 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'canonical_json.dart';
 
 final class TrainingService {
   const TrainingService();
@@ -114,6 +115,51 @@ final class TrainingService {
       startedAt: startedAt,
       sets: sets,
       bodyMassInputs: massInputs,
+    );
+  }
+
+  /// Explicitly recapture slot mass inputs at the original session cutoff.
+  TrainingSession refreshBodyMass(
+    TrainingSession session,
+    List<BodyMassMeasurement> measurements, {
+    required bool confirm,
+  }) {
+    if (!confirm) invalid('Refreshing body mass requires confirm:true.');
+    if (session.status != SessionStatus.active ||
+        session.sets.any((set) => set.status != SetStatus.planned)) {
+      invalid(
+        'Body mass can only be refreshed before any effort is completed or skipped.',
+      );
+    }
+    if (session.bodyMassInputs.isEmpty)
+      invalid('Session has no configured body mass inputs.');
+    final refreshed = <String, BodyMassInputSnapshot>{
+      for (final entry in session.bodyMassInputs.entries)
+        entry.key: BodyMassInputSnapshot.capture(
+          selection: entry.value.selection,
+          asOf: session.startedAt,
+          measurements: measurements,
+          override: entry.value.override,
+        ),
+    };
+    if (canonicalJson({
+          for (final e in refreshed.entries) e.key: e.value.toJson(),
+        }) ==
+        canonicalJson({
+          for (final e in session.bodyMassInputs.entries)
+            e.key: e.value.toJson(),
+        }))
+      return session;
+    return TrainingSession(
+      id: session.id,
+      revision: session.revision,
+      startedAt: session.startedAt,
+      sets: session.sets,
+      status: session.status,
+      finishedAt: session.finishedAt,
+      contentVersion: session.contentVersion + 1,
+      bodyMassInputs: refreshed,
+      derivedPlanInput: session.derivedPlanInput,
     );
   }
 

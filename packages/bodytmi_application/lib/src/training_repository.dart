@@ -369,6 +369,33 @@ final class StoredTrainingService {
     return next;
   });
 
+  /// Refresh mass inputs only before any persisted timing or traversal exists.
+  Future<TrainingSession> refreshBodyMass(
+    String id,
+    int expectedVersion, {
+    required bool confirm,
+  }) => repository.transaction(() async {
+    final current = await session(id);
+    if (current.contentVersion != expectedVersion) _conflict();
+    if ((await repository.timingActivities()).any(
+          (timer) => timer.sessionId == id,
+        ) ||
+        (await repository.executions()).any(
+          (execution) => execution.sessionId == id,
+        )) {
+      invalid(
+        'Body mass cannot be refreshed after timing or traversal has started.',
+      );
+    }
+    final next = const TrainingService().refreshBodyMass(current, [
+      for (final record in await repository.bodyMassRecords())
+        if (!record.deleted) record.measurement,
+    ], confirm: confirm);
+    if (identical(next, current)) return current;
+    await repository.updateSession(next);
+    return next;
+  });
+
   Future<TrainingSession> edit(
     String id,
     int expectedVersion,
