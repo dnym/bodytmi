@@ -56,7 +56,12 @@ final class DerivedTargetGraphService {
     String graphId, [
     int? number,
     DateTime? asOf,
+    String? runId,
+    bool allRuns = false,
   ]) => repository.transaction(() async {
+    if (runId != null) identifier({'runId': runId}, 'runId');
+    if (runId != null && allRuns)
+      invalid('Choose a run or all runs, not both.');
     final revision = await this.revision(graphId, number);
     final graph = revision.graph;
     final measurements = [
@@ -67,6 +72,10 @@ final class DerivedTargetGraphService {
       for (final session in await repository.sessions())
         if (session.status == SessionStatus.finalized) session,
     ];
+    final runBySession = {
+      for (final binding in await repository.sessionPrograms())
+        binding.sessionId: binding.runId,
+    };
     final resolvedBindings = <String, Map<String, Object?>>{};
     final resolverNodes = <Map<String, Object?>>[];
     for (final node in graph.nodes) {
@@ -89,6 +98,10 @@ final class DerivedTargetGraphService {
               : asOf;
           if (effective == null)
             invalid('Body-mass binding requires an explicit asOf.');
+          if (asOf != null && effective.isAfter(asOf))
+            invalid(
+              'Body-mass binding asOf cannot be after the resolution asOf.',
+            );
           final eligible = [
             for (final m in measurements)
               if (m.context == binding['context'] &&
@@ -120,9 +133,19 @@ final class DerivedTargetGraphService {
                   .toUtc()
                   .toIso8601String(),
             'stale': resolution.stale,
+            'sourceFingerprint': resolution.sourceFingerprint,
+            'sourceVersionSemantics': 'maximumMeasurementVersionOnly',
           };
         case 'history':
-          final selection = _historySelection(sessions, binding, unit);
+          final selection = _historySelection(
+            sessions,
+            binding,
+            unit,
+            asOf,
+            runBySession,
+            runId,
+            allRuns,
+          );
           if (selection != null) {
             value = selection.$1;
             version = selection.$2;
@@ -145,7 +168,16 @@ final class DerivedTargetGraphService {
       });
     }
     return {
-      'policy': 'bodytmi-derived-target-graph-resolution/1',
+      'policy': 'bodytmi-derived-target-graph-resolution/2',
+      'historyScope': {
+        'mode': allRuns
+            ? 'all'
+            : runId == null
+            ? 'adHoc'
+            : 'run',
+        if (runId != null) 'runId': runId,
+        if (asOf != null) 'asOf': asOf.toUtc().toIso8601String(),
+      },
       'graph': {
         'id': graph.id,
         'number': revision.number,
@@ -164,6 +196,10 @@ _Selection? _historySelection(
   List<TrainingSession> sessions,
   Map<String, Object?> binding,
   Unit unit,
+  DateTime? asOf,
+  Map<String, String> runBySession,
+  String? runId,
+  bool allRuns,
 ) {
   final metric = binding['metric']! as String;
   final direction = binding['direction']! as String;
@@ -176,6 +212,10 @@ _Selection? _historySelection(
       : null;
   _Selection? best;
   for (final session in sessions) {
+    if (!allRuns && runBySession[session.id] != runId) continue;
+    if (asOf != null &&
+        (session.finishedAt == null || session.finishedAt!.isAfter(asOf)))
+      continue;
     if (from != null && session.startedAt.isBefore(from)) continue;
     if (until != null && !session.startedAt.isBefore(until)) continue;
     final definition = session.revision.definition;
@@ -227,7 +267,7 @@ _Selection? _historySelection(
 bool _better(_Selection candidate, _Selection incumbent, String direction) {
   final comparison = direction == 'highest'
       ? candidate.$1.compareTo(incumbent.$1)
-      : -incumbent.$1.compareTo(candidate.$1);
+      : incumbent.$1.compareTo(candidate.$1);
   if (comparison > 0) return true;
   if (comparison < 0) return false;
   // Equal values: earliest start, then session ID, ordinal, set ID.

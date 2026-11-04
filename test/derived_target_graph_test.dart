@@ -359,6 +359,226 @@ void derivedTargetGraphTests() {
   }
 
   test(
+    'history selection uses distinct extremes and excludes results finalized after asOf',
+    () => _stored((store) async {
+      final rev = revision();
+      for (final item in [(2, 'fifty', '50'), (4, 'hundred', '100')]) {
+        var session = start(id: item.$2, day: item.$1, from: rev);
+        for (final set in session.sets) {
+          session = const TrainingService().complete(session, set.id, {
+            'mass': Quantity(item.$3, 'kg'),
+            'reps': Quantity('8', 'rep'),
+          });
+        }
+        session = session.finish(
+          instant(item.$1).add(const Duration(hours: 1)),
+        );
+        await store.insertSession(session);
+        await store.recordFinalization(session.id);
+      }
+      final service = DerivedTargetGraphService(store);
+      for (final direction in ['lowest', 'highest']) {
+        await service.publish(
+          DerivedTargetGraph.fromJson(
+            _graph(
+              id: direction,
+              bindings: {
+                'bench_max': {
+                  'kind': 'history',
+                  'metric': 'mass',
+                  'slotId': 'bench-heavy',
+                  'direction': direction,
+                },
+                'training_mass': {
+                  'kind': 'manual',
+                  'version': 1,
+                  'value': {'value': '1', 'unit': 'kg'},
+                },
+              },
+            ),
+          ),
+          0,
+        );
+      }
+      equal(
+        _nodeValue(
+          await service.resolve('lowest', null, instant(10)),
+          'max',
+        )['value'],
+        '50',
+      );
+      equal(
+        _nodeValue(
+          await service.resolve('highest', null, instant(10)),
+          'max',
+        )['value'],
+        '100',
+      );
+      equal(
+        _nodeValue(
+          await service.resolve('highest', null, instant(4)),
+          'max',
+        )['value'],
+        '70',
+      );
+      equal(
+        _nodeValue(
+          await service.resolve('lowest', null, instant(2)),
+          'max',
+        )['value'],
+        '70',
+      );
+      equal(
+        _nodeValue(
+          await service.resolve(
+            'lowest',
+            null,
+            instant(2).add(const Duration(hours: 1)),
+          ),
+          'max',
+        )['value'],
+        '50',
+      );
+    }),
+  );
+
+  test(
+    'history graph selects ad hoc, one run, or explicit all-runs context',
+    () => _stored((store) async {
+      final programs = ProgramService(store);
+      final template = definition();
+      await programs.publish(
+        ProgramDefinition.fromJson({
+          'id': 'two-runs',
+          'name': 'Two runs',
+          'plan': {
+            'id': 'cycle',
+            'type': 'group',
+            'children': [
+              {
+                'id': 'day',
+                'type': 'day',
+                'templateId': template.id,
+                'revision': 1,
+              },
+            ],
+          },
+        }),
+        0,
+      );
+      for (final item in [
+        ('run-a', 'session-a', '45'),
+        ('run-b', 'session-b', '110'),
+      ]) {
+        await programs.create(item.$1, 'two-runs', 1, instant(1));
+        final session = await programs.start(item.$1, 1, item.$2, instant(4));
+        await StoredTrainingService(store).edit(
+          session.id,
+          session.contentVersion,
+          (value) {
+            var completed = value;
+            for (final set in completed.sets) {
+              completed = const TrainingService().complete(completed, set.id, {
+                'mass': Quantity(item.$3, 'kg'),
+                'reps': Quantity('8', 'rep'),
+              });
+            }
+            return completed.finish(instant(4).add(const Duration(hours: 1)));
+          },
+        );
+      }
+      final service = DerivedTargetGraphService(store);
+      await service.publish(
+        DerivedTargetGraph.fromJson(_graph(id: 'scoped')),
+        0,
+      );
+      final adHoc = await service.resolve('scoped', null, instant(10));
+      equal(_nodeValue(adHoc, 'max')['value'], '70');
+      equal(jsonObject(adHoc['historyScope'], 'scope')['mode'], 'adHoc');
+      equal(
+        _nodeValue(
+          await service.resolve('scoped', null, instant(10), 'run-a'),
+          'max',
+        )['value'],
+        '45',
+      );
+      equal(
+        _nodeValue(
+          await service.resolve('scoped', null, instant(10), 'run-b'),
+          'max',
+        )['value'],
+        '110',
+      );
+      equal(
+        _nodeValue(
+          await service.resolve('scoped', null, instant(10), null, true),
+          'max',
+        )['value'],
+        '110',
+      );
+      await expectLater(
+        service.resolve('scoped', null, instant(10), 'run-a', true),
+        throwsA(isA<BodyTmiException>()),
+      );
+    }),
+  );
+
+  test(
+    'body mass source fingerprints detect inserted and deleted observations even when max version is unchanged',
+    () => _stored((store) async {
+      final service = DerivedTargetGraphService(store);
+      await service.publish(
+        DerivedTargetGraph.fromJson(_graph(id: 'fingerprint')),
+        0,
+      );
+      Map<String, Object?> mass(Map<String, Object?> result) => jsonObject(
+        jsonObject(result['bindings'], 'bindings')['training_mass'],
+        'mass',
+      );
+      final before = mass(
+        await service.resolve('fingerprint', null, instant(10)),
+      );
+      final bodyMass = StoredBodyMassService(store);
+      await bodyMass.save({
+        'id': 'inserted',
+        'context': 'clothed-training',
+        'observedAt': '2026-10-02T08:00:00Z',
+        'mass': {'value': '85', 'unit': 'kg'},
+      }, 0);
+      final after = mass(
+        await service.resolve('fingerprint', null, instant(10)),
+      );
+      equal(before['sourceVersion'], after['sourceVersion']);
+      final beforeFingerprint = jsonObject(
+        jsonObject(before['provenance'], 'provenance')['sourceFingerprint'],
+        'fingerprint',
+      );
+      final afterFingerprint = jsonObject(
+        jsonObject(after['provenance'], 'provenance')['sourceFingerprint'],
+        'fingerprint',
+      );
+      check(jsonEncode(beforeFingerprint) != jsonEncode(afterFingerprint));
+      await bodyMass.delete('mass-a', 1, confirm: true);
+      final deleted = mass(
+        await service.resolve('fingerprint', null, instant(10)),
+      );
+      equal(after['sourceVersion'], deleted['sourceVersion']);
+      check(
+        jsonEncode(afterFingerprint) !=
+            jsonEncode(
+              jsonObject(
+                jsonObject(
+                  deleted['provenance'],
+                  'provenance',
+                )['sourceFingerprint'],
+                'fingerprint',
+              ),
+            ),
+      );
+    }),
+  );
+
+  test(
     'stored graph publication checks expected revisions and resolves stored sources with provenance',
     () => _stored((store) async {
       final service = DerivedTargetGraphService(store);
@@ -391,7 +611,7 @@ void derivedTargetGraphTests() {
         null,
         DateTime.utc(2026, 10, 30),
       );
-      equal(resolved['policy'], 'bodytmi-derived-target-graph-resolution/1');
+      equal(resolved['policy'], 'bodytmi-derived-target-graph-resolution/2');
       final bindings = jsonObject(resolved['bindings'], 'bindings');
       final history = jsonObject(bindings['bench_max'], 'history');
       equal(history['status'], 'resolved');
@@ -610,6 +830,11 @@ void derivedTargetGraphTests() {
       equal(
         jsonObject(mass['provenance'], 'provenance')['asOf'],
         '2026-10-01T12:00:00.000Z',
+      );
+      // A graph cannot use a fixed future body-mass cutoff in an earlier query.
+      await expectLater(
+        service.resolve(published.graph.id, null, DateTime.utc(2026, 9, 30)),
+        throwsA(isA<BodyTmiException>()),
       );
       // A context with no observations stays unresolved, not zero.
       final empty = await service.publish(

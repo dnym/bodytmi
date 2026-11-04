@@ -218,7 +218,7 @@ Future<Map<String, Object?>> executeStored(
     'graph publish' => {'graph', 'expectedRevision'},
     'graph show' => {'graphId', 'revision'},
     'graph list' => <String>{},
-    'graph resolve' => {'graphId', 'revision', 'asOf'},
+    'graph resolve' => {'graphId', 'revision', 'asOf', 'runId', 'allRuns'},
     'store mass-status' => {'id'},
     'store effective-load' => {'id'},
     'store complete' => {
@@ -906,6 +906,8 @@ Future<Map<String, Object?>> executeStored(
           request.containsKey('asOf')
               ? parseInstant(request['asOf'], 'asOf')
               : null,
+          request.containsKey('runId') ? identifier(request, 'runId') : null,
+          flag('allRuns'),
         );
       case 'store assess-objectives':
         data = await store.transaction(
