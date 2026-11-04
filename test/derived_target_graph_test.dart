@@ -579,6 +579,119 @@ void derivedTargetGraphTests() {
   );
 
   test(
+    'history source fingerprints retain eligible membership and change for non-winning results',
+    () => _stored((store) async {
+      final service = DerivedTargetGraphService(store);
+      await service.publish(
+        DerivedTargetGraph.fromJson(_graph(id: 'history-fingerprint')),
+        0,
+      );
+      Map<String, Object?> history(Map<String, Object?> result) => jsonObject(
+        jsonObject(result['bindings'], 'bindings')['bench_max'],
+        'history',
+      );
+      Map<String, Object?> fingerprint(Map<String, Object?> binding) =>
+          jsonObject(
+            jsonObject(
+              binding['provenance'],
+              'provenance',
+            )['sourceFingerprint'],
+            'fingerprint',
+          );
+      final before = history(
+        await service.resolve('history-fingerprint', null, instant(10)),
+      );
+      final beforeFingerprint = fingerprint(before);
+      equal(beforeFingerprint['policy'], 'bodytmi-history-source/1');
+      final rev = revision();
+      var lower = start(id: 'nonwinner', day: 4, from: rev);
+      for (final set in lower.sets) {
+        lower = const TrainingService().complete(lower, set.id, {
+          'mass': Quantity('60', 'kg'),
+          'reps': Quantity('8', 'rep'),
+        });
+      }
+      lower = lower.finish(instant(4).add(const Duration(hours: 1)));
+      await store.insertSession(lower);
+      await store.recordFinalization(lower.id);
+      final inserted = history(
+        await service.resolve('history-fingerprint', null, instant(10)),
+      );
+      equal(jsonObject(inserted['value'], 'value')['value'], '70');
+      equal(inserted['sourceVersion'], before['sourceVersion']);
+      check(jsonEncode(beforeFingerprint) != jsonEncode(fingerprint(inserted)));
+      final eligible = fingerprint(inserted)['sources']! as List<Object?>;
+      check(
+        eligible.any(
+          (s) => jsonObject(s, 'source')['sessionId'] == 'nonwinner',
+        ),
+      );
+      check(
+        !eligible.any((s) => jsonObject(s, 'source')['sessionId'] == 's-two'),
+      );
+      final current = await StoredTrainingService(store).session('nonwinner');
+      final set = current.sets.firstWhere((s) => s.slotId == 'bench-heavy');
+      await StoredTrainingService(store).edit(
+        current.id,
+        current.contentVersion,
+        (session) => const TrainingService().complete(session, set.id, {
+          'mass': Quantity('65', 'kg'),
+          'reps': Quantity('8', 'rep'),
+        }),
+      );
+      final edited = history(
+        await service.resolve('history-fingerprint', null, instant(10)),
+      );
+      equal(jsonObject(edited['value'], 'value')['value'], '70');
+      check(
+        jsonEncode(fingerprint(inserted)) != jsonEncode(fingerprint(edited)),
+      );
+      final repeat = history(
+        await service.resolve('history-fingerprint', null, instant(10)),
+      );
+      jsonEqual(fingerprint(edited), fingerprint(repeat));
+    }),
+  );
+
+  test(
+    'unresolved history sources still provide an empty fingerprint',
+    () => _stored((store) async {
+      final service = DerivedTargetGraphService(store);
+      await service.publish(
+        DerivedTargetGraph.fromJson(
+          _graph(
+            id: 'history-empty',
+            bindings: {
+              'bench_max': {
+                'kind': 'history',
+                'metric': 'mass',
+                'templateId': 'not-present',
+              },
+              'training_mass': {
+                'kind': 'manual',
+                'version': 1,
+                'value': {'value': '1', 'unit': 'kg'},
+              },
+            },
+          ),
+        ),
+        0,
+      );
+      final result = await service.resolve('history-empty', null, instant(10));
+      final source = jsonObject(
+        jsonObject(result['bindings'], 'bindings')['bench_max'],
+        'source',
+      );
+      equal(source['status'], 'unresolved');
+      final fp = jsonObject(
+        jsonObject(source['provenance'], 'provenance')['sourceFingerprint'],
+        'fingerprint',
+      );
+      equal((fp['sources']! as List<Object?>).length, 0);
+    }),
+  );
+
+  test(
     'stored graph publication checks expected revisions and resolves stored sources with provenance',
     () => _stored((store) async {
       final service = DerivedTargetGraphService(store);
@@ -611,7 +724,7 @@ void derivedTargetGraphTests() {
         null,
         DateTime.utc(2026, 10, 30),
       );
-      equal(resolved['policy'], 'bodytmi-derived-target-graph-resolution/2');
+      equal(resolved['policy'], 'bodytmi-derived-target-graph-resolution/3');
       final bindings = jsonObject(resolved['bindings'], 'bindings');
       final history = jsonObject(bindings['bench_max'], 'history');
       equal(history['status'], 'resolved');

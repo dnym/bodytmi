@@ -78,6 +78,7 @@ final class DerivedTargetGraphService {
     };
     final resolvedBindings = <String, Map<String, Object?>>{};
     final resolverNodes = <Map<String, Object?>>[];
+    var historySourceCount = 0;
     for (final node in graph.nodes) {
       if (node['kind'] != 'source') {
         resolverNodes.add(node);
@@ -137,7 +138,7 @@ final class DerivedTargetGraphService {
             'sourceVersionSemantics': 'maximumMeasurementVersionOnly',
           };
         case 'history':
-          final selection = _historySelection(
+          final history = _historySelection(
             sessions,
             binding,
             unit,
@@ -145,17 +146,23 @@ final class DerivedTargetGraphService {
             runBySession,
             runId,
             allRuns,
+            10000 - historySourceCount,
           );
+          historySourceCount +=
+              (history.$2['sources']! as List<Object?>).length;
+          final selection = history.$1;
           if (selection != null) {
             value = selection.$1;
             version = selection.$2;
-            binding['provenance'] = {
-              'metric': binding['metric'],
-              'direction': binding['direction'],
-              'session': selection.$3,
-              'set': selection.$4,
-            };
           }
+          binding['provenance'] = {
+            'metric': binding['metric'],
+            'direction': binding['direction'],
+            if (selection != null) 'session': selection.$3,
+            if (selection != null) 'set': selection.$4,
+            'sourceVersionSemantics': 'selectedSessionVersionOnly',
+            'sourceFingerprint': history.$2,
+          };
       }
       binding['value'] = value?.toJson();
       binding['status'] = value == null ? 'unresolved' : 'resolved';
@@ -168,7 +175,7 @@ final class DerivedTargetGraphService {
       });
     }
     return {
-      'policy': 'bodytmi-derived-target-graph-resolution/2',
+      'policy': 'bodytmi-derived-target-graph-resolution/3',
       'historyScope': {
         'mode': allRuns
             ? 'all'
@@ -192,7 +199,7 @@ final class DerivedTargetGraphService {
 
 typedef _Selection = (Quantity, int, String, String, DateTime, int);
 
-_Selection? _historySelection(
+(_Selection?, Map<String, Object?>) _historySelection(
   List<TrainingSession> sessions,
   Map<String, Object?> binding,
   Unit unit,
@@ -200,6 +207,7 @@ _Selection? _historySelection(
   Map<String, String> runBySession,
   String? runId,
   bool allRuns,
+  int remainingSources,
 ) {
   final metric = binding['metric']! as String;
   final direction = binding['direction']! as String;
@@ -211,6 +219,7 @@ _Selection? _historySelection(
       ? parseInstant(binding['until'], 'until')
       : null;
   _Selection? best;
+  final sources = <Map<String, Object?>>[];
   for (final session in sessions) {
     if (!allRuns && runBySession[session.id] != runId) continue;
     if (asOf != null &&
@@ -246,6 +255,24 @@ _Selection? _historySelection(
       if (binding['role'] != null && binding['role'] != set.role) continue;
       if (binding['ordinal'] != null && binding['ordinal'] != set.ordinal)
         continue;
+      if (sources.length >= remainingSources) {
+        invalid(
+          'Graph history sources exceed the 10000-result resource limit.',
+        );
+      }
+      sources.add({
+        'sessionId': session.id,
+        'sessionVersion': session.contentVersion,
+        'setId': set.id,
+        'setVersion': set.contentVersion,
+        'runId': runBySession[session.id],
+        'startedAt': session.startedAt.toUtc().toIso8601String(),
+        'finishedAt': session.finishedAt!.toUtc().toIso8601String(),
+        'slotId': set.slotId,
+        'role': set.role,
+        'ordinal': set.ordinal,
+        'value': actual.toJson(),
+      });
       final candidate = (
         actual,
         session.contentVersion,
@@ -259,9 +286,23 @@ _Selection? _historySelection(
       }
     }
   }
-  return best == null
-      ? null
-      : (best.$1, best.$2, best.$3, best.$4, best.$5, best.$6);
+  sources.sort((a, b) {
+    final session = (a['sessionId']! as String).compareTo(
+      b['sessionId']! as String,
+    );
+    return session != 0
+        ? session
+        : (a['setId']! as String).compareTo(b['setId']! as String);
+  });
+  return (
+    best,
+    {
+      'policy': 'bodytmi-history-source/1',
+      'metric': metric,
+      'direction': direction,
+      'sources': sources,
+    },
+  );
 }
 
 bool _better(_Selection candidate, _Selection incumbent, String direction) {
