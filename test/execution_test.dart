@@ -139,20 +139,176 @@ Future<WorkoutExecution> _startGroups(TrainingStore store) async {
 
 void executionTests() {
   test(
+    'guided target edits preserve receipts and rest clocks and apply to upcoming sets',
+    () => _withStore((store, dir) async {
+      var execution = await _startGroups(store);
+      final training = StoredTrainingService(store);
+      var session = await training.session('group-session');
+      final first = session.sets.first;
+      final oldSessionVersion = session.contentVersion;
+      session = await training.editTarget(
+        session.id,
+        session.contentVersion,
+        first.id,
+        'mass',
+        Quantity('3', 'kg'),
+        applyToRemaining: true,
+      );
+      check(
+        session.sets
+            .where((s) => s.slotId == 'hold')
+            .every((s) => s.suggested['mass']!.value.toString() == '3'),
+      );
+      await _fails(
+        ExecutionService(store).step(
+          execution.id,
+          execution.version,
+          oldSessionVersion,
+          'stale',
+          instant(1),
+          action: 'complete',
+          acceptSuggested: true,
+        ),
+      );
+      execution = await _step(store, execution, 'hold', action: 'complete');
+      equal(execution.cursor, 1);
+      final holdResult = (await training.session(session.id)).sets.first;
+      equal(holdResult.actuals['mass']!.value.toString(), '3');
+      final rest = await TimingService(store).show(execution.clockId('rest'));
+      session = await training.session(session.id);
+      final lift = session.sets.firstWhere((s) => s.slotId == 'lift');
+      session = await training.editTarget(
+        session.id,
+        session.contentVersion,
+        lift.id,
+        'mass',
+        Quantity('12', 'kg'),
+        applyToRemaining: true,
+      );
+      equal((await TimingService(store).show(rest.id)).version, rest.version);
+      equal((await ExecutionService(store).show(execution.id)).cursor, 1);
+      equal(
+        canonicalJson(session.sets.first.toJson()),
+        canonicalJson(holdResult.toJson()),
+      );
+      final retry = await ExecutionService(store).step(
+        execution.id,
+        1,
+        oldSessionVersion + 1,
+        'hold',
+        instant(1),
+        action: 'complete',
+        acceptSuggested: true,
+      );
+      equal(retry.cursor, 1);
+      await store.backup('$dir/edited-backup');
+      final export = '$dir/edited-export.json';
+      await LogicalArchiveFiles.export(await store.archive(), export);
+      final prepared = await LogicalArchiveFiles.prepare(export);
+      final destination = await TrainingStore.open('$dir/restored.sqlite');
+      try {
+        await destination.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery',
+          confirm: true,
+        );
+      } finally {
+        await destination.close();
+        await prepared.close();
+      }
+      final restored = await TrainingStore.open('$dir/restored.sqlite');
+      try {
+        equal(
+          canonicalJson(
+            (await StoredTrainingService(
+              restored,
+            ).session(session.id)).toJson(),
+          ),
+          canonicalJson(session.toJson()),
+        );
+        equal((await ExecutionService(restored).show(execution.id)).cursor, 1);
+        equal(
+          (await TimingService(restored).show(rest.id)).version,
+          rest.version,
+        );
+      } finally {
+        await restored.close();
+      }
+      await _finishRest(store, execution);
+      execution = await _step(store, execution, 'rest');
+      execution = await _step(store, execution, 'lift', action: 'complete');
+      session = await training.session(session.id);
+      equal(session.set(lift.id).actuals['mass']!.value.toString(), '12');
+      equal(execution.cursor, 3);
+    }),
+  );
+  test(
+    'target edits protect affected clocks while allowing unrelated effort clocks',
+    () => _withStore((store, _) async {
+      final execution = await _startGroups(store);
+      final training = StoredTrainingService(store);
+      var session = await training.session('group-session');
+      final first = session.sets.first;
+      final lastHold = session.sets.lastWhere((s) => s.slotId == 'hold');
+      final clock = await TimingService(store).start(
+        'future-clock',
+        session.id,
+        lastHold.id,
+        'duration',
+        TimingPlan.fromJson({'effortMilliseconds': 1000}),
+        instant(1),
+      );
+      await _fails(
+        training.editTarget(
+          session.id,
+          session.contentVersion,
+          first.id,
+          'mass',
+          Quantity('3', 'kg'),
+          applyToRemaining: true,
+        ),
+      );
+      equal(
+        canonicalJson((await training.session(session.id)).toJson()),
+        canonicalJson(session.toJson()),
+      );
+      session = await training.editTarget(
+        session.id,
+        session.contentVersion,
+        first.id,
+        'mass',
+        Quantity('3', 'kg'),
+      );
+      equal((await TimingService(store).show(clock.id)).version, clock.version);
+      equal((await ExecutionService(store).show(execution.id)).cursor, 0);
+      final resumed = await TimingService(
+        store,
+      ).resume(clock.id, clock.version, 'epoch', instant(1));
+      final pending = (await TimingService(
+        store,
+      ).advance(clock.id, resumed.version, 'epoch', 1000, instant(1))).activity;
+      equal(pending.status, 'awaitingConfirmation');
+      await _fails(
+        training.editTarget(
+          session.id,
+          session.contentVersion,
+          lastHold.id,
+          'duration',
+          Quantity('2', 's'),
+        ),
+      );
+      equal(
+        (await training.session(session.id)).contentVersion,
+        session.contentVersion,
+      );
+    }),
+  );
+  test(
     'skip remaining defers to active traversal and preserves its cursor',
     () => _withStore((store, _) async {
       final execution = await _start(store);
       final training = StoredTrainingService(store);
       final before = await training.session('session');
-      await _fails(
-        training.editTarget(
-          before.id,
-          before.contentVersion,
-          before.sets.first.id,
-          before.sets.first.suggested.keys.first,
-          before.sets.first.suggested.values.first,
-        ),
-      );
       await _fails(
         training.skipSlot(
           before.id,
@@ -1530,10 +1686,17 @@ void executionTests() {
         });
         equal(view['cursor'], 1);
         equal(jsonObject(view['timer'], 'timer')['phase'], 'rest');
+        final edited = await command('store edit-target', {
+          'id': 'session',
+          'expectedVersion': view['sessionContentVersion'],
+          'setId': 'workout/lift-set',
+          'metric': 'mass',
+          'value': {'value': '12', 'unit': 'kg'},
+        });
         final restRequest = {
           'id': 'execution',
           'expectedVersion': view['version'],
-          'expectedSessionVersion': view['sessionContentVersion'],
+          'expectedSessionVersion': edited['contentVersion'],
           'requestId': 'rest',
           'at': instant(1).toIso8601String(),
         };
@@ -1554,6 +1717,14 @@ void executionTests() {
         equal(retry['alreadyApplied'], true);
         equal(jsonObject(retry['execution'], 'execution')['cursor'], 3);
         final session = await command('store show', {'id': 'session'});
+        final lift = jsonObject(jsonList(session, 'sets').last, 'lift');
+        equal(
+          jsonObject(
+            jsonObject(lift['actuals'], 'actuals')['mass'],
+            'mass',
+          )['value'],
+          '12',
+        );
         equal(
           jsonObject(
             jsonObject(jsonList(session, 'sets').first, 'set')['actuals'],

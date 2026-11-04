@@ -69,6 +69,56 @@ Future<TrainingSession> _done(TrainingStore store, TrainingSession session) =>
 
 void programTests() {
   test(
+    'guided target edits stay within the selected active program run',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-run-target-');
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        await _setup(store);
+        final strength = await _start(
+          store,
+          'strength-run',
+          'strength-edit',
+          1,
+        );
+        final cardio = await _start(store, 'cardio-run', 'cardio-edit', 1);
+        final programs = ProgramService(store);
+        final cardioRun = canonicalJson(
+          (await programs.run('cardio-run')).toJson(),
+        );
+        final beforeCardio = canonicalJson(cardio.toJson());
+        final execution = await ExecutionService(
+          store,
+        ).start('strength-execution', strength.id, instant(1));
+        final edited = await StoredTrainingService(store).editTarget(
+          strength.id,
+          strength.contentVersion,
+          strength.sets.first.id,
+          'mass',
+          Quantity('70', 'kg'),
+          applyToRemaining: true,
+        );
+        check(edited.sets.first.manualTargets.contains('mass'));
+        equal(
+          canonicalJson(
+            (await StoredTrainingService(store).session(cardio.id)).toJson(),
+          ),
+          beforeCardio,
+        );
+        equal(
+          canonicalJson((await programs.run('cardio-run')).toJson()),
+          cardioRun,
+        );
+        equal((await programs.run('strength-run')).cursor, 0);
+        equal((await ExecutionService(store).show(execution.id)).cursor, 0);
+        equal((await store.progressionDecisions()).length, 0);
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'program groups and repeats have stable finite paths and reject invalid or unbounded definitions',
     () {
       final j = _program('nested').toJson();

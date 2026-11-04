@@ -557,7 +557,7 @@ final class StoredTrainingService {
     return next;
   });
 
-  /// Edit a planned target atomically, leaving clock/traversal review explicit.
+  /// Edit planned targets atomically without changing live or unreviewed clocks.
   Future<TrainingSession> editTarget(
     String id,
     int expectedVersion,
@@ -568,19 +568,6 @@ final class StoredTrainingService {
   }) => repository.transaction(() async {
     final current = await session(id);
     if (current.contentVersion != expectedVersion) _conflict();
-    if ((await repository.executions()).any(
-      (e) => e.sessionId == id && !e.complete,
-    )) {
-      invalid('Cannot edit targets during active workout traversal.');
-    }
-    if ((await repository.timingActivities()).any(
-      (t) =>
-          t.sessionId == id && (t.active || t.status == 'awaitingConfirmation'),
-    )) {
-      invalid(
-        'Stop and review or discard the session clock before editing targets.',
-      );
-    }
     final next = const TrainingService().editTarget(
       current,
       setId,
@@ -589,6 +576,30 @@ final class StoredTrainingService {
       applyToRemaining: applyToRemaining,
     );
     if (identical(current, next)) return current;
+    final changed = {
+      for (var i = 0; i < current.sets.length; i++)
+        if (!identical(current.sets[i], next.sets[i])) current.sets[i].id,
+    };
+    if ((await repository.timingActivities()).any(
+      (t) =>
+          t.sessionId == id &&
+          !t.plan.restOnly &&
+          changed.contains(t.setId) &&
+          (t.active || t.status == 'awaitingConfirmation'),
+    )) {
+      invalid(
+        'Review or discard the affected effort clock before editing its target.',
+      );
+    }
+    for (final execution in await repository.executions()) {
+      if (execution.sessionId != id || execution.complete) continue;
+      final plan = executionPlan(current);
+      if (plan
+          .take(execution.cursor)
+          .any((occurrence) => changed.contains(occurrence.id))) {
+        invalid('Targets cannot be edited behind the traversal cursor.');
+      }
+    }
     return edit(id, expectedVersion, (_) => next);
   });
 
