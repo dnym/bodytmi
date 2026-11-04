@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "templateId": "upper-a",
+  "revision": 1,
+  "graphId": "bench-percentages",
+  "graphRevision": 1,
+  "asOf": "2026-10-30T12:00:00Z",
+  "bindings": [
+    {"occurrenceId": "workout/heavy[0]/heavy-set", "metric": "mass", "nodeId": "warmup"},
+    {"occurrenceId": "workout/heavy[1]/heavy-set", "metric": "mass", "nodeId": "working"},
+    {"occurrenceId": "workout/heavy[2]/heavy-set", "metric": "mass", "nodeId": "working"}
+  ]
+}
