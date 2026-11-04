@@ -344,6 +344,7 @@ final class StoredTrainingService {
       startedAt: next.startedAt,
       sets: finalSets,
       bodyMassInputs: next.bodyMassInputs,
+      initialBodyMassOverrides: next.initialBodyMassOverrides,
       derivedPlanInput: derivedInput,
     );
     if (derivedInput != null) {
@@ -396,6 +397,39 @@ final class StoredTrainingService {
     return next;
   });
 
+  /// Rebind before any timing/traversal, retaining initial start overrides.
+  Future<TrainingSession> rebindBodyMass(
+    String id,
+    int expectedVersion,
+    Map<String, BodyMassOverride?> updates, {
+    required bool confirm,
+  }) => repository.transaction(() async {
+    final current = await session(id);
+    if (current.contentVersion != expectedVersion) _conflict();
+    if ((await repository.timingActivities()).any(
+          (timer) => timer.sessionId == id,
+        ) ||
+        (await repository.executions()).any(
+          (execution) => execution.sessionId == id,
+        )) {
+      invalid(
+        'Body mass cannot be rebound after timing or traversal has started.',
+      );
+    }
+    final next = const TrainingService().rebindBodyMass(
+      current,
+      [
+        for (final record in await repository.bodyMassRecords())
+          if (!record.deleted) record.measurement,
+      ],
+      updates,
+      confirm: confirm,
+    );
+    if (identical(next, current)) return current;
+    await repository.updateSession(next);
+    return next;
+  });
+
   Future<TrainingSession> edit(
     String id,
     int expectedVersion,
@@ -417,6 +451,22 @@ final class StoredTrainingService {
     }
     if (next.id != current.id ||
         next.startedAt != current.startedAt ||
+        canonicalJson({
+              for (final e
+                  in (next.initialBodyMassOverrides ??
+                          <String, BodyMassOverride>{})
+                      .entries)
+                e.key: e.value.toJson(),
+            }) !=
+            canonicalJson({
+              for (final e
+                  in (current.initialBodyMassOverrides ??
+                          <String, BodyMassOverride>{})
+                      .entries)
+                e.key: e.value.toJson(),
+            }) ||
+        (next.initialBodyMassOverrides == null) !=
+            (current.initialBodyMassOverrides == null) ||
         canonicalJson(next.derivedPlanInput?.toJson()) !=
             canonicalJson(current.derivedPlanInput?.toJson()) ||
         canonicalJson({
@@ -458,11 +508,22 @@ final class StoredTrainingService {
 bool sameBodyMassOverrides(
   TrainingSession session,
   Map<String, BodyMassOverride> overrides,
-) =>
-    overrides.keys.every((k) => session.bodyMassInputs.containsKey(k)) &&
-    session.bodyMassInputs.entries.every(
-      (e) => e.value.sameOverride(overrides[e.key]),
-    );
+) {
+  if (overrides.keys.any((key) => !session.bodyMassInputs.containsKey(key)))
+    return false;
+  final initial = session.initialBodyMassOverrides;
+  if (initial != null) {
+    return canonicalJson({
+          for (final e in initial.entries) e.key: e.value.toJson(),
+        }) ==
+        canonicalJson({
+          for (final e in overrides.entries) e.key: e.value.toJson(),
+        });
+  }
+  return session.bodyMassInputs.entries.every(
+    (e) => e.value.sameOverride(overrides[e.key]),
+  );
+}
 
 Never _conflict() => throw const BodyTmiException(
   'conflict',

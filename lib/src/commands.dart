@@ -23,6 +23,7 @@ const commandNames = [
   'family validate',
   'session mass-status',
   'session mass-refresh',
+  'session mass-rebind',
   'session effective-load',
   'session complete',
   'session annotate',
@@ -131,6 +132,19 @@ final class Commands {
         data = const EffectiveMassService().evaluate(
           sessionFromJson(request['session']),
         );
+      case 'session mass-rebind':
+        keys({'session', 'measurements', 'bodyMassOverrides', 'confirm'});
+        data = const TrainingService()
+            .rebindBodyMass(
+              sessionFromJson(request['session']),
+              [
+                for (final m in jsonList(request, 'measurements'))
+                  BodyMassMeasurement.fromJson(m),
+              ],
+              bodyMassRebindingsFromJson(request['bodyMassOverrides']),
+              confirm: _bool(request, 'confirm'),
+            )
+            .toJson();
       case 'session mass-refresh':
         keys({'session', 'measurements', 'confirm'});
         data = const TrainingService().refreshBodyMass(

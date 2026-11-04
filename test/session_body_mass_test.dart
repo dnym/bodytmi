@@ -76,6 +76,455 @@ Future<void> _withStore(
 
 void sessionBodyMassTests() {
   test(
+    'body mass rebinding changes only selected slots and retains original overrides',
+    () {
+      final original = _start(
+        overrides: {
+          'bench-light': _override({
+            'mass': {'value': '68', 'unit': 'kg'},
+          }),
+        },
+      );
+      final inputs = [
+        _mass('training', '75'),
+        _mass('other', '82', day: 2),
+        _mass('health', '70', context: 'health'),
+      ];
+      final updates = {
+        'bench-heavy': _override({'measurementId': 'other'}),
+        'bench-light': null,
+      };
+      rejects(
+        () => const TrainingService().rebindBodyMass(
+          original,
+          inputs,
+          updates,
+          confirm: false,
+        ),
+      );
+      final next = const TrainingService().rebindBodyMass(
+        original,
+        inputs,
+        updates,
+        confirm: true,
+      );
+      equal(next.contentVersion, original.contentVersion + 1);
+      equal(
+        next.bodyMassInputs['bench-heavy']!.resolution.mass!.value.toString(),
+        '82',
+      );
+      equal(
+        next.bodyMassInputs['bench-light']!.resolution.mass!.value.toString(),
+        '70',
+      );
+      equal(next.initialBodyMassOverrides!.length, 1);
+      equal(
+        next.initialBodyMassOverrides!['bench-light']!.mass!.value.toString(),
+        '68',
+      );
+      equal(
+        canonicalJson(sessionFromJson(next.toJson()).toJson()),
+        canonicalJson(next.toJson()),
+      );
+      check(
+        identical(
+          const TrainingService().rebindBodyMass(
+            next,
+            inputs,
+            updates,
+            confirm: true,
+          ),
+          next,
+        ),
+      );
+      rejects(
+        () => const TrainingService().rebindBodyMass(next, inputs, {
+          'missing': null,
+        }, confirm: true),
+      );
+      rejects(
+        () => const TrainingService().rebindBodyMass(
+          next,
+          inputs,
+          {},
+          confirm: true,
+        ),
+      );
+      rejects(
+        () => const TrainingService().rebindBodyMass(next, inputs, {
+          'bench-heavy': _override({'measurementId': 'health'}),
+        }, confirm: true),
+      );
+      final complete = const TrainingService().complete(
+        next,
+        next.sets.first.id,
+        {},
+        acceptSuggested: true,
+      );
+      rejects(
+        () => const TrainingService().rebindBodyMass(
+          complete,
+          inputs,
+          updates,
+          confirm: true,
+        ),
+      );
+      equal(
+        canonicalJson(
+          complete.initialBodyMassOverrides!['bench-light']!.toJson(),
+        ),
+        canonicalJson(
+          original.bodyMassInputs['bench-light']!.override!.toJson(),
+        ),
+      );
+    },
+  );
+
+  test(
+    'stored rebinding preserves start retry identity through changes and completion',
+    () => _withStore((store, dir) async {
+      final training = StoredTrainingService(store);
+      final mass = StoredBodyMassService(store);
+      await training.publish(_definition(), 0);
+      await mass.save(_observation(_mass('training', '75')), 0);
+      await mass.save(_observation(_mass('other', '82', day: 2)), 0);
+      final initial = {
+        'bench-light': _override({
+          'mass': {'value': '68', 'unit': 'kg'},
+        }),
+      };
+      final started = await training.start(
+        'rebind',
+        definition().id,
+        1,
+        instant(10),
+        bodyMassOverrides: initial,
+      );
+      final updated = await training.rebindBodyMass(
+        started.id,
+        started.contentVersion,
+        {
+          'bench-heavy': _override({'measurementId': 'other'}),
+        },
+        confirm: true,
+      );
+      equal(
+        updated.bodyMassInputs['bench-heavy']!.resolution.mass!.value
+            .toString(),
+        '82',
+      );
+      final retry = await training.start(
+        'rebind',
+        definition().id,
+        1,
+        instant(10),
+        bodyMassOverrides: initial,
+      );
+      equal(canonicalJson(retry.toJson()), canonicalJson(updated.toJson()));
+      await _fails(training.start('rebind', definition().id, 1, instant(10)));
+      await _fails(
+        training.rebindBodyMass(started.id, started.contentVersion, {
+          'bench-heavy': null,
+        }, confirm: true),
+      );
+      final cleared = await training.rebindBodyMass(
+        updated.id,
+        updated.contentVersion,
+        {'bench-heavy': null},
+        confirm: true,
+      );
+      equal(
+        cleared.bodyMassInputs['bench-heavy']!.resolution.mass!.value
+            .toString(),
+        '82',
+      );
+      final done = await training.edit(
+        cleared.id,
+        cleared.contentVersion,
+        finished,
+      );
+      final proposal = await StoredProgressionService(store).propose(
+        done.id,
+        'bench-heavy',
+        jsonObject(example('double-progression')['rule'], 'rule'),
+      );
+      check(proposal.session.initialBodyMassOverrides != null);
+      await LogicalArchiveFiles.export(
+        await store.archive(),
+        '$dir/rebind.json',
+      );
+      final prepared = await LogicalArchiveFiles.prepare('$dir/rebind.json');
+      try {
+        await store.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery-rebind',
+          confirm: true,
+        );
+        await store.close();
+        final reopened = await TrainingStore.open('$dir/db.sqlite');
+        try {
+          final retry = await StoredTrainingService(reopened).start(
+            'rebind',
+            definition().id,
+            1,
+            instant(10),
+            bodyMassOverrides: initial,
+          );
+          equal(canonicalJson(retry.toJson()), canonicalJson(done.toJson()));
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await prepared.close();
+      }
+    }),
+  );
+
+  test(
+    'rebinding records an empty initial identity and rejects unavailable choices atomically',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final mass = StoredBodyMassService(store);
+      await training.publish(_definition(), 0);
+      await mass.save(_observation(_mass('training', '75')), 0);
+      await mass.save(_observation(_mass('future', '90', day: 11)), 0);
+      final started = await training.start(
+        'plain',
+        definition().id,
+        1,
+        instant(10),
+      );
+      final before = canonicalJson(started.toJson());
+      await _fails(
+        training.rebindBodyMass(started.id, started.contentVersion, {
+          'bench-heavy': _override({'measurementId': 'future'}),
+          'bench-light': _override({
+            'mass': {'value': '70', 'unit': 'kg'},
+          }),
+        }, confirm: true),
+      );
+      equal(
+        canonicalJson((await training.session(started.id)).toJson()),
+        before,
+      );
+      final rebound = await training.rebindBodyMass(
+        started.id,
+        started.contentVersion,
+        {
+          'bench-heavy': _override({
+            'mass': {'value': '90', 'unit': 'kg'},
+          }),
+        },
+        confirm: true,
+      );
+      check(
+        rebound.initialBodyMassOverrides != null &&
+            rebound.initialBodyMassOverrides!.isEmpty,
+      );
+      final retry = await training.start(
+        'plain',
+        definition().id,
+        1,
+        instant(10),
+      );
+      equal(canonicalJson(retry.toJson()), canonicalJson(rebound.toJson()));
+      final bad = copyJson(rebound.toJson());
+      bad['initialBodyMassOverrides'] = {
+        'unknown': {
+          'mass': {'value': '80', 'unit': 'kg'},
+        },
+      };
+      rejects(() => sessionFromJson(bad));
+      bad['initialBodyMassOverrides'] = null;
+      rejects(() => sessionFromJson(bad));
+    }),
+  );
+
+  test(
+    'rebound body mass survives group skip and keeps independent run start identities',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final programs = ProgramService(store);
+      await training.publish(_definition(), 0);
+      await programs.publish(
+        ProgramDefinition.fromJson({
+          'id': 'program',
+          'name': 'Program',
+          'plan': {
+            'id': 'day',
+            'type': 'day',
+            'templateId': definition().id,
+            'revision': 1,
+          },
+        }),
+        0,
+      );
+      for (final run in ['strength', 'cardio']) {
+        await programs.create(run, 'program', 1, instant(1));
+      }
+      final a = await programs.start(
+        'strength',
+        1,
+        'strength-session',
+        instant(10),
+      );
+      final b = await programs.start(
+        'cardio',
+        1,
+        'cardio-session',
+        instant(10),
+      );
+      final rebound = await training.rebindBodyMass(a.id, a.contentVersion, {
+        'bench-heavy': _override({
+          'mass': {'value': '80', 'unit': 'kg'},
+        }),
+      }, confirm: true);
+      final retry = await programs.start('strength', 1, a.id, instant(10));
+      equal(canonicalJson(retry.toJson()), canonicalJson(rebound.toJson()));
+      equal(
+        canonicalJson((await training.session(b.id)).toJson()),
+        canonicalJson(b.toJson()),
+      );
+      final execution = await ExecutionService(
+        store,
+      ).start('walk-rebound', a.id, instant(10));
+      await ExecutionService(store).skipGroup(
+        execution.id,
+        execution.version,
+        rebound.contentVersion,
+        'skip-all',
+        'workout',
+        instant(10),
+        confirm: true,
+      );
+      final skipped = await training.session(a.id);
+      check(
+        skipped.initialBodyMassOverrides != null &&
+            skipped.initialBodyMassOverrides!.isEmpty,
+      );
+      await training.edit(
+        skipped.id,
+        skipped.contentVersion,
+        (s) => s.finish(instant(10)),
+      );
+      final retried = await programs.start('strength', 1, a.id, instant(10));
+      check(retried.initialBodyMassOverrides != null);
+      equal((await programs.run('strength')).cursor, 1);
+      equal((await programs.run('cardio')).cursor, 0);
+      await store.archive();
+    }),
+  );
+
+  test(
+    'v33 labels reject rebound start identities and v33 sessions migrate unchanged',
+    () => _withStore((store, dir) async {
+      final training = StoredTrainingService(store);
+      await training.publish(_definition(), 0);
+      final original = await training.start(
+        'original',
+        definition().id,
+        1,
+        instant(10),
+      );
+      await store.snapshot('$dir/old.sqlite');
+      final old = sqlite3.open('$dir/old.sqlite');
+      old.userVersion = 33;
+      old.close();
+      final migrated = await TrainingStore.open('$dir/old.sqlite');
+      try {
+        equal(
+          canonicalJson(
+            (await StoredTrainingService(
+              migrated,
+            ).session(original.id)).toJson(),
+          ),
+          canonicalJson(original.toJson()),
+        );
+      } finally {
+        await migrated.close();
+      }
+      await training.rebindBodyMass(original.id, original.contentVersion, {
+        'bench-heavy': _override({
+          'mass': {'value': '80', 'unit': 'kg'},
+        }),
+      }, confirm: true);
+      await LogicalArchiveFiles.export(
+        await store.archive(),
+        '$dir/rebind-version.json',
+      );
+      final envelope =
+          jsonDecode(await File('$dir/rebind-version.json').readAsString())
+              as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/33';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('$dir/rebind-v33.json').writeAsString(jsonEncode(envelope));
+      await _fails(LogicalArchiveFiles.prepare('$dir/rebind-v33.json'));
+      await store.snapshot('$dir/rebind.sqlite');
+      equal(NativeBackup.validateDatabase('$dir/rebind.sqlite'), 34);
+      final raw = sqlite3.open('$dir/rebind.sqlite');
+      raw.userVersion = 33;
+      raw.close();
+      rejects(() => NativeBackup.validateDatabase('$dir/rebind.sqlite'));
+    }),
+  );
+
+  test(
+    'original measurement override remains a portable identity after rebinding',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final mass = StoredBodyMassService(store);
+      await training.publish(_definition(), 0);
+      await mass.save(_observation(_mass('training', '75')), 0);
+      final original = await training.start(
+        'selected-original',
+        definition().id,
+        1,
+        instant(10),
+        bodyMassOverrides: {
+          'bench-heavy': _override({'measurementId': 'training'}),
+        },
+      );
+      final rebound = await training.rebindBodyMass(
+        original.id,
+        original.contentVersion,
+        {
+          'bench-heavy': _override({
+            'mass': {'value': '80', 'unit': 'kg'},
+          }),
+        },
+        confirm: true,
+      );
+      final doc = copyJson((await store.archive()).toJson());
+      jsonList(doc, 'bodyMass').clear();
+      rejects(() => TrainingArchive.fromJson(doc));
+      final forged = copyJson(rebound.toJson());
+      forged['contentVersion'] = 1;
+      rejects(() => sessionFromJson(forged));
+      await mass.delete('training', 1, confirm: true);
+      await store.archive();
+      final retry = await training.start(
+        'selected-original',
+        definition().id,
+        1,
+        instant(10),
+        bodyMassOverrides: {
+          'bench-heavy': _override({'measurementId': 'training'}),
+        },
+      );
+      equal(canonicalJson(retry.toJson()), canonicalJson(rebound.toJson()));
+    }),
+  );
+
+  test(
     'explicit body mass refresh preserves cutoff, overrides and session targets',
     () {
       final original = _start(
@@ -441,6 +890,13 @@ void sessionBodyMassTests() {
       );
       await ExecutionService(store).start('walk', traversed.id, instant(10));
       await _fails(
+        training.rebindBodyMass(traversed.id, traversed.contentVersion, {
+          'bench-heavy': _override({
+            'mass': {'value': '77', 'unit': 'kg'},
+          }),
+        }, confirm: true),
+      );
+      await _fails(
         training.refreshBodyMass(
           traversed.id,
           traversed.contentVersion,
@@ -470,6 +926,11 @@ void sessionBodyMassTests() {
       );
       await _fails(
         training.refreshBodyMass(timed.id, timed.contentVersion, confirm: true),
+      );
+      await _fails(
+        training.rebindBodyMass(timed.id, timed.contentVersion, {
+          'bench-heavy': null,
+        }, confirm: true),
       );
     }),
   );
@@ -861,7 +1322,7 @@ void sessionBodyMassTests() {
       await service.edit(s.id, s.contentVersion, finished);
       await mass.delete('training', 1, confirm: true);
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 33);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 34);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/export.json',
@@ -987,7 +1448,7 @@ void sessionBodyMassTests() {
       }
       final check = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(check.userVersion, 33);
+        equal(check.userVersion, 34);
       } finally {
         check.close();
       }
@@ -1090,6 +1551,31 @@ void sessionBodyMassTests() {
         }, stored: false);
         jsonEqual(refreshed, pureRefresh);
         equal(jsonObject(refreshed, 'session')['contentVersion'], 2);
+        final updates = {
+          'bench-heavy': {
+            'mass': {'value': '81', 'unit': 'kg'},
+          },
+        };
+        final rebound = await command('store mass-rebind', {
+          'id': 'same',
+          'expectedVersion': 2,
+          'bodyMassOverrides': updates,
+          'confirm': true,
+        });
+        final pureRebind = await command('session mass-rebind', {
+          'session': pureRefresh,
+          'measurements': [changed.toJson()],
+          'bodyMassOverrides': updates,
+          'confirm': true,
+        }, stored: false);
+        jsonEqual(rebound, pureRebind);
+        final retry = await command('store start', {
+          'id': 'same',
+          'templateId': definition().id,
+          'revision': 1,
+          'startedAt': instant(10).toIso8601String(),
+        });
+        jsonEqual(retry, rebound);
       } finally {
         await dir.delete(recursive: true);
       }

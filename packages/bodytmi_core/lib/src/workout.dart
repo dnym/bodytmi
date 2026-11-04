@@ -419,9 +419,20 @@ final class TrainingSession {
     this.finishedAt,
     this.contentVersion = 1,
     Map<String, BodyMassInputSnapshot> bodyMassInputs = const {},
+    Map<String, BodyMassOverride>? initialBodyMassOverrides,
     this.derivedPlanInput,
   }) : sets = List.unmodifiable(sets),
-       bodyMassInputs = Map.unmodifiable(bodyMassInputs) {
+       bodyMassInputs = Map.unmodifiable(bodyMassInputs),
+       initialBodyMassOverrides = initialBodyMassOverrides == null
+           ? null
+           : Map.unmodifiable(initialBodyMassOverrides) {
+    if (this.initialBodyMassOverrides != null && contentVersion < 2)
+      invalid('Rebound body-mass inputs require a later session version.');
+    if (this.initialBodyMassOverrides?.keys.any(
+          (id) => !bodyMassInputs.containsKey(id),
+        ) ??
+        false)
+      invalid('Initial body-mass override names an unconfigured slot.');
     final configured = revision.definition.slots
         .where((s) => s.bodyMass != null)
         .toList();
@@ -442,6 +453,9 @@ final class TrainingSession {
   final DateTime? finishedAt;
   final List<TrainingSet> sets;
   final Map<String, BodyMassInputSnapshot> bodyMassInputs;
+
+  /// Original start request overrides, retained after explicit rebinding.
+  final Map<String, BodyMassOverride>? initialBodyMassOverrides;
   final DerivedPlanInput? derivedPlanInput;
   final SessionStatus status;
   final int contentVersion;
@@ -458,6 +472,7 @@ final class TrainingSession {
       finishedAt: finishedAt,
       contentVersion: contentVersion + 1,
       bodyMassInputs: bodyMassInputs,
+      initialBodyMassOverrides: initialBodyMassOverrides,
       derivedPlanInput: derivedPlanInput,
     );
   }
@@ -474,6 +489,7 @@ final class TrainingSession {
       startedAt: startedAt,
       sets: sets,
       bodyMassInputs: bodyMassInputs,
+      initialBodyMassOverrides: initialBodyMassOverrides,
       derivedPlanInput: derivedPlanInput,
       status: SessionStatus.finalized,
       finishedAt: at,
@@ -499,6 +515,11 @@ final class TrainingSession {
     'sets': [for (final set in sets) set.toJson()],
     if (derivedPlanInput != null)
       'derivedPlanInput': derivedPlanInput!.toJson(),
+    if (initialBodyMassOverrides != null)
+      'initialBodyMassOverrides': {
+        for (final e in initialBodyMassOverrides!.entries)
+          e.key: e.value.toJson(),
+      },
     if (bodyMassInputs.isNotEmpty)
       'bodyMassInputs': {
         for (final e in bodyMassInputs.entries) e.key: e.value.toJson(),

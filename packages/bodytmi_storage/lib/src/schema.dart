@@ -103,6 +103,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   32 =>
     schemaV27, // v32 adds derived suggestions for bounded targetless objectives.
   33 => schemaV27, // v33 allows program days to pin derived plans.
+  34 => schemaV27, // v34 retains original overrides after body-mass rebinding.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

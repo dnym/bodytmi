@@ -51,6 +51,7 @@ const storedCommandNames = [
   'graph preview-status',
   'store mass-status',
   'store mass-refresh',
+  'store mass-rebind',
   'store plan-status',
   'store effective-load',
   'store complete',
@@ -249,6 +250,12 @@ Future<Map<String, Object?>> executeStored(
     },
     'store mass-status' => {'id'},
     'store mass-refresh' => {'id', 'expectedVersion', 'confirm'},
+    'store mass-rebind' => {
+      'id',
+      'expectedVersion',
+      'bodyMassOverrides',
+      'confirm',
+    },
     'store plan-status' => {'id'},
     'store effective-load' => {'id'},
     'store complete' => {
@@ -823,6 +830,13 @@ Future<Map<String, Object?>> executeStored(
         data = await DerivedWorkoutPreview(
           store,
         ).sessionStatus(identifier(request, 'id'));
+      case 'store mass-rebind':
+        data = (await service.rebindBodyMass(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          bodyMassRebindingsFromJson(request['bodyMassOverrides']),
+          confirm: flag('confirm'),
+        )).toJson();
       case 'store mass-refresh':
         data = (await service.refreshBodyMass(
           identifier(request, 'id'),

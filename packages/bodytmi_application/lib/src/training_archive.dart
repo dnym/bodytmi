@@ -294,6 +294,14 @@ void validateBodyMassInputReferences(
   List<BodyMassRecord> records,
 ) {
   final byId = {for (final r in records) r.measurement.id: r};
+  for (final session in sessions) {
+    for (final override
+        in session.initialBodyMassOverrides?.values ?? <BodyMassOverride>[]) {
+      if (override.measurementId != null &&
+          !byId.containsKey(override.measurementId))
+        invalid('Original body-mass override measurement is missing.');
+    }
+  }
   for (final s in sessions)
     for (final binding in s.bodyMassInputs.values)
       for (final m in binding.measurements) {

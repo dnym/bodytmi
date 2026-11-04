@@ -159,6 +159,70 @@ final class TrainingService {
       finishedAt: session.finishedAt,
       contentVersion: session.contentVersion + 1,
       bodyMassInputs: refreshed,
+      initialBodyMassOverrides: session.initialBodyMassOverrides,
+      derivedPlanInput: session.derivedPlanInput,
+    );
+  }
+
+  /// Replace explicitly selected slot overrides while retaining start identity.
+  TrainingSession rebindBodyMass(
+    TrainingSession session,
+    List<BodyMassMeasurement> measurements,
+    Map<String, BodyMassOverride?> updates, {
+    required bool confirm,
+  }) {
+    if (!confirm) invalid('Rebinding body mass requires confirm:true.');
+    if (session.status != SessionStatus.active ||
+        session.sets.any((set) => set.status != SetStatus.planned)) {
+      invalid(
+        'Body mass can only be rebound before any effort is completed or skipped.',
+      );
+    }
+    if (updates.isEmpty ||
+        updates.keys.any((id) => !session.bodyMassInputs.containsKey(id)))
+      invalid('Rebinding requires configured body-mass slot IDs.');
+    final changedOverride = updates.entries.any(
+      (entry) => !session.bodyMassInputs[entry.key]!.sameOverride(entry.value),
+    );
+    final original =
+        session.initialBodyMassOverrides ??
+        (changedOverride
+            ? {
+                for (final entry in session.bodyMassInputs.entries)
+                  if (entry.value.override != null)
+                    entry.key: entry.value.override!,
+              }
+            : null);
+    final inputs = <String, BodyMassInputSnapshot>{
+      for (final entry in session.bodyMassInputs.entries)
+        entry.key: updates.containsKey(entry.key)
+            ? BodyMassInputSnapshot.capture(
+                selection: entry.value.selection,
+                asOf: session.startedAt,
+                measurements: measurements,
+                override: updates[entry.key],
+              )
+            : entry.value,
+    };
+    if (canonicalJson({
+              for (final e in inputs.entries) e.key: e.value.toJson(),
+            }) ==
+            canonicalJson({
+              for (final e in session.bodyMassInputs.entries)
+                e.key: e.value.toJson(),
+            }) &&
+        (original == null) == (session.initialBodyMassOverrides == null))
+      return session;
+    return TrainingSession(
+      id: session.id,
+      revision: session.revision,
+      startedAt: session.startedAt,
+      sets: session.sets,
+      status: session.status,
+      finishedAt: session.finishedAt,
+      contentVersion: session.contentVersion + 1,
+      bodyMassInputs: inputs,
+      initialBodyMassOverrides: original,
       derivedPlanInput: session.derivedPlanInput,
     );
   }

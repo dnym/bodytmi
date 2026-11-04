@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "session-1",
+  "expectedVersion": 1,
+  "bodyMassOverrides": {
+    "bench-heavy": {"measurementId": "training-mass-2026-10-31"},
+    "bench-light": null
+  },
+  "confirm": true
+}

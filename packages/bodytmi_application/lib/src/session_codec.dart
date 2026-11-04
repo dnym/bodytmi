@@ -17,6 +17,13 @@ Map<String, BodyMassOverride> bodyMassOverridesFromJson(Object? input) => {
     e.key: BodyMassOverride.fromJson(e.value),
 };
 
+Map<String, BodyMassOverride?> bodyMassRebindingsFromJson(Object? input) => {
+  for (final e in jsonObject(input, 'bodyMassOverrides').entries)
+    identifier({'id': e.key}, 'id'): e.value == null
+        ? null
+        : BodyMassOverride.fromJson(e.value),
+};
+
 TrainingSession sessionFromJson(Object? input) {
   final json = jsonObject(input, 'session');
   checkKeys(json, {
@@ -29,10 +36,14 @@ TrainingSession sessionFromJson(Object? input) {
     'contentVersion',
     'sets',
     'bodyMassInputs',
+    'initialBodyMassOverrides',
     'derivedPlanInput',
   });
   if (json['schemaVersion'] != 1)
     invalid('Unsupported session schema version.');
+  if (json.containsKey('initialBodyMassOverrides') &&
+      json['initialBodyMassOverrides'] == null)
+    invalid('Initial body-mass overrides must be an object.');
   final id = identifier(json, 'id');
   final revision = WorkoutRevision.fromJson(json['revision']);
   final startedAt = parseInstant(json['startedAt'], 'startedAt');
@@ -191,6 +202,9 @@ TrainingSession sessionFromJson(Object? input) {
       ).entries)
         e.key: BodyMassInputSnapshot.fromJson(e.value),
     },
+    initialBodyMassOverrides: json.containsKey('initialBodyMassOverrides')
+        ? bodyMassOverridesFromJson(json['initialBodyMassOverrides'])
+        : null,
     derivedPlanInput: derivedInput,
     status: status,
     finishedAt: finishedAt,
