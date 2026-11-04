@@ -36,6 +36,24 @@ final class DerivedWorkoutPreview {
     return projectCaptured(workout, graph, bindings);
   });
 
+  /// Compares a stored session's frozen plan with inputs in its original scope.
+  Future<Map<String, Object?>> sessionStatus(String sessionId) =>
+      repository.transaction(() async {
+        identifier({'id': sessionId}, 'id');
+        final session = await StoredTrainingService(
+          repository,
+        ).session(sessionId);
+        final input = session.derivedPlanInput;
+        return {
+          'policy': 'bodytmi-derived-session-plan-status/1',
+          'sessionId': session.id,
+          'sessionVersion': session.contentVersion,
+          'sessionStatus': session.status.name,
+          'configured': input != null,
+          'comparison': input == null ? null : await planStatus(input.snapshot),
+        };
+      });
+
   /// Resolves a published mapping against its pinned workout revision.
   Future<Map<String, Object?>> previewPlan({
     required String graphId,

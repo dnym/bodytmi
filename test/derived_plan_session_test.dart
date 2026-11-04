@@ -9,6 +9,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, isA, throwsA;
 
 import 'fixtures.dart';
+import 'cli_test.dart' show invoke;
 import 'support.dart';
 
 void sameJson(Object? a, Object? b) =>
@@ -357,6 +358,15 @@ void derivedPlanSessionTests() {
         'fingerprint',
       );
       check(jsonList(fingerprint, 'sources').isNotEmpty);
+      equal(
+        jsonObject(
+          (await DerivedWorkoutPreview(
+            store,
+          ).sessionStatus(session.id))['comparison'],
+          'comparison',
+        )['changed'],
+        false,
+      );
       final selected = Quantity.fromJson(binding['value']);
       equal(
         session.sets.first.suggested['mass']!.value,
@@ -371,6 +381,15 @@ void derivedPlanSessionTests() {
         }),
       );
       check(edit.contentVersion > completed.contentVersion);
+      equal(
+        jsonObject(
+          (await DerivedWorkoutPreview(
+            store,
+          ).sessionStatus(session.id))['comparison'],
+          'comparison',
+        )['changed'],
+        true,
+      );
       final retry = await training.start(
         'history-plan',
         definition().id,
@@ -524,6 +543,43 @@ void derivedPlanSessionTests() {
       );
       equal(a.sets.first.suggested['mass']!.value.toString(), '80');
       equal(b.sets.first.suggested['mass']!.value.toString(), '40');
+      final cardioSource = await training.session('cardio-source');
+      final cardioSet = cardioSource.sets.firstWhere(
+        (s) => s.slotId == 'bench-heavy',
+      );
+      await training.edit(
+        cardioSource.id,
+        cardioSource.contentVersion,
+        (s) => const TrainingService().complete(s, cardioSet.id, {
+          'mass': Quantity('45', 'kg'),
+          'reps': Quantity('5', 'rep'),
+        }),
+      );
+      final statuses = DerivedWorkoutPreview(store);
+      equal(
+        jsonObject(
+          (await statuses.sessionStatus(a.id))['comparison'],
+          'comparison',
+        )['changed'],
+        false,
+      );
+      equal(
+        jsonObject(
+          (await statuses.sessionStatus(b.id))['comparison'],
+          'comparison',
+        )['changed'],
+        true,
+      );
+      final cardioComparison = jsonObject(
+        (await statuses.sessionStatus(b.id))['comparison'],
+        'comparison',
+      );
+      check(
+        jsonList(
+          cardioComparison,
+          'targetChanges',
+        ).every((row) => jsonObject(row, 'target change')['changed'] == false),
+      );
       equal((await store.archive()).sessions.length, 4);
     }),
   );
@@ -577,6 +633,103 @@ void derivedPlanSessionTests() {
       db.close();
       rejects(() => NativeBackup.validateDatabase(snapshot));
     }),
+  );
+
+  test(
+    'session plan status handles absent plans and pinned graph revisions',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      final graphService = DerivedTargetGraphService(store);
+      final statusService = DerivedWorkoutPreview(store);
+      final ordinary = await training.start(
+        'ordinary-status',
+        definition().id,
+        1,
+        instant(1),
+      );
+      final empty = await statusService.sessionStatus(ordinary.id);
+      equal(empty['configured'], false);
+      equal(empty['comparison'], null);
+      equal(empty['sessionVersion'], ordinary.contentVersion);
+      await expectLater(
+        statusService.sessionStatus('missing'),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await graphService.publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final session = await training.start(
+        'planned-status',
+        definition().id,
+        1,
+        instant(2),
+        derivedPlan: _ref,
+      );
+      final changed = _graph();
+      jsonObject(
+        jsonObject(changed['bindings'], 'bindings')['max-source'],
+        'source',
+      )['value'] = {
+        'value': '120',
+        'unit': 'kg',
+      };
+      await graphService.publish(DerivedTargetGraph.fromJson(changed), 1);
+      final result = await statusService.sessionStatus(session.id);
+      equal(result['sessionStatus'], 'active');
+      equal(jsonObject(result['comparison'], 'comparison')['changed'], false);
+      equal(jsonObject(result['comparison'], 'comparison')['graphRevision'], 1);
+    }),
+  );
+
+  test(
+    'store plan-status CLI reports stored session evidence and rejects extra fields',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-plan-status-cli-',
+      );
+      final db = '${dir.path}/profile.sqlite';
+      final store = await TrainingStore.open(db);
+      try {
+        final training = StoredTrainingService(store);
+        await training.publish(definition(), 0);
+        await DerivedTargetGraphService(
+          store,
+        ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+        await training.start(
+          'session',
+          definition().id,
+          1,
+          instant(1),
+          derivedPlan: _ref,
+        );
+        await store.close();
+        final result = await invoke([
+          'store',
+          'plan-status',
+        ], jsonEncode({'schemaVersion': 1, 'database': db, 'id': 'session'}));
+        equal(result.code, 0);
+        equal(result.error, '');
+        final data = jsonObject(
+          jsonObject(jsonDecode(result.output), 'envelope')['data'],
+          'status',
+        );
+        equal(data['policy'], 'bodytmi-derived-session-plan-status/1');
+        equal(data['configured'], true);
+        equal(jsonObject(data['comparison'], 'comparison')['changed'], false);
+        final bad = await invoke(
+          ['store', 'plan-status'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': db,
+            'id': 'session',
+            'runId': 'other',
+          }),
+        );
+        equal(bad.code, 2);
+        equal(bad.output, '');
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
   );
 
   test(

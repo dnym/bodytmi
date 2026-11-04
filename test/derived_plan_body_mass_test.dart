@@ -143,6 +143,13 @@ void derivedPlanBodyMassTests() {
         derivedPlan: _ref,
       );
       equal(session.sets.first.suggested['mass']!.value.toString(), '68');
+      final statusService = DerivedWorkoutPreview(store);
+      final beforeStatus = await statusService.sessionStatus(session.id);
+      equal(beforeStatus['configured'], true);
+      equal(
+        jsonObject(beforeStatus['comparison'], 'comparison')['changed'],
+        false,
+      );
       final captured =
           session.derivedPlanInput!.bodyMassSources['body-source']!;
       equal(captured.length, 2);
@@ -173,6 +180,29 @@ void derivedPlanBodyMassTests() {
           'kg',
         ),
         0,
+      );
+      final checksumBeforeStatus = canonicalJson(
+        (await store.archive()).toJson(),
+      );
+      final afterStatus = await statusService.sessionStatus(session.id);
+      final comparison = jsonObject(afterStatus['comparison'], 'comparison');
+      equal(comparison['changed'], true);
+      equal(
+        jsonObject(
+          jsonObject(comparison['sources'], 'sources')['body-source'],
+          'source',
+        )['changed'],
+        true,
+      );
+      check(
+        jsonList(
+          comparison,
+          'targetChanges',
+        ).any((item) => jsonObject(item, 'target change')['changed'] == true),
+      );
+      equal(
+        canonicalJson((await store.archive()).toJson()),
+        checksumBeforeStatus,
       );
       final retry = await training.start(
         'body-session',

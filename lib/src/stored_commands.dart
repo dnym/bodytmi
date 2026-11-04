@@ -50,6 +50,7 @@ const storedCommandNames = [
   'graph plan-status',
   'graph preview-status',
   'store mass-status',
+  'store plan-status',
   'store effective-load',
   'store complete',
   'store annotate',
@@ -245,6 +246,7 @@ Future<Map<String, Object?>> executeStored(
       'bindings',
     },
     'store mass-status' => {'id'},
+    'store plan-status' => {'id'},
     'store effective-load' => {'id'},
     'store complete' => {
       'id',
@@ -808,6 +810,10 @@ Future<Map<String, Object?>> executeStored(
         data = const EffectiveMassService().evaluate(
           await service.session(identifier(request, 'id')),
         );
+      case 'store plan-status':
+        data = await DerivedWorkoutPreview(
+          store,
+        ).sessionStatus(identifier(request, 'id'));
       case 'store mass-status':
         data = await store.transaction(
           () async => const TrainingService().bodyMassStatus(
