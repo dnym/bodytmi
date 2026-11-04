@@ -76,6 +76,192 @@ void derivedWorkoutPreviewTests() {
   };
 
   test(
+    'preview status detects backdated input and mapped target changes while retaining pinned revisions',
+    () => withStore((store) async {
+      final graphs = DerivedTargetGraphService(store);
+      final graph = _graph();
+      jsonObject(graph['bindings'], 'bindings')['max_source'] = {
+        'kind': 'bodyMass',
+        'context': 'training',
+      };
+      await graphs.publish(DerivedTargetGraph.fromJson(graph), 0);
+      final mass = StoredBodyMassService(store);
+      await mass.save({
+        'id': 'first',
+        'context': 'training',
+        'observedAt': '2026-10-01T08:00:00Z',
+        'mass': {'value': '80', 'unit': 'kg'},
+      }, 0);
+      final workout = revision();
+      final set = start(
+        from: workout,
+      ).sets.firstWhere((s) => s.slotId == 'bench-heavy');
+      final service = DerivedWorkoutPreview(store);
+      final captured = await service.preview(
+        templateId: workout.definition.id,
+        revision: 1,
+        graphId: 'preview-graph',
+        graphRevision: 1,
+        asOf: instant(10),
+        bindings: [binding(set.id, 'mass', 'working')],
+      );
+      equal((await service.status(captured))['changed'], false);
+      await mass.save({
+        'id': 'second',
+        'context': 'training',
+        'observedAt': '2026-10-02T08:00:00Z',
+        'mass': {'value': '90', 'unit': 'kg'},
+      }, 0);
+      await graphs.publish(DerivedTargetGraph.fromJson(graph), 1);
+      final status = await service.status(captured);
+      equal(status['policy'], 'bodytmi-derived-workout-preview-status/1');
+      equal(status['changed'], true);
+      equal(
+        jsonObject(
+          jsonObject(status['sources'], 'sources')['max_source'],
+          'source',
+        )['changed'],
+        true,
+      );
+      final change = jsonObject(
+        (status['targetChanges']! as List<Object?>).single,
+        'change',
+      );
+      equal(change['changed'], true);
+      equal(
+        jsonObject(
+          jsonObject(change['captured'], 'target')['value'],
+          'quantity',
+        )['value'],
+        '64',
+      );
+      equal(
+        jsonObject(
+          jsonObject(change['current'], 'target')['value'],
+          'quantity',
+        )['value'],
+        '72',
+      );
+      equal(
+        jsonObject(
+          jsonObject(status['currentPreview'], 'preview')['workout'],
+          'workout',
+        )['revision'],
+        1,
+      );
+    }),
+  );
+
+  test(
+    'preview status reports changed source membership when the mapped value remains unchanged',
+    () => withStore((store) async {
+      final graph = _graph();
+      jsonObject(graph['bindings'], 'bindings')['max_source'] = {
+        'kind': 'history',
+        'metric': 'mass',
+        'slotId': 'bench-heavy',
+      };
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(graph), 0);
+      Future<void> insertSession(String id, int day, String mass) async {
+        var session = start(id: id, day: day, from: revision());
+        for (final set in session.sets) {
+          session = const TrainingService().complete(session, set.id, {
+            'mass': Quantity(mass, 'kg'),
+            'reps': Quantity('8', 'rep'),
+          });
+        }
+        session = session.finish(instant(day).add(const Duration(hours: 1)));
+        await store.insertSession(session);
+        await store.recordFinalization(session.id);
+      }
+
+      await insertSession('maximum', 1, '70');
+      final workout = revision();
+      final set = start(
+        from: workout,
+      ).sets.firstWhere((s) => s.slotId == 'bench-heavy');
+      final service = DerivedWorkoutPreview(store);
+      final preview = await service.preview(
+        templateId: workout.definition.id,
+        revision: 1,
+        graphId: 'preview-graph',
+        graphRevision: 1,
+        asOf: instant(10),
+        bindings: [binding(set.id, 'mass', 'working')],
+      );
+      await insertSession('lower', 2, '60');
+      final result = await service.status(preview);
+      equal(result['changed'], true);
+      equal(
+        jsonObject(
+          jsonObject(result['sources'], 'sources')['max_source'],
+          'source',
+        )['changed'],
+        true,
+      );
+      equal(
+        jsonObject(
+          (result['targetChanges']! as List<Object?>).single,
+          'change',
+        )['changed'],
+        false,
+      );
+    }),
+  );
+
+  test(
+    'preview status rejects forged authored targets, node mappings and graph arithmetic',
+    () => withStore((store) async {
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
+      final workout = revision();
+      final set = start(
+        from: workout,
+      ).sets.firstWhere((s) => s.slotId == 'bench-heavy');
+      final service = DerivedWorkoutPreview(store);
+      final captured = await service.preview(
+        templateId: workout.definition.id,
+        revision: 1,
+        graphId: 'preview-graph',
+        graphRevision: 1,
+        asOf: instant(10),
+        bindings: [binding(set.id, 'mass', 'working')],
+      );
+      Future<void> reject(Map<String, Object?> altered) async => expectLater(
+        service.status(altered),
+        throwsA(isA<BodyTmiException>()),
+      );
+      final wrongTarget = copyJson(captured);
+      jsonObject(
+        target(wrongTarget, set.id, 'mass')['value'],
+        'quantity',
+      )['value'] = '999';
+      await reject(wrongTarget);
+      final wrongAuthored = copyJson(captured);
+      jsonObject(
+        jsonObject(
+          occurrence(wrongAuthored, set.id)['authoredTargets'],
+          'authored',
+        )['mass'],
+        'quantity',
+      )['value'] = '999';
+      await reject(wrongAuthored);
+      final wrongGraph = copyJson(captured);
+      jsonObject(
+        jsonObject(wrongGraph['graphResolution'], 'graph')['resolution'],
+        'resolution',
+      )['policy'] = 'invalid';
+      await reject(wrongGraph);
+      final wrongNode = copyJson(captured);
+      target(wrongNode, set.id, 'mass')['nodeId'] = 'absent';
+      await reject(wrongNode);
+    }),
+  );
+
+  test(
     'derived workout preview maps exact graph values onto individual efforts without changing stored data',
     () => withStore((store) async {
       final graphs = DerivedTargetGraphService(store);
