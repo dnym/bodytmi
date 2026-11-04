@@ -38,6 +38,8 @@ Future<void> main(List<String> arguments) async {
               'graph preview takes database/templateId/revision/graphId/graphRevision/asOf/bindings and optional runId. Each binding maps occurrenceId/metric/nodeId. It previews explicit graph-derived targets without publishing, starting or changing a session. Unresolved values remain unknown; ordinary history prefill and accepted progression are not applied.',
           'graphWorkoutPlans':
               'Published graphs may include plans with id/templateId/revision/bindings; each binding selects occurrenceId/metric/nodeId. Publishing validates the pinned workout and units. graph plan-preview takes database/graphId/graphRevision/planId/asOf and optional runId to preview a saved plan. Plans do not yet modify session starts.',
+          'derivedSessionPlans':
+              'store start and run start optionally accept derivedPlan:{graphId,graphRevision,planId}. Published plans with resolved manual graph sources and existing numeric targets are frozen and applied at start. Overlap with accepted progression is rejected; nonmanual graph sources and targetless metrics remain pending. Retry must use the same plan reference.',
           'graphPlanStatus':
               'graph plan-status takes database/planPreview from graph plan-preview. It verifies that the mapping is the published plan and reports source and target changes in its original scope. Captured source evidence is caller-provided and not authenticated; no session is started or modified.',
           'graphPreviewStatus':

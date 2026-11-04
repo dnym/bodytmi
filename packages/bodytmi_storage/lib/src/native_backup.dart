@@ -127,6 +127,7 @@ final class NativeBackup {
           26,
           27,
           28,
+          29,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -248,6 +249,7 @@ final class NativeBackup {
             26,
             27,
             28,
+            29,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -381,6 +383,9 @@ final class NativeBackup {
           final session = sessionFromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 29 && session.derivedPlanInput != null) {
+            invalid('Derived session inputs require schema v29.');
+          }
           if (db.userVersion < 21 &&
               session.sets.any((s) => s.observations != null))
             invalid('Set observations require schema v21.');
@@ -571,6 +576,28 @@ final class NativeBackup {
           for (final row in db.select('SELECT snapshot FROM sessions'))
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ], massRecords);
+      }
+      if (db.userVersion >= 29) {
+        final graphs = [
+          for (final row in db.select(
+            'SELECT snapshot FROM derived_target_graphs',
+          ))
+            DerivedTargetGraphRevision.fromJson(
+              jsonDecode(row['snapshot'] as String),
+            ),
+        ];
+        final sessions = [
+          for (final row in db.select('SELECT snapshot FROM sessions'))
+            sessionFromJson(jsonDecode(row['snapshot'] as String)),
+        ];
+        final runs = <String, String>{};
+        for (final row in db.select('SELECT snapshot FROM session_programs')) {
+          final binding = SessionProgramBinding.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          runs[binding.sessionId] = binding.runId;
+        }
+        validateDerivedPlanReferences(sessions, graphs, runs);
       }
       if (db.userVersion >= 7) {
         final timers = <TimingActivity>[];

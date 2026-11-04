@@ -25,3 +25,4 @@ export 'src/derived_target_graph_service.dart';
 export 'src/contextual_records.dart';
 
 export 'src/derived_workout_preview.dart';
+export 'src/derived_plan_session.dart';

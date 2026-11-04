@@ -453,14 +453,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          28,
+          29,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/28',
+          'bodytmi-logical-export/29',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',

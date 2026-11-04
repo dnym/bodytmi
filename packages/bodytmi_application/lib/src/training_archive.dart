@@ -1,4 +1,5 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'derived_plan_session.dart';
 import 'session_codec.dart';
 import 'canonical_json.dart';
 import 'progression_decision.dart';
@@ -206,6 +207,9 @@ final class TrainingArchive {
     if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)
       invalid('Duplicate body-mass observation identity.');
     validateBodyMassInputReferences(sessions, bodyMass);
+    validateDerivedPlanReferences(sessions, graphs, {
+      for (final b in sessionPrograms) b.sessionId: b.runId,
+    });
     validateProgramData(
       programs: programRevisions,
       runs: programRuns,

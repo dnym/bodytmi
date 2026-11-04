@@ -378,6 +378,7 @@ final class ExecutionService {
           finishedAt: current.finishedAt,
           contentVersion: current.contentVersion + 1,
           bodyMassInputs: current.bodyMassInputs,
+          derivedPlanInput: current.derivedPlanInput,
         ),
       );
     }

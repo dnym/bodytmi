@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "graph": {
+    "id": "bench-percentages",
+    "name": "Bench percentage ladder",
+    "nodes": [
+      {
+        "id": "working",
+        "kind": "scale",
+        "unit": "kg",
+        "input": "max",
+        "factor": "0.8"
+      },
+      {
+        "id": "warmup",
+        "kind": "scale",
+        "unit": "kg",
+        "input": "working",
+        "factor": "0.5"
+      },
+      {
+        "id": "assisted",
+        "kind": "scale",
+        "unit": "kg",
+        "input": "mass",
+        "factor": "0.6"
+      },
+      {
+        "id": "max",
+        "kind": "source",
+        "unit": "kg",
+        "sourceId": "bench_max"
+      },
+      {
+        "id": "mass",
+        "kind": "source",
+        "unit": "kg",
+        "sourceId": "training_mass"
+      },
+      {
+        "id": "band",
+        "kind": "source",
+        "unit": "kg",
+        "sourceId": "band_tension"
+      }
+    ],
+    "bindings": {
+      "bench_max": {
+        "kind": "manual",
+        "version": 1,
+        "value": {
+          "value": "100",
+          "unit": "kg"
+        }
+      },
+      "training_mass": {
+        "kind": "manual",
+        "version": 1,
+        "value": {
+          "value": "80",
+          "unit": "kg"
+        }
+      },
+      "band_tension": {
+        "kind": "manual",
+        "version": 1,
+        "value": {
+          "value": "10",
+          "unit": "kg"
+        }
+      }
+    },
+    "plans": [
+      {
+        "id": "upper-a-ladder",
+        "templateId": "upper-a",
+        "revision": 1,
+        "bindings": [
+          {
+            "occurrenceId": "workout/heavy[0]/heavy-set",
+            "metric": "mass",
+            "nodeId": "warmup"
+          },
+          {
+            "occurrenceId": "workout/heavy[1]/heavy-set",
+            "metric": "mass",
+            "nodeId": "working"
+          },
+          {
+            "occurrenceId": "workout/heavy[2]/heavy-set",
+            "metric": "mass",
+            "nodeId": "working"
+          }
+        ]
+      }
+    ]
+  }
+}

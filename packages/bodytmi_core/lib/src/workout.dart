@@ -1,4 +1,5 @@
 import 'activity.dart';
+import 'derived_plan_input.dart';
 import 'body_mass_input.dart';
 import 'errors.dart';
 import 'effective_mass.dart';
@@ -418,6 +419,7 @@ final class TrainingSession {
     this.finishedAt,
     this.contentVersion = 1,
     Map<String, BodyMassInputSnapshot> bodyMassInputs = const {},
+    this.derivedPlanInput,
   }) : sets = List.unmodifiable(sets),
        bodyMassInputs = Map.unmodifiable(bodyMassInputs) {
     final configured = revision.definition.slots
@@ -440,6 +442,7 @@ final class TrainingSession {
   final DateTime? finishedAt;
   final List<TrainingSet> sets;
   final Map<String, BodyMassInputSnapshot> bodyMassInputs;
+  final DerivedPlanInput? derivedPlanInput;
   final SessionStatus status;
   final int contentVersion;
 
@@ -455,6 +458,7 @@ final class TrainingSession {
       finishedAt: finishedAt,
       contentVersion: contentVersion + 1,
       bodyMassInputs: bodyMassInputs,
+      derivedPlanInput: derivedPlanInput,
     );
   }
 
@@ -470,6 +474,7 @@ final class TrainingSession {
       startedAt: startedAt,
       sets: sets,
       bodyMassInputs: bodyMassInputs,
+      derivedPlanInput: derivedPlanInput,
       status: SessionStatus.finalized,
       finishedAt: at,
       contentVersion: contentVersion + 1,
@@ -492,6 +497,8 @@ final class TrainingSession {
     'status': status.name,
     'contentVersion': contentVersion,
     'sets': [for (final set in sets) set.toJson()],
+    if (derivedPlanInput != null)
+      'derivedPlanInput': derivedPlanInput!.toJson(),
     if (bodyMassInputs.isNotEmpty)
       'bodyMassInputs': {
         for (final e in bodyMassInputs.entries) e.key: e.value.toJson(),

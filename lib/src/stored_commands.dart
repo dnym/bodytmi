@@ -192,6 +192,7 @@ Future<Map<String, Object?>> executeStored(
       'revision',
       'startedAt',
       'bodyMassOverrides',
+      'derivedPlan',
     },
     'store show' => {'id'},
     'store assess-objectives' => {'id', 'setId', 'objectives'},
@@ -309,6 +310,7 @@ Future<Map<String, Object?>> executeStored(
       'id',
       'startedAt',
       'bodyMassOverrides',
+      'derivedPlan',
     },
     'run skip' => {'runId', 'expectedVersion', 'requestId', 'skippedAt'},
     'run pause' || 'run resume' => {'runId', 'expectedVersion'},
@@ -706,6 +708,9 @@ Future<Map<String, Object?>> executeStored(
           bodyMassOverrides: bodyMassOverridesFromJson(
             request['bodyMassOverrides'],
           ),
+          derivedPlan: request['derivedPlan'] == null
+              ? null
+              : DerivedPlanRef.fromJson(request['derivedPlan']),
         )).toJson();
       case 'run skip':
         final runId = identifier(request, 'runId');
@@ -795,6 +800,9 @@ Future<Map<String, Object?>> executeStored(
           bodyMassOverrides: bodyMassOverridesFromJson(
             request['bodyMassOverrides'],
           ),
+          derivedPlan: request['derivedPlan'] == null
+              ? null
+              : DerivedPlanRef.fromJson(request['derivedPlan']),
         )).toJson();
       case 'store effective-load':
         data = const EffectiveMassService().evaluate(

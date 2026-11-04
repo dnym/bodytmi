@@ -33,7 +33,7 @@ final class DerivedWorkoutPreview {
     final graph = await DerivedTargetGraphService(
       repository,
     ).resolve(graphId, graphRevision, asOf, runId);
-    return _project(workout, graph, bindings);
+    return projectCaptured(workout, graph, bindings);
   });
 
   /// Resolves a published mapping against its pinned workout revision.
@@ -106,7 +106,7 @@ final class DerivedWorkoutPreview {
       invalid('Plan preview does not match a published workout plan.');
     }
     plan.validate(workout, published.graph.nodes);
-    if (canonicalJson(_project(workout, resolution, plan.bindings)) !=
+    if (canonicalJson(projectCaptured(workout, resolution, plan.bindings)) !=
         canonicalJson(preview)) {
       invalid('Workout preview does not match the published plan.');
     }
@@ -179,7 +179,7 @@ final class DerivedWorkoutPreview {
     final graphStatus = await DerivedTargetGraphService(
       repository,
     ).status(graph);
-    final expected = _project(workout, graph, bindings);
+    final expected = projectCaptured(workout, graph, bindings);
     if (canonicalJson(expected) != canonicalJson(captured)) {
       invalid(
         'Workout preview does not match the pinned workout and graph resolution.',
@@ -239,7 +239,7 @@ final class DerivedWorkoutPreview {
     };
   });
 
-  Map<String, Object?> _project(
+  static Map<String, Object?> projectCaptured(
     WorkoutRevision workout,
     Map<String, Object?> graph,
     Object? bindings,
@@ -314,7 +314,7 @@ final class DerivedWorkoutPreview {
     };
   }
 
-  Map<String, Object?> _occurrence(
+  static Map<String, Object?> _occurrence(
     String id,
     Effort effort,
     WorkoutDefinition definition,

@@ -1,6 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'training_service.dart';
 import 'canonical_json.dart';
+import 'derived_plan_session.dart';
 
 int _positive(Map<String, Object?> json, String key) {
   final value = json[key];
@@ -28,6 +29,7 @@ TrainingSession sessionFromJson(Object? input) {
     'contentVersion',
     'sets',
     'bodyMassInputs',
+    'derivedPlanInput',
   });
   if (json['schemaVersion'] != 1)
     invalid('Unsupported session schema version.');
@@ -159,7 +161,7 @@ TrainingSession sessionFromJson(Object? input) {
   if (status == SessionStatus.finalized &&
       sets.any((s) => s.status == SetStatus.planned))
     invalid('A finalized session cannot contain planned sets.');
-  return TrainingSession(
+  final session = TrainingSession(
     id: id,
     revision: revision,
     startedAt: startedAt,
@@ -171,8 +173,13 @@ TrainingSession sessionFromJson(Object? input) {
       ).entries)
         e.key: BodyMassInputSnapshot.fromJson(e.value),
     },
+    derivedPlanInput: json['derivedPlanInput'] == null
+        ? null
+        : DerivedPlanInput.fromJson(json['derivedPlanInput']),
     status: status,
     finishedAt: finishedAt,
     contentVersion: _positive(json, 'contentVersion'),
   );
+  validateDerivedPlanSession(session);
+  return session;
 }
