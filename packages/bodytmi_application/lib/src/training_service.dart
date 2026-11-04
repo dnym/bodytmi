@@ -308,6 +308,51 @@ final class TrainingService {
     if (old == null || old.dimension != value.dimension) {
       invalid('Target must match an existing suggestion and its dimension.');
     }
+    return _applyTarget(
+      session,
+      selected,
+      metric,
+      value,
+      includeSelected: true,
+      applyToRemaining: applyToRemaining,
+    );
+  }
+
+  /// Explicitly carry one confirmed actual into untouched later suggestions.
+  TrainingSession carryActual(
+    TrainingSession session,
+    String setId,
+    String metric,
+  ) {
+    if (session.status != SessionStatus.active) {
+      invalid('Actuals can only be carried in an active session.');
+    }
+    identifier({'metric': metric}, 'metric');
+    final source = session.set(setId);
+    if (source.status != SetStatus.completed) {
+      invalid('Carry requires a completed effort.');
+    }
+    final actual = source.actuals[metric];
+    if (actual == null)
+      invalid('The completed effort has no actual for this metric.');
+    return _applyTarget(
+      session,
+      source,
+      metric,
+      actual,
+      includeSelected: false,
+      applyToRemaining: true,
+    );
+  }
+
+  TrainingSession _applyTarget(
+    TrainingSession session,
+    TrainingSet selected,
+    String metric,
+    Quantity value, {
+    required bool includeSelected,
+    required bool applyToRemaining,
+  }) {
     final occurrences = {
       for (final occurrence in session.revision.definition.plan.occurrences())
         if (occurrence.activity is Effort)
@@ -323,16 +368,16 @@ final class TrainingService {
         }
       }
     }
-    if (derived.contains(setId)) {
+    if (includeSelected && derived.contains(selected.id)) {
       invalid('A derived plan target must be changed through plan refresh.');
     }
-    final sourceIndex = session.sets.indexWhere((set) => set.id == setId);
+    final sourceIndex = session.sets.indexWhere((set) => set.id == selected.id);
     var changed = false;
     final sets = <TrainingSet>[];
     for (var i = 0; i < session.sets.length; i++) {
       final set = session.sets[i];
       final eligible =
-          i == sourceIndex ||
+          (includeSelected && i == sourceIndex) ||
           (applyToRemaining &&
               i > sourceIndex &&
               set.slotId == selected.slotId &&
@@ -345,6 +390,7 @@ final class TrainingService {
               !occurrences[set.id]!.criteria.containsKey(metric));
       if (!eligible ||
           (set.manualTargets.contains(metric) &&
+              (!includeSelected || !set.carriedTargets.containsKey(metric)) &&
               canonicalJson(set.suggested[metric]!.toJson()) ==
                   canonicalJson(value.toJson()))) {
         sets.add(set);
@@ -364,6 +410,12 @@ final class TrainingService {
               if (e.key != metric) e.key: e.value,
           },
           manualTargets: {...set.manualTargets, metric},
+          carriedTargets: {
+            for (final e in set.carriedTargets.entries)
+              if (e.key != metric) e.key: e.value,
+            if (!includeSelected)
+              metric: CarriedTargetSource(selected.id, selected.contentVersion),
+          },
           status: set.status,
           actuals: set.actuals,
           timing: set.timing,

@@ -350,7 +350,7 @@ void programTests() {
         );
         final snapshot = '${dir.path}/manual.sqlite';
         await store.snapshot(snapshot);
-        equal(NativeBackup.validateDatabase(snapshot), 36);
+        equal(NativeBackup.validateDatabase(snapshot), 37);
         final oldLabel = sqlite3.open(snapshot);
         oldLabel.userVersion = 35;
         oldLabel.close();
@@ -793,14 +793,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          36,
+          37,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/36',
+          'bodytmi-logical-export/37',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
@@ -992,7 +992,40 @@ void programTests() {
           jsonObject(jsonList(bound, 'days').single, 'day')['sessionId'],
           'cli',
         );
-        for (final set in s.sets)
+        s = sessionFromJson(
+          await call('store complete', {
+            'id': s.id,
+            'setId': s.sets.first.id,
+            'expectedVersion': s.contentVersion,
+            'actuals': {
+              'mass': {'value': '140', 'unit': 'lb'},
+            },
+            'acceptSuggested': true,
+          }),
+        );
+        final pureCarry = await invoke(
+          ['session', 'carry-actual'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'session': s.toJson(),
+            'setId': s.sets.first.id,
+            'metric': 'mass',
+          }),
+        );
+        equal(pureCarry.code, 0);
+        final storedCarry = await call('store carry-actual', {
+          'id': s.id,
+          'expectedVersion': s.contentVersion,
+          'setId': s.sets.first.id,
+          'metric': 'mass',
+        });
+        jsonEqual(
+          jsonObject(jsonDecode(pureCarry.output), 'response')['data'],
+          storedCarry,
+        );
+        s = sessionFromJson(storedCarry);
+        equal(s.sets[1].carriedTargets['mass']!.setId, s.sets.first.id);
+        for (final set in s.sets.skip(1))
           s = sessionFromJson(
             await call('store complete', {
               'id': s.id,

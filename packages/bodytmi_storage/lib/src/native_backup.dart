@@ -135,6 +135,7 @@ final class NativeBackup {
           34,
           35,
           36,
+          37,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -264,6 +265,7 @@ final class NativeBackup {
             34,
             35,
             36,
+            37,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -411,6 +413,10 @@ final class NativeBackup {
             invalid('Body-mass rebind identity requires schema v34.');
           }
           final session = sessionFromJson(sessionJson);
+          if (db.userVersion < 37 &&
+              session.sets.any((s) => s.carriedTargets.isNotEmpty)) {
+            invalid('Carried actual targets require schema v37.');
+          }
           if (db.userVersion < 36 &&
               session.sets.any((s) => s.manualTargets.isNotEmpty)) {
             invalid('Manual session targets require schema v36.');
@@ -484,6 +490,10 @@ final class NativeBackup {
           final d = ProgressionDecision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 37 &&
+              d.session.sets.any((s) => s.carriedTargets.isNotEmpty)) {
+            invalid('Frozen carried actual targets require schema v37.');
+          }
           if (db.userVersion < 23 &&
               d.ruleType == 'threshold' &&
               ThresholdRule.fromJson(d.rule).incrementBands != null)

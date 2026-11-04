@@ -139,6 +139,162 @@ Future<WorkoutExecution> _startGroups(TrainingStore store) async {
 
 void executionTests() {
   test(
+    'carry confirmed actuals during guided rest keeps cursor and source version',
+    () => _withStore((store, dir) async {
+      final execution = await _startGroups(store);
+      final advanced = await _step(
+        store,
+        execution,
+        'first',
+        action: 'complete',
+      );
+      final training = StoredTrainingService(store);
+      var session = await training.session('group-session');
+      final first = session.sets.first;
+      final rest = await TimingService(store).show(advanced.clockId('rest'));
+      await store.snapshot('$dir/v36.sqlite');
+      final previous = sqlite3.open('$dir/v36.sqlite');
+      previous.userVersion = 36;
+      previous.close();
+      equal(NativeBackup.validateDatabase('$dir/v36.sqlite'), 36);
+      final migrated = await TrainingStore.open('$dir/v36.sqlite');
+      equal(
+        canonicalJson(
+          (await StoredTrainingService(migrated).session(session.id)).toJson(),
+        ),
+        canonicalJson(session.toJson()),
+      );
+      await migrated.close();
+      session = await training.carryActual(
+        session.id,
+        session.contentVersion,
+        first.id,
+        'mass',
+      );
+      final other = session.sets.lastWhere((s) => s.slotId == 'hold');
+      equal(other.carriedTargets['mass']!.setId, first.id);
+      equal(other.carriedTargets['mass']!.contentVersion, first.contentVersion);
+      equal((await TimingService(store).show(rest.id)).version, rest.version);
+      equal((await ExecutionService(store).show(execution.id)).cursor, 1);
+      await expectLater(
+        training.carryActual(
+          session.id,
+          session.contentVersion - 1,
+          first.id,
+          'mass',
+        ),
+        throwsA(isA<BodyTmiException>()),
+      );
+      session = await training.edit(
+        session.id,
+        session.contentVersion,
+        (s) => const TrainingService().complete(s, first.id, {
+          'mass': Quantity('2', 'kg'),
+        }, acceptSuggested: true),
+      );
+      equal(
+        session.set(other.id).carriedTargets['mass']!.contentVersion,
+        first.contentVersion,
+      );
+      equal(session.set(other.id).suggested['mass']!.value.toString(), '1');
+      await store.backup('$dir/carry-native');
+      final file = '$dir/carry.json';
+      await LogicalArchiveFiles.export(await store.archive(), file);
+      final prepared = await LogicalArchiveFiles.prepare(file);
+      final destination = await TrainingStore.open(
+        '$dir/carry-restored.sqlite',
+      );
+      try {
+        await destination.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/carry-recovery',
+          confirm: true,
+        );
+      } finally {
+        await destination.close();
+        await prepared.close();
+      }
+      final restored = await TrainingStore.open('$dir/carry-restored.sqlite');
+      try {
+        equal(
+          canonicalJson(
+            (await StoredTrainingService(
+              restored,
+            ).session(session.id)).toJson(),
+          ),
+          canonicalJson(session.toJson()),
+        );
+      } finally {
+        await restored.close();
+      }
+      final envelope =
+          jsonDecode(await File(file).readAsString()) as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/36';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('$dir/old-carry.json').writeAsString(jsonEncode(envelope));
+      await _fails(LogicalArchiveFiles.prepare('$dir/old-carry.json'));
+      await store.snapshot('$dir/carry.sqlite');
+      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 37);
+      final old = sqlite3.open('$dir/carry.sqlite');
+      old.userVersion = 36;
+      old.close();
+      rejects(() => NativeBackup.validateDatabase('$dir/carry.sqlite'));
+    }),
+  );
+  test(
+    'carrying an actual rolls back if a destination effort clock is active',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      await training.publish(_groupDefinition(), 0);
+      var session = await training.start(
+        'carry-session',
+        'groups',
+        1,
+        instant(1),
+      );
+      session = await training.edit(
+        session.id,
+        session.contentVersion,
+        (s) => const TrainingService().complete(
+          s,
+          s.sets.first.id,
+          {},
+          acceptSuggested: true,
+        ),
+      );
+      final destination = session.sets.lastWhere((s) => s.slotId == 'hold');
+      await TimingService(store).start(
+        'carry-clock',
+        session.id,
+        destination.id,
+        'duration',
+        TimingPlan.fromJson({'effortMilliseconds': 1000}),
+        instant(1),
+      );
+      await _fails(
+        training.carryActual(
+          session.id,
+          session.contentVersion,
+          session.sets.first.id,
+          'mass',
+        ),
+      );
+      equal(
+        canonicalJson((await training.session(session.id)).toJson()),
+        canonicalJson(session.toJson()),
+      );
+    }),
+  );
+  test(
     'guided target edits preserve receipts and rest clocks and apply to upcoming sets',
     () => _withStore((store, dir) async {
       var execution = await _startGroups(store);
@@ -424,7 +580,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          36,
+          37,
         );
       } finally {
         await migrated.close();
@@ -1443,13 +1599,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 36);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 37);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/36',
+        'bodytmi-logical-export/37',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {

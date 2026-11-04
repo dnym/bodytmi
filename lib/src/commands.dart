@@ -28,6 +28,7 @@ const commandNames = [
   'session complete',
   'session annotate',
   'session edit-target',
+  'session carry-actual',
   'session skip',
   'session skip-remaining',
   'session skip-slot',
@@ -298,6 +299,15 @@ final class Commands {
               identifier(request, 'metric'),
               Quantity.fromJson(request['value']),
               applyToRemaining: _bool(request, 'applyToRemaining'),
+            )
+            .toJson();
+      case 'session carry-actual':
+        keys({'session', 'setId', 'metric'});
+        data = const TrainingService()
+            .carryActual(
+              sessionFromJson(request['session']),
+              requiredString(request, 'setId'),
+              identifier(request, 'metric'),
             )
             .toJson();
       case 'session skip-remaining':

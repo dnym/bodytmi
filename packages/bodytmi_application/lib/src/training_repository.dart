@@ -399,6 +399,7 @@ final class StoredTrainingService {
               maxEffortMetrics: set.maxEffortMetrics,
               criteria: set.criteria,
               manualTargets: set.manualTargets,
+              carriedTargets: set.carriedTargets,
               sources: {
                 for (final e in set.sources.entries)
                   if (!mapped[set.id]!.containsKey(e.key)) e.key: e.value,
@@ -565,16 +566,37 @@ final class StoredTrainingService {
     String metric,
     Quantity value, {
     bool applyToRemaining = false,
-  }) => repository.transaction(() async {
-    final current = await session(id);
-    if (current.contentVersion != expectedVersion) _conflict();
-    final next = const TrainingService().editTarget(
+  }) => _changeTargets(
+    id,
+    expectedVersion,
+    (current) => const TrainingService().editTarget(
       current,
       setId,
       metric,
       value,
       applyToRemaining: applyToRemaining,
-    );
+    ),
+  );
+
+  Future<TrainingSession> carryActual(
+    String id,
+    int expectedVersion,
+    String setId,
+    String metric,
+  ) => _changeTargets(
+    id,
+    expectedVersion,
+    (current) => const TrainingService().carryActual(current, setId, metric),
+  );
+
+  Future<TrainingSession> _changeTargets(
+    String id,
+    int expectedVersion,
+    TrainingSession Function(TrainingSession) change,
+  ) => repository.transaction(() async {
+    final current = await session(id);
+    if (current.contentVersion != expectedVersion) _conflict();
+    final next = change(current);
     if (identical(current, next)) return current;
     final changed = {
       for (var i = 0; i < current.sets.length; i++)

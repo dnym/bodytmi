@@ -89,6 +89,7 @@ TrainingSession sessionFromJson(Object? input) {
       'suggested',
       'sources',
       'manualTargets',
+      'carriedTargets',
       'status',
       'actuals',
       'timing',
@@ -178,6 +179,19 @@ TrainingSession sessionFromJson(Object? input) {
         invalid('Manual targets require a later set version.');
       }
     }
+    final carriedTargets = <String, CarriedTargetSource>{};
+    if (row.containsKey('carriedTargets')) {
+      final entries = jsonObject(row['carriedTargets'], 'carried targets');
+      if (entries.isEmpty) invalid('Carried targets cannot be empty.');
+      for (final entry in entries.entries) {
+        final source = jsonObject(entry.value, 'carried target source');
+        checkKeys(source, {'setId', 'contentVersion'});
+        carriedTargets[entry.key] = CarriedTargetSource(
+          requiredString(source, 'setId'),
+          _positive(source, 'contentVersion'),
+        );
+      }
+    }
     sets.add(
       TrainingSet(
         id: expected.id,
@@ -187,6 +201,7 @@ TrainingSession sessionFromJson(Object? input) {
         suggested: suggested,
         sources: sources,
         manualTargets: manualTargets,
+        carriedTargets: carriedTargets,
         maxEffortMetrics: maxEffortMetrics,
         criteria: criteria,
         actuals: actuals,
@@ -200,6 +215,28 @@ TrainingSession sessionFromJson(Object? input) {
         contentVersion: _positive(row, 'contentVersion'),
       ),
     );
+  }
+  final setIndices = {for (var i = 0; i < sets.length; i++) sets[i].id: i};
+  for (var i = 0; i < sets.length; i++) {
+    final set = sets[i];
+    for (final entry in set.carriedTargets.entries) {
+      final sourceIndex = setIndices[entry.value.setId];
+      if (sourceIndex == null || sourceIndex >= i)
+        invalid('Invalid carried target source.');
+      final source = sets[sourceIndex];
+      if (source.slotId != set.slotId ||
+          source.role != set.role ||
+          source.contentVersion < entry.value.contentVersion) {
+        invalid('Carried target source context or version is inconsistent.');
+      }
+      if (source.contentVersion == entry.value.contentVersion &&
+          (source.status != SetStatus.completed ||
+              source.actuals[entry.key] == null ||
+              canonicalJson(source.actuals[entry.key]!.toJson()) !=
+                  canonicalJson(set.suggested[entry.key]!.toJson()))) {
+        invalid('Carried target does not match its source actual.');
+      }
+    }
   }
   if (status == SessionStatus.finalized &&
       sets.any((s) => s.status == SetStatus.planned))

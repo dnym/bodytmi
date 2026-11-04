@@ -61,6 +61,7 @@ const storedCommandNames = [
   'store skip-remaining',
   'store skip-slot',
   'store edit-target',
+  'store carry-actual',
   'store finish',
   'store history',
   'store snapshot',
@@ -293,6 +294,7 @@ Future<Map<String, Object?>> executeStored(
       'value',
       'applyToRemaining',
     },
+    'store carry-actual' => {'id', 'expectedVersion', 'setId', 'metric'},
     'store finish' => {'id', 'expectedVersion', 'finishedAt'},
     'store history' => <String>{},
     'store snapshot' => {'destination'},
@@ -1099,6 +1101,13 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'metric'),
           Quantity.fromJson(request['value']),
           applyToRemaining: flag('applyToRemaining'),
+        )).toJson();
+      case 'store carry-actual':
+        data = (await service.carryActual(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          requiredString(request, 'setId'),
+          identifier(request, 'metric'),
         )).toJson();
       case 'store skip':
         final setId = requiredString(request, 'setId');

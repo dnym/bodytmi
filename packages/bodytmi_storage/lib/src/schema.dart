@@ -106,6 +106,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   34 => schemaV27, // v34 retains original overrides after body-mass rebinding.
   35 => schemaV27, // v35 adds raw body-mass source and notes.
   36 => schemaV27, // v36 adds manually edited session targets.
+  37 => schemaV27, // v37 adds carried actual source identities and versions.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

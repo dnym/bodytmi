@@ -234,6 +234,16 @@ final class HistorySource {
   };
 }
 
+final class CarriedTargetSource {
+  const CarriedTargetSource(this.setId, this.contentVersion);
+  final String setId;
+  final int contentVersion;
+  Map<String, Object?> toJson() => {
+    'setId': setId,
+    'contentVersion': contentVersion,
+  };
+}
+
 final class TrainingSet {
   TrainingSet({
     required this.id,
@@ -243,6 +253,7 @@ final class TrainingSet {
     required Metrics suggested,
     Map<String, HistorySource> sources = const {},
     Set<String> manualTargets = const {},
+    Map<String, CarriedTargetSource> carriedTargets = const {},
     this.status = SetStatus.planned,
     Metrics actuals = const {},
     this.contentVersion = 1,
@@ -251,6 +262,7 @@ final class TrainingSet {
     Set<String> maxEffortMetrics = const {},
     Map<String, NumericObjective> criteria = const {},
   }) : criteria = Map.unmodifiable(criteria),
+       carriedTargets = Map.unmodifiable(carriedTargets),
        manualTargets = Set.unmodifiable(manualTargets),
        maxEffortMetrics = Set.unmodifiable(maxEffortMetrics),
        observations = observations == null || observations.isEmpty
@@ -266,6 +278,11 @@ final class TrainingSet {
       invalid(
         'Manual targets must identify suggestions without history sources.',
       );
+    }
+    if (this.carriedTargets.keys.any(
+      (key) => !this.manualTargets.contains(key),
+    )) {
+      invalid('Carried targets must be manually selected suggestions.');
     }
     this.observations?.validateStatus(status.name);
     if (this.criteria.length + this.maxEffortMetrics.length > 100)
@@ -300,6 +317,7 @@ final class TrainingSet {
   final Metrics suggested;
   final Map<String, HistorySource> sources;
   final Set<String> manualTargets;
+  final Map<String, CarriedTargetSource> carriedTargets;
   final SetStatus status;
   final Metrics actuals;
   final TimedResult? timing;
@@ -349,6 +367,7 @@ final class TrainingSet {
       suggested: suggested,
       sources: sources,
       manualTargets: manualTargets,
+      carriedTargets: carriedTargets,
       timing:
           timingResult ??
           (timing == null
@@ -376,6 +395,7 @@ final class TrainingSet {
       suggested: suggested,
       sources: sources,
       manualTargets: manualTargets,
+      carriedTargets: carriedTargets,
       status: SetStatus.skipped,
       observations: observations?.notesOnly,
       maxEffortMetrics: maxEffortMetrics,
@@ -396,6 +416,7 @@ final class TrainingSet {
       suggested: suggested,
       sources: sources,
       manualTargets: manualTargets,
+      carriedTargets: carriedTargets,
       status: status,
       actuals: actuals,
       timing: timing,
@@ -415,6 +436,10 @@ final class TrainingSet {
     'sources': {for (final e in sources.entries) e.key: e.value.toJson()},
     if (manualTargets.isNotEmpty)
       'manualTargets': (manualTargets.toList()..sort()),
+    if (carriedTargets.isNotEmpty)
+      'carriedTargets': {
+        for (final e in carriedTargets.entries) e.key: e.value.toJson(),
+      },
     'status': status.name,
     'actuals': metricsToJson(actuals),
     if (timing != null) 'timing': timing!.toJson(),

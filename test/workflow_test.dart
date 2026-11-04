@@ -6,6 +6,102 @@ import 'support.dart';
 void workflowTests() {
   const service = TrainingService();
   test(
+    'carry actual freezes source identity and preserves protected targets',
+    () {
+      final json = definition().toJson();
+      final plan = json['plan']! as Map<String, Object?>;
+      plan['children'] = [
+        for (final id in ['a', 'b', 'c'])
+          {'id': id, 'type': 'effort', 'slot': 'bench-heavy'},
+        {
+          'id': 'authored',
+          'type': 'effort',
+          'slot': 'bench-heavy',
+          'targets': {
+            'mass': {'value': '40', 'unit': 'kg'},
+          },
+        },
+        {
+          'id': 'warmup',
+          'type': 'effort',
+          'slot': 'bench-heavy',
+          'role': 'warmup',
+        },
+        {'id': 'other', 'type': 'effort', 'slot': 'bench-light'},
+      ];
+      var session = start(
+        from: WorkoutRevision.publish(WorkoutDefinition.fromJson(json)),
+      );
+      rejects(
+        () => service.carryActual(session, session.sets.first.id, 'mass'),
+      );
+      session = service.editTarget(
+        session,
+        session.sets[2].id,
+        'mass',
+        Quantity('55', 'kg'),
+      );
+      session = service.complete(session, session.sets.first.id, {
+        'mass': Quantity('100', 'lb'),
+      }, acceptSuggested: true);
+      final source = session.sets.first;
+      rejects(() => service.carryActual(session, source.id, 'missing'));
+      final before = session;
+      session = service.carryActual(session, source.id, 'mass');
+      equal(session.contentVersion, before.contentVersion + 1);
+      equal(
+        canonicalJson(session.sets.first.toJson()),
+        canonicalJson(source.toJson()),
+      );
+      final carried = session.sets[1];
+      equal(
+        canonicalJson(carried.suggested['mass']!.toJson()),
+        canonicalJson(source.actuals['mass']!.toJson()),
+      );
+      equal(carried.carriedTargets['mass']!.setId, source.id);
+      equal(
+        carried.carriedTargets['mass']!.contentVersion,
+        source.contentVersion,
+      );
+      for (var i = 2; i < session.sets.length; i++) {
+        equal(
+          canonicalJson(session.sets[i].toJson()),
+          canonicalJson(before.sets[i].toJson()),
+        );
+      }
+      check(
+        identical(service.carryActual(session, source.id, 'mass'), session),
+      );
+      final corrupt = copyJson(session.toJson());
+      final corruptSets = corrupt['sets']! as List<Object?>;
+      final target = jsonObject(corruptSets[1], 'set');
+      jsonObject(target['carriedTargets'], 'carried')['mass'] = {
+        'setId': source.id,
+        'contentVersion': source.contentVersion + 1,
+      };
+      rejects(() => sessionFromJson(corrupt));
+      session = service.complete(session, source.id, {
+        'mass': Quantity('110', 'lb'),
+      }, acceptSuggested: true);
+      equal(
+        session.sets[1].carriedTargets['mass']!.contentVersion,
+        source.contentVersion,
+      );
+      equal(
+        canonicalJson(sessionFromJson(session.toJson()).toJson()),
+        canonicalJson(session.toJson()),
+      );
+      session = service.editTarget(
+        session,
+        carried.id,
+        'mass',
+        carried.suggested['mass']!,
+      );
+      check(session.sets[1].carriedTargets.isEmpty);
+      check(session.sets[1].manualTargets.contains('mass'));
+    },
+  );
+  test(
     'manual target carry preserves completed, authored and manual targets',
     () {
       final json = definition().toJson();
