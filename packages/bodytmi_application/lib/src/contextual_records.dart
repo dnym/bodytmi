@@ -17,6 +17,7 @@ final class ContextualRecords {
     DateTime? until,
     bool includeWarmups = false,
     FamilyRevision? family,
+    List<String>? roles,
   }) {
     if (!{'higher', 'lower'}.contains(direction))
       invalid('Record direction must be higher or lower.');
@@ -32,6 +33,7 @@ final class ContextualRecords {
       until: until,
       includeWarmups: includeWarmups,
       family: family,
+      roles: roles,
     );
     final sources = {for (final s in sessions) s.id: s};
     final setSources = {
@@ -116,11 +118,12 @@ final class ContextualRecords {
     final keys = groups.keys.toList()..sort();
     return {
       'policy': {
-        'id':
-            requiredString(
-              jsonObject(series['policy'], 'policy'),
-              'id',
-            ).endsWith('/3')
+        'id': roles != null
+            ? 'bodytmi-contextual-records/5'
+            : requiredString(
+                jsonObject(series['policy'], 'policy'),
+                'id',
+              ).endsWith('/3')
             ? 'bodytmi-contextual-records/4'
             : requiredString(
                 jsonObject(series['policy'], 'policy'),
@@ -138,6 +141,8 @@ final class ContextualRecords {
         'bodyMassAndDerivedLoads': 'excluded',
         'atActuals': metricsToJson(atActuals),
         'includeWarmups': includeWarmups,
+        if (roles != null)
+          'roles': jsonList(jsonObject(series['policy'], 'policy'), 'roles'),
         'includeActive': false,
         'context': context,
         'from': from?.toUtc().toIso8601String(),

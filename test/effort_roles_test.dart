@@ -84,6 +84,106 @@ TrainingSession _complete(TrainingSession session) {
 
 void effortRolesTests() {
   test(
+    'history series and records select multiple roles while preserving distinct contexts',
+    () {
+      final session = _complete(
+        const TrainingService().start(
+          sessionId: 'roles-report',
+          revision: WorkoutRevision.publish(_definition()),
+          startedAt: instant(1),
+        ),
+      );
+      final before = canonicalJson(session.toJson());
+      final series = const TrainingAnalytics().series(
+        [session],
+        metric: 'mass',
+        roles: ['warmup', 'drop'],
+      );
+      equal(series['pointCount'], 3);
+      equal(
+        jsonObject(series['policy'], 'policy')['id'],
+        'bodytmi-history-series/4',
+      );
+      equal(
+        jsonList(jsonObject(series['policy'], 'policy'), 'roles').join(','),
+        'drop,warmup',
+      );
+      final rows = jsonList(series, 'series');
+      equal(rows.length, 2);
+      final reportedRoles = rows
+          .map(
+            (row) => jsonObject(
+              jsonObject(row, 'row')['context'],
+              'context',
+            )['role'],
+          )
+          .toSet();
+      check(reportedRoles.containsAll(['drop', 'warmup']));
+      final family = FamilyRevision.publish(
+        ExerciseFamily.fromJson({
+          'id': 'family',
+          'name': 'Family',
+          'exercises': ['lift'],
+        }),
+      );
+      final familySeries = const TrainingAnalytics().series(
+        [session],
+        metric: 'mass',
+        family: family,
+        roles: ['drop', 'warmup'],
+      );
+      equal(familySeries['pointCount'], 3);
+      equal(
+        jsonObject(familySeries['policy'], 'policy')['id'],
+        'bodytmi-family-series/4',
+      );
+      final records = const ContextualRecords().evaluate(
+        [session],
+        metric: 'mass',
+        direction: 'higher',
+        roles: ['warmup', 'drop'],
+      );
+      equal(records['pointCount'], 3);
+      equal(records['eligibleCount'], 3);
+      equal(
+        jsonObject(records['policy'], 'policy')['id'],
+        'bodytmi-contextual-records/5',
+      );
+      final intersected = const TrainingAnalytics().series(
+        [session],
+        metric: 'mass',
+        roles: ['work', 'drop'],
+        context: {'role': 'drop'},
+      );
+      equal(intersected['pointCount'], 2);
+      rejects(() => const TrainingAnalytics().series([session], roles: []));
+      rejects(
+        () => const TrainingAnalytics().series(
+          [session],
+          roles: ['work', 'work'],
+        ),
+      );
+      rejects(
+        () => const ContextualRecords().evaluate(
+          [session],
+          metric: 'mass',
+          direction: 'higher',
+          roles: ['unknown'],
+        ),
+      );
+      rejects(
+        () => const ContextualRecords().evaluate(
+          [session],
+          metric: 'mass',
+          direction: 'higher',
+          roles: ['work'],
+          includeWarmups: true,
+        ),
+      );
+      equal(canonicalJson(session.toJson()), before);
+    },
+  );
+  test(
     'track-aware active preview uses durable counters, checks baseline and makes no changes',
     () async {
       final dir = await Directory.systemTemp.createTemp(
@@ -1358,6 +1458,31 @@ void effortRolesTests() {
       );
       equal(jsonObject(roleSummary['counts'], 'counts')['included'], 3);
       final finished = await call('store show', {'id': session.id});
+      final scopedSeries = await call('store series', {
+        'metric': 'mass',
+        'roles': ['warmup', 'drop'],
+      });
+      final pureScopedSeries = const Commands().execute('history series', {
+        'schemaVersion': 1,
+        'sessions': [finished],
+        'metric': 'mass',
+        'roles': ['drop', 'warmup'],
+      })['data'];
+      equal(canonicalJson(scopedSeries), canonicalJson(pureScopedSeries));
+      equal(jsonObject(scopedSeries, 'series')['pointCount'], 3);
+      final scopedRecords = await call('store records', {
+        'metric': 'mass',
+        'direction': 'higher',
+        'roles': ['warmup', 'drop'],
+      });
+      final pureScopedRecords = const Commands().execute('history records', {
+        'schemaVersion': 1,
+        'sessions': [finished],
+        'metric': 'mass',
+        'direction': 'higher',
+        'roles': ['drop', 'warmup'],
+      })['data'];
+      equal(canonicalJson(scopedRecords), canonicalJson(pureScopedRecords));
       final storedPreview = await call('store progression-preview', {
         'id': session.id,
         'slotId': 'lift',

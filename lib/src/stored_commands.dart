@@ -225,6 +225,7 @@ Future<Map<String, Object?>> executeStored(
       'from',
       'until',
       'includeWarmups',
+      'roles',
       'familyId',
       'familyRevision',
     },
@@ -234,6 +235,7 @@ Future<Map<String, Object?>> executeStored(
       'from',
       'until',
       'includeWarmups',
+      'roles',
       'includeActive',
       'familyId',
       'familyRevision',
@@ -986,6 +988,7 @@ Future<Map<String, Object?>> executeStored(
                 ? parseInstant(request['until'], 'until')
                 : null,
             includeWarmups: flag('includeWarmups'),
+            roles: analyticsRoles(request),
             family: request.containsKey('familyId')
                 ? await FamilyService(store).revision(
                     identifier(request, 'familyId'),
@@ -1021,6 +1024,7 @@ Future<Map<String, Object?>> executeStored(
                 ? parseInstant(request['until'], 'until')
                 : null,
             includeWarmups: flag('includeWarmups'),
+            roles: analyticsRoles(request),
             includeActive: flag('includeActive'),
             family: request.containsKey('familyId')
                 ? await FamilyService(store).revision(

@@ -236,6 +236,7 @@ final class Commands {
           'from',
           'until',
           'includeWarmups',
+          'roles',
           'family',
         });
         data = const ContextualRecords().evaluate(
@@ -257,6 +258,7 @@ final class Commands {
               ? parseInstant(request['until'], 'until')
               : null,
           includeWarmups: _bool(request, 'includeWarmups'),
+          roles: analyticsRoles(request),
           family: request.containsKey('family')
               ? FamilyRevision.fromJson(request['family'])
               : null,
@@ -270,6 +272,7 @@ final class Commands {
           'from',
           'until',
           'includeWarmups',
+          'roles',
           'includeActive',
           'family',
         });
@@ -290,6 +293,7 @@ final class Commands {
               ? parseInstant(request['until'], 'until')
               : null,
           includeWarmups: _bool(request, 'includeWarmups'),
+          roles: analyticsRoles(request),
           includeActive: _bool(request, 'includeActive'),
           family: request.containsKey('family')
               ? FamilyRevision.fromJson(request['family'])

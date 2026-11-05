@@ -3,6 +3,7 @@
   "metric": "reps",
   "context": {"runId": "strength-run"},
   "includeWarmups": false,
+  "roles": ["work", "backoff"],
   "includeActive": false,
   "from": "2026-10-01T00:00:00+02:00",
   "until": "2026-11-01T00:00:00+01:00"

@@ -13,17 +13,7 @@ final class TrainingAnalytics {
     List<String>? roles,
   }) {
     final metrics = _sumMetrics(sumMetrics);
-    if (roles != null &&
-        (roles.isEmpty ||
-            roles.toSet().length != roles.length ||
-            roles.any(
-              (r) => !{'work', 'warmup', 'backoff', 'drop'}.contains(r),
-            ) ||
-            includeWarmups))
-      invalid(
-        'roles needs distinct known effort roles and cannot be combined with includeWarmups.',
-      );
-    final selectedRoles = roles == null ? null : ([...roles]..sort());
+    final selectedRoles = _roles(roles, includeWarmups);
     bool included(TrainingSet set) =>
         selectedRoles?.contains(set.role) ??
         (includeWarmups || set.role != 'warmup');
@@ -164,8 +154,10 @@ final class TrainingAnalytics {
     bool includeWarmups = false,
     bool includeActive = false,
     FamilyRevision? family,
+    List<String>? roles,
   }) {
     _context(context);
+    final selectedRoles = _roles(roles, includeWarmups);
     if (metric != null) identifier({'metric': metric}, 'metric');
     if (from != null && until != null && !from.isBefore(until))
       invalid('Series from must precede exclusive until.');
@@ -197,7 +189,8 @@ final class TrainingAnalytics {
         });
       for (final set in sets) {
         if (set.status != SetStatus.completed ||
-            (!includeWarmups && set.role == 'warmup'))
+            !(selectedRoles?.contains(set.role) ??
+                (includeWarmups || set.role != 'warmup')))
           continue;
         final slot = session.revision.definition.slot(set.slotId);
         if (members != null && !members.contains(slot.exerciseId)) continue;
@@ -273,7 +266,11 @@ final class TrainingAnalytics {
     final keys = grouped.keys.toList()..sort();
     return {
       'policy': {
-        'id': family == null
+        'id': selectedRoles != null
+            ? (family == null
+                  ? 'bodytmi-history-series/4'
+                  : 'bodytmi-family-series/4')
+            : family == null
             ? (includesTypedObjective
                   ? 'bodytmi-history-series/3'
                   : includesMaxEffort
@@ -286,6 +283,7 @@ final class TrainingAnalytics {
                   : 'bodytmi-family-series/1'),
         if (family != null) 'family': family.toJson(),
         'includeWarmups': includeWarmups,
+        if (selectedRoles != null) 'roles': selectedRoles,
         'includeActive': includeActive,
         'context': context,
         'metric': metric,
@@ -296,6 +294,19 @@ final class TrainingAnalytics {
       'series': [for (final key in keys) grouped[key]],
     };
   }
+}
+
+List<String>? _roles(List<String>? roles, bool includeWarmups) {
+  if (roles != null &&
+      (roles.isEmpty ||
+          roles.toSet().length != roles.length ||
+          roles.any((role) => !effortRoles.contains(role)) ||
+          includeWarmups)) {
+    invalid(
+      'roles needs distinct known effort roles and cannot be combined with includeWarmups.',
+    );
+  }
+  return roles == null ? null : ([...roles]..sort());
 }
 
 List<String> _sumMetrics(List<String> input) {
