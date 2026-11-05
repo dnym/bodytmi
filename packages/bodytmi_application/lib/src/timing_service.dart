@@ -50,9 +50,9 @@ final class TimingService {
     if (s.status != SessionStatus.active ||
         s.set(setId).status != SetStatus.planned ||
         at.isBefore(s.startedAt) ||
-        s.set(setId).suggested[metric]?.dimension != Dimension.duration)
+        !supportsTimingMetric(s.set(setId), metric, resolved))
       invalid(
-        'Timing needs a planned duration metric in an active session and a valid start time.',
+        'Timing needs a compatible duration metric in an active planned set and a valid start time.',
       );
     validateExecutionData(
       await repository.executions(),
@@ -302,7 +302,7 @@ void validateTimingData(
     final set = s.set(t.setId);
     if (_insideWindow(s, t.setId))
       invalid('Timing records for scoped windows are not supported yet.');
-    if (set.suggested[t.metric]?.dimension != Dimension.duration ||
+    if (!supportsTimingMetric(set, t.metric, t.plan) ||
         parseInstant(
           t.toJson()['createdAt'],
           'createdAt',
@@ -351,6 +351,16 @@ void validateTimingData(
             timer.termination != result.termination)
           invalid('Timed result has no matching confirmation receipt.');
       }
+}
+
+/// Unplanned timing must be explicit and cannot collide with another metric.
+bool supportsTimingMetric(TrainingSet set, String metric, TimingPlan plan) {
+  final target = set.suggested[metric];
+  if (!plan.unplannedDuration) return target?.dimension == Dimension.duration;
+  return target == null &&
+      !set.maxEffortMetrics.contains(metric) &&
+      (set.criteria[metric] == null ||
+          set.criteria[metric]!.unit.dimension == Dimension.duration);
 }
 
 bool _insideWindow(TrainingSession s, String setId) => s

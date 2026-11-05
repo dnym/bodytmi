@@ -275,7 +275,7 @@ void familyTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          42,
+          43,
         );
       } finally {
         await migrated.close();
@@ -294,7 +294,7 @@ void familyTests() {
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/42',
+          'bodytmi-logical-export/43',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {

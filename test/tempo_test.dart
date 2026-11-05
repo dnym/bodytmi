@@ -75,6 +75,384 @@ Future<void> _fails(Future<Object?> action) =>
 
 void tempoTests() {
   test(
+    'native CLI times a repetition-only set with an explicit additional duration',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-rep-timer-cli-',
+      );
+      final database = '${dir.path}/db.sqlite';
+      try {
+        Future<Map<String, Object?>> call(
+          String command,
+          Map<String, Object?> data,
+        ) async {
+          final result = await invoke(
+            command.split(' '),
+            jsonEncode({'schemaVersion': 1, 'database': database, ...data}),
+          );
+          equal(result.code, 0);
+          equal(result.error, '');
+          return jsonObject(
+            jsonObject(jsonDecode(result.output), 'response')['data'],
+            'data',
+          );
+        }
+
+        await call('store publish', {
+          'definition': {
+            'id': 'reps-only',
+            'name': 'Rep practice',
+            'slots': [
+              {
+                'id': 'lift',
+                'exercise': 'squat',
+                'implementation': 'bodyweight',
+                'targets': {
+                  'reps': {'value': '5', 'unit': 'rep'},
+                },
+              },
+            ],
+            'plan': {'id': 'set', 'type': 'effort', 'slot': 'lift'},
+          },
+          'expectedRevision': 0,
+        });
+        final session = await call('store start', {
+          'id': 'session',
+          'templateId': 'reps-only',
+          'revision': 1,
+          'startedAt': instant(1).toIso8601String(),
+        });
+        final clock = await call('timer start', {
+          'id': 'clock',
+          'sessionId': 'session',
+          'setId': 'set',
+          'metric': 'duration',
+          'plan': {
+            'unplannedDuration': true,
+            'effortMilliseconds': 100,
+            'tempo': {
+              'phases': [
+                {'id': 'lower', 'milliseconds': 25},
+                {'id': 'raise', 'milliseconds': 25},
+              ],
+            },
+          },
+          'at': instant(1).toIso8601String(),
+        });
+        final run = await call('timer run', {
+          'id': 'clock',
+          'expectedVersion': clock['version'],
+        });
+        final ended = jsonObject(run['timer'], 'timer');
+        equal(ended['status'], 'awaitingConfirmation');
+        final before = await call('store show', {'id': 'session'});
+        equal(
+          jsonObject(jsonList(before, 'sets').single, 'set')['status'],
+          'planned',
+        );
+        await call('timer confirm', {
+          'id': 'clock',
+          'expectedVersion': ended['version'],
+          'expectedSessionVersion': session['contentVersion'],
+          'at': instant(1).toIso8601String(),
+          'actuals': {
+            'reps': {'value': '7', 'unit': 'rep'},
+          },
+        });
+        final after = await call('store show', {'id': 'session'});
+        final actuals = jsonObject(
+          jsonObject(jsonList(after, 'sets').single, 'set')['actuals'],
+          'actuals',
+        );
+        equal(jsonObject(actuals['reps'], 'reps')['value'], '7');
+        equal(jsonObject(actuals['duration'], 'duration')['value'], '0.1');
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'explicit unplanned duration clocks time repetition sets and preserve confirmation across backups',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-rep-tempo-');
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final definition = WorkoutDefinition.fromJson({
+          'id': 'reps-only',
+          'name': 'Repetitions',
+          'slots': [
+            {
+              'id': 'lift',
+              'exercise': 'squat',
+              'implementation': 'bodyweight',
+              'targets': {
+                'reps': {'value': '5', 'unit': 'rep'},
+              },
+            },
+          ],
+          'plan': {'id': 'set', 'type': 'effort', 'slot': 'lift'},
+        });
+        final training = StoredTrainingService(store);
+        await training.publish(definition, 0);
+        var session = await training.start(
+          'rep-session',
+          'reps-only',
+          1,
+          instant(1),
+        );
+        await store.snapshot('${dir.path}/legacy.sqlite');
+        final legacyDb = sqlite3.open('${dir.path}/legacy.sqlite');
+        legacyDb.userVersion = 42;
+        legacyDb.close();
+        equal(NativeBackup.validateDatabase('${dir.path}/legacy.sqlite'), 42);
+        final migrated = await TrainingStore.open('${dir.path}/legacy.sqlite');
+        await migrated.close();
+        final plan = TimingPlan.fromJson({
+          'unplannedDuration': true,
+          'preparationMilliseconds': 1000,
+          'effortMilliseconds': 3000,
+          'tempo': _tempo(),
+        });
+        rejects(
+          () => TimingPlan.fromJson({
+            'effortMilliseconds': 3000,
+            'unplannedDuration': false,
+          }),
+        );
+        rejects(
+          () => TimingPlan.fromJson({
+            'restOnly': true,
+            'effortMilliseconds': 0,
+            'restMilliseconds': 1000,
+            'unplannedDuration': true,
+          }),
+        );
+        final timers = TimingService(store);
+        await _fails(
+          timers.start(
+            'bad',
+            session.id,
+            session.sets.single.id,
+            'reps',
+            plan,
+            instant(1),
+          ),
+        );
+        await _fails(
+          timers.start(
+            'missing',
+            session.id,
+            session.sets.single.id,
+            'duration',
+            null,
+            instant(1),
+          ),
+        );
+        var clock = await timers.start(
+          'rep-clock',
+          session.id,
+          session.sets.single.id,
+          'duration',
+          plan,
+          instant(1),
+        );
+        equal(clock.plan.unplannedDuration, true);
+        clock = await timers.resume(
+          clock.id,
+          clock.version,
+          'owner',
+          instant(1),
+        );
+        await _fails(
+          timers.start(
+            'competing',
+            session.id,
+            session.sets.single.id,
+            'duration',
+            plan,
+            instant(1),
+          ),
+        );
+        clock = (await timers.advance(
+          clock.id,
+          clock.version,
+          'owner',
+          2000,
+          instant(1),
+        )).activity;
+        equal(clock.effortElapsedMilliseconds, 1000);
+        clock = await timers.recover(clock.id, clock.version, instant(1));
+        equal(clock.status, 'paused');
+        equal(clock.effortElapsedMilliseconds, 1000);
+        clock = await timers.resume(
+          clock.id,
+          clock.version,
+          'owner-next',
+          instant(1),
+        );
+        clock = (await timers.advance(
+          clock.id,
+          clock.version,
+          'owner-next',
+          2000,
+          instant(1),
+        )).activity;
+        equal(clock.status, 'awaitingConfirmation');
+        equal(
+          (await training.session(session.id)).sets.single.status,
+          SetStatus.planned,
+        );
+        await _fails(
+          timers.confirm(
+            clock.id,
+            clock.version,
+            session.contentVersion,
+            instant(1),
+            {},
+          ),
+        );
+        clock = await timers.confirm(
+          clock.id,
+          clock.version,
+          session.contentVersion,
+          instant(1),
+          {'reps': Quantity('7', 'rep')},
+        );
+        session = await training.session(session.id);
+        equal(session.sets.single.actuals['reps']!.value.toString(), '7');
+        equal(session.sets.single.actuals['duration']!.value.toString(), '3');
+        equal(session.sets.single.timing!.elapsedMilliseconds, 3000);
+        check(!session.sets.single.suggested.containsKey('duration'));
+        equal(
+          (await timers.confirm(
+            clock.id,
+            clock.version - 1,
+            session.contentVersion - 1,
+            instant(1),
+            {'reps': Quantity('7', 'rep')},
+          )).status,
+          'confirmed',
+        );
+        final managedSession = await training.start(
+          'managed-reps',
+          'reps-only',
+          1,
+          instant(2),
+        );
+        final executions = ExecutionService(store);
+        var execution = await executions.start(
+          'rep-execution',
+          managedSession.id,
+          instant(2),
+        );
+        var managedClock = await executions.time(
+          execution.id,
+          execution.version,
+          instant(2),
+          metric: 'elapsed',
+          plan: plan,
+        );
+        managedClock = await timers.resume(
+          managedClock.id,
+          managedClock.version,
+          'managed-owner',
+          instant(2),
+        );
+        managedClock = (await timers.advance(
+          managedClock.id,
+          managedClock.version,
+          'managed-owner',
+          4000,
+          instant(2),
+        )).activity;
+        equal(managedClock.status, 'awaitingConfirmation');
+        execution = await executions.step(
+          execution.id,
+          execution.version,
+          managedSession.contentVersion,
+          'review',
+          instant(2),
+          action: 'confirm',
+          timerId: managedClock.id,
+          timerVersion: managedClock.version,
+          actuals: {'reps': Quantity('6', 'rep')},
+        );
+        check(execution.complete);
+        final managedResult = (await training.session(
+          managedSession.id,
+        )).sets.single;
+        equal(managedResult.actuals['reps']!.value.toString(), '6');
+        equal(managedResult.actuals['elapsed']!.value.toString(), '3');
+        final archive = canonicalJson((await store.archive()).toJson());
+        await store.backup('${dir.path}/native');
+        final file = '${dir.path}/logical.json';
+        await LogicalArchiveFiles.export(await store.archive(), file);
+        final prepared = await LogicalArchiveFiles.prepare(file);
+        final destination = await TrainingStore.open(
+          '${dir.path}/restored.sqlite',
+        );
+        try {
+          await destination.restore(
+            prepared.backup,
+            recoveryDestination: '${dir.path}/recovery',
+            confirm: true,
+          );
+        } finally {
+          await destination.close();
+          await prepared.close();
+        }
+        final reopened = await TrainingStore.open(
+          '${dir.path}/restored.sqlite',
+        );
+        try {
+          equal(canonicalJson((await reopened.archive()).toJson()), archive);
+          final native = await NativeBackup.prepare('${dir.path}/native');
+          try {
+            await reopened.restore(
+              native,
+              recoveryDestination: '${dir.path}/native-recovery',
+              confirm: true,
+            );
+          } finally {
+            await native.close();
+          }
+        } finally {
+          await reopened.close();
+        }
+        final nativeRestored = await TrainingStore.open(
+          '${dir.path}/restored.sqlite',
+        );
+        try {
+          equal(
+            canonicalJson((await nativeRestored.archive()).toJson()),
+            archive,
+          );
+        } finally {
+          await nativeRestored.close();
+        }
+        final envelope = jsonObject(
+          jsonDecode(await File(file).readAsString()),
+          'archive',
+        );
+        envelope['format'] = 'bodytmi-logical-export/42';
+        envelope.remove('sha256');
+        envelope['sha256'] = sha256
+            .convert(utf8.encode(canonicalJson(envelope)))
+            .toString();
+        await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
+        await _fails(LogicalArchiveFiles.prepare('${dir.path}/old.json'));
+        await store.snapshot('${dir.path}/old.sqlite');
+        final oldDb = sqlite3.open('${dir.path}/old.sqlite');
+        oldDb.userVersion = 42;
+        oldDb.close();
+        rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'tempo samples expose current cues without inferring repetitions or a duration target',
     () async {
       final plan = TempoPlan.fromJson(_tempo());
@@ -158,7 +536,7 @@ void tempoTests() {
         equal((await TimingService(migrated).show('clock')).plan.tempo, null);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          42,
+          43,
         );
       } finally {
         await migrated.close();
@@ -461,13 +839,13 @@ void tempoTests() {
       t = await timing.resume(t.id, t.version, 'epoch', instant(1));
       await timing.advance(t.id, t.version, 'epoch', 4500, instant(1));
       final expected = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 42);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 43);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/42',
+        'bodytmi-logical-export/43',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {

@@ -141,6 +141,7 @@ final class NativeBackup {
           40,
           41,
           42,
+          43,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -276,6 +277,7 @@ final class NativeBackup {
             40,
             41,
             42,
+            43,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -705,6 +707,8 @@ final class NativeBackup {
           final t = TimingActivity.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 43 && t.plan.unplannedDuration)
+            invalid('Unplanned duration timing requires schema v43.');
           if (db.userVersion < 10 && t.plan.tempo != null)
             invalid('Tempo timing requires schema v10.');
           if (db.userVersion < 8 && t.plan.restOnly)

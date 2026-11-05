@@ -677,7 +677,7 @@ void effortRolesTests() {
       final migrated = await TrainingStore.open('${dir.path}/v41.sqlite');
       await migrated.close();
       final migratedDb = sqlite3.open('${dir.path}/v41.sqlite');
-      equal(migratedDb.userVersion, 42);
+      equal(migratedDb.userVersion, 43);
       migratedDb.close();
       await training.publish(_definition(), 0);
       var session = await training.start(
@@ -1306,7 +1306,7 @@ void effortRolesTests() {
           throwsA(isA<BodyTmiException>()),
         );
         await store.snapshot('${dir.path}/roles.sqlite');
-        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 42);
+        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 43);
         final relabeled = sqlite3.open('${dir.path}/roles.sqlite');
         relabeled.userVersion = 40;
         relabeled.close();

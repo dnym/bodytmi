@@ -140,10 +140,9 @@ final class ExecutionService {
       invalid(
         'Select exactly one configured duration metric to time this effort.',
       );
-    final q = set.suggested[selected];
-    if (q?.dimension != Dimension.duration)
-      invalid('Timing metric is not duration.');
     final chosen = plan ?? timingPlanFor(s, set.id, selected);
+    if (!supportsTimingMetric(set, selected, chosen))
+      invalid('Timing metric is incompatible with the selected plan.');
     if (chosen.restOnly || chosen.restMilliseconds != 0)
       invalid(
         'Traversal effort clocks cannot add rest outside the authored rest occurrences.',

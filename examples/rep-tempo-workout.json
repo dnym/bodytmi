@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "rep-tempo-practice",
+    "name": "Repetition tempo practice",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "squat",
+        "implementation": "bodyweight",
+        "targets": {"reps": {"value": "5", "unit": "rep"}}
+      }
+    ],
+    "plan": {"id": "set", "type": "effort", "slot": "movement"}
+  }
+}

@@ -24,6 +24,7 @@ final class TimingPlan {
     this.nearEndMilliseconds,
     this.restOnly,
     this.tempo,
+    this.unplannedDuration,
   );
   factory TimingPlan.fromJson(Object? input) {
     final j = jsonObject(input, 'timing plan');
@@ -35,7 +36,11 @@ final class TimingPlan {
       'nearEndMilliseconds',
       'restOnly',
       'tempo',
+      'unplannedDuration',
     });
+    if (j.containsKey('unplannedDuration') && j['unplannedDuration'] != true)
+      invalid('unplannedDuration must be true when specified.');
+    final unplannedDuration = j['unplannedDuration'] == true;
     final restOnly = j['restOnly'] ?? false;
     if (restOnly is! bool) invalid('restOnly must be boolean.');
     final prep = timingInt(
@@ -69,7 +74,8 @@ final class TimingPlan {
             rest <= 0 ||
             overrun != 'stop' ||
             near != null ||
-            tempo != null))
+            tempo != null ||
+            unplannedDuration))
       invalid('A rest-only plan needs only a positive rest duration.');
     return TimingPlan._(
       prep,
@@ -79,12 +85,14 @@ final class TimingPlan {
       near,
       restOnly,
       tempo,
+      unplannedDuration,
     );
   }
   factory TimingPlan.fromDuration(Quantity duration) => TimingPlan.fromJson({
     'effortMilliseconds': _durationMilliseconds(duration),
   });
   final bool restOnly;
+  final bool unplannedDuration;
   final int preparationMilliseconds, effortMilliseconds, restMilliseconds;
   final String overrun;
   final int? nearEndMilliseconds;
@@ -97,6 +105,7 @@ final class TimingPlan {
     if (nearEndMilliseconds != null) 'nearEndMilliseconds': nearEndMilliseconds,
     if (restOnly) 'restOnly': true,
     if (tempo != null) 'tempo': tempo!.toJson(),
+    if (unplannedDuration) 'unplannedDuration': true,
   };
 }
 

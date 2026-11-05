@@ -112,6 +112,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   40 => schemaV27, // v40 adds explicit untimed rest occurrences.
   41 => schemaV27, // v41 adds explicit back-off and drop effort roles.
   42 => schemaV27, // v42 adds role-specific progression receipts.
+  43 => schemaV27, // v43 adds explicit unplanned duration timers.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',
