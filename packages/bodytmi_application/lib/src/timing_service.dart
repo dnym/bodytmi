@@ -81,10 +81,12 @@ final class TimingService {
         'Rest timing requires an unscoped rest occurrence in an active session.',
       );
     final rest = occurrence!.activity as Rest;
+    if (rest.isManual)
+      invalid('Manual rest has no duration clock; use execution advance.');
     final plan = TimingPlan.fromJson({
       'restOnly': true,
       'effortMilliseconds': 0,
-      'restMilliseconds': rest.durationSeconds * 1000,
+      'restMilliseconds': rest.durationSeconds! * 1000,
     });
     final all = await repository.timingActivities();
     final existing = all.where((t) => t.id == id).firstOrNull;
@@ -285,7 +287,8 @@ void validateTimingData(
       if (occurrences.length != 1 ||
           occurrences.single.activity is! Rest ||
           _insideWindow(s, t.setId) ||
-          (occurrences.single.activity as Rest).durationSeconds * 1000 !=
+          (occurrences.single.activity as Rest).isManual ||
+          (occurrences.single.activity as Rest).durationSeconds! * 1000 !=
               t.plan.restMilliseconds ||
           t.metric != 'duration' ||
           parseInstant(

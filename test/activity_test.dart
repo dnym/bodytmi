@@ -3,6 +3,34 @@ import 'fixtures.dart';
 import 'support.dart';
 
 void activityTests() {
+  test('manual rest is explicit and cannot imply a duration', () {
+    final rest =
+        Activity.fromJson({'id': 'recover', 'type': 'rest', 'manual': true})
+            as Rest;
+    check(rest.isManual);
+    equal(rest.durationSeconds, null);
+    jsonEqual(rest.toJson(), {'type': 'rest', 'id': 'recover', 'manual': true});
+    for (final fields in [
+      {'manual': false},
+      {'manual': null},
+      {'manual': true, 'durationSeconds': 10},
+      {'durationSeconds': 0},
+      <String, Object?>{},
+    ]) {
+      rejects(
+        () => Activity.fromJson({'id': 'recover', 'type': 'rest', ...fields}),
+      );
+    }
+    final timed =
+        Activity.fromJson({
+              'id': 'recover',
+              'type': 'rest',
+              'durationSeconds': 10,
+            })
+            as Rest;
+    check(!timed.isManual);
+    equal(timed.durationSeconds, 10);
+  });
   test(
     'requested nested walk/run plan has 72 efforts and only two outer rests',
     () {
@@ -29,7 +57,10 @@ void activityTests() {
       equal(occurrences.where((o) => o.activity is Effort).length, 72);
       final rests = occurrences.map((o) => o.activity).whereType<Rest>();
       equal(rests.length, 2);
-      equal(rests.fold<int>(0, (sum, rest) => sum + rest.durationSeconds), 240);
+      equal(
+        rests.fold<int>(0, (sum, rest) => sum + rest.durationSeconds!),
+        240,
+      );
       equal(occurrences.map((o) => o.id).toSet().length, 74);
       equal(72 * 30 + 240, 40 * 60);
       jsonEqual(Activity.fromJson(plan.toJson()).toJson(), plan.toJson());

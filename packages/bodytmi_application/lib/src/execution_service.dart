@@ -96,6 +96,9 @@ final class ExecutionService {
     if (s.status != SessionStatus.active) invalid('Session is finalized.');
     final occurrence = executionPlan(s)[e.cursor];
     final rest = occurrence.activity is Rest;
+    if (rest && (occurrence.activity as Rest).isManual) {
+      invalid('Manual rest has no duration clock; use execution advance.');
+    }
     final clockId = e.clockId(rest ? 'rest' : 'effort');
     final old = await repository.timingActivity(clockId);
     if (old != null &&
@@ -227,12 +230,14 @@ final class ExecutionService {
     } else if (rest) {
       if (action != 'advance')
         invalid('Rest does not contain effort results to complete.');
-      final clock = (await repository.timingActivities())
-          .where((t) => t.id == e.clockId('rest'))
-          .firstOrNull;
-      if (clock?.status != 'completed')
-        invalid('Run the rest clock to its boundary or explicitly skip it.');
-      sourceTimer = clock!.id;
+      if (!(occurrence.activity as Rest).isManual) {
+        final clock = (await repository.timingActivities())
+            .where((t) => t.id == e.clockId('rest'))
+            .firstOrNull;
+        if (clock?.status != 'completed')
+          invalid('Run the rest clock to its boundary or explicitly skip it.');
+        sourceTimer = clock!.id;
+      }
     } else {
       if (action == 'complete')
         s = await training.edit(
@@ -285,8 +290,10 @@ final class ExecutionService {
     TrainingSession s,
     DateTime at,
   ) async {
-    if (!e.complete && executionPlan(s)[e.cursor].activity is Rest)
-      await time(e.id, e.version, at);
+    if (!e.complete) {
+      final current = executionPlan(s)[e.cursor].activity;
+      if (current is Rest && !current.isManual) await time(e.id, e.version, at);
+    }
   }
 
   /// Skip only the unacknowledged remainder of a structural occurrence. Existing
@@ -425,7 +432,8 @@ void _validateManagedClocks(
     final rest = plan[i].activity is Rest;
     final t = byId['execution-${e.id}-${rest ? 'rest' : 'effort'}-$i'];
     if (t != null &&
-        (t.sessionId != s.id ||
+        ((plan[i].activity is Rest && (plan[i].activity as Rest).isManual) ||
+            t.sessionId != s.id ||
             t.setId != plan[i].id ||
             t.plan.restOnly != rest ||
             (!rest && t.plan.restMilliseconds != 0)))
@@ -443,8 +451,8 @@ List<ActivityOccurrence> executionPlan(TrainingSession s) {
       'Execution requires at most 10000 uniquely identified occurrences.',
     );
   for (final o in plan)
-    if (o.activity case Rest(:final durationSeconds)) {
-      if (durationSeconds < 1 || durationSeconds > 86400)
+    if (o.activity case Rest(:final durationSeconds, :final isManual)) {
+      if (!isManual && (durationSeconds! < 1 || durationSeconds > 86400))
         invalid('Execution rest duration exceeds the 24-hour clock limit.');
     }
   return plan;
@@ -566,7 +574,9 @@ void validateExecutionData(
         if (action != 'skip' && action != 'advance' && !groupSkip)
           invalid('Rest receipt cannot certify effort.');
         final timer = r['timerId'] == null ? null : timerMap[r['timerId']];
-        if (groupSkip
+        if ((o.activity as Rest).isManual
+            ? r.containsKey('timerId')
+            : groupSkip
             ? r.containsKey('timerId')
             : (timer == null ||
                   !timer.plan.restOnly ||
@@ -634,7 +644,9 @@ void validateExecutionData(
         }
       }
     }
-    if (!e.complete && plan[e.cursor].activity is Rest) {
+    if (!e.complete &&
+        plan[e.cursor].activity is Rest &&
+        !(plan[e.cursor].activity as Rest).isManual) {
       final t = timerMap[e.clockId('rest')];
       if (t == null ||
           !t.plan.restOnly ||

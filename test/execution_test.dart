@@ -43,6 +43,19 @@ WorkoutDefinition _definition() => WorkoutDefinition.fromJson({
     ],
   },
 });
+WorkoutDefinition _manualDefinition() => WorkoutDefinition.fromJson({
+  ..._definition().toJson(),
+  'id': 'manual-rest',
+  'plan': {
+    'id': 'workout',
+    'type': 'sequence',
+    'children': [
+      {'id': 'hold-set', 'type': 'effort', 'slot': 'hold'},
+      {'id': 'recovery', 'type': 'rest', 'manual': true},
+      {'id': 'lift-set', 'type': 'effort', 'slot': 'lift'},
+    ],
+  },
+});
 Future<void> _fails(Future<Object?> action) =>
     expectLater(action, throwsA(isA<BodyTmiException>()));
 Future<void> _withStore(
@@ -138,6 +151,407 @@ Future<WorkoutExecution> _startGroups(TrainingStore store) async {
 }
 
 void executionTests() {
+  test(
+    'manual rest advances only explicitly and survives both portability formats',
+    () => _withStore((store, dir) async {
+      await store.snapshot('$dir/v39.sqlite');
+      final old = sqlite3.open('$dir/v39.sqlite');
+      old.userVersion = 39;
+      old.close();
+      equal(NativeBackup.validateDatabase('$dir/v39.sqlite'), 39);
+      final migrated = await TrainingStore.open('$dir/v39.sqlite');
+      equal(
+        (await StoredTrainingService(migrated).revision('traversal')).number,
+        1,
+      );
+      await migrated.close();
+      final training = StoredTrainingService(store);
+      await training.publish(_manualDefinition(), 0);
+      final session = await training.start(
+        'manual-session',
+        'manual-rest',
+        1,
+        instant(1),
+      );
+      final service = ExecutionService(store);
+      var e = await service.start('manual-execution', session.id, instant(1));
+      e = await _step(store, e, 'hold', action: 'complete');
+      equal(e.cursor, 1);
+      final view = await service.view(e.id);
+      equal(view['timer'], null);
+      equal(
+        jsonObject(
+          jsonObject(view['current'], 'current')['activity'],
+          'activity',
+        )['manual'],
+        true,
+      );
+      check((await store.timingActivities()).isEmpty);
+      await _fails(service.time(e.id, e.version, instant(1)));
+      await _fails(
+        TimingService(
+          store,
+        ).startRest('manual-clock', session.id, 'workout/recovery', instant(1)),
+      );
+      final current = (await store.session(session.id))!;
+      await _fails(
+        service.step(
+          e.id,
+          e.version + 1,
+          current.contentVersion,
+          'rest',
+          instant(1),
+        ),
+      );
+      final before = canonicalJson((await store.archive()).toJson());
+      await store.backup('$dir/native-manual');
+      final file = '$dir/manual.json';
+      await LogicalArchiveFiles.export(await store.archive(), file);
+      final prepared = await LogicalArchiveFiles.prepare(file);
+      final destination = await TrainingStore.open('$dir/restore.sqlite');
+      try {
+        await destination.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery',
+          confirm: true,
+        );
+      } finally {
+        await destination.close();
+        await prepared.close();
+      }
+      final restored = await TrainingStore.open('$dir/restore.sqlite');
+      try {
+        equal(canonicalJson((await restored.archive()).toJson()), before);
+        final native = await NativeBackup.prepare('$dir/native-manual');
+        try {
+          await restored.restore(
+            native,
+            recoveryDestination: '$dir/recovery-native',
+            confirm: true,
+          );
+        } finally {
+          await native.close();
+        }
+      } finally {
+        await restored.close();
+      }
+      final nativeRestored = await TrainingStore.open('$dir/restore.sqlite');
+      try {
+        equal(canonicalJson((await nativeRestored.archive()).toJson()), before);
+      } finally {
+        await nativeRestored.close();
+      }
+      final envelope =
+          jsonDecode(await File(file).readAsString()) as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/39';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final entry in envelope.entries)
+                  if (entry.key != 'sha256') entry.key: entry.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('$dir/old-manual.json').writeAsString(jsonEncode(envelope));
+      await _fails(LogicalArchiveFiles.prepare('$dir/old-manual.json'));
+      await store.snapshot('$dir/manual.sqlite');
+      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 40);
+      final relabeled = sqlite3.open('$dir/manual.sqlite');
+      relabeled.userVersion = 39;
+      relabeled.close();
+      rejects(() => NativeBackup.validateDatabase('$dir/manual.sqlite'));
+      final previous = e;
+      e = await service.step(
+        e.id,
+        e.version,
+        current.contentVersion,
+        'rest',
+        instant(1),
+      );
+      equal(e.cursor, 2);
+      equal(e.receipts[1]['timerId'], null);
+      final retry = await service.step(
+        previous.id,
+        previous.version,
+        current.contentVersion,
+        'rest',
+        instant(1),
+      );
+      equal(retry.cursor, 2);
+      e = await _step(store, e, 'lift', action: 'complete');
+      check(e.complete);
+      final done = await training.session(session.id);
+      equal(done.sets.last.status, SetStatus.completed);
+      check((await store.timingActivities()).isEmpty);
+      final archive = await store.archive();
+      final forged = copyJson(archive.toJson());
+      final recorded = jsonObject(
+        jsonList(forged, 'executions').single,
+        'execution',
+      );
+      jsonObject(jsonList(recorded, 'receipts')[1], 'receipt')['timerId'] =
+          'invented-clock';
+      rejects(() => TrainingArchive.fromJson(forged));
+    }),
+  );
+  test(
+    'manual rest before a timed rest rolls back if the next clock conflicts',
+    () => _withStore((store, _) async {
+      final def = _manualDefinition().toJson();
+      def['id'] = 'consecutive-rest';
+      def['plan'] = {
+        'id': 'workout',
+        'type': 'sequence',
+        'children': [
+          {'id': 'manual', 'type': 'rest', 'manual': true},
+          {'id': 'timed', 'type': 'rest', 'durationSeconds': 2},
+          {'id': 'lift', 'type': 'effort', 'slot': 'lift'},
+        ],
+      };
+      final training = StoredTrainingService(store);
+      await training.publish(WorkoutDefinition.fromJson(def), 0);
+      final session = await training.start(
+        'rest-session',
+        'consecutive-rest',
+        1,
+        instant(1),
+      );
+      final clock = await TimingService(store).start(
+        'other-clock',
+        'session',
+        'workout/hold-set',
+        'duration',
+        TimingPlan.fromJson({'effortMilliseconds': 1000}),
+        instant(1),
+      );
+      final service = ExecutionService(store);
+      var e = await service.start('rest-execution', session.id, instant(1));
+      await _fails(
+        service.step(
+          e.id,
+          e.version,
+          session.contentVersion,
+          'manual',
+          instant(1),
+        ),
+      );
+      equal((await service.show(e.id)).cursor, 0);
+      await TimingService(
+        store,
+      ).stop(clock.id, clock.version, instant(1), confirm: true, discard: true);
+      e = await service.step(
+        e.id,
+        e.version,
+        session.contentVersion,
+        'manual',
+        instant(1),
+      );
+      equal(e.cursor, 1);
+      equal(
+        (await TimingService(store).show(e.clockId('rest'))).status,
+        'paused',
+      );
+      await store.archive();
+    }),
+  );
+  test(
+    'group and individual skips acknowledge manual rest without a clock',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      await training.publish(_manualDefinition(), 0);
+      await training.start('group-manual', 'manual-rest', 1, instant(1));
+      var e = await ExecutionService(
+        store,
+      ).start('group-manual-exec', 'group-manual', instant(1));
+      e = await ExecutionService(store).skipGroup(
+        e.id,
+        e.version,
+        1,
+        'skip-all',
+        'workout',
+        instant(1),
+        confirm: true,
+      );
+      check(e.complete);
+      check(!e.receipts[1].containsKey('timerId'));
+      await training.start('single-manual', 'manual-rest', 1, instant(1));
+      var second = await ExecutionService(
+        store,
+      ).start('single-manual-exec', 'single-manual', instant(1));
+      second = await _step(store, second, 'hold', action: 'complete');
+      final s = await training.session('single-manual');
+      await _fails(
+        ExecutionService(store).step(
+          second.id,
+          second.version,
+          s.contentVersion,
+          'skip-rest',
+          instant(1),
+          action: 'skip',
+        ),
+      );
+      second = await ExecutionService(store).step(
+        second.id,
+        second.version,
+        s.contentVersion,
+        'skip-rest',
+        instant(1),
+        action: 'skip',
+        confirm: true,
+      );
+      equal(second.cursor, 2);
+      check(!second.receipts[1].containsKey('timerId'));
+      check((await store.timingActivities()).isEmpty);
+      await store.archive();
+    }),
+  );
+  test(
+    'manual rest advances only its selected program after session finish',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      await training.publish(_manualDefinition(), 0);
+      final programs = ProgramService(store);
+      for (final name in ['strength', 'cardio']) {
+        await programs.publish(
+          ProgramDefinition.fromJson({
+            'id': name,
+            'name': name,
+            'plan': {
+              'id': 'day',
+              'type': 'day',
+              'templateId': 'manual-rest',
+              'revision': 1,
+            },
+          }),
+          0,
+        );
+        await programs.create('$name-run', name, 1, instant(1));
+      }
+      final strength = await programs.start(
+        'strength-run',
+        1,
+        'strength-session',
+        instant(1),
+      );
+      final cardio = await programs.start(
+        'cardio-run',
+        1,
+        'cardio-session',
+        instant(1),
+      );
+      final cardioRun = canonicalJson(
+        (await programs.run('cardio-run')).toJson(),
+      );
+      final cardioSession = canonicalJson(cardio.toJson());
+      var e = await ExecutionService(
+        store,
+      ).start('program-execution', strength.id, instant(1));
+      e = await _step(store, e, 'hold', action: 'complete');
+      e = await _step(store, e, 'manual-rest');
+      e = await _step(store, e, 'lift', action: 'complete');
+      check(e.complete);
+      equal((await programs.run('strength-run')).cursor, 0);
+      var s = await training.session(strength.id);
+      s = await training.edit(
+        s.id,
+        s.contentVersion,
+        (s) => s.finish(instant(1).add(const Duration(hours: 1))),
+      );
+      await training.edit(
+        s.id,
+        s.contentVersion,
+        (s) => s.finish(instant(1).add(const Duration(hours: 1))),
+      );
+      equal((await programs.run('strength-run')).cursor, 1);
+      equal(
+        canonicalJson((await programs.run('cardio-run')).toJson()),
+        cardioRun,
+      );
+      equal(
+        canonicalJson((await training.session(cardio.id)).toJson()),
+        cardioSession,
+      );
+      equal((await store.programReceipts()).length, 1);
+      await store.archive();
+    }),
+  );
+  test('native CLI exposes manual rest and explicit advancement', () async {
+    final dir = await Directory.systemTemp.createTemp(
+      'bodytmi-manual-rest-cli-',
+    );
+    final path = '${dir.path}/db.sqlite';
+    try {
+      Future<Map<String, Object?>> call(
+        String name,
+        Map<String, Object?> fields,
+      ) async {
+        final response = await invoke(
+          name.split(' '),
+          jsonEncode({'schemaVersion': 1, 'database': path, ...fields}),
+        );
+        equal(response.code, 0);
+        return jsonObject(
+          jsonObject(jsonDecode(response.output), 'response')['data'],
+          'data',
+        );
+      }
+
+      await call('store publish', {
+        'definition': _manualDefinition().toJson(),
+        'expectedRevision': 0,
+      });
+      await call('store start', {
+        'id': 'cli',
+        'templateId': 'manual-rest',
+        'revision': 1,
+        'startedAt': instant(1).toIso8601String(),
+      });
+      await call('execution start', {
+        'id': 'ex',
+        'sessionId': 'cli',
+        'at': instant(1).toIso8601String(),
+      });
+      var view = await call('execution complete', {
+        'id': 'ex',
+        'expectedVersion': 1,
+        'expectedSessionVersion': 1,
+        'requestId': 'hold',
+        'at': instant(1).toIso8601String(),
+        'acceptSuggested': true,
+      });
+      equal(view['cursor'], 1);
+      equal(view['timer'], null);
+      final request = {
+        'id': 'ex',
+        'expectedVersion': view['version'],
+        'expectedSessionVersion': view['sessionContentVersion'],
+        'requestId': 'rest',
+        'at': instant(1).toIso8601String(),
+      };
+      final run = await invoke([
+        'execution',
+        'run',
+      ], jsonEncode({'schemaVersion': 1, 'database': path, ...request}));
+      equal(run.code, 2);
+      equal(run.output, '');
+      view = await call('execution advance', request);
+      equal(view['cursor'], 2);
+      equal((await call('execution advance', request))['cursor'], 2);
+      view = await call('execution complete', {
+        'id': 'ex',
+        'expectedVersion': view['version'],
+        'expectedSessionVersion': view['sessionContentVersion'],
+        'requestId': 'lift',
+        'at': instant(1).toIso8601String(),
+        'acceptSuggested': true,
+      });
+      equal(view['status'], 'completed');
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
   test(
     'carry confirmed actuals during guided rest keeps cursor and source version',
     () => _withStore((store, dir) async {
@@ -243,7 +657,7 @@ void executionTests() {
       await File('$dir/old-carry.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-carry.json'));
       await store.snapshot('$dir/carry.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 39);
+      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 40);
       final old = sqlite3.open('$dir/carry.sqlite');
       old.userVersion = 36;
       old.close();
@@ -580,7 +994,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          39,
+          40,
         );
       } finally {
         await migrated.close();
@@ -1599,13 +2013,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 39);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 40);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/39',
+        'bodytmi-logical-export/40',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {

@@ -69,7 +69,13 @@ sealed class Activity {
               )
             : Effort(id, identifier(json, 'slot'), role as String);
       case 'rest':
-        checkKeys(json, {'id', 'type', 'durationSeconds'});
+        checkKeys(json, {'id', 'type', 'durationSeconds', 'manual'});
+        if (json.containsKey('manual')) {
+          if (json['manual'] != true || json.containsKey('durationSeconds')) {
+            invalid('Manual rest requires manual:true and no duration.');
+          }
+          return Rest.manual(id);
+        }
         return Rest(id, _positiveInt(json, 'durationSeconds'));
       case 'sequence':
         checkKeys(json, {'id', 'type', 'children'});
@@ -252,13 +258,17 @@ final class Effort extends Activity {
 }
 
 final class Rest extends Activity {
-  const Rest(super.id, this.durationSeconds);
-  final int durationSeconds;
+  const Rest(super.id, int durationSeconds)
+    : durationSeconds = durationSeconds,
+      isManual = false;
+  const Rest.manual(super.id) : durationSeconds = null, isManual = true;
+  final int? durationSeconds;
+  final bool isManual;
   @override
   Map<String, Object?> toJson() => {
     'type': 'rest',
     'id': id,
-    'durationSeconds': durationSeconds,
+    if (isManual) 'manual': true else 'durationSeconds': durationSeconds,
   };
 }
 
