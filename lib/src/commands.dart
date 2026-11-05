@@ -16,6 +16,7 @@ const commandNames = [
   'template publish',
   'activity expand',
   'activity groups',
+  'activity window-status',
   'session start',
   'session show',
   'session summary',
@@ -126,6 +127,23 @@ final class Commands {
               group.toJson(),
           ],
         };
+      case 'activity window-status':
+        keys({
+          'definition',
+          'occurrence',
+          'elapsedMilliseconds',
+          'windowStarts',
+        });
+        final occurrence = request['occurrence'];
+        final elapsed = request['elapsedMilliseconds'];
+        if (occurrence is! int || elapsed is! int)
+          invalid('occurrence and elapsedMilliseconds must be integers.');
+        data = const WindowDeadlines().evaluate(
+          definition: WorkoutDefinition.fromJson(request['definition']),
+          occurrence: occurrence,
+          elapsedMilliseconds: elapsed,
+          windowStarts: jsonObject(request['windowStarts'], 'windowStarts'),
+        );
       case 'session start':
         keys({
           'id',

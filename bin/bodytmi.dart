@@ -90,6 +90,8 @@ Future<void> main(List<String> arguments) async {
               'Effort roles are work, warmup, backoff and drop. Prefill and reports keep roles separate; summaries include all except warmups by default and accept an explicit roles list. Graph history sources can explicitly filter by role. Stored progression propose/show/accept/decline accept an optional role, default work; each role has an independent receipt, targets and counter within its run.',
           'activityGroups':
               'activity groups takes definition and optional containing occurrence index. It reports half-open group bounds and authored durations for window scopes, including repeated and nested windows. This is structural inspection only; scoped window execution remains unsupported.',
+          'windowStatus':
+              'activity window-status takes definition/occurrence/elapsedMilliseconds/windowStarts. It calculates nested authored window deadlines from explicit shared logical milliseconds. It does not own or advance a clock, record results or execute windows.',
           'roleProgressionPreview':
               'session progression-preview takes session/slotId/rule and optional role, ruleType and state; store progression-preview takes database/id instead of session. Role defaults to work; ruleType defaults to double. State is supplied explicitly, defaults to zero, and is not loaded from stored receipts. Preview is read-only and does not apply targets or create progression decisions.',
           'progressionTrack':

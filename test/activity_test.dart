@@ -196,6 +196,85 @@ void activityTests() {
     rejects(() => WorkoutDefinition.fromJson(input));
   });
   test(
+    'window deadlines use one explicit logical timeline and never certify effort',
+    () async {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'outer',
+        'type': 'window',
+        'durationSeconds': 10,
+        'child': {
+          'id': 'inner',
+          'type': 'window',
+          'durationSeconds': 3,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        },
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      const resolver = WindowDeadlines();
+      final starts = <String, Object?>{'outer': 0, 'outer/inner': 9000};
+      Map<String, Object?> resolve(
+        int elapsed, [
+        Map<String, Object?>? windows,
+      ]) => resolver.evaluate(
+        definition: workout,
+        occurrence: 0,
+        elapsedMilliseconds: elapsed,
+        windowStarts: windows ?? starts,
+      );
+      final before = resolve(9999);
+      equal(before['expired'], false);
+      equal(before['earliestDeadlineMilliseconds'], 10000);
+      final after = resolve(11000);
+      final rows = jsonList(
+        after,
+        'windows',
+      ).map((r) => jsonObject(r, 'window')).toList();
+      equal(after['expired'], true);
+      equal(rows[0]['expired'], true);
+      equal(rows[0]['overrunMilliseconds'], 1000);
+      equal(rows[1]['expired'], false);
+      equal(rows[1]['remainingMilliseconds'], 1000);
+      equal(resolve(12000)['expired'], true);
+      equal(
+        jsonObject(jsonList(resolve(12000), 'windows')[1], 'inner')['expired'],
+        true,
+      );
+      final tied = resolve(10000, {'outer': 0, 'outer/inner': 7000});
+      check(
+        jsonList(
+          tied,
+          'windows',
+        ).every((row) => jsonObject(row, 'window')['expired'] == true),
+      );
+      jsonEqual(resolve(11000), after);
+      check(!after.containsKey('results') && !after.containsKey('completed'));
+      rejects(() => resolve(11000, {'outer': 0}));
+      rejects(() => resolve(11000, {'outer': 0, 'outer/inner': 10000}));
+      rejects(() => resolve(11000, {'outer': 5000, 'outer/inner': 4000}));
+      rejects(() => resolve(8000));
+      rejects(() => resolve(2000000001));
+      final request = {
+        'schemaVersion': 1,
+        'definition': input,
+        'occurrence': 0,
+        'elapsedMilliseconds': 11000,
+        'windowStarts': starts,
+      };
+      final result = const Commands().execute(
+        'activity window-status',
+        request,
+      );
+      jsonEqual(result['data'], after);
+      final cli = await invoke([
+        'activity',
+        'window-status',
+      ], jsonEncode(request));
+      equal(cli.code, 0);
+      jsonEqual(jsonObject(jsonDecode(cli.output), 'response')['data'], after);
+    },
+  );
+  test(
     'group queries bound their output and allow a narrow occurrence filter',
     () {
       final plan = Repeat(
