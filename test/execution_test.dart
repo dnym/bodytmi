@@ -257,7 +257,7 @@ void executionTests() {
       await File('$dir/old-manual.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-manual.json'));
       await store.snapshot('$dir/manual.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 43);
+      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 44);
       final relabeled = sqlite3.open('$dir/manual.sqlite');
       relabeled.userVersion = 39;
       relabeled.close();
@@ -657,7 +657,7 @@ void executionTests() {
       await File('$dir/old-carry.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-carry.json'));
       await store.snapshot('$dir/carry.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 43);
+      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 44);
       final old = sqlite3.open('$dir/carry.sqlite');
       old.userVersion = 36;
       old.close();
@@ -994,7 +994,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          43,
+          44,
         );
       } finally {
         await migrated.close();
@@ -2015,13 +2015,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 43);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 44);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/43',
+        'bodytmi-logical-export/44',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {

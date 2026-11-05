@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/43';
+const _format = 'bodytmi-logical-export/44';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -104,6 +104,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/40',
       'bodytmi-logical-export/41',
       'bodytmi-logical-export/42',
+      'bodytmi-logical-export/43',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -112,7 +113,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final unplannedTimingData = input['format'] == _format;
+    final openEndedTimingData = input['format'] == _format;
+    final unplannedTimingData =
+        openEndedTimingData || input['format'] == 'bodytmi-logical-export/43';
     final roleProgressionData =
         unplannedTimingData || input['format'] == 'bodytmi-logical-export/42';
     final extendedRolesData =
@@ -405,6 +408,17 @@ final class LogicalArchiveFiles {
       invalid('Slot timing defaults require logical v13.');
     if (!declineData && archive.progressions.any((d) => d.declinedAt != null))
       invalid('Progression declines require logical v11.');
+    if (!openEndedTimingData &&
+        (archive.timers.any((t) => t.plan.openEnded) ||
+            archive.sessions.any(
+              (s) => s.sets.any((set) => set.timing?.termination == 'manual'),
+            ) ||
+            archive.progressions.any(
+              (d) => d.session.sets.any(
+                (set) => set.timing?.termination == 'manual',
+              ),
+            )))
+      invalid('Open-ended timing requires logical v44.');
     if (!unplannedTimingData &&
         archive.timers.any((t) => t.plan.unplannedDuration))
       invalid('Unplanned duration timing requires logical v43.');
@@ -460,7 +474,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 43');
+          db.execute('PRAGMA user_version = 44');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

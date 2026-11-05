@@ -9,8 +9,7 @@
   "plan": {
     "unplannedDuration": true,
     "preparationMilliseconds": 5000,
-    "effortMilliseconds": 30000,
-    "overrun": "continue",
+    "openEnded": true,
     "tempo": {
       "phases": [
         {"id": "lower", "milliseconds": 3000},

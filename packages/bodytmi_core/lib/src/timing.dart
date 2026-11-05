@@ -25,6 +25,7 @@ final class TimingPlan {
     this.restOnly,
     this.tempo,
     this.unplannedDuration,
+    this.openEnded,
   );
   factory TimingPlan.fromJson(Object? input) {
     final j = jsonObject(input, 'timing plan');
@@ -37,10 +38,14 @@ final class TimingPlan {
       'restOnly',
       'tempo',
       'unplannedDuration',
+      'openEnded',
     });
     if (j.containsKey('unplannedDuration') && j['unplannedDuration'] != true)
       invalid('unplannedDuration must be true when specified.');
     final unplannedDuration = j['unplannedDuration'] == true;
+    if (j.containsKey('openEnded') && j['openEnded'] != true)
+      invalid('openEnded must be true when specified.');
+    final openEnded = j['openEnded'] == true;
     final restOnly = j['restOnly'] ?? false;
     if (restOnly is! bool) invalid('restOnly must be boolean.');
     final prep = timingInt(
@@ -48,18 +53,29 @@ final class TimingPlan {
       'preparationMilliseconds',
       max: 86400000,
     );
-    final effort = timingInt(
-      j,
-      'effortMilliseconds',
-      min: restOnly ? 0 : 1,
-      max: 86400000,
-    );
+    if (openEnded &&
+        (!unplannedDuration ||
+            restOnly ||
+            j.containsKey('effortMilliseconds') ||
+            j.containsKey('overrun') ||
+            j.containsKey('nearEndMilliseconds')))
+      invalid(
+        'Open-ended effort requires unplannedDuration and no target, overrun or near-end setting.',
+      );
+    final effort = openEnded
+        ? 0
+        : timingInt(
+            j,
+            'effortMilliseconds',
+            min: restOnly ? 0 : 1,
+            max: 86400000,
+          );
     final rest = timingInt(
       {...j, 'restMilliseconds': j['restMilliseconds'] ?? 0},
       'restMilliseconds',
       max: 86400000,
     );
-    final overrun = j['overrun'] ?? 'stop';
+    final overrun = openEnded ? 'continue' : (j['overrun'] ?? 'stop');
     if (!{'stop', 'continue'}.contains(overrun))
       invalid('overrun must be stop or continue.');
     final near = j.containsKey('nearEndMilliseconds')
@@ -86,6 +102,7 @@ final class TimingPlan {
       restOnly,
       tempo,
       unplannedDuration,
+      openEnded,
     );
   }
   factory TimingPlan.fromDuration(Quantity duration) => TimingPlan.fromJson({
@@ -93,19 +110,21 @@ final class TimingPlan {
   });
   final bool restOnly;
   final bool unplannedDuration;
+  final bool openEnded;
   final int preparationMilliseconds, effortMilliseconds, restMilliseconds;
   final String overrun;
   final int? nearEndMilliseconds;
   final TempoPlan? tempo;
   Map<String, Object?> toJson() => {
     'preparationMilliseconds': preparationMilliseconds,
-    'effortMilliseconds': effortMilliseconds,
+    if (!openEnded) 'effortMilliseconds': effortMilliseconds,
     'restMilliseconds': restMilliseconds,
-    'overrun': overrun,
+    if (!openEnded) 'overrun': overrun,
     if (nearEndMilliseconds != null) 'nearEndMilliseconds': nearEndMilliseconds,
     if (restOnly) 'restOnly': true,
     if (tempo != null) 'tempo': tempo!.toJson(),
     if (unplannedDuration) 'unplannedDuration': true,
+    if (openEnded) 'openEnded': true,
   };
 }
 
@@ -179,7 +198,7 @@ final class TimedResult {
     identifier({'id': metric}, 'id');
     if (elapsedMilliseconds <= 0 ||
         elapsedMilliseconds > 604800000 ||
-        !{'target', 'early', 'overrun'}.contains(termination) ||
+        !{'target', 'early', 'overrun', 'manual'}.contains(termination) ||
         !{'timer', 'manual-override', 'manual-edit'}.contains(mode))
       invalid('Invalid timed-result provenance.');
   }
@@ -311,6 +330,7 @@ final class TimingActivity {
               'target',
               'early',
               'overrun',
+              'manual',
               'no-effort',
               'rest',
             }.contains(j['termination'])) ||
@@ -337,6 +357,11 @@ final class TimingActivity {
                     p.preparationMilliseconds + effort + p.restMilliseconds)) ||
         ((j['termination'] == 'no-effort') !=
             (j['termination'] != null && effort == 0 && !p.restOnly)) ||
+        (p.openEnded &&
+            j['termination'] != null &&
+            !{'manual', 'no-effort'}.contains(j['termination'])) ||
+        (!p.openEnded && j['termination'] == 'manual') ||
+        (j['termination'] == 'manual' && effort == 0) ||
         (j['termination'] == 'target' && effort != p.effortMilliseconds) ||
         (j['termination'] == 'early' &&
             (effort <= 0 || effort >= p.effortMilliseconds)) ||
@@ -491,9 +516,12 @@ final class TimingActivity {
         phaseElapsed += delta;
         total += delta;
         delta = 0;
-        if (before < p.effortMilliseconds && effort >= p.effortMilliseconds)
+        if (!p.openEnded &&
+            before < p.effortMilliseconds &&
+            effort >= p.effortMilliseconds)
           cue('target');
-        else if (p.nearEndMilliseconds != null &&
+        else if (!p.openEnded &&
+            p.nearEndMilliseconds != null &&
             before < p.effortMilliseconds - p.nearEndMilliseconds! &&
             effort >= p.effortMilliseconds - p.nearEndMilliseconds!)
           cue('near-end');
@@ -583,6 +611,8 @@ final class TimingActivity {
     if (phase != 'effort') invalid('Clock is not in effort phase.');
     final end = effortElapsedMilliseconds == 0
         ? 'no-effort'
+        : plan.openEnded
+        ? 'manual'
         : effortElapsedMilliseconds < plan.effortMilliseconds
         ? 'early'
         : effortElapsedMilliseconds == plan.effortMilliseconds
@@ -604,6 +634,8 @@ final class TimingActivity {
         termination ??
         (effortElapsedMilliseconds == 0
             ? 'no-effort'
+            : plan.openEnded
+            ? 'manual'
             : effortElapsedMilliseconds < plan.effortMilliseconds
             ? 'early'
             : effortElapsedMilliseconds == plan.effortMilliseconds

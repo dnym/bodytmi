@@ -95,7 +95,7 @@ Future<void> main(List<String> arguments) async {
           'tempoSample':
               'tempo sample takes tempo/previousElapsedMilliseconds/elapsedMilliseconds and optional includeInitial. It returns the current phase and at most the newest crossed cue from explicit effort-time samples; it does not own a clock, deliver audio or count reps.',
           'unplannedTiming':
-              'timer start and execution time/run can time a set without a prescribed duration metric using an explicit plan with unplannedDuration:true and an explicit unused duration metric ID. The plan still requires an explicit effortMilliseconds boundary; tempo is optional. Confirming records elapsed duration and requires explicit remaining actuals or acceptSuggested. The workout prescription is unchanged.',
+              'timer start and execution time/run can time a set without a prescribed duration metric using an explicit plan with unplannedDuration:true and an explicit unused duration metric ID. Specify either effortMilliseconds or openEnded:true; end open-ended effort explicitly. Tempo is optional. Confirming records elapsed duration and requires explicit remaining actuals or acceptSuggested. The workout prescription is unchanged.',
           'roleProgressionPreview':
               'session progression-preview takes session/slotId/rule and optional role, ruleType and state; store progression-preview takes database/id instead of session and optionally useTrack:true to load current run/role lineage instead of state. Active sessions can be previewed but must be finalized before creating durable decisions. Role defaults to work; ruleType defaults to double. Preview is read-only and does not apply targets or create progression decisions.',
           'progressionTrack':

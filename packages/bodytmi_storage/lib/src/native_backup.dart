@@ -142,6 +142,7 @@ final class NativeBackup {
           41,
           42,
           43,
+          44,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -278,6 +279,7 @@ final class NativeBackup {
             41,
             42,
             43,
+            44,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -442,6 +444,9 @@ final class NativeBackup {
             invalid('Body-mass rebind identity requires schema v34.');
           }
           final session = sessionFromJson(sessionJson);
+          if (db.userVersion < 44 &&
+              session.sets.any((s) => s.timing?.termination == 'manual'))
+            invalid('Manual timing termination requires schema v44.');
           if (db.userVersion < 37 &&
               session.sets.any((s) => s.carriedTargets.isNotEmpty)) {
             invalid('Carried actual targets require schema v37.');
@@ -519,6 +524,9 @@ final class NativeBackup {
           final d = ProgressionDecision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 44 &&
+              d.session.sets.any((s) => s.timing?.termination == 'manual'))
+            invalid('Frozen manual timing termination requires schema v44.');
           if (db.userVersion < 42 && d.role != 'work')
             invalid('Role-specific progression requires schema v42.');
           if (db.userVersion < 37 &&
@@ -707,6 +715,8 @@ final class NativeBackup {
           final t = TimingActivity.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 44 && t.plan.openEnded)
+            invalid('Open-ended timing requires schema v44.');
           if (db.userVersion < 43 && t.plan.unplannedDuration)
             invalid('Unplanned duration timing requires schema v43.');
           if (db.userVersion < 10 && t.plan.tempo != null)
