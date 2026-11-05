@@ -313,17 +313,25 @@ Future<Map<String, Object?>> executeStored(
     'archive export' => {'destination'},
     'archive validate' => {'source'},
     'archive restore' => {'source', 'recoveryDestination', 'confirm'},
-    'progression propose' => {'sessionId', 'slotId', 'rule', 'ruleType'},
-    'progression show' => {'sessionId', 'slotId'},
+    'progression propose' => {
+      'sessionId',
+      'slotId',
+      'role',
+      'rule',
+      'ruleType',
+    },
+    'progression show' => {'sessionId', 'slotId', 'role'},
     'progression accept' => {
       'sessionId',
       'slotId',
+      'role',
       'expectedVersion',
       'acceptedAt',
     },
     'progression decline' => {
       'sessionId',
       'slotId',
+      'role',
       'expectedVersion',
       'declinedAt',
     },
@@ -780,6 +788,9 @@ Future<Map<String, Object?>> executeStored(
         final progression = StoredProgressionService(store);
         final sessionId = identifier(request, 'sessionId');
         final slotId = identifier(request, 'slotId');
+        final role = request.containsKey('role')
+            ? requiredString(request, 'role')
+            : 'work';
         final decision = switch (command) {
           'progression propose' => await progression.propose(
             sessionId,
@@ -788,20 +799,23 @@ Future<Map<String, Object?>> executeStored(
             ruleType: request.containsKey('ruleType')
                 ? requiredString(request, 'ruleType')
                 : 'double',
+            role: role,
           ),
           'progression accept' => await progression.accept(
             sessionId,
             slotId,
             integer('expectedVersion'),
             parseInstant(request['acceptedAt'], 'acceptedAt'),
+            role: role,
           ),
           'progression decline' => await progression.decline(
             sessionId,
             slotId,
             integer('expectedVersion'),
             parseInstant(request['declinedAt'], 'declinedAt'),
+            role: role,
           ),
-          _ => await progression.decision(sessionId, slotId),
+          _ => await progression.decision(sessionId, slotId, role: role),
         };
         final changed = await progression.stale(decision);
         data = {

@@ -152,39 +152,49 @@ final class StoredTrainingService {
     final sets = <TrainingSet>[];
     final bySlot = {
       for (final slot in prescription.definition.slots)
-        slot.id: latestApplication(
-          decisions,
-          prescription.definition.id,
-          slot,
-          runId: runId,
-        ),
+        for (final role in ['work', 'warmup', 'backoff', 'drop'])
+          (slot.id, role): latestApplication(
+            decisions,
+            prescription.definition.id,
+            slot,
+            runId: runId,
+            role: role,
+          ),
     };
-    final workingCounts = <String, int>{};
-    for (final set in next.sets.where((s) => s.role == 'work')) {
-      workingCounts.update(set.slotId, (n) => n + 1, ifAbsent: () => 1);
+    final workingCounts = <(String, String), int>{};
+    for (final set in next.sets) {
+      workingCounts.update(
+        (set.slotId, set.role),
+        (n) => n + 1,
+        ifAbsent: () => 1,
+      );
     }
     final authored = {
       for (final entry in bySlot.entries)
         if (entry.value != null)
-          entry.key: prescription.definition.workingTargets(entry.key),
+          entry.key: prescription.definition.roleTargets(
+            entry.key.$1,
+            entry.key.$2,
+          ),
     };
     final previousAuthored = {
       for (final entry in bySlot.entries)
         if (entry.value != null)
-          entry.key: entry.value!.session.revision.definition.workingTargets(
-            entry.key,
+          entry.key: entry.value!.session.revision.definition.roleTargets(
+            entry.key.$1,
+            entry.key.$2,
           ),
     };
     for (final set in next.sets) {
-      final applied = set.role == 'work' ? bySlot[set.slotId] : null;
+      final applied = bySlot[(set.slotId, set.role)];
       if (applied == null) {
         sets.add(set);
         continue;
       }
       final vector = applied.nextSets;
-      final count = workingCounts[set.slotId];
+      final count = workingCounts[(set.slotId, set.role)];
       if (vector.length != count ||
-          previousAuthored[set.slotId]!.length != count)
+          previousAuthored[(set.slotId, set.role)]!.length != count)
         _conflict();
       final oldObjectives = applied.sets[set.ordinal].maxEffortMetrics;
       if (oldObjectives.length != set.maxEffortMetrics.length ||
@@ -209,8 +219,8 @@ final class StoredTrainingService {
             priorTarget == null ||
             target.compareTo(priorTarget) != 0)
           _conflict();
-        if (authored[set.slotId]![set.ordinal][metric]!.compareTo(
-              previousAuthored[set.slotId]![set.ordinal][metric]!,
+        if (authored[(set.slotId, set.role)]![set.ordinal][metric]!.compareTo(
+              previousAuthored[(set.slotId, set.role)]![set.ordinal][metric]!,
             ) !=
             0)
           _conflict();
@@ -288,7 +298,7 @@ final class StoredTrainingService {
     required List<TrainingSet> sets,
     required DerivedPlanRef reference,
     required String? runId,
-    required Map<String, ProgressionDecision?> bySlot,
+    required Map<(String, String), ProgressionDecision?> bySlot,
     required bool incrementSetVersions,
     Map<String, Object?>? reviewedPreview,
   }) async {
@@ -356,7 +366,7 @@ final class StoredTrainingService {
       final occurrenceId = binding['occurrenceId']! as String;
       final metric = binding['metric']! as String;
       final set = sets.firstWhere((item) => item.id == occurrenceId);
-      final applied = set.role == 'work' ? bySlot[set.slotId] : null;
+      final applied = bySlot[(set.slotId, set.role)];
       if (applied != null && applied.controlledMetrics.contains(metric)) {
         invalid(
           'Derived plan conflicts with an accepted progression target; reconciliation is required.',
@@ -454,12 +464,14 @@ final class StoredTrainingService {
     );
     final bySlot = {
       for (final slot in current.revision.definition.slots)
-        slot.id: latestApplication(
-          decisions,
-          current.revision.definition.id,
-          slot,
-          runId: runId,
-        ),
+        for (final role in ['work', 'warmup', 'backoff', 'drop'])
+          (slot.id, role): latestApplication(
+            decisions,
+            current.revision.definition.id,
+            slot,
+            runId: runId,
+            role: role,
+          ),
     };
     final result = await _resolveSessionPlan(
       session: current,

@@ -84,6 +84,280 @@ TrainingSession _complete(TrainingSession session) {
 
 void effortRolesTests() {
   test(
+    'role-specific progression remains isolated across simultaneous runs',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-role-runs-');
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final training = StoredTrainingService(store);
+        final programs = ProgramService(store);
+        await training.publish(_definition(), 0);
+        for (final name in ['strength', 'cardio']) {
+          await programs.publish(
+            ProgramDefinition.fromJson({
+              'id': name,
+              'name': name,
+              'plan': {
+                'id': 'day',
+                'type': 'day',
+                'templateId': 'role-practice',
+                'revision': 1,
+              },
+            }),
+            0,
+          );
+          await programs.create('$name-run', name, 1, instant(1));
+          var session = await programs.start(
+            '$name-run',
+            1,
+            '$name-one',
+            instant(1),
+          );
+          session = await training.edit(session.id, session.contentVersion, (
+            s,
+          ) {
+            for (final set in s.sets) {
+              s = const TrainingService().complete(
+                s,
+                set.id,
+                {},
+                acceptSuggested: true,
+              );
+            }
+            return s.finish(instant(1).add(const Duration(hours: 1)));
+          });
+        }
+        final service = StoredProgressionService(store);
+        final proposal = await service.propose(
+          'strength-one',
+          'lift',
+          _rule(),
+          role: 'backoff',
+          ruleType: 'threshold',
+        );
+        await service.accept(
+          'strength-one',
+          'lift',
+          proposal.version,
+          instant(1).add(const Duration(hours: 2)),
+          role: 'backoff',
+        );
+        final cardioProposal = await service.propose(
+          'cardio-one',
+          'lift',
+          _rule(),
+          role: 'backoff',
+          ruleType: 'threshold',
+        );
+        equal(cardioProposal.previousApplication, null);
+        for (final name in ['strength', 'cardio']) {
+          final run = await programs.run('$name-run');
+          final next = await programs.start(
+            '$name-run',
+            run.contentVersion,
+            '$name-two',
+            instant(2),
+          );
+          equal(
+            next.sets
+                .singleWhere((s) => s.role == 'backoff')
+                .suggested['mass']!
+                .value
+                .toString(),
+            name == 'strength' ? '11' : '10',
+          );
+        }
+        await store.archive();
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test('durable progression isolates roles, lineage and portability', () async {
+    final dir = await Directory.systemTemp.createTemp(
+      'bodytmi-role-progression-',
+    );
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    try {
+      final training = StoredTrainingService(store);
+      final progression = StoredProgressionService(store);
+      await store.snapshot('${dir.path}/v41.sqlite');
+      final oldProfile = sqlite3.open('${dir.path}/v41.sqlite');
+      oldProfile.userVersion = 41;
+      oldProfile.close();
+      equal(NativeBackup.validateDatabase('${dir.path}/v41.sqlite'), 41);
+      final migrated = await TrainingStore.open('${dir.path}/v41.sqlite');
+      await migrated.close();
+      final migratedDb = sqlite3.open('${dir.path}/v41.sqlite');
+      equal(migratedDb.userVersion, 42);
+      migratedDb.close();
+      await training.publish(_definition(), 0);
+      var session = await training.start(
+        'first',
+        'role-practice',
+        1,
+        instant(1),
+      );
+      session = await training.edit(session.id, session.contentVersion, (s) {
+        for (final set in s.sets) {
+          s = const TrainingService().complete(
+            s,
+            set.id,
+            set.role == 'drop' ? {'reps': Quantity('0', 'rep')} : {},
+            acceptSuggested: true,
+          );
+        }
+        return s.finish(instant(1).add(const Duration(hours: 1)));
+      });
+      final decisions = <String, ProgressionDecision>{};
+      for (final role in ['work', 'backoff', 'drop', 'warmup']) {
+        decisions[role] = await progression.propose(
+          session.id,
+          'lift',
+          _rule(),
+          ruleType: 'threshold',
+          role: role,
+        );
+      }
+      equal(decisions['work']!.id, 'first/lift');
+      equal(decisions['backoff']!.id, 'first/lift/backoff');
+      equal(decisions['drop']!.proposal.outcome, 'failed');
+      final at = instant(1).add(const Duration(hours: 2));
+      for (final role in ['work', 'backoff', 'warmup']) {
+        await progression.accept(
+          session.id,
+          'lift',
+          decisions[role]!.version,
+          at,
+          role: role,
+        );
+      }
+      final declined = await progression.decline(
+        session.id,
+        'lift',
+        decisions['drop']!.version,
+        at,
+        role: 'drop',
+      );
+      equal(declined.failedSessions, 1);
+      equal(
+        (await progression.decline(
+          session.id,
+          'lift',
+          declined.version,
+          at,
+          role: 'drop',
+        )).failedSessions,
+        1,
+      );
+      equal((await progression.decision(session.id, 'lift')).role, 'work');
+      var next = await training.start('second', 'role-practice', 1, instant(2));
+      equal(
+        next.sets.map((s) => s.suggested['mass']!.value.toString()).join(','),
+        '11,11,11,11,10,10',
+      );
+      next = await training.edit(next.id, next.contentVersion, (s) {
+        for (final set in s.sets) {
+          s = const TrainingService().complete(
+            s,
+            set.id,
+            {},
+            acceptSuggested: true,
+          );
+        }
+        return s.finish(instant(2).add(const Duration(hours: 1)));
+      });
+      final following = await progression.propose(
+        next.id,
+        'lift',
+        _rule(),
+        ruleType: 'threshold',
+        role: 'backoff',
+      );
+      equal(following.previousApplication, decisions['backoff']!.id);
+      equal(following.previousSequence, 1);
+      final dropFollowing = await progression.propose(
+        next.id,
+        'lift',
+        _rule(),
+        ruleType: 'threshold',
+        role: 'drop',
+      );
+      equal(dropFollowing.previousFailures, 1);
+      final data = canonicalJson((await store.archive()).toJson());
+      await store.backup('${dir.path}/native');
+      final file = '${dir.path}/logical.json';
+      await LogicalArchiveFiles.export(await store.archive(), file);
+      final prepared = await LogicalArchiveFiles.prepare(file);
+      final destination = await TrainingStore.open(
+        '${dir.path}/restore.sqlite',
+      );
+      try {
+        await destination.restore(
+          prepared.backup,
+          recoveryDestination: '${dir.path}/recovery',
+          confirm: true,
+        );
+      } finally {
+        await destination.close();
+        await prepared.close();
+      }
+      final restored = await TrainingStore.open('${dir.path}/restore.sqlite');
+      try {
+        equal(canonicalJson((await restored.archive()).toJson()), data);
+        final native = await NativeBackup.prepare('${dir.path}/native');
+        try {
+          await restored.restore(
+            native,
+            recoveryDestination: '${dir.path}/native-recovery',
+            confirm: true,
+          );
+        } finally {
+          await native.close();
+        }
+      } finally {
+        await restored.close();
+      }
+      final nativeRestored = await TrainingStore.open(
+        '${dir.path}/restore.sqlite',
+      );
+      try {
+        equal(canonicalJson((await nativeRestored.archive()).toJson()), data);
+      } finally {
+        await nativeRestored.close();
+      }
+      final envelope = jsonObject(
+        jsonDecode(await File(file).readAsString()),
+        'envelope',
+      );
+      envelope['format'] = 'bodytmi-logical-export/41';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
+      await expectLater(
+        LogicalArchiveFiles.prepare('${dir.path}/old.json'),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await store.snapshot('${dir.path}/old.sqlite');
+      final old = sqlite3.open('${dir.path}/old.sqlite');
+      old.userVersion = 41;
+      old.close();
+      rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
+  test(
     'role progression previews preserve explicit state and treat skipped sets as unknown',
     () {
       var session = const TrainingService().start(
@@ -298,7 +572,7 @@ void effortRolesTests() {
   );
 
   test(
-    'stored progression remains work-only and independent across program runs',
+    'default work progression remains independent across program runs',
     () async {
       final dir = await Directory.systemTemp.createTemp('bodytmi-roles-');
       final store = await TrainingStore.open('${dir.path}/db.sqlite');
@@ -533,7 +807,7 @@ void effortRolesTests() {
           throwsA(isA<BodyTmiException>()),
         );
         await store.snapshot('${dir.path}/roles.sqlite');
-        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 41);
+        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 42);
         final relabeled = sqlite3.open('${dir.path}/roles.sqlite');
         relabeled.userVersion = 40;
         relabeled.close();
@@ -635,6 +909,59 @@ void effortRolesTests() {
         },
       )['data'];
       equal(canonicalJson(storedPreview), canonicalJson(purePreview));
+      final decision = jsonObject(
+        await call('progression propose', {
+          'sessionId': session.id,
+          'slotId': 'lift',
+          'role': 'drop',
+          'ruleType': 'threshold',
+          'rule': _rule(),
+        }),
+        'decision',
+      );
+      equal(decision['role'], 'drop');
+      final accepted = jsonObject(
+        await call('progression accept', {
+          'sessionId': session.id,
+          'slotId': 'lift',
+          'role': 'drop',
+          'expectedVersion': decision['version'],
+          'acceptedAt': instant(
+            1,
+          ).add(const Duration(hours: 2)).toIso8601String(),
+        }),
+        'decision',
+      );
+      equal(accepted['status'], 'accepted');
+      equal(
+        jsonObject(
+          await call('progression show', {
+            'sessionId': session.id,
+            'slotId': 'lift',
+            'role': 'drop',
+          }),
+          'decision',
+        )['id'],
+        accepted['id'],
+      );
+      final later = sessionFromJson(
+        await call('store start', {
+          'id': 'later',
+          'templateId': 'role-practice',
+          'revision': 1,
+          'startedAt': instant(2).toIso8601String(),
+        }),
+      );
+      check(
+        later.sets
+            .where((s) => s.role == 'drop')
+            .every((s) => s.suggested['mass']!.value.toString() == '11'),
+      );
+      check(
+        later.sets
+            .where((s) => s.role == 'work')
+            .every((s) => s.suggested['mass']!.value.toString() == '10'),
+      );
       final pureSummary = const Commands().execute('session summary', {
         'schemaVersion': 1,
         'session': finished,

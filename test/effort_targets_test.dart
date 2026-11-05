@@ -672,7 +672,7 @@ void effortTargetsTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          41,
+          42,
         );
       } finally {
         await store.close();

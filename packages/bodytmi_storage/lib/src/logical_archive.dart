@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/41';
+const _format = 'bodytmi-logical-export/42';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -102,6 +102,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/38',
       'bodytmi-logical-export/39',
       'bodytmi-logical-export/40',
+      'bodytmi-logical-export/41',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -110,7 +111,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final extendedRolesData = input['format'] == _format;
+    final roleProgressionData = input['format'] == _format;
+    final extendedRolesData =
+        roleProgressionData || input['format'] == 'bodytmi-logical-export/41';
     final manualRestData =
         extendedRolesData || input['format'] == 'bodytmi-logical-export/40';
     final roundedTargetsData =
@@ -248,6 +251,9 @@ final class LogicalArchiveFiles {
       }
     }
     final archive = TrainingArchive.fromJson(inputData);
+    if (!roleProgressionData &&
+        archive.progressions.any((d) => d.role != 'work'))
+      invalid('Role-specific progression requires logical v42.');
     if (!extendedRolesData &&
         archive.revisions.any((r) => r.definition.hasExtendedEffortRoles)) {
       invalid('Back-off and drop effort roles require logical v41.');
@@ -448,7 +454,7 @@ final class LogicalArchiveFiles {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 41');
+          db.execute('PRAGMA user_version = 42');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
@@ -487,7 +493,7 @@ final class LogicalArchiveFiles {
               'INSERT INTO progression_decisions(session_id,slot_id,snapshot) VALUES (?,?,?)',
               [
                 decision.session.id,
-                decision.slotId,
+                decision.storageSlotKey,
                 canonicalJson(decision.toJson()),
               ],
             );

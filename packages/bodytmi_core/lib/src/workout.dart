@@ -175,14 +175,20 @@ final class WorkoutDefinition {
       plan.nodes.whereType<Effort>().any((e) => e.criteria.isNotEmpty);
 
   /// Published working targets in the same slot/role ordinal order as sessions.
-  List<Metrics> workingTargets(String slotId) => List.unmodifiable([
-    for (final occurrence in plan.occurrences())
-      if (occurrence.activity case Effort(
-        :final role,
-        slotId: final id,
-      ) when id == slotId && role == 'work')
-        (occurrence.activity as Effort).resolveTargets(slot(slotId).targets),
-  ]);
+  List<Metrics> workingTargets(String slotId) => roleTargets(slotId, 'work');
+
+  /// Published targets in the selected slot and effort role's ordinal order.
+  List<Metrics> roleTargets(String slotId, String selectedRole) =>
+      List.unmodifiable([
+        for (final occurrence in plan.occurrences())
+          if (occurrence.activity case Effort(
+            :final role,
+            slotId: final id,
+          ) when id == slotId && role == selectedRole)
+            (occurrence.activity as Effort).resolveTargets(
+              slot(slotId).targets,
+            ),
+      ]);
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,

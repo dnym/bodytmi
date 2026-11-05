@@ -53,7 +53,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 41) {
+            if (native.userVersion > 42) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -114,7 +114,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 41);
+    validateSchema(schema.map((row) => row.data), 42);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -237,7 +237,8 @@ final class TrainingStore implements TrainingRepository {
     final result = <ProgressionDecision>[];
     for (final row in await _db.select(_db.progressionDecisions).get()) {
       final decision = ProgressionDecision.fromJson(jsonDecode(row.snapshot));
-      if (decision.session.id != row.sessionId || decision.slotId != row.slotId)
+      if (decision.session.id != row.sessionId ||
+          decision.storageSlotKey != row.slotId)
         invalid('Stored progression identity is inconsistent.');
       result.add(decision);
     }
@@ -253,7 +254,7 @@ final class TrainingStore implements TrainingRepository {
         await (_db.select(_db.progressionDecisions)..where(
               (r) =>
                   r.sessionId.equals(decision.session.id) &
-                  r.slotId.equals(decision.slotId),
+                  r.slotId.equals(decision.storageSlotKey),
             ))
             .getSingleOrNull();
     if (old != null) {
@@ -272,7 +273,7 @@ final class TrainingStore implements TrainingRepository {
         .insertOnConflictUpdate(
           ProgressionDecisionsCompanion.insert(
             sessionId: decision.session.id,
-            slotId: decision.slotId,
+            slotId: decision.storageSlotKey,
             snapshot: snapshot,
           ),
         );

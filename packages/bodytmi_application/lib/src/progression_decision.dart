@@ -3,7 +3,7 @@ import 'session_codec.dart';
 import 'canonical_json.dart';
 import 'progression_evaluation.dart';
 
-/// Stable exposure identity is session/slot, never a result content version.
+/// Stable exposure identity includes role, never a result content version.
 final class ProgressionDecision {
   ProgressionDecision({
     required this.session,
@@ -18,6 +18,7 @@ final class ProgressionDecision {
     this.runId,
     this.ruleType = 'double',
     this.previousCursor = 0,
+    this.role = 'work',
   }) : rule = _freeze(rule) as Map<String, Object?> {
     if (session.status != SessionStatus.finalized)
       invalid('Progression requires finalized confirmed work.');
@@ -25,6 +26,7 @@ final class ProgressionDecision {
     if (runId != null) identifier({'id': runId}, 'id');
     if (version < 1 ||
         !{'double', 'threshold'}.contains(ruleType) ||
+        !{'work', 'warmup', 'backoff', 'drop'}.contains(role) ||
         previousCursor < 0 ||
         (ruleType == 'double' && previousCursor != 0) ||
         previousSequence < 0 ||
@@ -35,7 +37,7 @@ final class ProgressionDecision {
       (s) => s.id == slotId,
     );
     if (slots.isEmpty || sets.isEmpty)
-      invalid('Progression needs a known slot with working sets.');
+      invalid('Progression needs a known slot with sets in the selected role.');
     if ((acceptedAt != null && declinedAt != null) ||
         (resolvedAt != null && resolvedAt!.isBefore(session.finishedAt!)))
       invalid('A decision needs one resolution, no earlier than finalization.');
@@ -61,6 +63,7 @@ final class ProgressionDecision {
       'runId',
       'ruleType',
       'previousCursor',
+      'role',
     });
     int count(String key, int min) {
       final v = j[key];
@@ -72,6 +75,8 @@ final class ProgressionDecision {
     if (previous != null && previous is! String)
       invalid('Invalid previous application identity.');
     final kind = j['ruleType'] ?? 'double';
+    if (j.containsKey('role') && j['role'] == 'work')
+      invalid('The default work role must be omitted in stored decisions.');
     if (kind is! String ||
         (kind != 'threshold' && j.containsKey('previousCursor')))
       invalid('Invalid stored rule type or coordinator state.');
@@ -92,6 +97,7 @@ final class ProgressionDecision {
       runId: j['runId'] == null ? null : identifier(j, 'runId'),
       ruleType: kind,
       previousCursor: kind == 'threshold' ? count('previousCursor', 0) : 0,
+      role: j.containsKey('role') ? requiredString(j, 'role') : 'work',
     );
     if (canonicalJson(j['proposal']) !=
         canonicalJson(decision.proposal.toJson()))
@@ -112,6 +118,7 @@ final class ProgressionDecision {
       : 'pending';
   final String? runId;
   final String ruleType;
+  final String role;
   final int previousCursor;
   int get cursor => declinedAt != null ? previousCursor : proposal.cursor;
   late final Set<String> controlledMetrics = ruleType == 'double'
@@ -124,7 +131,8 @@ final class ProgressionDecision {
           ...ThresholdRule.fromJson(rule).resets.keys,
           ...ThresholdRule.fromJson(rule).deloadMetrics,
         };
-  String get id => '${session.id}/$slotId';
+  String get storageSlotKey => role == 'work' ? slotId : '$slotId/$role';
+  String get id => '${session.id}/$storageSlotKey';
   int get sequence => previousSequence + (resolvedAt == null ? 0 : 1);
 
   /// Decline holds targets, but the confirmed exposure's classification still
@@ -144,9 +152,10 @@ final class ProgressionDecision {
     slot.implementation,
     slot.equipmentId,
     slot.setupNote,
+    if (role != 'work') role,
   ]);
   late final List<TrainingSet> sets = List.unmodifiable(
-    session.sets.where((s) => s.slotId == slotId && s.role == 'work'),
+    session.sets.where((s) => s.slotId == slotId && s.role == role),
   );
   late final ProgressionEvaluation proposal = ruleType == 'threshold'
       ? ProgressionEvaluation.threshold(
@@ -166,6 +175,7 @@ final class ProgressionDecision {
         );
   bool sameContext(ProgressionDecision other) =>
       runId == other.runId &&
+      role == other.role &&
       session.revision.definition.id == other.session.revision.definition.id &&
       slot.compatibleWith(other.slot);
   bool matches(String templateId, ExerciseSlot candidate) =>
@@ -184,6 +194,7 @@ final class ProgressionDecision {
     runId: runId,
     ruleType: ruleType,
     previousCursor: previousCursor,
+    role: role,
   );
   ProgressionDecision decline(DateTime at) => ProgressionDecision(
     session: session,
@@ -198,10 +209,12 @@ final class ProgressionDecision {
     runId: runId,
     ruleType: ruleType,
     previousCursor: previousCursor,
+    role: role,
   );
   Map<String, Object?> toJson() => {
     'session': session.toJson(),
     'slotId': slotId,
+    if (role != 'work') 'role': role,
     'rule': rule,
     'previousApplication': previousApplication,
     'previousSequence': previousSequence,
@@ -223,10 +236,12 @@ ProgressionDecision? latestApplication(
   String templateId,
   ExerciseSlot slot, {
   String? runId,
+  String role = 'work',
 }) {
   ProgressionDecision? latest;
   for (final d in decisions) {
     if (d.runId == runId &&
+        d.role == role &&
         d.resolvedAt != null &&
         d.matches(templateId, slot) &&
         (latest == null || d.sequence > latest.sequence))
@@ -344,8 +359,8 @@ bool matchesProgressionBaseline(
   final currentPlan = decision.session.revision.definition;
   final priorPlan = before.session.revision.definition;
   if (currentPlan.hasEffortTargets || priorPlan.hasEffortTargets) {
-    final authored = currentPlan.workingTargets(decision.slotId);
-    final prior = priorPlan.workingTargets(before.slotId);
+    final authored = currentPlan.roleTargets(decision.slotId, decision.role);
+    final prior = priorPlan.roleTargets(before.slotId, before.role);
     if (authored.length != prior.length) return false;
     for (var i = 0; i < authored.length; i++) {
       for (final metric in decision.controlledMetrics) {

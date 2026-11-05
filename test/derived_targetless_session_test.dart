@@ -244,7 +244,7 @@ void derivedTargetlessSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 41);
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 42);
       final db = sqlite3.open('$dir/snapshot.sqlite');
       db.userVersion = 31;
       db.close();
@@ -269,7 +269,7 @@ void derivedTargetlessSessionTests() {
         await reopened.close();
       }
       final migrated = sqlite3.open('$dir/old.sqlite');
-      equal(migrated.userVersion, 41);
+      equal(migrated.userVersion, 42);
       migrated.close();
     }),
   );

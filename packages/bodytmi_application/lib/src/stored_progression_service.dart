@@ -12,7 +12,10 @@ final class StoredProgressionService {
     String slotId,
     Map<String, Object?> rule, {
     String ruleType = 'double',
+    String role = 'work',
   }) => repository.transaction(() async {
+    if (!{'work', 'warmup', 'backoff', 'drop'}.contains(role))
+      invalid('Unknown progression role.');
     if (ruleType == 'double') {
       DoubleProgressionRule.fromJson(rule);
     } else if (ruleType == 'threshold') {
@@ -21,7 +24,12 @@ final class StoredProgressionService {
       invalid('Unknown stored progression rule type.');
     }
     final all = await repository.progressionDecisions();
-    final existing = all.where((d) => d.id == '$sessionId/$slotId').firstOrNull;
+    final existing = all
+        .where(
+          (d) =>
+              d.session.id == sessionId && d.slotId == slotId && d.role == role,
+        )
+        .firstOrNull;
     if (existing?.resolvedAt != null) {
       if (existing!.ruleType != ruleType ||
           canonicalJson(existing.rule) != canonicalJson(rule))
@@ -42,6 +50,7 @@ final class StoredProgressionService {
       session.revision.definition.id,
       candidates.single,
       runId: runId,
+      role: role,
     );
     if (before != null &&
         (before.ruleType != ruleType ||
@@ -58,6 +67,7 @@ final class StoredProgressionService {
       runId: runId,
       ruleType: ruleType,
       previousCursor: before?.cursor ?? 0,
+      role: role,
     );
     if (before != null && !matchesProgressionBaseline(next, before))
       _conflict(
@@ -72,9 +82,22 @@ final class StoredProgressionService {
     return next;
   });
 
-  Future<ProgressionDecision> decision(String sessionId, String slotId) async {
+  Future<ProgressionDecision> decision(
+    String sessionId,
+    String slotId, {
+    String role = 'work',
+  }) async {
+    if (!{'work', 'warmup', 'backoff', 'drop'}.contains(role))
+      invalid('Unknown progression role.');
     final rows = await repository.progressionDecisions();
-    return rows.where((d) => d.id == '$sessionId/$slotId').firstOrNull ??
+    return rows
+            .where(
+              (d) =>
+                  d.session.id == sessionId &&
+                  d.slotId == slotId &&
+                  d.role == role,
+            )
+            .firstOrNull ??
         (throw const BodyTmiException(
           'not_found',
           'Progression decision not found.',
@@ -98,6 +121,7 @@ final class StoredProgressionService {
       decision.session.revision.definition.id,
       decision.slot,
       runId: runId,
+      role: decision.role,
     );
     return latest?.id != decision.previousApplication;
   }
@@ -106,9 +130,10 @@ final class StoredProgressionService {
     String sessionId,
     String slotId,
     int expectedVersion,
-    DateTime at,
-  ) => repository.transaction(() async {
-    final pending = await decision(sessionId, slotId);
+    DateTime at, {
+    String role = 'work',
+  }) => repository.transaction(() async {
+    final pending = await decision(sessionId, slotId, role: role);
     if (pending.version != expectedVersion)
       _conflict('Progression decision version changed.');
     if (pending.acceptedAt != null) return pending;
@@ -132,9 +157,10 @@ final class StoredProgressionService {
     String sessionId,
     String slotId,
     int expectedVersion,
-    DateTime at,
-  ) => repository.transaction(() async {
-    final pending = await decision(sessionId, slotId);
+    DateTime at, {
+    String role = 'work',
+  }) => repository.transaction(() async {
+    final pending = await decision(sessionId, slotId, role: role);
     if (pending.version != expectedVersion)
       _conflict('Progression decision version changed.');
     if (pending.declinedAt != null) return pending;
