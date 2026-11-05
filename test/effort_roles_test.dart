@@ -84,6 +84,109 @@ TrainingSession _complete(TrainingSession session) {
 
 void effortRolesTests() {
   test(
+    'active-session progression previews use confirmed role results without creating decisions',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-active-preview-',
+      );
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final training = StoredTrainingService(store);
+        await training.publish(_definition(), 0);
+        var session = await training.start(
+          'active-preview',
+          'role-practice',
+          1,
+          instant(1),
+        );
+        final work = session.sets.where((set) => set.role == 'work').toList();
+        session = await training.edit(
+          session.id,
+          session.contentVersion,
+          (s) => const TrainingService().complete(
+            s,
+            work[0].id,
+            {},
+            acceptSuggested: true,
+          ),
+        );
+        Map<String, Object?> preview(TrainingSession s) =>
+            const RoleProgressionPreview().evaluate(
+              session: s,
+              slotId: 'lift',
+              role: 'work',
+              ruleType: 'threshold',
+              rule: _rule(),
+              failedSessions: 2,
+            );
+        equal(
+          jsonObject(preview(session)['proposal'], 'proposal')['outcome'],
+          'unknown',
+        );
+        session = await training.edit(
+          session.id,
+          session.contentVersion,
+          (s) => const TrainingService().complete(
+            s,
+            work[1].id,
+            {},
+            acceptSuggested: true,
+          ),
+        );
+        final before = canonicalJson((await store.archive()).toJson());
+        final ready = preview(session);
+        equal(ready['policy'], 'bodytmi-role-progression-preview/2');
+        equal(ready['sessionStatus'], 'active');
+        equal(ready['finalizationRequired'], true);
+        equal(ready['sessionContentVersion'], session.contentVersion);
+        equal(jsonObject(ready['proposal'], 'proposal')['outcome'], 'advance');
+        equal(jsonObject(ready['state'], 'state')['failedSessions'], 2);
+        final doublePreview = const RoleProgressionPreview().evaluate(
+          session: session,
+          slotId: 'lift',
+          rule: jsonObject(example('double-progression')['rule'], 'rule'),
+        );
+        equal(
+          jsonObject(doublePreview['proposal'], 'proposal')['outcome'],
+          'increaseObjective',
+        );
+        check(session.sets.any((set) => set.status == SetStatus.planned));
+        final pure = const Commands().execute('session progression-preview', {
+          'schemaVersion': 1,
+          'session': session.toJson(),
+          'slotId': 'lift',
+          'ruleType': 'threshold',
+          'rule': _rule(),
+          'state': {'failedSessions': 2},
+        });
+        equal(canonicalJson(pure['data']), canonicalJson(ready));
+        await expectLater(
+          StoredProgressionService(
+            store,
+          ).propose(session.id, 'lift', _rule(), ruleType: 'threshold'),
+          throwsA(isA<BodyTmiException>()),
+        );
+        equal((await store.progressionDecisions()).length, 0);
+        equal(canonicalJson((await store.archive()).toJson()), before);
+        session = await training.edit(
+          session.id,
+          session.contentVersion,
+          (s) => const TrainingService().complete(s, work[0].id, {
+            'mass': Quantity('12', 'kg'),
+          }, acceptSuggested: true),
+        );
+        final changed = preview(session);
+        equal(jsonObject(changed['proposal'], 'proposal')['outcome'], 'review');
+        check(
+          changed['sessionContentVersion'] != ready['sessionContentVersion'],
+        );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'role-specific progression remains isolated across simultaneous runs',
     () async {
       final dir = await Directory.systemTemp.createTemp('bodytmi-role-runs-');
@@ -509,14 +612,17 @@ void effortRolesTests() {
       );
       equal(jsonList(backoffPreview, 'setIds').length, 1);
       equal(jsonObject(backoffPreview['state'], 'state')['failedSessions'], 2);
-      rejects(
-        () => const RoleProgressionPreview().evaluate(
-          session: session,
-          slotId: 'lift',
-          rule: _rule(),
-          ruleType: 'threshold',
-        ),
+      final unfinished = const RoleProgressionPreview().evaluate(
+        session: session,
+        slotId: 'lift',
+        rule: _rule(),
+        ruleType: 'threshold',
       );
+      equal(
+        jsonObject(unfinished['proposal'], 'proposal')['outcome'],
+        'unknown',
+      );
+      equal(unfinished['finalizationRequired'], true);
       rejects(
         () => const RoleProgressionPreview().evaluate(
           session: old,
@@ -938,6 +1044,43 @@ void effortRolesTests() {
           'execution',
         );
         session = sessionFromJson(await call('store show', {'id': session.id}));
+        if (set.role == 'work' && set.ordinal == 1) {
+          final preview = jsonObject(
+            await call('store progression-preview', {
+              'id': session.id,
+              'slotId': 'lift',
+              'ruleType': 'threshold',
+              'rule': _rule(),
+            }),
+            'preview',
+          );
+          equal(preview['finalizationRequired'], true);
+          equal(
+            jsonObject(preview['proposal'], 'proposal')['outcome'],
+            'advance',
+          );
+          final pure = const Commands().execute('session progression-preview', {
+            'schemaVersion': 1,
+            'session': session.toJson(),
+            'slotId': 'lift',
+            'ruleType': 'threshold',
+            'rule': _rule(),
+          });
+          equal(canonicalJson(preview), canonicalJson(pure['data']));
+          final denied = await invoke(
+            ['progression', 'propose'],
+            jsonEncode({
+              'schemaVersion': 1,
+              'database': path,
+              'sessionId': session.id,
+              'slotId': 'lift',
+              'ruleType': 'threshold',
+              'rule': _rule(),
+            }),
+          );
+          check(denied.code != 0);
+          equal(denied.output, '');
+        }
       }
       equal(execution['status'], 'completed');
       await call('store finish', {

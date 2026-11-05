@@ -1,7 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'progression_evaluation.dart';
 
-/// Evaluates one role in a finalized session without creating a decision.
+/// Evaluates one role without creating a decision or finalizing the session.
 final class RoleProgressionPreview {
   const RoleProgressionPreview();
 
@@ -17,9 +17,6 @@ final class RoleProgressionPreview {
     identifier({'id': slotId}, 'id');
     if (!{'work', 'warmup', 'backoff', 'drop'}.contains(role)) {
       invalid('Unknown effort role.');
-    }
-    if (session.status != SessionStatus.finalized) {
-      invalid('Progression preview requires a finalized session.');
     }
     if (failedSessions < 0 ||
         cursor < 0 ||
@@ -53,9 +50,15 @@ final class RoleProgressionPreview {
       );
     }
     return {
-      'policy': 'bodytmi-role-progression-preview/1',
+      'policy': session.status == SessionStatus.active
+          ? 'bodytmi-role-progression-preview/2'
+          : 'bodytmi-role-progression-preview/1',
       'sessionId': session.id,
       'sessionContentVersion': session.contentVersion,
+      if (session.status == SessionStatus.active) ...{
+        'sessionStatus': 'active',
+        'finalizationRequired': true,
+      },
       'slotId': slotId,
       'role': role,
       'setIds': [for (final set in sets) set.id],
