@@ -459,7 +459,7 @@ final class TrainingService {
     if (!session.revision.definition.slots.any((slot) => slot.id == slotId)) {
       invalid('Unknown workout slot: $slotId.');
     }
-    if (role != null && role != 'work' && role != 'warmup') {
+    if (role != null && !effortRoles.contains(role)) {
       invalid('Unknown effort role.');
     }
     return _skipPlanned(

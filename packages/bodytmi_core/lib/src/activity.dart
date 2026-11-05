@@ -2,6 +2,9 @@ import 'errors.dart';
 import 'quantity.dart';
 import 'objective.dart';
 
+/// Explicit effort roles. Progression currently owns only `work` occurrences.
+const effortRoles = {'work', 'warmup', 'backoff', 'drop'};
+
 Set<String> maxEffortObjectivesFromJson(Object? input) {
   final json = jsonObject(input, 'objectives');
   if (json.isEmpty || json.length > 100)
@@ -44,7 +47,7 @@ sealed class Activity {
           'objectives',
         });
         final role = json['role'] ?? 'work';
-        if (role != 'work' && role != 'warmup') invalid('Unknown effort role.');
+        if (!effortRoles.contains(role)) invalid('Unknown effort role.');
         if (json.containsKey('objectives')) {
           if (json.containsKey('targets') &&
               metricsFromJson(json['targets']).isEmpty)

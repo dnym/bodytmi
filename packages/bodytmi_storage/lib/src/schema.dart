@@ -110,6 +110,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   38 => schemaV27, // v38 adds binary derived-target arithmetic.
   39 => schemaV27, // v39 adds native-scale rounding in derived graphs.
   40 => schemaV27, // v40 adds explicit untimed rest occurrences.
+  41 => schemaV27, // v41 adds explicit back-off and drop effort roles.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

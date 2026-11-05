@@ -301,8 +301,7 @@ void _context(Map<String, Object?> context) {
       if (e.value is! String)
         invalid('setupNote filter must be a string or null.');
     } else if (e.key == 'role') {
-      if (!{'work', 'warmup'}.contains(e.value))
-        invalid('Unknown series role.');
+      if (!effortRoles.contains(e.value)) invalid('Unknown series role.');
     } else {
       identifier(context, e.key);
     }

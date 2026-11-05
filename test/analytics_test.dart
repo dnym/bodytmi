@@ -354,7 +354,7 @@ void analyticsTests() {
         () => _analytics.series([session], runBySession: {'missing': 'run'}),
       );
       rejects(() => _analytics.series([session], context: {'equipment': 12}));
-      rejects(() => _analytics.series([session], context: {'role': 'backoff'}));
+      rejects(() => _analytics.series([session], context: {'role': 'unknown'}));
       rejects(() => _analytics.series([session], context: {'family': 'rows'}));
       rejects(
         () => _analytics.series([session], from: instant(2), until: instant(1)),

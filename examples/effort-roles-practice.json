@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "role-practice",
+    "name": "Work, back-off and drop segments",
+    "slots": [
+      {
+        "id": "lift",
+        "exercise": "lift",
+        "implementation": "barbell",
+        "targets": {"mass": {"value": "50", "unit": "kg"}, "reps": {"value": "8", "unit": "rep"}},
+        "prefill": ["mass"]
+      }
+    ],
+    "plan": {
+      "id": "workout", "type": "sequence", "children": [
+        {"id": "warmup", "type": "effort", "slot": "lift", "role": "warmup", "targets": {"mass": {"value": "25", "unit": "kg"}}},
+        {"id": "work", "type": "effort", "slot": "lift", "role": "work"},
+        {"id": "backoff", "type": "effort", "slot": "lift", "role": "backoff", "targets": {"mass": {"value": "40", "unit": "kg"}}},
+        {"id": "drop", "type": "effort", "slot": "lift", "role": "drop", "targets": {"mass": {"value": "30", "unit": "kg"}}}
+      ]
+    }
+  }
+}

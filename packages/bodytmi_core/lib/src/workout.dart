@@ -164,6 +164,10 @@ final class WorkoutDefinition {
 
   bool get hasManualRest => plan.nodes.whereType<Rest>().any((r) => r.isManual);
 
+  bool get hasExtendedEffortRoles => plan.nodes.whereType<Effort>().any(
+    (e) => e.role == 'backoff' || e.role == 'drop',
+  );
+
   bool get hasMaxEffortObjectives =>
       plan.nodes.whereType<Effort>().any((e) => e.maxEffortMetrics.isNotEmpty);
 

@@ -25,7 +25,7 @@ Future<void> main(List<String> arguments) async {
           'skipRemaining':
               'store skip-remaining takes database/id/expectedVersion/confirm:true and skips all planned efforts without changing completed results or finishing the session. Stop and review or discard session clocks first; use execution skip-group during traversal. session skip-remaining takes session/confirm:true and requires the caller to account for external clock/traversal state.',
           'skipSlot':
-              'store skip-slot takes database/id/expectedVersion/slotId/confirm:true and optional role (work or warmup); session skip-slot takes session/slotId/confirm:true and optional role. The same clock and traversal safeguards apply.',
+              'store skip-slot takes database/id/expectedVersion/slotId/confirm:true and optional role (work, warmup, backoff or drop); session skip-slot takes session/slotId/confirm:true and optional role. The same clock and traversal safeguards apply.',
           'editTarget':
               'session edit-target takes session/setId/metric/value and optional applyToRemaining; store edit-target takes database/id/expectedVersion/setId/metric/value and optional applyToRemaining. Edits planned suggestions only; explicit carry skips authored, derived and manually edited targets. Stored edits cannot change sets with active or unreviewed effort clocks.',
           'carryActual':
@@ -86,6 +86,8 @@ Future<void> main(List<String> arguments) async {
               'timer start creates a paused per-set clock; omitted plan resolves the pinned slot timing defaults against its duration suggestion; timer rest times an authored rest occurrence. timer run uses a foreground monotonic clock. Optional stream:true emits NDJSON cue envelopes before the final response. Ctrl-C pauses; unexpected interruption requires explicit timer recover (freeze/adjust). Effort expiry never logs actuals: timer confirm requires expectedSessionVersion and explicit result review. Slots may publish timing defaults with an explicit duration metric, preparation, tempo, near-end and overrun. Explicit clock plans replace defaults. Optional plan.tempo defines repeating effort cues; tempoState exposes logical phase without counting achieved reps. Scoped windows and audio are pending.',
           'execution':
               'execution start/show/list/time/complete/confirm/advance/skip/skip-group/run traverse finite effort/rest occurrences. Timed rests prepare a clock; rest nodes with manual:true have no timer and require execution advance. run advances timed rest boundaries; timed efforts require explicit review. Actions require execution/session versions and stable requestId; corrections never replay cursor advancement. skip-group requires an explicit groupPath from the current groups list and confirm:true; it preserves existing results. Scoped windows are not yet supported.',
+          'effortRoles':
+              'Effort roles are work, warmup, backoff and drop. Prefill and reports keep roles separate; summaries include all except warmups by default. Graph history sources can explicitly filter by role. Stored progression currently evaluates and updates work sets only.',
         }),
       );
       return;
