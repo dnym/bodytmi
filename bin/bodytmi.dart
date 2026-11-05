@@ -93,7 +93,7 @@ Future<void> main(List<String> arguments) async {
           'windowStatus':
               'activity window-status takes definition/occurrence/elapsedMilliseconds/windowStarts. It calculates nested authored window deadlines from explicit shared logical milliseconds. It does not own or advance a clock, record results or execute windows.',
           'roleProgressionPreview':
-              'session progression-preview takes session/slotId/rule and optional role, ruleType and state; store progression-preview takes database/id instead of session. Active sessions can be previewed but must be finalized before creating durable decisions. Role defaults to work; ruleType defaults to double. State is supplied explicitly, defaults to zero, and is not loaded from stored receipts. Preview is read-only and does not apply targets or create progression decisions.',
+              'session progression-preview takes session/slotId/rule and optional role, ruleType and state; store progression-preview takes database/id instead of session and optionally useTrack:true to load current run/role lineage instead of state. Active sessions can be previewed but must be finalized before creating durable decisions. Role defaults to work; ruleType defaults to double. Preview is read-only and does not apply targets or create progression decisions.',
           'progressionTrack':
               'progression track takes database/templateId/revision/slotId/asOf and optional runId/role. It reports the latest resolved decision eligible at the cutoff, with controlled targets and current source-change status; omitted runId selects ad hoc sessions. It does not check prescription compatibility or apply progression.',
         }),

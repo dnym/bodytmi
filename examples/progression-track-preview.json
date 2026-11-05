@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "slotId": "movement",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "duration",
+    "minimum": {
+      "value": "10",
+      "unit": "s"
+    },
+    "threshold": {
+      "value": "60",
+      "unit": "s"
+    },
+    "increments": {
+      "mass": {
+        "value": "1",
+        "unit": "kg"
+      },
+      "distance": {
+        "value": "0.1",
+        "unit": "m"
+      },
+      "angle": {
+        "value": "0.1",
+        "unit": "rad"
+      }
+    },
+    "resets": {
+      "duration": {
+        "value": "10",
+        "unit": "s"
+      }
+    },
+    "coordination": {
+      "mode": "weighted",
+      "order": [
+        "mass",
+        "mass",
+        "mass",
+        "distance",
+        "distance",
+        "angle"
+      ]
+    },
+    "deloadAfter": 2,
+    "deloadPercent": "10",
+    "deloadMetrics": [
+      "mass",
+      "distance"
+    ]
+  },
+  "id": "threshold-session-001",
+  "database": "bodytmi.sqlite",
+  "useTrack": true
+}

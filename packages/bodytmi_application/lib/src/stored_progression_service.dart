@@ -1,11 +1,97 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'progression_decision.dart';
+import 'role_progression_preview.dart';
 import 'canonical_json.dart';
 import 'training_repository.dart';
 
 final class StoredProgressionService {
   const StoredProgressionService(this.repository);
   final TrainingRepository repository;
+
+  /// Preview against the current durable lineage without writing a decision.
+  Future<Map<String, Object?>> previewFromTrack(
+    String sessionId,
+    String slotId,
+    Map<String, Object?> rule, {
+    String ruleType = 'double',
+    String role = 'work',
+  }) => repository.transaction(() async {
+    if (!{'work', 'warmup', 'backoff', 'drop'}.contains(role))
+      invalid('Unknown progression role.');
+    if (ruleType == 'double') {
+      DoubleProgressionRule.fromJson(rule);
+    } else if (ruleType == 'threshold') {
+      ThresholdRule.fromJson(rule);
+    } else {
+      invalid('Unknown stored progression rule type.');
+    }
+    final session = await StoredTrainingService(repository).session(sessionId);
+    final candidates = session.revision.definition.slots.where(
+      (s) => s.id == slotId,
+    );
+    if (candidates.isEmpty) invalid('Unknown progression slot.');
+    final runId = (await repository.sessionPrograms())
+        .where((b) => b.sessionId == sessionId)
+        .firstOrNull
+        ?.runId;
+    final all = await repository.progressionDecisions();
+    final existing = all
+        .where(
+          (d) =>
+              d.session.id == sessionId && d.slotId == slotId && d.role == role,
+        )
+        .firstOrNull;
+    if (existing?.resolvedAt != null)
+      _conflict('This exposure is already resolved; use progression show.');
+    final before = latestApplication(
+      all,
+      session.revision.definition.id,
+      candidates.single,
+      runId: runId,
+      role: role,
+    );
+    if (before != null &&
+        (before.ruleType != ruleType ||
+            canonicalJson(before.rule) != canonicalJson(rule))) {
+      _conflict('Changing an active rule requires explicit reconciliation.');
+    }
+    if (before != null &&
+        !matchesSessionProgressionBaseline(
+          session,
+          slotId,
+          role,
+          before.controlledMetrics,
+          before,
+        )) {
+      _conflict(
+        'Session prescription differs from the latest applied progression; reconcile first.',
+      );
+    }
+    final preview = const RoleProgressionPreview().evaluate(
+      session: session,
+      slotId: slotId,
+      role: role,
+      ruleType: ruleType,
+      rule: rule,
+      failedSessions: before?.failedSessions ?? 0,
+      cursor: before?.cursor ?? 0,
+    );
+    return {
+      ...preview,
+      'policy': 'bodytmi-stored-progression-preview/1',
+      'stateSource': {
+        'runId': runId,
+        'previousApplication': before?.id,
+        'previousSequence': before?.sequence ?? 0,
+        'previousResolvedAt': before?.resolvedAt?.toUtc().toIso8601String(),
+        'previousResolvedAfterSessionStart':
+            before?.resolvedAt?.isAfter(session.startedAt) ?? false,
+        'previousInputsChanged': before == null ? false : await stale(before),
+        'pendingVersion': existing?.version,
+        'pendingStale': existing == null ? null : await stale(existing),
+      },
+    };
+  });
 
   /// Inspect the latest resolved track at a session-start cutoff. This does not
   /// assert that a new prescription is compatible with the stored baseline.

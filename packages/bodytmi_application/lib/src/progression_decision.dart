@@ -338,16 +338,34 @@ Object? _freeze(Object? value) {
 bool matchesProgressionBaseline(
   ProgressionDecision decision,
   ProgressionDecision before,
+) => matchesSessionProgressionBaseline(
+  decision.session,
+  decision.slotId,
+  decision.role,
+  decision.controlledMetrics,
+  before,
+);
+
+/// Apply the same baseline checks to an active session for a read-only preview.
+bool matchesSessionProgressionBaseline(
+  TrainingSession session,
+  String slotId,
+  String role,
+  Set<String> controlledMetrics,
+  ProgressionDecision before,
 ) {
-  if (decision.sets.length != before.sets.length) return false;
-  for (var i = 0; i < decision.sets.length; i++) {
-    final currentObjectives = decision.sets[i].maxEffortMetrics;
+  final sets = session.sets
+      .where((s) => s.slotId == slotId && s.role == role)
+      .toList();
+  if (sets.length != before.sets.length) return false;
+  for (var i = 0; i < sets.length; i++) {
+    final currentObjectives = sets[i].maxEffortMetrics;
     final previousObjectives = before.sets[i].maxEffortMetrics;
     if (currentObjectives.length != previousObjectives.length ||
         !currentObjectives.containsAll(previousObjectives))
       return false;
     if (canonicalJson({
-          for (final e in decision.sets[i].criteria.entries)
+          for (final e in sets[i].criteria.entries)
             e.key: e.value.semanticJson(),
         }) !=
         canonicalJson({
@@ -356,14 +374,14 @@ bool matchesProgressionBaseline(
         }))
       return false;
   }
-  final currentPlan = decision.session.revision.definition;
+  final currentPlan = session.revision.definition;
   final priorPlan = before.session.revision.definition;
   if (currentPlan.hasEffortTargets || priorPlan.hasEffortTargets) {
-    final authored = currentPlan.roleTargets(decision.slotId, decision.role);
+    final authored = currentPlan.roleTargets(slotId, role);
     final prior = priorPlan.roleTargets(before.slotId, before.role);
     if (authored.length != prior.length) return false;
     for (var i = 0; i < authored.length; i++) {
-      for (final metric in decision.controlledMetrics) {
+      for (final metric in controlledMetrics) {
         final value = authored[i][metric], old = prior[i][metric];
         if (value == null ||
             old == null ||
@@ -374,10 +392,10 @@ bool matchesProgressionBaseline(
     }
   }
   final expected = before.nextSets;
-  if (expected.length != decision.sets.length) return false;
+  if (expected.length != sets.length) return false;
   for (var i = 0; i < expected.length; i++) {
-    for (final metric in decision.controlledMetrics) {
-      final actual = decision.sets[i].suggested[metric];
+    for (final metric in controlledMetrics) {
+      final actual = sets[i].suggested[metric];
       if (actual == null || actual.compareTo(expected[i][metric]!) != 0)
         return false;
     }

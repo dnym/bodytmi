@@ -84,6 +84,218 @@ TrainingSession _complete(TrainingSession session) {
 
 void effortRolesTests() {
   test(
+    'track-aware active preview uses durable counters, checks baseline and makes no changes',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-track-preview-',
+      );
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final training = StoredTrainingService(store);
+        final progression = StoredProgressionService(store);
+        await training.publish(_definition(), 0);
+        var first = await training.start(
+          'prior',
+          'role-practice',
+          1,
+          instant(1),
+        );
+        first = await training.edit(first.id, first.contentVersion, (s) {
+          for (final set in s.sets) {
+            s = const TrainingService().complete(
+              s,
+              set.id,
+              set.role == 'work' ? {'reps': Quantity('0', 'rep')} : {},
+              acceptSuggested: true,
+            );
+          }
+          return s.finish(instant(1).add(const Duration(hours: 1)));
+        });
+        final proposed = await progression.propose(
+          first.id,
+          'lift',
+          _rule(),
+          ruleType: 'threshold',
+        );
+        final declined = await progression.decline(
+          first.id,
+          'lift',
+          proposed.version,
+          instant(1).add(const Duration(hours: 2)),
+        );
+        equal(declined.failedSessions, 1);
+        var current = await training.start(
+          'current',
+          'role-practice',
+          1,
+          instant(2),
+        );
+        current = await training.edit(current.id, current.contentVersion, (s) {
+          for (final set in s.sets.where((s) => s.role == 'work')) {
+            s = const TrainingService().complete(
+              s,
+              set.id,
+              {},
+              acceptSuggested: true,
+            );
+          }
+          return s;
+        });
+        final before = canonicalJson((await store.archive()).toJson());
+        final preview = await progression.previewFromTrack(
+          current.id,
+          'lift',
+          _rule(),
+          ruleType: 'threshold',
+        );
+        equal(preview['policy'], 'bodytmi-stored-progression-preview/1');
+        equal(preview['finalizationRequired'], true);
+        equal(jsonObject(preview['state'], 'state')['failedSessions'], 1);
+        equal(
+          jsonObject(preview['proposal'], 'proposal')['outcome'],
+          'advance',
+        );
+        final source = jsonObject(preview['stateSource'], 'state source');
+        equal(source['previousApplication'], declined.id);
+        equal(source['previousSequence'], 1);
+        equal(source['previousInputsChanged'], false);
+        equal(source['runId'], null);
+        equal(canonicalJson((await store.archive()).toJson()), before);
+        first = await training.edit(
+          first.id,
+          first.contentVersion,
+          (s) => const TrainingService().complete(
+            s,
+            first.sets.firstWhere((set) => set.role == 'work').id,
+            {'reps': Quantity('1', 'rep')},
+            acceptSuggested: true,
+          ),
+        );
+        final afterCorrection = await progression.previewFromTrack(
+          current.id,
+          'lift',
+          _rule(),
+          ruleType: 'threshold',
+        );
+        equal(
+          jsonObject(
+            afterCorrection['stateSource'],
+            'source',
+          )['previousInputsChanged'],
+          true,
+        );
+        equal(
+          jsonObject(afterCorrection['state'], 'state')['failedSessions'],
+          1,
+        );
+        final edited = await training.start(
+          'edited',
+          'role-practice',
+          1,
+          instant(3),
+        );
+        await training.editTarget(
+          edited.id,
+          edited.contentVersion,
+          edited.sets.firstWhere((s) => s.role == 'work').id,
+          'mass',
+          Quantity('15', 'kg'),
+        );
+        await expectLater(
+          progression.previewFromTrack(
+            edited.id,
+            'lift',
+            _rule(),
+            ruleType: 'threshold',
+          ),
+          throwsA(isA<BodyTmiException>()),
+        );
+        final otherRule = {
+          ..._rule(),
+          'minimum': {'value': '7', 'unit': 'rep'},
+        };
+        await expectLater(
+          progression.previewFromTrack(
+            current.id,
+            'lift',
+            otherRule,
+            ruleType: 'threshold',
+          ),
+          throwsA(isA<BodyTmiException>()),
+        );
+        final untracked = await progression.previewFromTrack(
+          current.id,
+          'lift',
+          _rule(),
+          role: 'backoff',
+          ruleType: 'threshold',
+        );
+        equal(
+          jsonObject(untracked['stateSource'], 'source')['previousApplication'],
+          null,
+        );
+        equal(jsonObject(untracked['state'], 'state')['failedSessions'], 0);
+        var later = await training.start(
+          'later',
+          'role-practice',
+          1,
+          instant(4),
+        );
+        later = await training.edit(later.id, later.contentVersion, (s) {
+          for (final set in s.sets) {
+            s = const TrainingService().complete(
+              s,
+              set.id,
+              {},
+              acceptSuggested: true,
+            );
+          }
+          return s.finish(instant(4).add(const Duration(hours: 1)));
+        });
+        final laterProposal = await progression.propose(
+          later.id,
+          'lift',
+          _rule(),
+          ruleType: 'threshold',
+        );
+        final laterDecision = await progression.decline(
+          later.id,
+          'lift',
+          laterProposal.version,
+          instant(4).add(const Duration(hours: 2)),
+        );
+        final currentLineage = await progression.previewFromTrack(
+          current.id,
+          'lift',
+          _rule(),
+          ruleType: 'threshold',
+        );
+        final currentSource = jsonObject(
+          currentLineage['stateSource'],
+          'source',
+        );
+        equal(currentSource['previousApplication'], laterDecision.id);
+        equal(currentSource['previousResolvedAfterSessionStart'], true);
+        equal(
+          jsonObject(currentLineage['state'], 'state')['failedSessions'],
+          0,
+        );
+        await expectLater(
+          progression.previewFromTrack(
+            first.id,
+            'lift',
+            _rule(),
+            ruleType: 'threshold',
+          ),
+          throwsA(isA<BodyTmiException>()),
+        );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'active-session progression previews use confirmed role results without creating decisions',
     () async {
       final dir = await Directory.systemTemp.createTemp(
@@ -253,6 +465,18 @@ void effortRolesTests() {
           ruleType: 'threshold',
         );
         equal(cardioProposal.previousApplication, null);
+        final cardioPreview = await service.previewFromTrack(
+          'cardio-one',
+          'lift',
+          _rule(),
+          role: 'backoff',
+          ruleType: 'threshold',
+        );
+        final cardioSource = jsonObject(cardioPreview['stateSource'], 'source');
+        equal(cardioSource['runId'], 'cardio-run');
+        equal(cardioSource['previousApplication'], null);
+        equal(cardioSource['pendingVersion'], cardioProposal.version);
+        equal(cardioSource['pendingStale'], false);
         Future<Map<String, Object?>> track(
           String? runId,
           DateTime asOf, {
@@ -1067,6 +1291,40 @@ void effortRolesTests() {
             'rule': _rule(),
           });
           equal(canonicalJson(preview), canonicalJson(pure['data']));
+          final tracked = jsonObject(
+            await call('store progression-preview', {
+              'id': session.id,
+              'slotId': 'lift',
+              'ruleType': 'threshold',
+              'rule': _rule(),
+              'useTrack': true,
+            }),
+            'preview',
+          );
+          equal(tracked['policy'], 'bodytmi-stored-progression-preview/1');
+          equal(
+            jsonObject(tracked['stateSource'], 'source')['previousApplication'],
+            null,
+          );
+          equal(
+            canonicalJson(tracked['proposal']),
+            canonicalJson(preview['proposal']),
+          );
+          final mixed = await invoke(
+            ['store', 'progression-preview'],
+            jsonEncode({
+              'schemaVersion': 1,
+              'database': path,
+              'id': session.id,
+              'slotId': 'lift',
+              'ruleType': 'threshold',
+              'rule': _rule(),
+              'useTrack': true,
+              'state': <String, Object?>{},
+            }),
+          );
+          check(mixed.code != 0);
+          equal(mixed.output, '');
           final denied = await invoke(
             ['progression', 'propose'],
             jsonEncode({

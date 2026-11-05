@@ -215,6 +215,7 @@ Future<Map<String, Object?>> executeStored(
       'ruleType',
       'rule',
       'state',
+      'useTrack',
     },
     'store records' => {
       'context',
@@ -938,10 +939,26 @@ Future<Map<String, Object?>> executeStored(
           roles: analyticsRoles(request),
         );
       case 'store progression-preview':
-        data = roleProgressionPreview(
-          await service.session(identifier(request, 'id')),
-          request,
-        );
+        if (flag('useTrack')) {
+          if (request.containsKey('state'))
+            invalid('useTrack cannot be combined with state.');
+          data = await StoredProgressionService(store).previewFromTrack(
+            identifier(request, 'id'),
+            identifier(request, 'slotId'),
+            jsonObject(request['rule'], 'rule'),
+            role: request.containsKey('role')
+                ? requiredString(request, 'role')
+                : 'work',
+            ruleType: request.containsKey('ruleType')
+                ? requiredString(request, 'ruleType')
+                : 'double',
+          );
+        } else {
+          data = roleProgressionPreview(
+            await service.session(identifier(request, 'id')),
+            request,
+          );
+        }
       case 'store records':
         if (request.containsKey('familyRevision') &&
             !request.containsKey('familyId'))
