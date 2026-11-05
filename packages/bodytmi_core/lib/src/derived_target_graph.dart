@@ -2,6 +2,7 @@ import 'derived_targets.dart';
 import 'derived_workout_plan.dart';
 import 'errors.dart';
 import 'instant.dart';
+import 'numeric_scale.dart';
 import 'quantity.dart';
 
 /// Reusable scalar dependency graph with explicit per-source binding policies.
@@ -75,6 +76,18 @@ final class DerivedTargetGraph {
           'unit': Unit.parse(requiredString(node, 'unit')).name,
           'left': identifier(node, 'left'),
           'right': identifier(node, 'right'),
+        });
+      } else if (kind == 'round') {
+        checkKeys(node, {'id', 'kind', 'unit', 'input', 'scale', 'rounding'});
+        final nodeId = identifier(node, 'id');
+        if (!nodeIds.add(nodeId)) invalid('Duplicate node: $nodeId.');
+        nodes.add({
+          'id': nodeId,
+          'kind': kind,
+          'unit': Unit.parse(requiredString(node, 'unit')).name,
+          'input': identifier(node, 'input'),
+          'scale': NumericScale.fromJson(node['scale']).toJson(),
+          'rounding': NumericScale.roundingPolicy(node['rounding']),
         });
       } else {
         invalid('Unknown derived target node kind: $kind.');

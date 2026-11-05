@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "graph": [
+    {"id": "training-max", "kind": "source", "unit": "kg", "sourceId": "max-load"},
+    {"id": "percentage", "kind": "scale", "unit": "kg", "input": "training-max", "factor": "0.82"},
+    {"id": "working-load", "kind": "round", "unit": "kg", "input": "percentage", "rounding": "nearest", "scale": {"id": "available-loads", "unit": "kg", "range": {"start": "0", "step": "2.5", "count": 100}}}
+  ],
+  "bindings": {
+    "max-load": {"version": 1, "value": {"value": "100", "unit": "kg"}}
+  }
+}

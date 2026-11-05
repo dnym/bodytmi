@@ -1,4 +1,5 @@
 import 'errors.dart';
+import 'numeric_scale.dart';
 import 'quantity.dart';
 
 /// Resolves an explicitly supplied scalar dependency graph without history access.
@@ -10,6 +11,7 @@ final class DerivedTargets {
       invalid('nodes must contain 1–256 entries.');
     }
     final nodes = <String, Map<String, Object?>>{};
+    var scaleTicks = 0;
     for (final value in input) {
       final node = jsonObject(value, 'node');
       final id = identifier(node, 'id');
@@ -51,6 +53,18 @@ final class DerivedTargets {
         Unit.parse(requiredString(node, 'unit'));
         identifier(node, 'left');
         identifier(node, 'right');
+      } else if (kind == 'round') {
+        checkKeys(node, {'id', 'kind', 'unit', 'input', 'scale', 'rounding'});
+        final unit = Unit.parse(requiredString(node, 'unit'));
+        identifier(node, 'input');
+        final scale = NumericScale.fromJson(node['scale']);
+        if (scale.unit.dimension != unit.dimension) {
+          invalid('Rounding scale dimension mismatch at $id.');
+        }
+        NumericScale.roundingPolicy(node['rounding']);
+        scaleTicks += scale.ticks.length;
+        if (scaleTicks > 10000)
+          invalid('Derived graph exceeds 10000 scale ticks.');
       } else {
         invalid('Unknown derived target node kind: $kind.');
       }
@@ -101,6 +115,31 @@ final class DerivedTargets {
           'unit': unit.name,
           'input': dependency,
           'factor': factor.toString(),
+          'value': result?.toJson(),
+          'status': result == null ? 'unresolved' : 'resolved',
+        });
+      } else if (node['kind'] == 'round') {
+        final dependency = identifier(node, 'input');
+        visit(dependency);
+        if (Unit.parse(requiredString(nodes[dependency]!, 'unit')).dimension !=
+            unit.dimension) {
+          invalid('Derived target dependency dimension mismatch at $id.');
+        }
+        final scale = NumericScale.fromJson(node['scale']);
+        final rounding = NumericScale.roundingPolicy(node['rounding']);
+        final source = resolved[dependency];
+        final selection = source == null
+            ? null
+            : scale.resolve(source, rounding);
+        result = selection?.tick?.quantity;
+        normalized.add({
+          'id': id,
+          'kind': 'round',
+          'unit': unit.name,
+          'input': dependency,
+          'scale': scale.toJson(),
+          'rounding': rounding,
+          'selection': selection?.toJson(),
           'value': result?.toJson(),
           'status': result == null ? 'unresolved' : 'resolved',
         });

@@ -881,7 +881,7 @@ void publishedObjectiveTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          38,
+          39,
         );
       } finally {
         await store.close();

@@ -41,6 +41,185 @@ Map<String, Object?> _node(Map<String, Object?> result, String id) => _nodes(
 ).map((v) => jsonObject(v, 'node')).singleWhere((v) => v['id'] == id);
 
 void derivedTargetsTests() {
+  test('round nodes retain native ticks and explicit rounding decisions', () {
+    final scale = {
+      'id': 'machine',
+      'unit': 'kg',
+      'ticks': [
+        {
+          'id': 'light',
+          'value': '20',
+          'labels': {'lb': '44'},
+        },
+        {
+          'id': 'middle',
+          'value': '22.5',
+          'labels': {'lb': '50'},
+        },
+        {
+          'id': 'heavy',
+          'value': '25',
+          'labels': {'lb': '55'},
+        },
+      ],
+    };
+    Map<String, Object?> round(String id, String policy) => {
+      'id': id,
+      'kind': 'round',
+      'unit': 'kg',
+      'input': 'requested',
+      'scale': scale,
+      'rounding': policy,
+    };
+    final nodes = [
+      _source('max', 'kg', _q('100', 'kg'), version: 2),
+      _scale('requested', 'kg', 'max', '0.2375'),
+      round('nearest', 'nearest'),
+      round('up', 'atLeast'),
+      round('down', 'atMost'),
+    ];
+    final result = const DerivedTargets().resolve(nodes);
+    equal(
+      jsonObject(_node(result, 'nearest')['value'], 'value')['value'],
+      '22.5',
+    );
+    equal(jsonObject(_node(result, 'up')['value'], 'value')['value'], '25');
+    equal(jsonObject(_node(result, 'down')['value'], 'value')['value'], '22.5');
+    final selection = jsonObject(
+      _node(result, 'nearest')['selection'],
+      'selection',
+    );
+    equal(selection['scaleId'], 'machine');
+    equal(jsonObject(selection['tick'], 'tick')['id'], 'middle');
+    equal(
+      jsonObject(
+        jsonObject(selection['tick'], 'tick')['labels'],
+        'labels',
+      )['lb'],
+      '50',
+    );
+    equal(selection['exact'], false);
+    jsonEqual(result, const DerivedTargets().resolve(nodes.reversed.toList()));
+    final snapshot = const DerivedTargetSnapshot().capture(
+      [
+        {
+          'id': 'requested',
+          'kind': 'source',
+          'unit': 'kg',
+          'sourceId': 'request',
+        },
+        round('nearest', 'nearest'),
+      ],
+      {
+        'request': {'version': 1, 'value': _q('23.75', 'kg')},
+      },
+    );
+    final status = const DerivedTargetSnapshot().status(snapshot, {
+      'request': {'version': 2, 'value': _q('24', 'kg')},
+    });
+    equal(status['changed'], true);
+    final current = jsonObject(status['current'], 'current');
+    equal(
+      jsonObject(_node(current, 'nearest')['value'], 'value')['value'],
+      '25',
+    );
+  });
+  test(
+    'round nodes propagate missing and unavailable settings and validate scales',
+    () {
+      Map<String, Object?> round(
+        String input,
+        String policy,
+        Object scale, [
+        String unit = 'kg',
+      ]) => {
+        'id': 'result',
+        'kind': 'round',
+        'unit': unit,
+        'input': input,
+        'scale': scale,
+        'rounding': policy,
+      };
+      final scale = {
+        'id': 'fixed',
+        'unit': 'lb',
+        'range': {'start': '10', 'step': '5', 'count': 3},
+      };
+      final missing = const DerivedTargets().resolve([
+        _source('a', 'kg', null),
+        round('a', 'nearest', scale),
+      ]);
+      equal(_node(missing, 'result')['status'], 'unresolved');
+      equal(_node(missing, 'result')['selection'], null);
+      final unavailable = const DerivedTargets().resolve([
+        _source('a', 'lb', _q('25', 'lb'), version: 1),
+        round('a', 'atLeast', scale),
+      ]);
+      equal(_node(unavailable, 'result')['status'], 'unresolved');
+      equal(
+        jsonObject(
+          _node(unavailable, 'result')['selection'],
+          'selection',
+        )['outcome'],
+        'blocked',
+      );
+      final downward = const DerivedTargets().resolve([
+        _source('a', 'lb', _q('25', 'lb'), version: 1),
+        round('a', 'atMost', scale),
+      ]);
+      equal(
+        jsonObject(
+          jsonObject(
+            _node(downward, 'result')['selection'],
+            'selection',
+          )['tick'],
+          'tick',
+        )['id'],
+        'tick-2',
+      );
+      rejects(
+        () => const DerivedTargets().resolve([
+          _source('a', 's', null),
+          round('a', 'nearest', scale),
+        ]),
+      );
+      rejects(
+        () => const DerivedTargets().resolve([
+          _source('a', 'kg', null),
+          round('a', 'nearest', scale, 's'),
+        ]),
+      );
+      rejects(
+        () => const DerivedTargets().resolve([
+          _source('a', 'kg', null),
+          round('a', 'invalid', scale),
+        ]),
+      );
+      rejects(
+        () =>
+            const DerivedTargets().resolve([round('result', 'nearest', scale)]),
+      );
+      final huge = [
+        for (var i = 0; i < 11; i++)
+          {
+            'id': 'r$i',
+            'kind': 'round',
+            'unit': 'kg',
+            'input': 'a',
+            'scale': {
+              'id': 's$i',
+              'unit': 'kg',
+              'range': {'start': '0', 'step': '1', 'count': 1000},
+            },
+            'rounding': 'nearest',
+          },
+      ];
+      rejects(
+        () =>
+            const DerivedTargets().resolve([_source('a', 'kg', null), ...huge]),
+      );
+    },
+  );
   test(
     'binary graph arithmetic uses exact quantities and explicit dependencies',
     () {

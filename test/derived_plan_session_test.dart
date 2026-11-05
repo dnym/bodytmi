@@ -111,6 +111,133 @@ void derivedPlanSessionTests() {
   }
 
   test(
+    'derived workout plans freeze rounded native ticks through restore',
+    () => withStore((store, dir) async {
+      await store.snapshot('$dir/v38.sqlite');
+      final old = sqlite3.open('$dir/v38.sqlite');
+      old.userVersion = 38;
+      old.close();
+      equal(NativeBackup.validateDatabase('$dir/v38.sqlite'), 38);
+      final migrated = await TrainingStore.open('$dir/v38.sqlite');
+      equal(
+        (await StoredTrainingService(
+          migrated,
+        ).revision(definition().id)).number,
+        1,
+      );
+      await migrated.close();
+      final graph = copyJson(_graph());
+      (graph['nodes']! as List<Object?>).add({
+        'id': 'rounded',
+        'kind': 'round',
+        'unit': 'kg',
+        'input': 'work',
+        'rounding': 'nearest',
+        'scale': {
+          'id': 'stack',
+          'unit': 'kg',
+          'range': {'start': '0', 'step': '7.5', 'count': 20},
+        },
+      });
+      final plan = jsonObject(
+        (graph['plans']! as List<Object?>).single,
+        'plan',
+      );
+      for (final binding in jsonList(plan, 'bindings')) {
+        jsonObject(binding, 'binding')['nodeId'] = 'rounded';
+      }
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(graph), 0);
+      final service = StoredTrainingService(store);
+      final session = await service.start(
+        'rounded-session',
+        definition().id,
+        1,
+        instant(1),
+        derivedPlan: _ref,
+      );
+      check(
+        session.sets
+            .where((s) => s.slotId == 'bench-heavy')
+            .every((s) => s.suggested['mass']!.value.toString() == '82.5'),
+      );
+      final snapshot = session.derivedPlanInput!.snapshot;
+      check(canonicalJson(snapshot).contains('tick-11'));
+      final unavailable = copyJson(graph);
+      unavailable['id'] = 'unavailable-graph';
+      final roundNode = jsonList(unavailable, 'nodes')
+          .map((n) => jsonObject(n, 'node'))
+          .singleWhere((n) => n['id'] == 'rounded');
+      roundNode['rounding'] = 'atLeast';
+      jsonObject(
+        jsonObject(roundNode['scale'], 'scale')['range'],
+        'range',
+      )['count'] = 10;
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(unavailable), 0);
+      await expectLater(
+        service.start(
+          'unavailable',
+          definition().id,
+          1,
+          instant(1),
+          derivedPlan: const DerivedPlanRef('unavailable-graph', 1, 'bench'),
+        ),
+        throwsA(isA<BodyTmiException>()),
+      );
+      equal(await store.session('unavailable'), null);
+      final before = canonicalJson((await store.archive()).toJson());
+      await store.backup('$dir/round-native');
+      final file = '$dir/rounded.json';
+      await LogicalArchiveFiles.export(await store.archive(), file);
+      final prepared = await LogicalArchiveFiles.prepare(file);
+      final destination = await TrainingStore.open('$dir/restore.sqlite');
+      try {
+        await destination.restore(
+          prepared.backup,
+          recoveryDestination: '$dir/recovery',
+          confirm: true,
+        );
+      } finally {
+        await destination.close();
+        await prepared.close();
+      }
+      final restored = await TrainingStore.open('$dir/restore.sqlite');
+      try {
+        equal(canonicalJson((await restored.archive()).toJson()), before);
+      } finally {
+        await restored.close();
+      }
+      final envelope =
+          jsonDecode(await File(file).readAsString()) as Map<String, Object?>;
+      envelope['format'] = 'bodytmi-logical-export/38';
+      envelope['sha256'] = sha256
+          .convert(
+            utf8.encode(
+              canonicalJson({
+                for (final e in envelope.entries)
+                  if (e.key != 'sha256') e.key: e.value,
+              }),
+            ),
+          )
+          .toString();
+      await File('$dir/old-round.json').writeAsString(jsonEncode(envelope));
+      await expectLater(
+        LogicalArchiveFiles.prepare('$dir/old-round.json'),
+        throwsA(isA<BodyTmiException>()),
+      );
+      await store.snapshot('$dir/round.sqlite');
+      equal(NativeBackup.validateDatabase('$dir/round.sqlite'), 39);
+      final oldLabel = sqlite3.open('$dir/round.sqlite');
+      oldLabel.userVersion = 38;
+      oldLabel.close();
+      rejects(() => NativeBackup.validateDatabase('$dir/round.sqlite'));
+    }),
+  );
+
+  test(
     'binary graph targets survive session capture and portability',
     () => withStore((store, dir) async {
       await store.snapshot('$dir/v37.sqlite');
@@ -210,7 +337,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/binary.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/binary.sqlite'), 38);
+      equal(NativeBackup.validateDatabase('$dir/binary.sqlite'), 39);
       final oldLabel = sqlite3.open('$dir/binary.sqlite');
       oldLabel.userVersion = 37;
       oldLabel.close();
@@ -443,7 +570,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 38);
+        equal(backup.manifest['databaseSchemaVersion'], 39);
       } finally {
         await backup.close();
       }
@@ -1298,7 +1425,7 @@ void derivedPlanSessionTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 38);
+      equal(NativeBackup.validateDatabase(snapshot), 39);
       final db = sqlite3.open(snapshot);
       db.userVersion = 30;
       db.close();
@@ -1674,7 +1801,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 38);
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 39);
       final db = sqlite3.open('$dir/snapshot.sqlite');
       db.userVersion = 32;
       db.close();
@@ -1776,7 +1903,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 38);
+        equal(reopened.userVersion, 39);
       } finally {
         reopened.close();
       }

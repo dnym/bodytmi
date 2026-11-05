@@ -1,5 +1,6 @@
 import 'derived_targets.dart';
 import 'errors.dart';
+import 'numeric_scale.dart';
 import 'quantity.dart';
 
 /// Reproducible caller-supplied source bindings for an authored scalar graph.
@@ -52,6 +53,16 @@ final class DerivedTargetSnapshot {
           'unit': Unit.parse(requiredString(node, 'unit')).name,
           'left': identifier(node, 'left'),
           'right': identifier(node, 'right'),
+        });
+      } else if (kind == 'round') {
+        checkKeys(node, {'id', 'kind', 'unit', 'input', 'scale', 'rounding'});
+        graph.add({
+          'id': identifier(node, 'id'),
+          'kind': kind,
+          'unit': Unit.parse(requiredString(node, 'unit')).name,
+          'input': identifier(node, 'input'),
+          'scale': NumericScale.fromJson(node['scale']).toJson(),
+          'rounding': NumericScale.roundingPolicy(node['rounding']),
         });
       } else {
         invalid('Unknown derived target node kind: $kind.');

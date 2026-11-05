@@ -783,7 +783,7 @@ void derivedPlanBodyMassTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 38);
+      equal(NativeBackup.validateDatabase(snapshot), 39);
       final db = sqlite3.open(snapshot);
       db.userVersion = 29;
       db.close();

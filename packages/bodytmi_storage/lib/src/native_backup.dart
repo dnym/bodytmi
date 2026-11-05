@@ -137,6 +137,7 @@ final class NativeBackup {
           36,
           37,
           38,
+          39,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -268,6 +269,7 @@ final class NativeBackup {
             36,
             37,
             38,
+            39,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -327,6 +329,10 @@ final class NativeBackup {
           final graph = DerivedTargetGraphRevision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 39 &&
+              graph.graph.nodes.any((n) => n['kind'] == 'round')) {
+            invalid('Derived native-scale rounding requires schema v39.');
+          }
           if (db.userVersion < 38 &&
               graph.graph.nodes.any(
                 (n) => n['kind'] == 'add' || n['kind'] == 'subtract',
