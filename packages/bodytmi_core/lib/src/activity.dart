@@ -2,7 +2,7 @@ import 'errors.dart';
 import 'quantity.dart';
 import 'objective.dart';
 
-/// Explicit effort roles. Progression currently owns only `work` occurrences.
+/// Explicit effort roles. Stored progression defaults to `work` and can select another role.
 const effortRoles = {'work', 'warmup', 'backoff', 'drop'};
 
 Set<String> maxEffortObjectivesFromJson(Object? input) {
@@ -330,11 +330,25 @@ final class ActivityOccurrence {
 /// Structural group bounds in the finite occurrence stream. A repeat iteration
 /// contains its child, while between-round rest belongs to the enclosing repeat.
 final class ActivityGroupOccurrence {
-  const ActivityGroupOccurrence(this.path, this.start, this.end);
+  const ActivityGroupOccurrence(
+    this.path,
+    this.start,
+    this.end, {
+    this.windowDurationSeconds,
+  });
   final String path;
   final int start, end;
+
+  /// Authored duration for a window; this is not a running deadline.
+  final int? windowDurationSeconds;
   bool contains(int cursor) => start <= cursor && cursor < end;
-  Map<String, Object?> toJson() => {'path': path, 'start': start, 'end': end};
+  Map<String, Object?> toJson() => {
+    'path': path,
+    'start': start,
+    'end': end,
+    if (windowDurationSeconds != null)
+      'windowDurationSeconds': windowDurationSeconds,
+  };
 }
 
 List<ActivityGroupOccurrence> activityGroups(
@@ -344,10 +358,20 @@ List<ActivityGroupOccurrence> activityGroups(
 }) {
   final groups = <ActivityGroupOccurrence>[];
   var cursor = 0;
-  void add(String path, int start, int end) {
+  void add(String path, int start, int end, {int? windowDurationSeconds}) {
     if ((containing == null || start <= containing && containing < end) &&
-        (paths == null || paths.contains(path)))
-      groups.add(ActivityGroupOccurrence(path, start, end));
+        (paths == null || paths.contains(path))) {
+      if (groups.length >= 10000)
+        invalid('Activity group selection exceeds 10000 groups.');
+      groups.add(
+        ActivityGroupOccurrence(
+          path,
+          start,
+          end,
+          windowDurationSeconds: windowDurationSeconds,
+        ),
+      );
+    }
   }
 
   void walk(Activity node, String prefix) {
@@ -368,8 +392,10 @@ List<ActivityGroupOccurrence> activityGroups(
           if (i + 1 < count && restBetweenSeconds > 0 && ++cursor > 10000)
             invalid('Activity traversal exceeds 10000 occurrences.');
         }
-      case TimeWindow():
-        invalid('Scoped window groups are not implemented yet.');
+      case TimeWindow(:final child, :final durationSeconds):
+        walk(child, path);
+        add(path, start, cursor, windowDurationSeconds: durationSeconds);
+        return;
     }
     add(path, start, cursor);
   }

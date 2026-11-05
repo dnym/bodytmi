@@ -1257,10 +1257,12 @@ void executionTests() {
       equal(byPath['workout/rounds']!.end, 7);
       equal(byPath['workout']!.end, 8);
       equal(byPath['workout/rounds[0]']!.contains(3), false);
-      rejects(
-        () =>
-            activityGroups(TimeWindow('window', 10, const Effort('e', 'hold'))),
-      );
+      final window = activityGroups(
+        TimeWindow('window', 10, const Effort('e', 'hold')),
+      ).single;
+      equal(window.windowDurationSeconds, 10);
+      equal(window.start, 0);
+      equal(window.end, 1);
     },
   );
   test(

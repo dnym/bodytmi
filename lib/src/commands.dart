@@ -15,6 +15,7 @@ const commandNames = [
   'template validate',
   'template publish',
   'activity expand',
+  'activity groups',
   'session start',
   'session show',
   'session summary',
@@ -103,6 +104,28 @@ final class Commands {
           for (final occurrence in definition.plan.occurrences())
             {'id': occurrence.id, 'activity': occurrence.activity.toJson()},
         ];
+      case 'activity groups':
+        keys({'definition', 'containing'});
+        final definition = WorkoutDefinition.fromJson(request['definition']);
+        final containing = request['containing'];
+        if (request.containsKey('containing') &&
+            (containing is! int || containing < 0))
+          invalid('containing must be a nonnegative occurrence index.');
+        final occurrences = definition.plan.occurrences().toList();
+        if (containing is int && containing >= occurrences.length)
+          invalid('containing must refer to an occurrence.');
+        data = {
+          'policy': 'bodytmi-activity-groups/1',
+          'occurrenceCount': occurrences.length,
+          'containing': containing,
+          'groups': [
+            for (final group in activityGroups(
+              definition.plan,
+              containing: containing as int?,
+            ))
+              group.toJson(),
+          ],
+        };
       case 'session start':
         keys({
           'id',
