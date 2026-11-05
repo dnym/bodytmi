@@ -76,6 +76,38 @@ sealed class ProgramNode {
         for (var i = 0; i < count; i++) yield* child.occurrences('$path[$i]');
     }
   }
+
+  /// Enumerate days with their authored group and repeat ancestry. This is
+  /// descriptive context; labels do not alter prescriptions or run state.
+  Iterable<ProgramDayOccurrence> scopedOccurrences([
+    String prefix = '',
+    List<ProgramScope> scopes = const [],
+  ]) sync* {
+    final path = prefix.isEmpty ? id : '$prefix/$id';
+    switch (this) {
+      case ProgramDay():
+        yield ProgramDayOccurrence(path, this as ProgramDay, scopes: scopes);
+      case ProgramGroup(:final items):
+        final nested = [...scopes, ProgramScope(path, id, 'group', label)];
+        for (final child in items) yield* child.scopedOccurrences(path, nested);
+      case ProgramRepeat(:final count, :final child):
+        for (var i = 0; i < count; i++) {
+          final roundPath = '$path[$i]';
+          final nested = [
+            ...scopes,
+            ProgramScope(
+              roundPath,
+              id,
+              'repeat',
+              label,
+              iteration: i,
+              count: count,
+            ),
+          ];
+          yield* child.scopedOccurrences(roundPath, nested);
+        }
+    }
+  }
 }
 
 final class ProgramDay extends ProgramNode {
@@ -129,10 +161,38 @@ final class ProgramRepeat extends ProgramNode {
 }
 
 final class ProgramDayOccurrence {
-  const ProgramDayOccurrence(this.path, this.day);
+  ProgramDayOccurrence(
+    this.path,
+    this.day, {
+    List<ProgramScope> scopes = const [],
+  }) : scopes = List.unmodifiable(scopes);
   final String path;
   final ProgramDay day;
+  final List<ProgramScope> scopes;
   Map<String, Object?> toJson() => {'path': path, 'day': day.toJson()};
+}
+
+/// A pinned authored group or one indexed repeat iteration containing a day.
+final class ProgramScope {
+  const ProgramScope(
+    this.path,
+    this.nodeId,
+    this.type,
+    this.label, {
+    this.iteration,
+    this.count,
+  });
+  final String path, nodeId, type;
+  final String? label;
+  final int? iteration, count;
+  Map<String, Object?> toJson() => {
+    'path': path,
+    'nodeId': nodeId,
+    'type': type,
+    if (label != null) 'label': label,
+    if (iteration != null) 'iteration': iteration,
+    if (count != null) 'count': count,
+  };
 }
 
 final class ProgramDefinition {

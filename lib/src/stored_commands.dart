@@ -364,7 +364,7 @@ Future<Map<String, Object?>> executeStored(
     'run create' => {'id', 'programId', 'revision', 'startedAt', 'loop'},
     'run list' => {'status'},
     'run show' => {'runId'},
-    'run schedule' => {'runId', 'count'},
+    'run schedule' => {'runId', 'count', 'includeScopes'},
     'run start' => {
       'runId',
       'expectedVersion',
@@ -753,6 +753,7 @@ Future<Map<String, Object?>> executeStored(
         data = await programs.schedule(
           identifier(request, 'runId'),
           count: request.containsKey('count') ? integer('count') : 10,
+          includeScopes: flag('includeScopes'),
         );
       case 'run show':
         data = await runView(await programs.run(identifier(request, 'runId')));

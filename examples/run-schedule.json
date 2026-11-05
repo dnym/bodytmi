@@ -2,5 +2,6 @@
   "schemaVersion": 1,
   "database": "bodytmi.sqlite",
   "runId": "strength-run",
-  "count": 8
+  "count": 8,
+  "includeScopes": true
 }

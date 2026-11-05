@@ -166,6 +166,7 @@ void programTests() {
         nested['plan'] = {
           'id': 'block',
           'type': 'repeat',
+          'label': 'Strength phase',
           'count': 2,
           'child': nested['plan'],
         };
@@ -183,7 +184,58 @@ void programTests() {
         equal(jsonObject(days[4], 'day')['path'], 'block[0]/cycle/a');
         equal(jsonObject(days[4], 'day')['cycle'], 1);
         equal(jsonObject(days[4], 'day')['ordinal'], 4);
+        check(!jsonObject(days[0], 'day').containsKey('scopes'));
+        final scoped = await programs.schedule(
+          'nested-run',
+          count: 6,
+          includeScopes: true,
+        );
+        equal(scoped['policy'], 'bodytmi-program-run-schedule/2');
+        final scopedDays = jsonList(scoped, 'days');
+        final firstScopes = jsonList(
+          jsonObject(scopedDays[0], 'day'),
+          'scopes',
+        );
+        equal(firstScopes.length, 2);
+        final repeat = jsonObject(firstScopes[0], 'repeat');
+        equal(repeat['path'], 'block[0]');
+        equal(repeat['label'], 'Strength phase');
+        equal(repeat['iteration'], 0);
+        equal(repeat['count'], 2);
+        final group = jsonObject(firstScopes[1], 'group');
+        equal(group['path'], 'block[0]/cycle');
+        equal(group['label'], 'Cycle');
+        final secondScopes = jsonList(
+          jsonObject(scopedDays[3], 'day'),
+          'scopes',
+        );
+        equal(jsonObject(secondScopes.first, 'scope')['iteration'], 1);
+        final repeatedCycle = jsonObject(scopedDays[4], 'day');
+        equal(repeatedCycle['cycle'], 1);
+        equal(
+          jsonObject(
+            jsonList(repeatedCycle, 'scopes').first,
+            'scope',
+          )['iteration'],
+          0,
+        );
         equal(canonicalJson((await store.archive()).toJson()), before);
+        final revised = copyJson(nested);
+        jsonObject(revised['plan'], 'repeat')['label'] = 'New phase';
+        await programs.publish(ProgramDefinition.fromJson(revised), 1);
+        final pinned = await programs.schedule(
+          'nested-run',
+          count: 1,
+          includeScopes: true,
+        );
+        final pinnedScopes = jsonList(
+          jsonObject(jsonList(pinned, 'days').single, 'day'),
+          'scopes',
+        );
+        equal(
+          jsonObject(pinnedScopes.first, 'scope')['label'],
+          'Strength phase',
+        );
         await _start(store, 'strength-run', 'strength-session', 1);
         final strength = await programs.schedule('strength-run', count: 1);
         equal(
@@ -969,6 +1021,19 @@ void programTests() {
         );
         equal(jsonList(upcoming, 'days').length, 3);
         equal(jsonObject(jsonList(upcoming, 'days')[2], 'day')['cycle'], 1);
+        final scoped = jsonObject(
+          await call('run schedule', {
+            'runId': 'strength-run',
+            'count': 1,
+            'includeScopes': true,
+          }),
+          'schedule',
+        );
+        final ancestry = jsonList(
+          jsonObject(jsonList(scoped, 'days').single, 'day'),
+          'scopes',
+        );
+        equal(jsonObject(ancestry.single, 'group')['label'], 'Cycle');
         var s = sessionFromJson(
           await call('run start', {
             'runId': 'strength-run',
