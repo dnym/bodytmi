@@ -10,11 +10,24 @@ final class TrainingAnalytics {
     TrainingSession session, {
     bool includeWarmups = false,
     List<String> sumMetrics = const [],
+    List<String>? roles,
   }) {
     final metrics = _sumMetrics(sumMetrics);
-    final sets = session.sets
-        .where((s) => includeWarmups || s.role != 'warmup')
-        .toList();
+    if (roles != null &&
+        (roles.isEmpty ||
+            roles.toSet().length != roles.length ||
+            roles.any(
+              (r) => !{'work', 'warmup', 'backoff', 'drop'}.contains(r),
+            ) ||
+            includeWarmups))
+      invalid(
+        'roles needs distinct known effort roles and cannot be combined with includeWarmups.',
+      );
+    final selectedRoles = roles == null ? null : ([...roles]..sort());
+    bool included(TrainingSet set) =>
+        selectedRoles?.contains(set.role) ??
+        (includeWarmups || set.role != 'warmup');
+    final sets = session.sets.where(included).toList();
     final totals = <String, _MetricTotal>{};
     for (final set in sets) {
       for (final metric in metrics) {
@@ -45,12 +58,15 @@ final class TrainingAnalytics {
     final keys = totals.keys.toList()..sort();
     return {
       'policy': {
-        'id': sets.any((s) => s.criteria.isNotEmpty)
+        'id': selectedRoles != null
+            ? 'bodytmi-session-summary/4'
+            : sets.any((s) => s.criteria.isNotEmpty)
             ? 'bodytmi-session-summary/3'
             : sets.any((s) => s.maxEffortMetrics.isNotEmpty)
             ? 'bodytmi-session-summary/2'
             : 'bodytmi-session-summary/1',
         'includeWarmups': includeWarmups,
+        if (selectedRoles != null) 'roles': selectedRoles,
         'sumMetrics': metrics,
       },
       'source': {
@@ -77,7 +93,13 @@ final class TrainingAnalytics {
             ).toJson(),
       'counts': {
         'included': sets.length,
-        'excludedWarmups': session.sets.length - sets.length,
+        'excludedWarmups': session.sets
+            .where((s) => s.role == 'warmup' && !included(s))
+            .length,
+        if (selectedRoles != null)
+          'excludedRoles': session.sets
+              .where((s) => s.role != 'warmup' && !included(s))
+              .length,
         for (final status in SetStatus.values)
           status.name: sets.where((s) => s.status == status).length,
       },

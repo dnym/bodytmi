@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
@@ -117,6 +118,39 @@ void effortRolesTests() {
       }
       final summary = const TrainingAnalytics().summary(old);
       equal(jsonObject(summary['counts'], 'counts')['included'], 5);
+      final selected = const TrainingAnalytics().summary(
+        old,
+        roles: ['drop', 'warmup'],
+        sumMetrics: ['mass'],
+      );
+      final counts = jsonObject(selected['counts'], 'counts');
+      equal(
+        jsonObject(selected['policy'], 'policy')['id'],
+        'bodytmi-session-summary/4',
+      );
+      equal(counts['included'], 3);
+      equal(counts['excludedWarmups'], 0);
+      equal(counts['excludedRoles'], 3);
+      equal(
+        jsonList(jsonObject(selected['policy'], 'policy'), 'roles').join(','),
+        'drop,warmup',
+      );
+      equal(
+        jsonObject(jsonList(selected, 'totals').single, 'total')['value'],
+        '12',
+      );
+      rejects(() => const TrainingAnalytics().summary(old, roles: []));
+      rejects(
+        () => const TrainingAnalytics().summary(old, roles: ['work', 'work']),
+      );
+      rejects(() => const TrainingAnalytics().summary(old, roles: ['other']));
+      rejects(
+        () => const TrainingAnalytics().summary(
+          old,
+          roles: ['work'],
+          includeWarmups: true,
+        ),
+      );
       for (final role in ['work', 'backoff', 'drop']) {
         final series = const TrainingAnalytics().series(
           [old],
@@ -478,6 +512,23 @@ void effortRolesTests() {
           1,
         ).add(const Duration(hours: 1)).toIso8601String(),
       });
+      final roleSummary = jsonObject(
+        await call('store summary', {
+          'id': session.id,
+          'roles': ['backoff', 'drop'],
+          'sumMetrics': ['mass'],
+        }),
+        'summary',
+      );
+      equal(jsonObject(roleSummary['counts'], 'counts')['included'], 3);
+      final finished = await call('store show', {'id': session.id});
+      final pureSummary = const Commands().execute('session summary', {
+        'schemaVersion': 1,
+        'session': finished,
+        'roles': ['drop', 'backoff'],
+        'sumMetrics': ['mass'],
+      })['data'];
+      equal(canonicalJson(roleSummary), canonicalJson(pureSummary));
       final series = jsonObject(
         await call('store series', {
           'metric': 'mass',

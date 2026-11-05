@@ -170,11 +170,12 @@ final class Commands {
         keys({'session'});
         data = sessionFromJson(request['session']).toJson();
       case 'session summary':
-        keys({'session', 'includeWarmups', 'sumMetrics'});
+        keys({'session', 'includeWarmups', 'sumMetrics', 'roles'});
         data = const TrainingAnalytics().summary(
           sessionFromJson(request['session']),
           includeWarmups: _bool(request, 'includeWarmups'),
           sumMetrics: analyticsSums(request),
+          roles: analyticsRoles(request),
         );
       case 'history records':
         keys({

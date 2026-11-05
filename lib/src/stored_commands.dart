@@ -205,7 +205,7 @@ Future<Map<String, Object?>> executeStored(
     },
     'store show' => {'id'},
     'store assess-objectives' => {'id', 'setId', 'objectives'},
-    'store summary' => {'id', 'includeWarmups', 'sumMetrics'},
+    'store summary' => {'id', 'includeWarmups', 'sumMetrics', 'roles'},
     'store records' => {
       'context',
       'metric',
@@ -889,6 +889,7 @@ Future<Map<String, Object?>> executeStored(
           await service.session(identifier(request, 'id')),
           includeWarmups: flag('includeWarmups'),
           sumMetrics: analyticsSums(request),
+          roles: analyticsRoles(request),
         );
       case 'store records':
         if (request.containsKey('familyRevision') &&
