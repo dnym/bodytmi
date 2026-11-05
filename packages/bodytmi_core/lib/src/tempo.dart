@@ -52,6 +52,25 @@ final class TempoPlan {
     throw StateError('Tempo position exceeds its cycle.');
   }
 
+  /// Return at most the newest crossed beat. Repeated or frozen samples never
+  /// emit a cue, and delayed samples do not replay missed boundaries.
+  TempoPosition? cueAt(
+    int previousMilliseconds,
+    int elapsedMilliseconds, {
+    bool includeInitial = false,
+  }) {
+    if (previousMilliseconds < 0 ||
+        previousMilliseconds > elapsedMilliseconds) {
+      invalid('Tempo samples must be nonnegative and monotonic.');
+    }
+    final current = position(elapsedMilliseconds);
+    if (previousMilliseconds == elapsedMilliseconds) return null;
+    if (current.boundaryEffortMilliseconds > previousMilliseconds ||
+        (includeInitial && previousMilliseconds == 0))
+      return current;
+    return null;
+  }
+
   Map<String, Object?> toJson() => {
     'phases': [for (final phase in phases) phase.toJson()],
   };

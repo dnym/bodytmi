@@ -531,8 +531,12 @@ final class TimingActivity {
     if (p.tempo != null) {
       final position = next.tempoState;
       if (position != null &&
-          (position.boundaryEffortMilliseconds > effortElapsedMilliseconds ||
-              (phase == 'effort' && elapsedMilliseconds == 0))) {
+          p.tempo!.cueAt(
+                effortElapsedMilliseconds,
+                next.effortElapsedMilliseconds,
+                includeInitial: phase == 'effort' && elapsedMilliseconds == 0,
+              ) !=
+              null) {
         cues.add({
           'kind': 'tempo',
           'phase': 'effort',

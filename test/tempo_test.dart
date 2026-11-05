@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
@@ -73,6 +74,48 @@ Future<void> _fails(Future<Object?> action) =>
     expectLater(action, throwsA(isA<BodyTmiException>()));
 
 void tempoTests() {
+  test(
+    'tempo samples expose current cues without inferring repetitions or a duration target',
+    () async {
+      final plan = TempoPlan.fromJson(_tempo());
+      equal(plan.cueAt(0, 0, includeInitial: true), null);
+      equal(plan.cueAt(0, 1000), null);
+      equal(plan.cueAt(0, 1000, includeInitial: true)!.phaseId, 'lower');
+      equal(plan.cueAt(1000, 3000)!.phaseId, 'hold');
+      equal(plan.cueAt(3000, 11500)!.phaseId, 'raise');
+      equal(plan.cueAt(11500, 11500), null);
+      rejects(() => plan.cueAt(2000, 1000));
+      rejects(() => plan.cueAt(-1, 0));
+      rejects(() => plan.cueAt(0, 604800001));
+      final request = {
+        'schemaVersion': 1,
+        'tempo': _tempo(),
+        'previousElapsedMilliseconds': 1000,
+        'elapsedMilliseconds': 3500,
+        'includeInitial': false,
+      };
+      final response = const Commands().execute('tempo sample', request);
+      final data = jsonObject(response['data'], 'sample');
+      equal(jsonObject(data['position'], 'position')['phaseId'], 'hold');
+      equal(jsonObject(data['cue'], 'cue')['boundaryEffortMilliseconds'], 3000);
+      check(!data.containsKey('reps') && !data.containsKey('actuals'));
+      final cli = await invoke(['tempo', 'sample'], jsonEncode(request));
+      equal(cli.code, 0);
+      equal(
+        canonicalJson(jsonObject(jsonDecode(cli.output), 'response')),
+        canonicalJson(response),
+      );
+      var clock = _clock(plan: _plan(prep: 0, rest: 0));
+      clock = clock.resume('owner', instant(1));
+      clock = clock.advance(1000, 'owner', instant(1)).activity;
+      final step = clock.advance(3500, 'owner', instant(1));
+      equal(step.cues.single['kind'], 'tempo');
+      equal(
+        canonicalJson(step.cues.single['tempo']),
+        canonicalJson(data['cue']),
+      );
+    },
+  );
   test(
     'schema and logical v9 clocks migrate without acquiring tempo or changing elapsed inputs',
     () => _withStore((store, dir) async {

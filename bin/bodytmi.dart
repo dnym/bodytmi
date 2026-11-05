@@ -92,6 +92,8 @@ Future<void> main(List<String> arguments) async {
               'activity groups takes definition and optional containing occurrence index. It reports half-open group bounds and authored durations for window scopes, including repeated and nested windows. This is structural inspection only; scoped window execution remains unsupported.',
           'windowStatus':
               'activity window-status takes definition/occurrence/elapsedMilliseconds/windowStarts. It calculates nested authored window deadlines from explicit shared logical milliseconds. It does not own or advance a clock, record results or execute windows.',
+          'tempoSample':
+              'tempo sample takes tempo/previousElapsedMilliseconds/elapsedMilliseconds and optional includeInitial. It returns the current phase and at most the newest crossed cue from explicit effort-time samples; it does not own a clock, deliver audio or count reps.',
           'roleProgressionPreview':
               'session progression-preview takes session/slotId/rule and optional role, ruleType and state; store progression-preview takes database/id instead of session and optionally useTrack:true to load current run/role lineage instead of state. Active sessions can be previewed but must be finalized before creating durable decisions. Role defaults to work; ruleType defaults to double. Preview is read-only and does not apply targets or create progression decisions.',
           'progressionTrack':

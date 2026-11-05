@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "tempo": {
+    "phases": [
+      {"id": "lower", "milliseconds": 3000},
+      {"id": "hold", "milliseconds": 1000},
+      {"id": "raise", "milliseconds": 2000}
+    ]
+  },
+  "previousElapsedMilliseconds": 1000,
+  "elapsedMilliseconds": 3500
+}

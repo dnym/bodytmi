@@ -17,6 +17,7 @@ const commandNames = [
   'activity expand',
   'activity groups',
   'activity window-status',
+  'tempo sample',
   'session start',
   'session show',
   'session summary',
@@ -144,6 +145,32 @@ final class Commands {
           elapsedMilliseconds: elapsed,
           windowStarts: jsonObject(request['windowStarts'], 'windowStarts'),
         );
+      case 'tempo sample':
+        keys({
+          'tempo',
+          'previousElapsedMilliseconds',
+          'elapsedMilliseconds',
+          'includeInitial',
+        });
+        final plan = TempoPlan.fromJson(request['tempo']);
+        final previous = request['previousElapsedMilliseconds'];
+        final elapsed = request['elapsedMilliseconds'];
+        if (previous is! int || elapsed is! int)
+          invalid('Tempo samples must use integer milliseconds.');
+        final position = plan.position(elapsed);
+        final cue = plan.cueAt(
+          previous,
+          elapsed,
+          includeInitial: _bool(request, 'includeInitial'),
+        );
+        data = {
+          'policy': 'bodytmi-tempo-sample/1',
+          'previousElapsedMilliseconds': previous,
+          'elapsedMilliseconds': elapsed,
+          'includeInitial': _bool(request, 'includeInitial'),
+          'position': position.toJson(),
+          'cue': cue?.toJson(),
+        };
       case 'session start':
         keys({
           'id',
