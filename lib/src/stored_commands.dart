@@ -73,6 +73,7 @@ const storedCommandNames = [
   'archive validate',
   'archive restore',
   'progression propose',
+  'progression track',
   'progression show',
   'progression accept',
   'progression decline',
@@ -319,6 +320,14 @@ Future<Map<String, Object?>> executeStored(
       'role',
       'rule',
       'ruleType',
+    },
+    'progression track' => {
+      'templateId',
+      'revision',
+      'slotId',
+      'role',
+      'runId',
+      'asOf',
     },
     'progression show' => {'sessionId', 'slotId', 'role'},
     'progression accept' => {
@@ -781,6 +790,19 @@ Future<Map<String, Object?>> executeStored(
           'receipt': receipt.toJson(),
           'run': await runView(await programs.run(runId)),
         };
+      case 'progression track':
+        data = await StoredProgressionService(store).track(
+          templateId: identifier(request, 'templateId'),
+          revision: integer('revision'),
+          slotId: identifier(request, 'slotId'),
+          asOf: parseInstant(request['asOf'], 'asOf'),
+          runId: request.containsKey('runId')
+              ? identifier(request, 'runId')
+              : null,
+          role: request.containsKey('role')
+              ? requiredString(request, 'role')
+              : 'work',
+        );
       case 'progression propose':
       case 'progression show':
       case 'progression accept':

@@ -7,6 +7,80 @@ final class StoredProgressionService {
   const StoredProgressionService(this.repository);
   final TrainingRepository repository;
 
+  /// Inspect the latest resolved track at a session-start cutoff. This does not
+  /// assert that a new prescription is compatible with the stored baseline.
+  Future<Map<String, Object?>> track({
+    required String templateId,
+    required int revision,
+    required String slotId,
+    required DateTime asOf,
+    String? runId,
+    String role = 'work',
+  }) => repository.transaction(() async {
+    identifier({'id': templateId}, 'id');
+    identifier({'id': slotId}, 'id');
+    if (revision < 1 || !{'work', 'warmup', 'backoff', 'drop'}.contains(role))
+      invalid('Invalid progression track revision or role.');
+    if (runId != null) {
+      identifier({'id': runId}, 'id');
+      if (!(await repository.programRuns()).any((run) => run.id == runId)) {
+        throw const BodyTmiException('not_found', 'Program run not found.');
+      }
+    }
+    final prescription = await StoredTrainingService(
+      repository,
+    ).revision(templateId, revision);
+    final slots = prescription.definition.slots.where((s) => s.id == slotId);
+    if (slots.isEmpty) invalid('Unknown progression slot.');
+    final decisions = (await repository.progressionDecisions()).where(
+      (d) =>
+          d.resolvedAt != null &&
+          !d.resolvedAt!.isAfter(asOf) &&
+          d.session.startedAt.isBefore(asOf),
+    );
+    final latest = latestApplication(
+      decisions,
+      templateId,
+      slots.single,
+      runId: runId,
+      role: role,
+    );
+    return {
+      'policy': 'bodytmi-progression-track/1',
+      'asOf': asOf.toUtc().toIso8601String(),
+      'templateId': templateId,
+      'revision': revision,
+      'slotId': slotId,
+      'role': role,
+      'runId': runId,
+      'resolved': latest != null,
+      if (latest != null) ...{
+        'decisionId': latest.id,
+        'sourceSessionId': latest.session.id,
+        'sourceContentVersion': latest.session.contentVersion,
+        'sourceRevision': latest.session.revision.number,
+        'resolvedAt': latest.resolvedAt!.toUtc().toIso8601String(),
+        'status': latest.status,
+        'inputsChanged': await stale(latest),
+        'sequence': latest.sequence,
+        'ruleType': latest.ruleType,
+        'rule': latest.rule,
+        'controlledMetrics': latest.controlledMetrics.toList()..sort(),
+        'state': {
+          'failedSessions': latest.failedSessions,
+          if (latest.ruleType == 'threshold') 'cursor': latest.cursor,
+          'nextSets': [
+            for (final set in latest.nextSets)
+              metricsToJson({
+                for (final metric in latest.controlledMetrics)
+                  metric: set[metric]!,
+              }),
+          ],
+        },
+      },
+    };
+  });
+
   Future<ProgressionDecision> propose(
     String sessionId,
     String slotId,

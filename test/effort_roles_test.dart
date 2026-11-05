@@ -150,6 +150,53 @@ void effortRolesTests() {
           ruleType: 'threshold',
         );
         equal(cardioProposal.previousApplication, null);
+        Future<Map<String, Object?>> track(
+          String? runId,
+          DateTime asOf, {
+          String role = 'backoff',
+        }) => service.track(
+          templateId: 'role-practice',
+          revision: 1,
+          slotId: 'lift',
+          asOf: asOf,
+          runId: runId,
+          role: role,
+        );
+        equal(
+          (await track(
+            'strength-run',
+            instant(1).add(const Duration(hours: 1)),
+          ))['resolved'],
+          false,
+        );
+        final current = await track(
+          'strength-run',
+          instant(1).add(const Duration(hours: 2)),
+        );
+        equal(current['decisionId'], proposal.id);
+        equal(current['status'], 'accepted');
+        equal(current['inputsChanged'], false);
+        equal(jsonObject(current['state'], 'state')['failedSessions'], 0);
+        final nextTargets = jsonObject(
+          jsonList(jsonObject(current['state'], 'state'), 'nextSets').single,
+          'targets',
+        );
+        equal(jsonObject(nextTargets['mass'], 'mass')['value'], '11');
+        equal(nextTargets.containsKey('reps'), false);
+        equal((await track('cardio-run', instant(2)))['resolved'], false);
+        equal((await track(null, instant(2)))['resolved'], false);
+        equal(
+          (await track('strength-run', instant(2), role: 'work'))['resolved'],
+          false,
+        );
+        await expectLater(
+          track('missing-run', instant(2)),
+          throwsA(isA<BodyTmiException>()),
+        );
+        await expectLater(
+          track('strength-run', instant(2), role: 'invalid'),
+          throwsA(isA<BodyTmiException>()),
+        );
         for (final name in ['strength', 'cardio']) {
           final run = await programs.run('$name-run');
           final next = await programs.start(
@@ -167,6 +214,19 @@ void effortRolesTests() {
             name == 'strength' ? '11' : '10',
           );
         }
+        final source = await training.session('strength-one');
+        final backoff = source.sets.singleWhere((s) => s.role == 'backoff');
+        await training.edit(
+          source.id,
+          source.contentVersion,
+          (s) => const TrainingService().complete(s, backoff.id, {
+            'reps': Quantity('9', 'rep'),
+          }, acceptSuggested: true),
+        );
+        final changed = await track('strength-run', instant(2));
+        equal(changed['inputsChanged'], true);
+        equal(changed['decisionId'], current['decisionId']);
+        equal(canonicalJson(changed['state']), canonicalJson(current['state']));
         await store.archive();
       } finally {
         await store.close();
@@ -241,6 +301,15 @@ void effortRolesTests() {
         role: 'drop',
       );
       equal(declined.failedSessions, 1);
+      final held = await progression.track(
+        templateId: 'role-practice',
+        revision: 1,
+        slotId: 'lift',
+        role: 'drop',
+        asOf: at,
+      );
+      equal(held['status'], 'declined');
+      equal(jsonObject(held['state'], 'state')['failedSessions'], 1);
       equal(
         (await progression.decline(
           session.id,
@@ -933,6 +1002,19 @@ void effortRolesTests() {
         'decision',
       );
       equal(accepted['status'], 'accepted');
+      final track = jsonObject(
+        await call('progression track', {
+          'templateId': 'role-practice',
+          'revision': 1,
+          'slotId': 'lift',
+          'role': 'drop',
+          'asOf': instant(2).toIso8601String(),
+        }),
+        'track',
+      );
+      equal(track['decisionId'], accepted['id']);
+      equal(track['role'], 'drop');
+      equal(track['runId'], null);
       equal(
         jsonObject(
           await call('progression show', {

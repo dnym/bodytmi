@@ -90,6 +90,8 @@ Future<void> main(List<String> arguments) async {
               'Effort roles are work, warmup, backoff and drop. Prefill and reports keep roles separate; summaries include all except warmups by default and accept an explicit roles list. Graph history sources can explicitly filter by role. Stored progression propose/show/accept/decline accept an optional role, default work; each role has an independent receipt, targets and counter within its run.',
           'roleProgressionPreview':
               'session progression-preview takes session/slotId/rule and optional role, ruleType and state; store progression-preview takes database/id instead of session. Role defaults to work; ruleType defaults to double. State is supplied explicitly, defaults to zero, and is not loaded from stored receipts. Preview is read-only and does not apply targets or create progression decisions.',
+          'progressionTrack':
+              'progression track takes database/templateId/revision/slotId/asOf and optional runId/role. It reports the latest resolved decision eligible at the cutoff, with controlled targets and current source-change status; omitted runId selects ad hoc sessions. It does not check prescription compatibility or apply progression.',
         }),
       );
       return;
