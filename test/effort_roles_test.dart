@@ -84,6 +84,50 @@ TrainingSession _complete(TrainingSession session) {
 
 void effortRolesTests() {
   test(
+    'role progression previews preserve explicit state and treat skipped sets as unknown',
+    () {
+      var session = const TrainingService().start(
+        sessionId: 'preview',
+        revision: WorkoutRevision.publish(_definition()),
+        startedAt: instant(1),
+      );
+      for (final set in session.sets) {
+        session = const TrainingService().skip(session, set.id);
+      }
+      session = session.finish(instant(1).add(const Duration(hours: 1)));
+      final doubleRule = jsonObject(
+        example('double-progression')['rule'],
+        'rule',
+      );
+      final preview = const RoleProgressionPreview().evaluate(
+        session: session,
+        slotId: 'lift',
+        role: 'drop',
+        rule: doubleRule,
+        failedSessions: 2,
+      );
+      equal(jsonObject(preview['proposal'], 'proposal')['outcome'], 'unknown');
+      equal(jsonObject(preview['state'], 'state')['failedSessions'], 2);
+      rejects(
+        () => const RoleProgressionPreview().evaluate(
+          session: session,
+          slotId: 'lift',
+          rule: doubleRule,
+          cursor: 1,
+        ),
+      );
+      rejects(
+        () => const Commands().execute('session progression-preview', {
+          'schemaVersion': 1,
+          'session': session.toJson(),
+          'slotId': 'lift',
+          'rule': doubleRule,
+          'state': {'failedSessions': '2'},
+        }),
+      );
+    },
+  );
+  test(
     'effort roles keep independent ordinals, history, summaries and filters',
     () {
       final workout = _definition();
@@ -99,6 +143,54 @@ void effortRolesTests() {
         'warmup:0,work:0,work:1,backoff:0,drop:0,drop:1',
       );
       final old = _complete(session);
+      final preview = const RoleProgressionPreview().evaluate(
+        session: old,
+        slotId: 'lift',
+        role: 'work',
+        ruleType: 'threshold',
+        rule: _rule(),
+      );
+      equal(jsonObject(preview['proposal'], 'proposal')['outcome'], 'advance');
+      equal(jsonList(preview, 'setIds').length, 2);
+      final backoffPreview = const RoleProgressionPreview().evaluate(
+        session: old,
+        slotId: 'lift',
+        role: 'backoff',
+        ruleType: 'threshold',
+        rule: _rule(),
+        failedSessions: 2,
+      );
+      equal(
+        jsonObject(backoffPreview['proposal'], 'proposal')['outcome'],
+        'review',
+      );
+      equal(jsonList(backoffPreview, 'setIds').length, 1);
+      equal(jsonObject(backoffPreview['state'], 'state')['failedSessions'], 2);
+      rejects(
+        () => const RoleProgressionPreview().evaluate(
+          session: session,
+          slotId: 'lift',
+          rule: _rule(),
+          ruleType: 'threshold',
+        ),
+      );
+      rejects(
+        () => const RoleProgressionPreview().evaluate(
+          session: old,
+          slotId: 'lift',
+          role: 'other',
+          rule: _rule(),
+          ruleType: 'threshold',
+        ),
+      );
+      rejects(
+        () => const RoleProgressionPreview().evaluate(
+          session: old,
+          slotId: 'missing',
+          rule: _rule(),
+          ruleType: 'threshold',
+        ),
+      );
       final next = const TrainingService().start(
         sessionId: 'two',
         revision: rev,
@@ -522,6 +614,27 @@ void effortRolesTests() {
       );
       equal(jsonObject(roleSummary['counts'], 'counts')['included'], 3);
       final finished = await call('store show', {'id': session.id});
+      final storedPreview = await call('store progression-preview', {
+        'id': session.id,
+        'slotId': 'lift',
+        'role': 'drop',
+        'ruleType': 'threshold',
+        'rule': _rule(),
+        'state': {'failedSessions': 1, 'cursor': 0},
+      });
+      final purePreview = const Commands().execute(
+        'session progression-preview',
+        {
+          'schemaVersion': 1,
+          'session': finished,
+          'slotId': 'lift',
+          'role': 'drop',
+          'ruleType': 'threshold',
+          'rule': _rule(),
+          'state': {'failedSessions': 1, 'cursor': 0},
+        },
+      )['data'];
+      equal(canonicalJson(storedPreview), canonicalJson(purePreview));
       final pureSummary = const Commands().execute('session summary', {
         'schemaVersion': 1,
         'session': finished,

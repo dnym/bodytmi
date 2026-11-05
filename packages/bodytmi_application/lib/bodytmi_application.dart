@@ -11,6 +11,7 @@ export 'src/training_repository.dart';
 export 'src/training_archive.dart';
 export 'src/progression_decision.dart';
 export 'src/progression_evaluation.dart';
+export 'src/role_progression_preview.dart';
 export 'src/stored_progression_service.dart';
 export 'src/canonical_json.dart';
 export 'src/program_service.dart';

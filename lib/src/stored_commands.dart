@@ -34,6 +34,7 @@ const storedCommandNames = [
   'store start',
   'store show',
   'store summary',
+  'store progression-preview',
   'store assess-objectives',
   'store series',
   'store records',
@@ -206,6 +207,14 @@ Future<Map<String, Object?>> executeStored(
     'store show' => {'id'},
     'store assess-objectives' => {'id', 'setId', 'objectives'},
     'store summary' => {'id', 'includeWarmups', 'sumMetrics', 'roles'},
+    'store progression-preview' => {
+      'id',
+      'slotId',
+      'role',
+      'ruleType',
+      'rule',
+      'state',
+    },
     'store records' => {
       'context',
       'metric',
@@ -890,6 +899,11 @@ Future<Map<String, Object?>> executeStored(
           includeWarmups: flag('includeWarmups'),
           sumMetrics: analyticsSums(request),
           roles: analyticsRoles(request),
+        );
+      case 'store progression-preview':
+        data = roleProgressionPreview(
+          await service.session(identifier(request, 'id')),
+          request,
         );
       case 'store records':
         if (request.containsKey('familyRevision') &&

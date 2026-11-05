@@ -88,6 +88,8 @@ Future<void> main(List<String> arguments) async {
               'execution start/show/list/time/complete/confirm/advance/skip/skip-group/run traverse finite effort/rest occurrences. Timed rests prepare a clock; rest nodes with manual:true have no timer and require execution advance. run advances timed rest boundaries; timed efforts require explicit review. Actions require execution/session versions and stable requestId; corrections never replay cursor advancement. skip-group requires an explicit groupPath from the current groups list and confirm:true; it preserves existing results. Scoped windows are not yet supported.',
           'effortRoles':
               'Effort roles are work, warmup, backoff and drop. Prefill and reports keep roles separate; summaries include all except warmups by default and accept an explicit roles list. Graph history sources can explicitly filter by role. Stored progression currently evaluates and updates work sets only.',
+          'roleProgressionPreview':
+              'session progression-preview takes session/slotId/rule and optional role, ruleType and state; store progression-preview takes database/id instead of session. Role defaults to work; ruleType defaults to double. State is supplied explicitly, defaults to zero, and is not loaded from stored receipts. Preview is read-only and does not apply targets or create progression decisions.',
         }),
       );
       return;

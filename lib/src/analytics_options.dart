@@ -1,4 +1,33 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'package:bodytmi_application/bodytmi_application.dart';
+
+Map<String, Object?> roleProgressionPreview(
+  TrainingSession session,
+  Map<String, Object?> request,
+) {
+  final state = jsonObject(request['state'] ?? <String, Object?>{}, 'state');
+  checkKeys(state, {'failedSessions', 'cursor'});
+  final failures = state['failedSessions'] ?? 0;
+  final cursor = state['cursor'] ?? 0;
+  if (failures is! int || cursor is! int)
+    invalid('Progression state must use integer counts.');
+  final kind = request.containsKey('ruleType')
+      ? requiredString(request, 'ruleType')
+      : 'double';
+  if (kind == 'double' && state.containsKey('cursor'))
+    invalid('Double progression has no cursor.');
+  return const RoleProgressionPreview().evaluate(
+    session: session,
+    slotId: identifier(request, 'slotId'),
+    role: request.containsKey('role')
+        ? requiredString(request, 'role')
+        : 'work',
+    ruleType: kind,
+    rule: jsonObject(request['rule'], 'rule'),
+    failedSessions: failures,
+    cursor: cursor,
+  );
+}
 
 List<String>? analyticsRoles(Map<String, Object?> request) =>
     !request.containsKey('roles')

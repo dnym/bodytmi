@@ -18,6 +18,7 @@ const commandNames = [
   'session start',
   'session show',
   'session summary',
+  'session progression-preview',
   'history series',
   'history records',
   'family validate',
@@ -176,6 +177,12 @@ final class Commands {
           includeWarmups: _bool(request, 'includeWarmups'),
           sumMetrics: analyticsSums(request),
           roles: analyticsRoles(request),
+        );
+      case 'session progression-preview':
+        keys({'session', 'slotId', 'role', 'ruleType', 'rule', 'state'});
+        data = roleProgressionPreview(
+          sessionFromJson(request['session']),
+          request,
         );
       case 'history records':
         keys({
