@@ -1,6 +1,7 @@
 import 'execution_runner.dart';
 import 'timing_runner.dart';
 import 'analytics_options.dart';
+import 'session_window_clock_adapter.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
@@ -34,6 +35,7 @@ const storedCommandNames = [
   'store start',
   'store show',
   'store summary',
+  'store window-clock',
   'store progression-preview',
   'store assess-objectives',
   'store series',
@@ -208,6 +210,15 @@ Future<Map<String, Object?>> executeStored(
     'store show' => {'id'},
     'store assess-objectives' => {'id', 'setId', 'objectives'},
     'store summary' => {'id', 'includeWarmups', 'sumMetrics', 'roles'},
+    'store window-clock' => {
+      'id',
+      'action',
+      'clock',
+      'expectedVersion',
+      'ownerId',
+      'ownerElapsedMilliseconds',
+      'toOccurrence',
+    },
     'store progression-preview' => {
       'id',
       'slotId',
@@ -933,6 +944,11 @@ Future<Map<String, Object?>> executeStored(
         );
       case 'store show':
         data = (await service.session(identifier(request, 'id'))).toJson();
+      case 'store window-clock':
+        data = sessionWindowClockRequest(
+          await service.session(identifier(request, 'id')),
+          request,
+        );
       case 'store summary':
         data = const TrainingAnalytics().summary(
           await service.session(identifier(request, 'id')),

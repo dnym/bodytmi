@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
@@ -671,6 +672,181 @@ void activityTests() {
         )['status'],
         'running',
       );
+    },
+  );
+  test(
+    'session window clocks require explicit review before movement',
+    () async {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'rounds',
+        'type': 'repeat',
+        'count': 2,
+        'child': {
+          'id': 'minute',
+          'type': 'window',
+          'durationSeconds': 5,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        },
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      final revision = WorkoutRevision.publish(workout);
+      const training = TrainingService();
+      const windows = SessionWindowClock();
+      var session = training.start(
+        sessionId: 'session',
+        revision: revision,
+        startedAt: instant(1),
+      );
+      final original = session.toJson();
+      var state = windows.start(session);
+      state = windows.apply(
+        session,
+        state,
+        expectedVersion: 1,
+        action: 'resume',
+        ownerId: 'epoch',
+      );
+      state = windows.apply(
+        session,
+        state,
+        expectedVersion: 2,
+        action: 'advance',
+        ownerId: 'epoch',
+        ownerElapsedMilliseconds: 6000,
+      );
+      equal(jsonObject(state['clock'], 'clock')['status'], 'boundary');
+      rejects(
+        () => windows.apply(
+          session,
+          state,
+          expectedVersion: 3,
+          action: 'move',
+          toOccurrence: 1,
+        ),
+      );
+      jsonEqual(session.toJson(), original);
+      final old = session;
+      session = training.complete(
+        session,
+        session.sets.first.id,
+        session.sets.first.suggested,
+      );
+      state = windows.apply(
+        session,
+        state,
+        expectedVersion: 3,
+        action: 'move',
+        toOccurrence: 1,
+      );
+      equal(state['sessionContentVersion'], session.contentVersion);
+      rejects(
+        () => windows.apply(
+          old,
+          state,
+          expectedVersion: 4,
+          action: 'resume',
+          ownerId: 'next',
+        ),
+      );
+      final other = training.start(
+        sessionId: 'other',
+        revision: revision,
+        startedAt: instant(1),
+      );
+      rejects(
+        () => windows.apply(
+          other,
+          state,
+          expectedVersion: 4,
+          action: 'resume',
+          ownerId: 'next',
+        ),
+      );
+      final newer = training.start(
+        sessionId: 'session',
+        revision: WorkoutRevision.publish(workout, previous: revision),
+        startedAt: instant(1),
+      );
+      rejects(
+        () => windows.apply(
+          newer,
+          windows.start(old),
+          expectedVersion: 1,
+          action: 'resume',
+          ownerId: 'epoch',
+        ),
+      );
+      session = training.skip(session, session.sets.last.id, confirm: true);
+      state = windows.apply(
+        session,
+        state,
+        expectedVersion: 4,
+        action: 'move',
+        toOccurrence: 2,
+      );
+      equal(jsonObject(state['clock'], 'clock')['status'], 'complete');
+      equal(session.sets.last.status, SetStatus.skipped);
+      rejects(() => windows.start(session.finish(instant(2))));
+
+      final startRequest = {
+        'schemaVersion': 1,
+        'session': old.toJson(),
+        'action': 'start',
+      };
+      final pure = const Commands().execute(
+        'session window-clock',
+        startRequest,
+      );
+      jsonEqual(pure['data'], windows.start(old));
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-session-window-',
+      );
+      try {
+        final db = '${dir.path}/db.sqlite';
+        Future<Map<String, Object?>> command(
+          String name,
+          Map<String, Object?> request,
+        ) async {
+          final result = await invoke(
+            name.split(' '),
+            jsonEncode({'schemaVersion': 1, 'database': db, ...request}),
+          );
+          equal(result.code, 0);
+          return jsonObject(
+            jsonObject(jsonDecode(result.output), 'response')['data'],
+            'data',
+          );
+        }
+
+        await command('store publish', {
+          'definition': input,
+          'expectedRevision': 0,
+        });
+        await command('store start', {
+          'id': 'session',
+          'templateId': workout.id,
+          'revision': 1,
+          'startedAt': instant(1).toIso8601String(),
+        });
+        final stored = await command('store window-clock', {
+          'id': 'session',
+          'action': 'start',
+        });
+        jsonEqual(stored, windows.start(old));
+        final resumed = await command('store window-clock', {
+          'id': 'session',
+          'action': 'resume',
+          'clock': stored,
+          'expectedVersion': 1,
+          'ownerId': 'cli',
+        });
+        equal(jsonObject(resumed['clock'], 'clock')['status'], 'running');
+        final loaded = await command('store show', {'id': 'session'});
+        jsonEqual(loaded, old.toJson());
+      } finally {
+        await dir.delete(recursive: true);
+      }
     },
   );
   test(

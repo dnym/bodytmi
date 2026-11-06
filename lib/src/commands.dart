@@ -1,6 +1,7 @@
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'analytics_options.dart';
+import 'session_window_clock_adapter.dart';
 
 const commandNames = [
   'quantity normalize',
@@ -24,6 +25,7 @@ const commandNames = [
   'session start',
   'session show',
   'session summary',
+  'session window-clock',
   'session progression-preview',
   'history series',
   'history records',
@@ -287,6 +289,20 @@ final class Commands {
               ),
             )
             .toJson();
+      case 'session window-clock':
+        keys({
+          'session',
+          'action',
+          'clock',
+          'expectedVersion',
+          'ownerId',
+          'ownerElapsedMilliseconds',
+          'toOccurrence',
+        });
+        data = sessionWindowClockRequest(
+          sessionFromJson(request['session']),
+          request,
+        );
       case 'session effective-load':
         keys({'session'});
         data = const EffectiveMassService().evaluate(
