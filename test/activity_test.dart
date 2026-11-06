@@ -371,6 +371,97 @@ void activityTests() {
     },
   );
   test(
+    'window transitions retain enclosing starts and validate scope entries',
+    () async {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'workout',
+        'type': 'sequence',
+        'children': [
+          {
+            'id': 'outer',
+            'type': 'window',
+            'durationSeconds': 10,
+            'child': {
+              'id': 'rounds',
+              'type': 'repeat',
+              'count': 2,
+              'child': {
+                'id': 'inner',
+                'type': 'window',
+                'durationSeconds': 5,
+                'child': {
+                  'id': 'pair',
+                  'type': 'sequence',
+                  'children': [
+                    {'id': 'first', 'type': 'effort', 'slot': 'bench-heavy'},
+                    {'id': 'second', 'type': 'effort', 'slot': 'bench-light'},
+                  ],
+                },
+              },
+            },
+          },
+          {'id': 'outside', 'type': 'effort', 'slot': 'bench-light'},
+        ],
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      const resolver = WindowDeadlines();
+      const outer = 'workout/outer';
+      const first = 'workout/outer/rounds[0]/inner';
+      const second = 'workout/outer/rounds[1]/inner';
+      Map<String, Object?> move(
+        int from,
+        int to,
+        int time,
+        Map<String, Object?> starts,
+      ) => resolver.transition(
+        definition: workout,
+        fromOccurrence: from,
+        toOccurrence: to,
+        elapsedMilliseconds: time,
+        windowStarts: starts,
+      );
+      final within = move(0, 1, 2000, {outer: 0, first: 0});
+      jsonEqual(within['windowStarts'], {outer: 0, first: 0});
+      jsonEqual(within['entered'], []);
+      jsonEqual(within['exited'], []);
+      final next = move(1, 2, 5000, {outer: 0, first: 0});
+      jsonEqual(next['exited'], [first]);
+      jsonEqual(next['entered'], [second]);
+      jsonEqual(next['windowStarts'], {outer: 0, second: 5000});
+      final exit = move(1, 4, 10000, {outer: 0, first: 0});
+      jsonEqual(exit['exited'], [first, outer]);
+      jsonEqual(exit['windowStarts'], {});
+      final end = move(4, 5, 10000, {});
+      equal(end['toOccurrenceId'], null);
+      rejects(() => move(0, 1, 5000, {outer: 0, first: 0}));
+      rejects(() => move(1, 2, 10000, {outer: 0, first: 0}));
+      rejects(() => move(0, 3, 2000, {outer: 0, first: 0}));
+      rejects(() => move(0, 0, 2000, {outer: 0, first: 0}));
+      rejects(() => move(0, 6, 2000, {outer: 0, first: 0}));
+      rejects(() => move(1, 2, 5000, {outer: 0}));
+      check(!next.containsKey('results') && !next.containsKey('completed'));
+      final request = {
+        'schemaVersion': 1,
+        'definition': input,
+        'fromOccurrence': 1,
+        'toOccurrence': 2,
+        'elapsedMilliseconds': 5000,
+        'windowStarts': {outer: 0, first: 0},
+      };
+      jsonEqual(
+        const Commands().execute('activity window-transition', request)['data'],
+        next,
+      );
+      final cli = await invoke([
+        'activity',
+        'window-transition',
+      ], jsonEncode(request));
+      equal(cli.code, 0);
+      jsonEqual(jsonObject(jsonDecode(cli.output), 'response')['data'], next);
+    },
+  );
+  test(
     'group queries bound their output and allow a narrow occurrence filter',
     () {
       final plan = Repeat(

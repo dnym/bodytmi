@@ -18,6 +18,7 @@ const commandNames = [
   'activity groups',
   'activity window-status',
   'activity window-crossing',
+  'activity window-transition',
   'tempo sample',
   'session start',
   'session show',
@@ -163,6 +164,28 @@ final class Commands {
           definition: WorkoutDefinition.fromJson(request['definition']),
           occurrence: occurrence,
           previousElapsedMilliseconds: previous,
+          elapsedMilliseconds: elapsed,
+          windowStarts: jsonObject(request['windowStarts'], 'windowStarts'),
+        );
+      case 'activity window-transition':
+        keys({
+          'definition',
+          'fromOccurrence',
+          'toOccurrence',
+          'elapsedMilliseconds',
+          'windowStarts',
+        });
+        final from = request['fromOccurrence'];
+        final to = request['toOccurrence'];
+        final elapsed = request['elapsedMilliseconds'];
+        if (from is! int || to is! int || elapsed is! int)
+          invalid(
+            'Occurrence indices and elapsedMilliseconds must be integers.',
+          );
+        data = const WindowDeadlines().transition(
+          definition: WorkoutDefinition.fromJson(request['definition']),
+          fromOccurrence: from,
+          toOccurrence: to,
           elapsedMilliseconds: elapsed,
           windowStarts: jsonObject(request['windowStarts'], 'windowStarts'),
         );

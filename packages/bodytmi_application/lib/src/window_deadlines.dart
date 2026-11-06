@@ -5,6 +5,85 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 final class WindowDeadlines {
   const WindowDeadlines();
 
+  /// Calculates scope changes at an explicitly selected later occurrence.
+  /// It does not decide which occurrences should be traversed or skipped.
+  Map<String, Object?> transition({
+    required WorkoutDefinition definition,
+    required int fromOccurrence,
+    required int toOccurrence,
+    required int elapsedMilliseconds,
+    required Map<String, Object?> windowStarts,
+  }) {
+    final current = evaluate(
+      definition: definition,
+      occurrence: fromOccurrence,
+      elapsedMilliseconds: elapsedMilliseconds,
+      windowStarts: windowStarts,
+    );
+    final occurrences = definition.plan.occurrences().toList();
+    if (toOccurrence <= fromOccurrence || toOccurrence > occurrences.length)
+      invalid(
+        'The destination must be a later occurrence or the end of the plan.',
+      );
+    final previous =
+        activityGroups(
+            definition.plan,
+            containing: fromOccurrence,
+          ).where((scope) => scope.windowDurationSeconds != null).toList()
+          ..sort((a, b) => a.path.length.compareTo(b.path.length));
+    final next = toOccurrence == occurrences.length
+        ? <ActivityGroupOccurrence>[]
+        : (activityGroups(
+              definition.plan,
+              containing: toOccurrence,
+            ).where((scope) => scope.windowDurationSeconds != null).toList()
+            ..sort((a, b) => a.path.length.compareTo(b.path.length)));
+    final previousPaths = previous.map((scope) => scope.path).toSet();
+    final nextPaths = next.map((scope) => scope.path).toSet();
+    final activeRows = (current['windows'] as List<Map<String, Object?>>);
+    if (activeRows.any(
+      (row) => row['expired'] == true && nextPaths.contains(row['path']),
+    ))
+      invalid('Cannot continue within an expired window.');
+    for (final scope in next) {
+      if (!previousPaths.contains(scope.path) && scope.start != toOccurrence)
+        invalid('Cannot enter a window after its first occurrence.');
+    }
+    final starts = <String, Object?>{
+      for (final scope in next)
+        scope.path: previousPaths.contains(scope.path)
+            ? windowStarts[scope.path]
+            : elapsedMilliseconds,
+    };
+    if (toOccurrence < occurrences.length) {
+      evaluate(
+        definition: definition,
+        occurrence: toOccurrence,
+        elapsedMilliseconds: elapsedMilliseconds,
+        windowStarts: starts,
+      );
+    }
+    return {
+      'policy': 'bodytmi-window-transition/1',
+      'fromOccurrence': fromOccurrence,
+      'fromOccurrenceId': current['occurrenceId'],
+      'toOccurrence': toOccurrence,
+      'toOccurrenceId': toOccurrence == occurrences.length
+          ? null
+          : occurrences[toOccurrence].id,
+      'elapsedMilliseconds': elapsedMilliseconds,
+      'exited': [
+        for (final scope in previous.reversed)
+          if (!nextPaths.contains(scope.path)) scope.path,
+      ],
+      'entered': [
+        for (final scope in next)
+          if (!previousPaths.contains(scope.path)) scope.path,
+      ],
+      'windowStarts': starts,
+    };
+  }
+
   /// Reports the first boundary reached by a pair of logical-time samples.
   /// A caller must handle that boundary before sampling later deadlines.
   Map<String, Object?> crossing({
