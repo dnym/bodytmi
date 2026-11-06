@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "rep-tempo-practice",
+    "name": "Repetition tempo practice",
+    "slots": [
+      {
+        "id": "movement",
+        "exercise": "squat",
+        "implementation": "bodyweight",
+        "targets": {
+          "reps": {
+            "value": "5",
+            "unit": "rep"
+          }
+        },
+        "timing": {
+          "metric": "duration",
+          "openEnded": true,
+          "preparationMilliseconds": 1000,
+          "tempo": {
+            "phases": [
+              {
+                "id": "lower",
+                "milliseconds": 2000
+              },
+              {
+                "id": "raise",
+                "milliseconds": 1000
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "set",
+      "type": "effort",
+      "slot": "movement"
+    }
+  }
+}

@@ -75,6 +75,127 @@ Future<void> _withStore(
 }
 
 void timingDefaultsTests() {
+  test('schema v44 profiles migrate to v45 without losing revisions', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-v44-');
+    final path = '${dir.path}/db.sqlite';
+    var store = await TrainingStore.open(path);
+    try {
+      await StoredTrainingService(store).publish(_definition(), 0);
+      await store.close();
+      final db = sqlite3.open(path);
+      db.execute('PRAGMA user_version = 44');
+      db.close();
+      store = await TrainingStore.open(path);
+      equal(
+        (await store.revision('guided', 1))!.definition.name,
+        'Guided practice',
+      );
+      equal(
+        (await store.backup('${dir.path}/migrated'))['databaseSchemaVersion'],
+        45,
+      );
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
+  test(
+    'open-ended slot guidance starts managed clocks and survives portability',
+    () async {
+      final input = _definition().toJson();
+      final slot = jsonObject(jsonList(input, 'slots').single, 'slot');
+      jsonObject(slot['targets'], 'targets').remove('duration');
+      slot['timing'] = {
+        'metric': 'duration',
+        'openEnded': true,
+        'preparationMilliseconds': 1000,
+        'tempo': {
+          'phases': [
+            {'id': 'beat', 'milliseconds': 500},
+          ],
+        },
+      };
+      final def = WorkoutDefinition.fromJson(input);
+      final defaults = def.slots.single.timing!;
+      check(defaults.openEnded);
+      check(defaults.resolve(def.slots.single.targets).unplannedDuration);
+      jsonEqual(
+        WorkoutDefinition.fromJson(def.toJson()).toJson(),
+        def.toJson(),
+      );
+      for (final bad in [
+        {...jsonObject(slot['timing'], 'timing'), 'overrun': 'continue'},
+        {...jsonObject(slot['timing'], 'timing'), 'nearEndMilliseconds': 100},
+        {...jsonObject(slot['timing'], 'timing'), 'openEnded': false},
+        {...jsonObject(slot['timing'], 'timing'), 'metric': 'reps'},
+      ]) {
+        final changed = def.toJson();
+        jsonObject(jsonList(changed, 'slots').single, 'slot')['timing'] = bad;
+        rejects(() => WorkoutDefinition.fromJson(changed));
+      }
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-open-default-',
+      );
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final training = StoredTrainingService(store);
+        await training.publish(def, 0);
+        await training.start('session', 'guided', 1, instant(1));
+        final execution = ExecutionService(store);
+        final e = await execution.start('execution', 'session', instant(1));
+        final t = await execution.time(e.id, e.version, instant(1));
+        check(t.plan.openEnded);
+        equal(t.metric, 'duration');
+        equal(t.plan.preparationMilliseconds, 1000);
+        equal(t.plan.tempo!.phases.single.id, 'beat');
+        await store.backup('${dir.path}/native');
+        await LogicalArchiveFiles.export(
+          await store.archive(),
+          '${dir.path}/archive.json',
+        );
+        final prepared = await LogicalArchiveFiles.prepare(
+          '${dir.path}/archive.json',
+        );
+        try {
+          check(
+            prepared
+                .archive
+                .revisions
+                .single
+                .definition
+                .slots
+                .single
+                .timing!
+                .openEnded,
+          );
+        } finally {
+          await prepared.close();
+        }
+        final envelope = jsonObject(
+          jsonDecode(await File('${dir.path}/archive.json').readAsString()),
+          'archive',
+        );
+        envelope['format'] = 'bodytmi-logical-export/44';
+        envelope.remove('sha256');
+        envelope['sha256'] = sha256
+            .convert(utf8.encode(canonicalJson(envelope)))
+            .toString();
+        await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
+        await _fails(LogicalArchiveFiles.prepare('${dir.path}/old.json'));
+        final native = sqlite3.open('${dir.path}/native/database.sqlite');
+        native.execute('PRAGMA user_version = 44');
+        native.close();
+        rejects(
+          () => NativeBackup.validateDatabase(
+            '${dir.path}/native/database.sqlite',
+          ),
+        );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test(
     'slot timing defaults validate explicit duration bindings and canonical options without prescribing an independent effort target',
     () {
@@ -398,14 +519,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          44,
+          45,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/44',
+          'bodytmi-logical-export/45',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {

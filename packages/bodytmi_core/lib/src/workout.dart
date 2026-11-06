@@ -128,6 +128,16 @@ final class WorkoutDefinition {
             node.criteria.isEmpty)
           invalid('Each effort needs targets or explicit objectives.');
         slot.timing?.resolve(resolved);
+        final timing = slot.timing;
+        if (timing != null &&
+            timing.openEnded &&
+            (node.maxEffortMetrics.contains(timing.metric) ||
+                (node.criteria[timing.metric] != null &&
+                    node.criteria[timing.metric]!.unit.dimension !=
+                        Dimension.duration)))
+          invalid(
+            'Open-ended timing metric conflicts with an effort objective.',
+          );
       }
     }
     for (final slot in slots) {

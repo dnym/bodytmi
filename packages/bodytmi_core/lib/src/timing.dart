@@ -140,19 +140,30 @@ final class EffortTimingDefaults {
       'overrun',
       'nearEndMilliseconds',
       'tempo',
+      'openEnded',
     });
     final metric = identifier(j, 'metric');
+    if (j.containsKey('openEnded') && j['openEnded'] != true)
+      invalid('openEnded must be true when specified.');
+    final openEnded = j['openEnded'] == true;
     final probe = TimingPlan.fromJson({
       for (final e in j.entries)
         if (e.key != 'metric') e.key: e.value,
-      'effortMilliseconds': 86400000,
+      if (openEnded) 'unplannedDuration': true,
+      if (!openEnded) 'effortMilliseconds': 86400000,
     });
     return EffortTimingDefaults._(metric, probe);
   }
   final String metric;
   final TimingPlan _guidance;
+  bool get openEnded => _guidance.openEnded;
   TimingPlan resolve(Metrics suggested) {
     final duration = suggested[metric];
+    if (openEnded) {
+      if (duration != null)
+        invalid('Open-ended timing metric must not be a target.');
+      return _guidance;
+    }
     if (duration == null)
       invalid('Timing defaults reference an unconfigured duration metric.');
     return TimingPlan.fromJson({
@@ -164,7 +175,8 @@ final class EffortTimingDefaults {
   Map<String, Object?> toJson() => {
     'metric': metric,
     'preparationMilliseconds': _guidance.preparationMilliseconds,
-    'overrun': _guidance.overrun,
+    if (openEnded) 'openEnded': true,
+    if (!openEnded) 'overrun': _guidance.overrun,
     if (_guidance.nearEndMilliseconds != null)
       'nearEndMilliseconds': _guidance.nearEndMilliseconds,
     if (_guidance.tempo != null) 'tempo': _guidance.tempo!.toJson(),

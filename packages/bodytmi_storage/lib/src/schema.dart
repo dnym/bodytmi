@@ -114,6 +114,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   42 => schemaV27, // v42 adds role-specific progression receipts.
   43 => schemaV27, // v43 adds explicit unplanned duration timers.
   44 => schemaV27, // v44 adds open-ended effort timers.
+  45 => schemaV27, // v45 adds open-ended slot timing defaults.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

@@ -349,7 +349,7 @@ void derivedWorkoutPreviewTests() {
         }
         final reopened = sqlite3.open(path);
         try {
-          equal(reopened.userVersion, 44);
+          equal(reopened.userVersion, 45);
         } finally {
           reopened.close();
         }
@@ -421,7 +421,7 @@ void derivedWorkoutPreviewTests() {
         );
         final copy = '${temp.path}/snapshot.sqlite';
         await store.snapshot(copy);
-        equal(NativeBackup.validateDatabase(copy), 44);
+        equal(NativeBackup.validateDatabase(copy), 45);
         final db = sqlite3.open(copy);
         db.userVersion = 27;
         db.close();

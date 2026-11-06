@@ -402,7 +402,7 @@ void programTests() {
         );
         final snapshot = '${dir.path}/manual.sqlite';
         await store.snapshot(snapshot);
-        equal(NativeBackup.validateDatabase(snapshot), 44);
+        equal(NativeBackup.validateDatabase(snapshot), 45);
         final oldLabel = sqlite3.open(snapshot);
         oldLabel.userVersion = 35;
         oldLabel.close();
@@ -845,14 +845,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          44,
+          45,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/44',
+          'bodytmi-logical-export/45',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
