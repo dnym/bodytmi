@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "rep-clock",
+  "sessionId": "rep-session",
+  "setId": "set",
+  "at": "2026-11-01T09:00:00+01:00"
+}

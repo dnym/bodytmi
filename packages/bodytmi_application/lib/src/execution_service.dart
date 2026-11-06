@@ -125,21 +125,7 @@ final class ExecutionService {
       return old;
     }
     final set = s.set(occurrence.id);
-    final selected =
-        metric ??
-        s.revision.definition.slot(set.slotId).timing?.metric ??
-        (set.suggested.entries
-                    .where((v) => v.value.dimension == Dimension.duration)
-                    .length ==
-                1
-            ? set.suggested.entries
-                  .singleWhere((v) => v.value.dimension == Dimension.duration)
-                  .key
-            : null);
-    if (selected == null)
-      invalid(
-        'Select exactly one configured duration metric to time this effort.',
-      );
+    final selected = timingMetricFor(s, set.id, metric);
     final chosen = plan ?? timingPlanFor(s, set.id, selected);
     if (!supportsTimingMetric(set, selected, chosen))
       invalid('Timing metric is incompatible with the selected plan.');

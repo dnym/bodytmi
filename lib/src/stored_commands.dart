@@ -592,7 +592,7 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'id'),
           identifier(request, 'sessionId'),
           requiredString(request, 'setId'),
-          identifier(request, 'metric'),
+          request.containsKey('metric') ? identifier(request, 'metric') : null,
           request.containsKey('plan')
               ? TimingPlan.fromJson(request['plan'])
               : null,

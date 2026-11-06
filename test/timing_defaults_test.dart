@@ -75,6 +75,119 @@ Future<void> _withStore(
 }
 
 void timingDefaultsTests() {
+  test(
+    'standalone timers select pinned guidance or one duration and reject ambiguity',
+    () => _withStore((store, dir) async {
+      final training = StoredTrainingService(store);
+      final timers = TimingService(store);
+      final t = await timers.start(
+        'guided-clock',
+        'session',
+        'practice[0]/effort',
+        null,
+        null,
+        instant(1),
+      );
+      equal(t.metric, 'duration');
+      equal(t.plan.preparationMilliseconds, 1000);
+      equal(
+        (await timers.start(
+          'guided-clock',
+          'session',
+          'practice[0]/effort',
+          null,
+          null,
+          instant(1),
+        )).version,
+        t.version,
+      );
+      await timers.stop(
+        t.id,
+        t.version,
+        instant(1),
+        confirm: true,
+        discard: true,
+      );
+      await training.publish(_definition(defaults: false, ambiguous: true), 1);
+      await training.start('ambiguous', 'guided', 2, instant(2));
+      await _fails(
+        timers.start(
+          'ambiguous-clock',
+          'ambiguous',
+          'practice[0]/effort',
+          null,
+          null,
+          instant(2),
+        ),
+      );
+      equal(await store.timingActivity('ambiguous-clock'), null);
+      final explicit = await timers.start(
+        'explicit-clock',
+        'ambiguous',
+        'practice[0]/effort',
+        'otherDuration',
+        null,
+        instant(2),
+      );
+      equal(explicit.metric, 'otherDuration');
+      equal(explicit.plan.effortMilliseconds, 2000);
+      await timers.stop(
+        explicit.id,
+        explicit.version,
+        instant(2),
+        confirm: true,
+        discard: true,
+      );
+      await training.publish(_definition(defaults: false), 2);
+      await training.start('unique', 'guided', 3, instant(3));
+      final unique = await timers.start(
+        'unique-clock',
+        'unique',
+        'practice[0]/effort',
+        null,
+        null,
+        instant(3),
+      );
+      equal(unique.metric, 'duration');
+      equal(unique.plan.effortMilliseconds, 12000);
+      await timers.stop(
+        unique.id,
+        unique.version,
+        instant(3),
+        confirm: true,
+        discard: true,
+      );
+      final repOnly = _definition(defaults: false).toJson();
+      final slot = jsonObject(jsonList(repOnly, 'slots').single, 'slot');
+      jsonObject(slot['targets'], 'targets').remove('duration');
+      await training.publish(WorkoutDefinition.fromJson(repOnly), 3);
+      await training.start('rep-only', 'guided', 4, instant(4));
+      final plan = TimingPlan.fromJson({
+        'unplannedDuration': true,
+        'openEnded': true,
+      });
+      await _fails(
+        timers.start(
+          'missing-metric',
+          'rep-only',
+          'practice[0]/effort',
+          null,
+          plan,
+          instant(4),
+        ),
+      );
+      equal(await store.timingActivity('missing-metric'), null);
+      final open = await timers.start(
+        'open-clock',
+        'rep-only',
+        'practice[0]/effort',
+        'duration',
+        plan,
+        instant(4),
+      );
+      check(open.plan.openEnded);
+    }),
+  );
   test('schema v44 profiles migrate to v45 without losing revisions', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-v44-');
     final path = '${dir.path}/db.sqlite';
@@ -141,6 +254,23 @@ void timingDefaultsTests() {
         final training = StoredTrainingService(store);
         await training.publish(def, 0);
         await training.start('session', 'guided', 1, instant(1));
+        final standalone = await TimingService(store).start(
+          'standalone',
+          'session',
+          'practice[0]/effort',
+          null,
+          null,
+          instant(1),
+        );
+        check(standalone.plan.openEnded);
+        equal(standalone.metric, 'duration');
+        await TimingService(store).stop(
+          standalone.id,
+          standalone.version,
+          instant(1),
+          confirm: true,
+          discard: true,
+        );
         final execution = ExecutionService(store);
         final e = await execution.start('execution', 'session', instant(1));
         final t = await execution.time(e.id, e.version, instant(1));
@@ -641,7 +771,6 @@ void timingDefaultsTests() {
           'id': 'clock',
           'sessionId': 'session',
           'setId': 'practice[0]/effort',
-          'metric': 'duration',
           'at': instant(1).toIso8601String(),
         });
         equal(jsonObject(t['plan'], 'plan')['preparationMilliseconds'], 20);

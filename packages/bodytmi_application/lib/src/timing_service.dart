@@ -13,19 +13,20 @@ final class TimingService {
     String id,
     String sessionId,
     String setId,
-    String metric,
+    String? metric,
     TimingPlan? plan,
     DateTime at,
   ) => repository.transaction(() async {
     final s = await StoredTrainingService(repository).session(sessionId);
-    final resolved = plan ?? timingPlanFor(s, setId, metric);
+    final selected = timingMetricFor(s, setId, metric);
+    final resolved = plan ?? timingPlanFor(s, setId, selected);
     if (resolved.restOnly)
       invalid('Use the rest timing operation for a rest occurrence.');
     final next = TimingActivity.create(
       id: id,
       sessionId: sessionId,
       setId: setId,
-      metric: metric,
+      metric: selected,
       plan: resolved,
       at: at,
     );
@@ -34,7 +35,7 @@ final class TimingService {
     if (existing != null) {
       if (existing.sessionId != sessionId ||
           existing.setId != setId ||
-          existing.metric != metric ||
+          existing.metric != selected ||
           existing.toJson()['createdAt'] != next.toJson()['createdAt'] ||
           canonicalJson(existing.plan.toJson()) !=
               canonicalJson(resolved.toJson()))
@@ -50,7 +51,7 @@ final class TimingService {
     if (s.status != SessionStatus.active ||
         s.set(setId).status != SetStatus.planned ||
         at.isBefore(s.startedAt) ||
-        !supportsTimingMetric(s.set(setId), metric, resolved))
+        !supportsTimingMetric(s.set(setId), selected, resolved))
       invalid(
         'Timing needs a compatible duration metric in an active planned set and a valid start time.',
       );
@@ -257,6 +258,22 @@ final class TimingService {
     await service.edit(session.id, expectedSessionVersion, (_) => updated);
     return next;
   });
+}
+
+String timingMetricFor(TrainingSession session, String setId, String? metric) {
+  if (metric != null) return metric;
+  final set = session.set(setId);
+  final declared = session.revision.definition.slot(set.slotId).timing?.metric;
+  if (declared != null) return declared;
+  final durationMetrics = set.suggested.entries
+      .where((entry) => entry.value.dimension == Dimension.duration)
+      .map((entry) => entry.key)
+      .toList();
+  if (durationMetrics.length != 1)
+    invalid(
+      'Select exactly one configured duration metric to time this effort.',
+    );
+  return durationMetrics.single;
 }
 
 TimingPlan timingPlanFor(TrainingSession session, String setId, String metric) {
