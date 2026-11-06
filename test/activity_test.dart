@@ -275,6 +275,102 @@ void activityTests() {
     },
   );
   test(
+    'window crossing reports the first nested boundary without claiming work',
+    () async {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'outer',
+        'type': 'window',
+        'durationSeconds': 10,
+        'child': {
+          'id': 'sequence',
+          'type': 'sequence',
+          'children': [
+            {'id': 'before', 'type': 'effort', 'slot': 'bench-heavy'},
+            {
+              'id': 'inner',
+              'type': 'window',
+              'durationSeconds': 3,
+              'child': {
+                'id': 'during',
+                'type': 'effort',
+                'slot': 'bench-heavy',
+              },
+            },
+            {'id': 'after', 'type': 'effort', 'slot': 'bench-light'},
+          ],
+        },
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      const resolver = WindowDeadlines();
+      Map<String, Object?> crossing(int before, int after, int innerStart) =>
+          resolver.crossing(
+            definition: workout,
+            occurrence: 1,
+            previousElapsedMilliseconds: before,
+            elapsedMilliseconds: after,
+            windowStarts: {'outer': 0, 'outer/sequence/inner': innerStart},
+          );
+      equal(crossing(8000, 9999, 8000)['status'], 'within');
+      final parent = crossing(8000, 12000, 8000);
+      equal(parent['status'], 'crossed');
+      final parentBoundary = jsonObject(parent['boundary'], 'boundary');
+      equal(parentBoundary['elapsedMilliseconds'], 10000);
+      jsonEqual(parentBoundary['paths'], ['outer']);
+      equal(parentBoundary['scopeStart'], 0);
+      equal(parentBoundary['scopeEnd'], 3);
+      final child = jsonObject(
+        crossing(1000, 11000, 1000)['boundary'],
+        'boundary',
+      );
+      equal(child['elapsedMilliseconds'], 4000);
+      jsonEqual(child['paths'], ['outer/sequence/inner']);
+      equal(child['scopeStart'], 1);
+      equal(child['scopeEnd'], 2);
+      final tied = jsonObject(
+        crossing(7000, 10000, 7000)['boundary'],
+        'boundary',
+      );
+      jsonEqual(tied['paths'], ['outer', 'outer/sequence/inner']);
+      equal(tied['scopeEnd'], 3);
+      equal(crossing(10000, 11000, 8000)['status'], 'alreadyExpired');
+      equal(crossing(10000, 10000, 8000)['boundary'], null);
+      final unscoped = resolver.crossing(
+        definition: definition(),
+        occurrence: 0,
+        previousElapsedMilliseconds: 0,
+        elapsedMilliseconds: 10000,
+        windowStarts: {},
+      );
+      equal(unscoped['status'], 'within');
+      equal(unscoped['boundary'], null);
+      rejects(() => crossing(9000, 8999, 8000));
+      rejects(() => crossing(7999, 9000, 8000));
+      check(!parent.containsKey('results') && !parent.containsKey('completed'));
+      final request = {
+        'schemaVersion': 1,
+        'definition': input,
+        'occurrence': 1,
+        'previousElapsedMilliseconds': 8000,
+        'elapsedMilliseconds': 12000,
+        'windowStarts': {'outer': 0, 'outer/sequence/inner': 8000},
+      };
+      jsonEqual(
+        const Commands().execute('activity window-crossing', request)['data'],
+        parent,
+      );
+      final result = await invoke([
+        'activity',
+        'window-crossing',
+      ], jsonEncode(request));
+      equal(result.code, 0);
+      jsonEqual(
+        jsonObject(jsonDecode(result.output), 'response')['data'],
+        parent,
+      );
+    },
+  );
+  test(
     'group queries bound their output and allow a narrow occurrence filter',
     () {
       final plan = Repeat(

@@ -91,7 +91,7 @@ Future<void> main(List<String> arguments) async {
           'activityGroups':
               'activity groups takes definition and optional containing occurrence index. It reports half-open group bounds and authored durations for window scopes, including repeated and nested windows. This is structural inspection only; scoped window execution remains unsupported.',
           'windowStatus':
-              'activity window-status takes definition/occurrence/elapsedMilliseconds/windowStarts. It calculates nested authored window deadlines from explicit shared logical milliseconds. It does not own or advance a clock, record results or execute windows.',
+              'activity window-status takes definition/occurrence/elapsedMilliseconds/windowStarts. It calculates nested authored window deadlines from explicit shared logical milliseconds. activity window-crossing compares two logical samples and identifies the earliest crossed window boundary and its occurrence bounds, including tied deadlines. Neither query owns or advances a clock, records results or executes windows.',
           'tempoSample':
               'tempo sample takes tempo/previousElapsedMilliseconds/elapsedMilliseconds and optional includeInitial. It returns the current phase and at most the newest crossed cue from explicit effort-time samples; it does not own a clock, deliver audio or count reps.',
           'unplannedTiming':

@@ -5,6 +5,62 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 final class WindowDeadlines {
   const WindowDeadlines();
 
+  /// Reports the first boundary reached by a pair of logical-time samples.
+  /// A caller must handle that boundary before sampling later deadlines.
+  Map<String, Object?> crossing({
+    required WorkoutDefinition definition,
+    required int occurrence,
+    required int previousElapsedMilliseconds,
+    required int elapsedMilliseconds,
+    required Map<String, Object?> windowStarts,
+  }) {
+    if (elapsedMilliseconds < previousElapsedMilliseconds)
+      invalid('Logical elapsed samples must be monotonic.');
+    final previous = evaluate(
+      definition: definition,
+      occurrence: occurrence,
+      elapsedMilliseconds: previousElapsedMilliseconds,
+      windowStarts: windowStarts,
+    );
+    final current = evaluate(
+      definition: definition,
+      occurrence: occurrence,
+      elapsedMilliseconds: elapsedMilliseconds,
+      windowStarts: windowStarts,
+    );
+    final earliest = current['earliestDeadlineMilliseconds'] as int?;
+    final alreadyExpired = previous['expired'] as bool;
+    final crossed =
+        !alreadyExpired && earliest != null && elapsedMilliseconds >= earliest;
+    final windows = (current['windows'] as List<Map<String, Object?>>)
+        .where((window) => window['deadlineMilliseconds'] == earliest)
+        .toList();
+    final scopes = activityGroups(definition.plan, containing: occurrence);
+    final scopeByPath = {for (final scope in scopes) scope.path: scope};
+    final outermost = crossed ? scopeByPath[windows.first['path']]! : null;
+    return {
+      'policy': 'bodytmi-window-crossing/1',
+      'occurrence': occurrence,
+      'occurrenceId': current['occurrenceId'],
+      'previousElapsedMilliseconds': previousElapsedMilliseconds,
+      'elapsedMilliseconds': elapsedMilliseconds,
+      'status': alreadyExpired
+          ? 'alreadyExpired'
+          : crossed
+          ? 'crossed'
+          : 'within',
+      'boundary': crossed
+          ? {
+              'elapsedMilliseconds': earliest,
+              'paths': [for (final window in windows) window['path']],
+              'scopeStart': outermost!.start,
+              'scopeEnd': outermost.end,
+              'currentOccurrence': occurrence,
+            }
+          : null,
+    };
+  }
+
   Map<String, Object?> evaluate({
     required WorkoutDefinition definition,
     required int occurrence,

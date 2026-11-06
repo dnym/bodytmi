@@ -17,6 +17,7 @@ const commandNames = [
   'activity expand',
   'activity groups',
   'activity window-status',
+  'activity window-crossing',
   'tempo sample',
   'session start',
   'session show',
@@ -142,6 +143,26 @@ final class Commands {
         data = const WindowDeadlines().evaluate(
           definition: WorkoutDefinition.fromJson(request['definition']),
           occurrence: occurrence,
+          elapsedMilliseconds: elapsed,
+          windowStarts: jsonObject(request['windowStarts'], 'windowStarts'),
+        );
+      case 'activity window-crossing':
+        keys({
+          'definition',
+          'occurrence',
+          'previousElapsedMilliseconds',
+          'elapsedMilliseconds',
+          'windowStarts',
+        });
+        final occurrence = request['occurrence'];
+        final previous = request['previousElapsedMilliseconds'];
+        final elapsed = request['elapsedMilliseconds'];
+        if (occurrence is! int || previous is! int || elapsed is! int)
+          invalid('occurrence and elapsed samples must be integers.');
+        data = const WindowDeadlines().crossing(
+          definition: WorkoutDefinition.fromJson(request['definition']),
+          occurrence: occurrence,
+          previousElapsedMilliseconds: previous,
           elapsedMilliseconds: elapsed,
           windowStarts: jsonObject(request['windowStarts'], 'windowStarts'),
         );
