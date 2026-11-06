@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "window-example",
+    "name": "Window scope example",
+    "slots": [
+      {
+        "id": "lift",
+        "exercise": "lift",
+        "implementation": "barbell",
+        "targets": {
+          "reps": {
+            "value": "5",
+            "unit": "rep"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "rounds",
+      "type": "repeat",
+      "count": 3,
+      "child": {
+        "id": "minute",
+        "type": "window",
+        "durationSeconds": 60,
+        "child": {
+          "id": "set",
+          "type": "effort",
+          "slot": "lift"
+        }
+      }
+    }
+  },
+  "action": "start"
+}

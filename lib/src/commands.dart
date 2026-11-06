@@ -19,6 +19,7 @@ const commandNames = [
   'activity window-status',
   'activity window-crossing',
   'activity window-transition',
+  'activity window-clock',
   'tempo sample',
   'session start',
   'session show',
@@ -189,6 +190,48 @@ final class Commands {
           elapsedMilliseconds: elapsed,
           windowStarts: jsonObject(request['windowStarts'], 'windowStarts'),
         );
+      case 'activity window-clock':
+        keys({
+          'definition',
+          'action',
+          'clock',
+          'expectedVersion',
+          'ownerId',
+          'ownerElapsedMilliseconds',
+          'toOccurrence',
+        });
+        final definition = WorkoutDefinition.fromJson(request['definition']);
+        final action = requiredString(request, 'action');
+        if (action == 'start') {
+          if (request.keys.any(
+            (key) => !{'schemaVersion', 'definition', 'action'}.contains(key),
+          ))
+            invalid('Starting a window clock takes only a definition.');
+          data = const WindowClock().start(definition);
+        } else {
+          final version = request['expectedVersion'];
+          final ownerElapsed = request['ownerElapsedMilliseconds'];
+          final to = request['toOccurrence'];
+          if (version is! int ||
+              version < 1 ||
+              (request.containsKey('ownerElapsedMilliseconds') &&
+                  ownerElapsed is! int) ||
+              (request.containsKey('toOccurrence') && to is! int))
+            invalid(
+              'Clock versions, samples and occurrence indices must be integers.',
+            );
+          data = const WindowClock().apply(
+            definition,
+            request['clock'],
+            expectedVersion: version,
+            action: action,
+            ownerId: request.containsKey('ownerId')
+                ? identifier(request, 'ownerId')
+                : null,
+            ownerElapsedMilliseconds: ownerElapsed as int?,
+            toOccurrence: to as int?,
+          );
+        }
       case 'tempo sample':
         keys({
           'tempo',

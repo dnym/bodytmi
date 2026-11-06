@@ -462,6 +462,218 @@ void activityTests() {
     },
   );
   test(
+    'caller-owned window clock freezes on recovery and waits at boundaries',
+    () async {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'rounds',
+        'type': 'repeat',
+        'count': 2,
+        'child': {
+          'id': 'minute',
+          'type': 'window',
+          'durationSeconds': 5,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        },
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      const clock = WindowClock();
+      var state = clock.start(workout);
+      equal(state['status'], 'paused');
+      jsonEqual(state['windowStarts'], {'rounds[0]/minute': 0});
+      state = clock.apply(
+        workout,
+        state,
+        expectedVersion: 1,
+        action: 'resume',
+        ownerId: 'epoch',
+      );
+      rejects(
+        () => clock.apply(
+          workout,
+          state,
+          expectedVersion: 2,
+          action: 'advance',
+          ownerId: 'other',
+          ownerElapsedMilliseconds: 1,
+        ),
+      );
+      rejects(
+        () =>
+            clock.apply(workout, state, expectedVersion: 1, action: 'recover'),
+        'conflict',
+      );
+      state = clock.apply(
+        workout,
+        state,
+        expectedVersion: 2,
+        action: 'advance',
+        ownerId: 'epoch',
+        ownerElapsedMilliseconds: 3000,
+      );
+      equal(state['elapsedMilliseconds'], 3000);
+      rejects(
+        () => clock.apply(
+          workout,
+          state,
+          expectedVersion: 3,
+          action: 'advance',
+          ownerId: 'epoch',
+          ownerElapsedMilliseconds: 2999,
+        ),
+      );
+      state = clock.apply(
+        workout,
+        state,
+        expectedVersion: 3,
+        action: 'recover',
+      );
+      equal(state['elapsedMilliseconds'], 3000);
+      equal(state['status'], 'paused');
+      state = clock.apply(
+        workout,
+        state,
+        expectedVersion: 4,
+        action: 'resume',
+        ownerId: 'new-epoch',
+      );
+      state = clock.apply(
+        workout,
+        state,
+        expectedVersion: 5,
+        action: 'advance',
+        ownerId: 'new-epoch',
+        ownerElapsedMilliseconds: 4000,
+      );
+      equal(state['status'], 'boundary');
+      equal(state['elapsedMilliseconds'], 5000);
+      rejects(
+        () => clock.apply(
+          workout,
+          state,
+          expectedVersion: 6,
+          action: 'resume',
+          ownerId: 'epoch',
+        ),
+      );
+      state = clock.apply(
+        workout,
+        state,
+        expectedVersion: 6,
+        action: 'move',
+        toOccurrence: 1,
+      );
+      jsonEqual(state['windowStarts'], {'rounds[1]/minute': 5000});
+      state = clock.apply(
+        workout,
+        state,
+        expectedVersion: 7,
+        action: 'resume',
+        ownerId: 'third',
+      );
+      state = clock.apply(
+        workout,
+        state,
+        expectedVersion: 8,
+        action: 'pause',
+        ownerId: 'third',
+        ownerElapsedMilliseconds: 1000,
+      );
+      equal(state['elapsedMilliseconds'], 6000);
+      state = clock.apply(
+        workout,
+        state,
+        expectedVersion: 9,
+        action: 'move',
+        toOccurrence: 2,
+      );
+      equal(state['status'], 'complete');
+      check(!state.containsKey('results'));
+      final forged = {...clock.start(workout), 'status': 'boundary'};
+      final future = {
+        ...clock.start(workout),
+        'policy': 'bodytmi-window-clock/2',
+      };
+      rejects(
+        () => clock.apply(
+          workout,
+          future,
+          expectedVersion: 1,
+          action: 'resume',
+          ownerId: 'epoch',
+        ),
+      );
+      rejects(
+        () => clock.apply(
+          workout,
+          forged,
+          expectedVersion: 1,
+          action: 'move',
+          toOccurrence: 1,
+        ),
+      );
+      final badSample = {
+        ...clock.start(workout),
+        'status': 'running',
+        'ownerId': 'owner',
+        'ownerElapsedMilliseconds': 1,
+      };
+      rejects(
+        () => clock.apply(
+          workout,
+          badSample,
+          expectedVersion: 1,
+          action: 'recover',
+        ),
+      );
+      final changed = workout.toJson();
+      changed['name'] = 'Different workout';
+      rejects(
+        () => clock.apply(
+          WorkoutDefinition.fromJson(changed),
+          clock.start(workout),
+          expectedVersion: 1,
+          action: 'resume',
+          ownerId: 'epoch',
+        ),
+      );
+      final request = {
+        'schemaVersion': 1,
+        'definition': input,
+        'action': 'start',
+      };
+      final cli = await invoke([
+        'activity',
+        'window-clock',
+      ], jsonEncode(request));
+      equal(cli.code, 0);
+      jsonEqual(
+        jsonObject(jsonDecode(cli.output), 'response')['data'],
+        clock.start(workout),
+      );
+      final resumeRequest = {
+        'schemaVersion': 1,
+        'definition': input,
+        'action': 'resume',
+        'clock': clock.start(workout),
+        'expectedVersion': 1,
+        'ownerId': 'cli-epoch',
+      };
+      final resumed = await invoke([
+        'activity',
+        'window-clock',
+      ], jsonEncode(resumeRequest));
+      equal(resumed.code, 0);
+      equal(
+        jsonObject(
+          jsonObject(jsonDecode(resumed.output), 'response')['data'],
+          'clock',
+        )['status'],
+        'running',
+      );
+    },
+  );
+  test(
     'group queries bound their output and allow a narrow occurrence filter',
     () {
       final plan = Repeat(
