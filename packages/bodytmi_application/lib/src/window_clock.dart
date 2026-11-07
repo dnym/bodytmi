@@ -14,11 +14,12 @@ final class WindowClock {
       containing: 0,
     ).where((scope) => scope.windowDurationSeconds != null);
     return _validate(definition, {
-      'policy': 'bodytmi-window-clock/1',
+      'policy': 'bodytmi-window-clock/2',
       'version': 1,
       'definition': definition.toJson(),
       'status': 'paused',
       'occurrence': 0,
+      'occurrenceStartedMilliseconds': 0,
       'elapsedMilliseconds': 0,
       'windowStarts': {for (final scope in scopes) scope.path: 0},
       'ownerId': null,
@@ -45,6 +46,7 @@ final class WindowClock {
     final occurrence = state['occurrence'] as int;
     final starts = jsonObject(state['windowStarts'], 'windowStarts');
     final next = <String, Object?>{...state, 'version': version + 1};
+    next['policy'] = 'bodytmi-window-clock/2';
     if (action != 'recover' && adjustmentMilliseconds != null)
       invalid('Only recovery accepts an elapsed adjustment.');
     switch (action) {
@@ -90,6 +92,13 @@ final class WindowClock {
           next.addAll({
             'status': 'boundary',
             'elapsedMilliseconds': boundary['elapsedMilliseconds'],
+            'boundaryEvidence': {
+              'deadlineMilliseconds': boundary['elapsedMilliseconds'],
+              'paths': boundary['paths'],
+              'unappliedMilliseconds':
+                  sample - (boundary['elapsedMilliseconds'] as int),
+              'trigger': action,
+            },
             'ownerId': null,
             'ownerElapsedMilliseconds': 0,
           });
@@ -125,14 +134,20 @@ final class WindowClock {
           windowStarts: starts,
         );
         final boundary = crossing['status'] == 'crossed'
-            ? jsonObject(
-                crossing['boundary'],
-                'boundary',
-              )['elapsedMilliseconds']
+            ? jsonObject(crossing['boundary'], 'boundary')
             : null;
+        if (boundary != null) {
+          next['boundaryEvidence'] = {
+            'deadlineMilliseconds': boundary['elapsedMilliseconds'],
+            'paths': boundary['paths'],
+            'unappliedMilliseconds':
+                sample - (boundary['elapsedMilliseconds'] as int),
+            'trigger': 'recover',
+          };
+        }
         next.addAll({
           'status': boundary == null ? 'paused' : 'boundary',
-          'elapsedMilliseconds': boundary ?? sample,
+          'elapsedMilliseconds': boundary?['elapsedMilliseconds'] ?? sample,
           'ownerId': null,
           'ownerElapsedMilliseconds': 0,
         });
@@ -155,8 +170,12 @@ final class WindowClock {
         next.addAll({
           'status': toOccurrence == count ? 'complete' : 'paused',
           'occurrence': toOccurrence,
+          'occurrenceStartedMilliseconds': toOccurrence == count
+              ? null
+              : elapsed,
           'windowStarts': move['windowStarts'],
         });
+        next.remove('boundaryEvidence');
       default:
         invalid('Unknown window clock action.');
     }
@@ -171,13 +190,22 @@ final class WindowClock {
       'version',
       'status',
       'occurrence',
+      'occurrenceStartedMilliseconds',
       'elapsedMilliseconds',
       'windowStarts',
       'ownerId',
       'ownerElapsedMilliseconds',
+      'boundaryEvidence',
     });
-    if (state['policy'] != 'bodytmi-window-clock/1')
+    if (!{
+      'bodytmi-window-clock/1',
+      'bodytmi-window-clock/2',
+    }.contains(state['policy']))
       invalid('Unsupported window clock policy.');
+    if (state['policy'] == 'bodytmi-window-clock/1' &&
+        (state.containsKey('occurrenceStartedMilliseconds') ||
+            state.containsKey('boundaryEvidence')))
+      invalid('Legacy window clocks cannot contain timing evidence.');
     if (canonicalJson(state['definition']) !=
         canonicalJson(definition.toJson()))
       invalid('Window clock definition does not match the pinned workout.');
@@ -187,6 +215,7 @@ final class WindowClock {
         elapsed = state['elapsedMilliseconds'];
     final owner = state['ownerId'], sample = state['ownerElapsedMilliseconds'];
     final starts = jsonObject(state['windowStarts'], 'windowStarts');
+    final occurrenceStart = state['occurrenceStartedMilliseconds'];
     final count = definition.plan.occurrences().length;
     if (version is! int ||
         version < 1 ||
@@ -202,6 +231,13 @@ final class WindowClock {
         sample > _limit ||
         sample > elapsed)
       invalid('Invalid window clock state.');
+    if (state.containsKey('occurrenceStartedMilliseconds') &&
+        (status == 'complete'
+            ? occurrenceStart != null
+            : occurrenceStart is! int ||
+                  occurrenceStart < 0 ||
+                  occurrenceStart > elapsed))
+      invalid('Invalid current occurrence start time.');
     if (status == 'running') {
       identifier({'id': owner}, 'id');
     } else if (owner != null || sample != 0) {
@@ -223,7 +259,40 @@ final class WindowClock {
       if ((status == 'boundary' && (deadline == null || deadline != elapsed)) ||
           (status != 'boundary' && view['expired'] == true))
         invalid('Window clock state does not match its boundary.');
+      if (occurrenceStart is int &&
+          starts.values.any((start) => start is int && start > occurrenceStart))
+        invalid(
+          'An enclosing window cannot start after its current occurrence.',
+        );
+      if (state.containsKey('boundaryEvidence')) {
+        final evidence = jsonObject(
+          state['boundaryEvidence'],
+          'boundary evidence',
+        );
+        checkKeys(evidence, {
+          'deadlineMilliseconds',
+          'paths',
+          'unappliedMilliseconds',
+          'trigger',
+        });
+        final unapplied = evidence['unappliedMilliseconds'];
+        final windows = view['windows'] as List<Map<String, Object?>>;
+        final paths = [
+          for (final row in windows)
+            if (row['deadlineMilliseconds'] == deadline) row['path'],
+        ];
+        if (status != 'boundary' ||
+            evidence['deadlineMilliseconds'] != deadline ||
+            !{'advance', 'pause', 'recover'}.contains(evidence['trigger']) ||
+            unapplied is! int ||
+            unapplied < 0 ||
+            unapplied > _limit - elapsed ||
+            canonicalJson(evidence['paths']) != canonicalJson(paths))
+          invalid('Invalid window boundary evidence.');
+      }
     }
+    if (status == 'complete' && state.containsKey('boundaryEvidence'))
+      invalid('A completed clock cannot retain a pending boundary.');
     return {
       ...state,
       'windowStarts': Map<String, Object?>.unmodifiable(starts),

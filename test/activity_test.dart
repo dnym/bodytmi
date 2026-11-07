@@ -548,6 +548,40 @@ void activityTests() {
       );
       equal(state['status'], 'boundary');
       equal(state['elapsedMilliseconds'], 5000);
+      equal(state['occurrenceStartedMilliseconds'], 0);
+      jsonEqual(state['boundaryEvidence'], {
+        'deadlineMilliseconds': 5000,
+        'paths': ['rounds[0]/minute'],
+        'unappliedMilliseconds': 2000,
+        'trigger': 'advance',
+      });
+      final forgedBoundary = {
+        ...state,
+        'boundaryEvidence': {
+          ...jsonObject(state['boundaryEvidence'], 'evidence'),
+          'paths': ['wrong'],
+        },
+      };
+      rejects(
+        () => clock.apply(
+          workout,
+          forgedBoundary,
+          expectedVersion: 6,
+          action: 'move',
+          toOccurrence: 1,
+        ),
+      );
+      final legacy = {...state, 'policy': 'bodytmi-window-clock/1'}
+        ..remove('occurrenceStartedMilliseconds')
+        ..remove('boundaryEvidence');
+      final legacyNext = clock.apply(
+        workout,
+        legacy,
+        expectedVersion: 6,
+        action: 'move',
+        toOccurrence: 1,
+      );
+      equal(legacyNext['occurrenceStartedMilliseconds'], 5000);
       rejects(
         () => clock.apply(
           workout,
@@ -565,6 +599,8 @@ void activityTests() {
         toOccurrence: 1,
       );
       jsonEqual(state['windowStarts'], {'rounds[1]/minute': 5000});
+      equal(state['occurrenceStartedMilliseconds'], 5000);
+      check(!state.containsKey('boundaryEvidence'));
       state = clock.apply(
         workout,
         state,
@@ -589,11 +625,12 @@ void activityTests() {
         toOccurrence: 2,
       );
       equal(state['status'], 'complete');
+      equal(state['occurrenceStartedMilliseconds'], null);
       check(!state.containsKey('results'));
       final forged = {...clock.start(workout), 'status': 'boundary'};
       final future = {
         ...clock.start(workout),
-        'policy': 'bodytmi-window-clock/2',
+        'policy': 'bodytmi-window-clock/3',
       };
       rejects(
         () => clock.apply(
@@ -734,6 +771,38 @@ void activityTests() {
       );
       equal(boundary['status'], 'boundary');
       equal(boundary['elapsedMilliseconds'], 5000);
+      jsonEqual(boundary['boundaryEvidence'], {
+        'deadlineMilliseconds': 5000,
+        'paths': ['outer'],
+        'unappliedMilliseconds': 7000,
+        'trigger': 'recover',
+      });
+      final tiedInput = copyJson(input);
+      jsonObject(
+        jsonObject(tiedInput['plan'], 'outer')['child'],
+        'inner',
+      )['durationSeconds'] = 5;
+      final tiedWorkout = WorkoutDefinition.fromJson(tiedInput);
+      var tiedClock = service.start(tiedWorkout);
+      tiedClock = service.apply(
+        tiedWorkout,
+        tiedClock,
+        expectedVersion: 1,
+        action: 'resume',
+        ownerId: 'tied',
+      );
+      tiedClock = service.apply(
+        tiedWorkout,
+        tiedClock,
+        expectedVersion: 2,
+        action: 'pause',
+        ownerId: 'tied',
+        ownerElapsedMilliseconds: 5000,
+      );
+      jsonEqual(
+        jsonObject(tiedClock['boundaryEvidence'], 'evidence')['paths'],
+        ['outer', 'outer/inner'],
+      );
       equal(jsonObject(boundary['windowStarts'], 'starts')['outer/inner'], 0);
       check(!boundary.containsKey('results'));
       rejects(
