@@ -218,7 +218,12 @@ final class TrainingArchive {
     validateDerivedTargetGraphRevisions(graphs);
     validateProgramPlanReferences(programRevisions, graphs);
     validateTimingData(timers, sessions);
-    validateWindowCheckpoints(windowCheckpoints, sessions);
+    validateWindowCheckpoints(
+      windowCheckpoints,
+      sessions,
+      timers: timers,
+      executions: executions,
+    );
     validateExecutionData(executions, sessions, timers);
     if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)
       invalid('Duplicate body-mass observation identity.');

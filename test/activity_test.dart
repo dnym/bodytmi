@@ -1345,7 +1345,7 @@ void activityTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          46,
+          47,
         );
         final archive = jsonObject(
           jsonDecode(await File('${dir.path}/logical.json').readAsString()),
@@ -1414,7 +1414,7 @@ void activityTests() {
           NativeBackup.validateDatabase(
             '${dir.path}/finished-native/database.sqlite',
           ),
-          46,
+          47,
         );
         await expectCheckpointFailure(
           WindowCheckpointService(
@@ -1536,7 +1536,7 @@ void activityTests() {
         await store.backup('${dir.path}/native');
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          46,
+          47,
         );
         await LogicalArchiveFiles.export(
           await store.archive(),
@@ -1645,6 +1645,658 @@ void activityTests() {
       }
     },
   );
+  test(
+    'reserved scoped clocks enforce one timing owner and survive recovery',
+    () async {
+      final input = definition().toJson();
+      input['id'] = 'scoped-workout';
+      input['plan'] = {
+        'id': 'window',
+        'type': 'window',
+        'durationSeconds': 5,
+        'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+      };
+      final scopedWorkout = WorkoutDefinition.fromJson(input);
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-reserved-window-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        var training = StoredTrainingService(store);
+        await training.publish(scopedWorkout, 0);
+        final scopedSession = await training.start(
+          'scoped',
+          scopedWorkout.id,
+          1,
+          instant(1),
+        );
+        final otherWorkout = definition();
+        await training.publish(otherWorkout, 0);
+        final other = await training.start(
+          'other',
+          otherWorkout.id,
+          1,
+          instant(1),
+        );
+        var timers = TimingService(store);
+        final plan = TimingPlan.fromJson({
+          'unplannedDuration': true,
+          'effortMilliseconds': 1000,
+        });
+        var timer = await timers.start(
+          'timer',
+          other.id,
+          other.sets.first.id,
+          'duration',
+          plan,
+          instant(1),
+        );
+        final originalTimer = timer;
+        var checkpoints = WindowCheckpointService(store);
+        final initial = const SessionWindowClock().start(scopedSession);
+        await checkpoints.save('cp', scopedSession.id, 0, initial);
+        await checkpoints.save('other-cp', scopedSession.id, 0, initial);
+        await expectCheckpointFailure(checkpoints.reserve('cp', 1), 'conflict');
+        timer = await timers.stop(
+          timer.id,
+          timer.version,
+          instant(1),
+          confirm: true,
+          discard: true,
+        );
+        var cp = await checkpoints.reserve('cp', 1);
+        check(cp.reserved);
+        equal(cp.version, 2);
+        final duplicate = copyJson((await store.archive()).toJson());
+        final duplicateRows = jsonList(duplicate, 'windowCheckpoints');
+        jsonObject(duplicateRows.last, 'checkpoint')['reserved'] = true;
+        rejects(() => TrainingArchive.fromJson(duplicate));
+        final collision = copyJson((await store.archive()).toJson());
+        jsonList(collision, 'timers')[0] = originalTimer.toJson();
+        rejects(() => TrainingArchive.fromJson(collision));
+        await expectCheckpointFailure(
+          checkpoints.release('cp', 2, confirm: false),
+        );
+        await expectCheckpointFailure(
+          timers.start(
+            'other-timer',
+            other.id,
+            other.sets.first.id,
+            'duration',
+            plan,
+            instant(1),
+          ),
+          'conflict',
+        );
+        final restId = other.revision.definition.plan
+            .occurrences()
+            .firstWhere((o) => o.activity is Rest)
+            .id;
+        await expectCheckpointFailure(
+          timers.startRest('other-rest', other.id, restId, instant(1)),
+          'conflict',
+        );
+        await expectCheckpointFailure(
+          checkpoints.reserve('other-cp', 1),
+          'conflict',
+        );
+        await expectCheckpointFailure(
+          checkpoints.save('cp', scopedSession.id, 2, initial),
+        );
+        await expectCheckpointFailure(
+          checkpoints.delete('cp', 2, confirm: true),
+        );
+        await expectCheckpointFailure(
+          checkpoints.action(
+            'other-cp',
+            expectedVersion: 1,
+            expectedSessionVersion: 1,
+            expectedClockVersion: 1,
+            action: 'resume',
+            ownerId: 'epoch',
+          ),
+        );
+        await expectCheckpointFailure(
+          checkpoints.action(
+            'cp',
+            expectedVersion: 2,
+            expectedSessionVersion: 2,
+            expectedClockVersion: 1,
+            action: 'resume',
+            ownerId: 'epoch',
+          ),
+          'conflict',
+        );
+        await expectCheckpointFailure(
+          checkpoints.action(
+            'cp',
+            expectedVersion: 2,
+            expectedSessionVersion: 1,
+            expectedClockVersion: 2,
+            action: 'resume',
+            ownerId: 'epoch',
+          ),
+          'conflict',
+        );
+        cp = await checkpoints.action(
+          'cp',
+          expectedVersion: 2,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          action: 'resume',
+          ownerId: 'epoch',
+        );
+        equal(cp.version, 3);
+        await expectCheckpointFailure(
+          checkpoints.release('cp', 3, confirm: true),
+        );
+        await expectCheckpointFailure(
+          training.edit(
+            scopedSession.id,
+            1,
+            (s) => const TrainingService().complete(
+              s,
+              s.sets.first.id,
+              s.sets.first.suggested,
+            ),
+          ),
+        );
+        await store.backup('${dir.path}/native');
+        await LogicalArchiveFiles.export(
+          await store.archive(),
+          '${dir.path}/logical.json',
+        );
+        final archive = jsonObject(
+          jsonDecode(await File('${dir.path}/logical.json').readAsString()),
+          'archive',
+        );
+        archive['format'] = 'bodytmi-logical-export/46';
+        archive.remove('sha256');
+        archive['sha256'] = sha256
+            .convert(utf8.encode(canonicalJson(archive)))
+            .toString();
+        await File('${dir.path}/old.json').writeAsString(jsonEncode(archive));
+        await expectCheckpointFailure(
+          LogicalArchiveFiles.prepare('${dir.path}/old.json'),
+        );
+        final old = sqlite3.open('${dir.path}/native/database.sqlite');
+        old.userVersion = 46;
+        old.close();
+        rejects(
+          () => NativeBackup.validateDatabase(
+            '${dir.path}/native/database.sqlite',
+          ),
+        );
+        final logical = await LogicalArchiveFiles.prepare(
+          '${dir.path}/logical.json',
+        );
+        try {
+          await store.restore(
+            logical.backup,
+            recoveryDestination: '${dir.path}/recovery',
+            confirm: true,
+          );
+        } finally {
+          await logical.close();
+          await store.close();
+        }
+        store = await TrainingStore.open(path);
+        training = StoredTrainingService(store);
+        timers = TimingService(store);
+        checkpoints = WindowCheckpointService(store);
+        check((await checkpoints.show('cp')).reserved);
+        await expectCheckpointFailure(
+          timers.start(
+            'after-restore',
+            other.id,
+            other.sets.first.id,
+            'duration',
+            plan,
+            instant(1),
+          ),
+          'conflict',
+        );
+        cp = await checkpoints.action(
+          'cp',
+          expectedVersion: 3,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 2,
+          action: 'recover',
+        );
+        equal(jsonObject(cp.clock['clock'], 'clock')['status'], 'paused');
+        cp = await checkpoints.action(
+          'cp',
+          expectedVersion: 4,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 3,
+          action: 'resume',
+          ownerId: 'new-epoch',
+        );
+        cp = await checkpoints.action(
+          'cp',
+          expectedVersion: 5,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 4,
+          action: 'advance',
+          ownerId: 'new-epoch',
+          ownerElapsedMilliseconds: 6000,
+        );
+        equal(jsonObject(cp.clock['clock'], 'clock')['status'], 'boundary');
+        equal(
+          (await training.session('scoped')).sets.first.status,
+          SetStatus.planned,
+        );
+        final reviewed = await checkpoints.review(
+          'cp',
+          expectedVersion: 6,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 5,
+          toOccurrence: 1,
+          action: 'skip',
+          confirm: true,
+        );
+        check(!reviewed.checkpoint.reserved);
+        equal(reviewed.session.sets.first.status, SetStatus.skipped);
+        timer = await timers.start(
+          'after-release',
+          other.id,
+          other.sets.first.id,
+          'duration',
+          plan,
+          instant(1),
+        );
+        equal(timer.status, 'paused');
+        await timers.stop(
+          timer.id,
+          timer.version,
+          instant(1),
+          confirm: true,
+          discard: true,
+        );
+        final second = await checkpoints.reserve('other-cp', 1);
+        await expectCheckpointFailure(
+          training.edit('scoped', 2, (s) => s.finish(instant(2))),
+        );
+        final released = await checkpoints.release(
+          'other-cp',
+          second.version,
+          confirm: true,
+        );
+        check(!released.reserved);
+        await checkpoints.save('third', 'scoped', 0, initial);
+        await checkpoints.reserve('third', 1);
+        final moved = await checkpoints.action(
+          'third',
+          expectedVersion: 2,
+          expectedSessionVersion: 2,
+          expectedClockVersion: 1,
+          action: 'move',
+          toOccurrence: 1,
+        );
+        check(!moved.reserved);
+        equal(jsonObject(moved.clock['clock'], 'clock')['status'], 'complete');
+        final finished = await training.edit(
+          'scoped',
+          2,
+          (s) => s.finish(instant(2)),
+        );
+        equal(finished.status, SessionStatus.finalized);
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'reserved clocks cannot compete with traversal in the same session',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-reserved-traversal-',
+      );
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final workout = definition();
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final first = await training.start('first', workout.id, 1, instant(1));
+        final second = await training.start(
+          'second',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final checkpoints = WindowCheckpointService(store);
+        await checkpoints.save(
+          'first-cp',
+          first.id,
+          0,
+          const SessionWindowClock().start(first),
+        );
+        await checkpoints.save(
+          'second-cp',
+          second.id,
+          0,
+          const SessionWindowClock().start(second),
+        );
+        await ExecutionService(
+          store,
+        ).start('first-execution', first.id, instant(1));
+        await expectCheckpointFailure(checkpoints.reserve('first-cp', 1));
+        final saved = await checkpoints.reserve('second-cp', 1);
+        check(saved.reserved);
+        await expectCheckpointFailure(
+          ExecutionService(
+            store,
+          ).start('second-execution', second.id, instant(1)),
+        );
+        final forged = copyJson((await store.archive()).toJson());
+        for (final row in jsonList(forged, 'windowCheckpoints')) {
+          final checkpoint = jsonObject(row, 'checkpoint');
+          if (checkpoint['id'] == 'first-cp') checkpoint['reserved'] = true;
+          if (checkpoint['id'] == 'second-cp') checkpoint.remove('reserved');
+        }
+        rejects(() => TrainingArchive.fromJson(forged));
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'reserved checkpoint review preserves ownership across process death',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-reserved-review-crash-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final workout = definition();
+        await StoredTrainingService(store).publish(workout, 0);
+        final session = await StoredTrainingService(
+          store,
+        ).start('session', workout.id, 1, instant(1));
+        await WindowCheckpointService(
+          store,
+        ).save('cp', session.id, 0, const SessionWindowClock().start(session));
+        await WindowCheckpointService(store).reserve('cp', 1);
+        await store.close();
+        final binary = await compileNative(
+          'test/helpers/store_owner.dart',
+          '${dir.path}/owner',
+        );
+        for (final mode in [
+          'reserved-review-rollback',
+          'reserved-review-commit',
+        ]) {
+          final child = await Process.start(binary, [path, mode]);
+          final errors = child.stderr.transform(utf8.decoder).join();
+          try {
+            equal(
+              await child.stdout
+                  .transform(utf8.decoder)
+                  .transform(const LineSplitter())
+                  .first
+                  .timeout(const Duration(seconds: 15)),
+              'ready',
+            );
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+            equal(await errors, '');
+          } finally {
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+          }
+          final reopened = await TrainingStore.open(path);
+          try {
+            final committed = mode.endsWith('commit');
+            final checkpoint = await WindowCheckpointService(
+              reopened,
+            ).show('cp');
+            final result = await StoredTrainingService(
+              reopened,
+            ).session('session');
+            check(checkpoint.reserved);
+            equal(checkpoint.version, committed ? 3 : 2);
+            equal(
+              result.sets.first.status,
+              committed ? SetStatus.skipped : SetStatus.planned,
+            );
+            equal(
+              jsonObject(checkpoint.clock['clock'], 'clock')['occurrence'],
+              committed ? 1 : 0,
+            );
+            await reopened.archive();
+          } finally {
+            await reopened.close();
+          }
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'reserved clock ownership survives process death and rollback',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-reservation-crash-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final workout = definition();
+        await StoredTrainingService(store).publish(workout, 0);
+        final session = await StoredTrainingService(
+          store,
+        ).start('session', workout.id, 1, instant(1));
+        await WindowCheckpointService(
+          store,
+        ).save('cp', session.id, 0, const SessionWindowClock().start(session));
+        await LogicalArchiveFiles.export(
+          await store.archive(),
+          '${dir.path}/old.json',
+        );
+        final envelope = jsonObject(
+          jsonDecode(await File('${dir.path}/old.json').readAsString()),
+          'archive',
+        );
+        envelope['format'] = 'bodytmi-logical-export/46';
+        envelope.remove('sha256');
+        envelope['sha256'] = sha256
+            .convert(utf8.encode(canonicalJson(envelope)))
+            .toString();
+        await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
+        final prepared = await LogicalArchiveFiles.prepare(
+          '${dir.path}/old.json',
+        );
+        try {
+          check(!prepared.archive.windowCheckpoints.single.reserved);
+        } finally {
+          await prepared.close();
+        }
+        await store.close();
+        final binary = await compileNative(
+          'test/helpers/store_owner.dart',
+          '${dir.path}/owner',
+        );
+        for (final mode in [
+          'checkpoint-reserve-rollback',
+          'checkpoint-reserve-commit',
+        ]) {
+          final child = await Process.start(binary, [path, mode]);
+          final errors = child.stderr.transform(utf8.decoder).join();
+          try {
+            equal(
+              await child.stdout
+                  .transform(utf8.decoder)
+                  .transform(const LineSplitter())
+                  .first
+                  .timeout(const Duration(seconds: 15)),
+              'ready',
+            );
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+            equal(await errors, '');
+          } finally {
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+          }
+          final reopened = await TrainingStore.open(path);
+          try {
+            final committed = mode.endsWith('commit');
+            final checkpoint = await WindowCheckpointService(
+              reopened,
+            ).show('cp');
+            equal(checkpoint.reserved, committed);
+            equal(checkpoint.version, committed ? 2 : 1);
+            final plan = TimingPlan.fromJson({
+              'unplannedDuration': true,
+              'effortMilliseconds': 1000,
+            });
+            final attempt = TimingService(reopened).start(
+              'timer-$mode',
+              session.id,
+              session.sets.first.id,
+              'duration',
+              plan,
+              instant(1),
+            );
+            if (committed) {
+              await expectCheckpointFailure(attempt, 'conflict');
+            } else {
+              final timer = await attempt;
+              await TimingService(reopened).stop(
+                timer.id,
+                timer.version,
+                instant(1),
+                confirm: true,
+                discard: true,
+              );
+            }
+            await reopened.archive();
+          } finally {
+            await reopened.close();
+          }
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test('reserved clock action recovers after process death', () async {
+    final dir = await Directory.systemTemp.createTemp(
+      'bodytmi-reserved-action-crash-',
+    );
+    final path = '${dir.path}/db.sqlite';
+    final store = await TrainingStore.open(path);
+    try {
+      final workout = definition();
+      await StoredTrainingService(store).publish(workout, 0);
+      final session = await StoredTrainingService(
+        store,
+      ).start('session', workout.id, 1, instant(1));
+      await WindowCheckpointService(
+        store,
+      ).save('cp', session.id, 0, const SessionWindowClock().start(session));
+      await WindowCheckpointService(store).reserve('cp', 1);
+      await store.close();
+      final binary = await compileNative(
+        'test/helpers/store_owner.dart',
+        '${dir.path}/owner',
+      );
+      for (final mode in [
+        'checkpoint-action-rollback',
+        'checkpoint-action-commit',
+      ]) {
+        final child = await Process.start(binary, [path, mode]);
+        final errors = child.stderr.transform(utf8.decoder).join();
+        try {
+          equal(
+            await child.stdout
+                .transform(utf8.decoder)
+                .transform(const LineSplitter())
+                .first
+                .timeout(const Duration(seconds: 15)),
+            'ready',
+          );
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+          equal(await errors, '');
+        } finally {
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+        }
+        final reopened = await TrainingStore.open(path);
+        try {
+          final committed = mode.endsWith('commit');
+          final checkpoints = WindowCheckpointService(reopened);
+          final checkpoint = await checkpoints.show('cp');
+          check(checkpoint.reserved);
+          equal(checkpoint.version, committed ? 3 : 2);
+          equal(
+            jsonObject(checkpoint.clock['clock'], 'clock')['status'],
+            committed ? 'running' : 'paused',
+          );
+          if (committed) {
+            final recovered = await checkpoints.action(
+              'cp',
+              expectedVersion: 3,
+              expectedSessionVersion: 1,
+              expectedClockVersion: 2,
+              action: 'recover',
+            );
+            check(recovered.reserved);
+            equal(
+              jsonObject(recovered.clock['clock'], 'clock')['status'],
+              'paused',
+            );
+          }
+          await reopened.archive();
+        } finally {
+          await reopened.close();
+        }
+      }
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
+  test('schema v46 checkpoints migrate without reservations', () async {
+    final dir = await Directory.systemTemp.createTemp(
+      'bodytmi-reservation-v46-',
+    );
+    final path = '${dir.path}/db.sqlite';
+    var store = await TrainingStore.open(path);
+    try {
+      final workout = definition();
+      await StoredTrainingService(store).publish(workout, 0);
+      final session = await StoredTrainingService(
+        store,
+      ).start('session', workout.id, 1, instant(1));
+      await WindowCheckpointService(
+        store,
+      ).save('cp', session.id, 0, const SessionWindowClock().start(session));
+      await store.close();
+      final raw = sqlite3.open(path);
+      raw.userVersion = 46;
+      raw.close();
+      store = await TrainingStore.open(path);
+      final checkpoint = await WindowCheckpointService(store).show('cp');
+      check(!checkpoint.reserved);
+      equal(checkpoint.version, 1);
+      equal(
+        (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
+        47,
+      );
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
   test('schema v45 migrates to an empty checkpoint collection', () async {
     final dir = await Directory.systemTemp.createTemp(
       'bodytmi-checkpoint-v45-',
@@ -1670,7 +2322,7 @@ void activityTests() {
       );
       equal(
         (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-        46,
+        47,
       );
     } finally {
       await store.close();
@@ -1720,11 +2372,33 @@ void activityTests() {
           'clock': clock,
         });
         equal(stale.code, 5);
-        final review = await command('checkpoint review', {
+        final reserved = await command('checkpoint reserve', {
           'id': 'one',
           'expectedVersion': 1,
+        });
+        equal(reserved.code, 0);
+        final running = await command('checkpoint action', {
+          'id': 'one',
+          'expectedVersion': 2,
           'expectedSessionVersion': 1,
           'expectedClockVersion': 1,
+          'action': 'resume',
+          'ownerId': 'cli',
+        });
+        equal(running.code, 0);
+        final recovered = await command('checkpoint action', {
+          'id': 'one',
+          'expectedVersion': 3,
+          'expectedSessionVersion': 1,
+          'expectedClockVersion': 2,
+          'action': 'recover',
+        });
+        equal(recovered.code, 0);
+        final review = await command('checkpoint review', {
+          'id': 'one',
+          'expectedVersion': 4,
+          'expectedSessionVersion': 1,
+          'expectedClockVersion': 3,
           'toOccurrence': 1,
           'action': 'skip',
           'confirm': true,
@@ -1734,12 +2408,12 @@ void activityTests() {
           jsonObject(jsonDecode(review.output), 'response')['data'],
           'data',
         );
-        equal(jsonObject(reviewed['checkpoint'], 'checkpoint')['version'], 2);
+        equal(jsonObject(reviewed['checkpoint'], 'checkpoint')['version'], 5);
         final retry = await command('checkpoint review', {
           'id': 'one',
-          'expectedVersion': 1,
+          'expectedVersion': 4,
           'expectedSessionVersion': 1,
-          'expectedClockVersion': 1,
+          'expectedClockVersion': 3,
           'toOccurrence': 1,
           'action': 'skip',
           'confirm': true,
@@ -1747,12 +2421,18 @@ void activityTests() {
         equal(retry.code, 5);
         final refused = await command('checkpoint delete', {
           'id': 'one',
-          'expectedVersion': 2,
+          'expectedVersion': 5,
         });
         equal(refused.code, 2);
+        final released = await command('checkpoint release', {
+          'id': 'one',
+          'expectedVersion': 5,
+          'confirm': true,
+        });
+        equal(released.code, 0);
         final removed = await command('checkpoint delete', {
           'id': 'one',
-          'expectedVersion': 2,
+          'expectedVersion': 6,
           'confirm': true,
         });
         equal(removed.code, 0);

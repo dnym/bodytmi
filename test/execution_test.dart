@@ -258,7 +258,7 @@ void executionTests() {
       await File('$dir/old-manual.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-manual.json'));
       await store.snapshot('$dir/manual.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 46);
+      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 47);
       final relabeled = sqlite3.open('$dir/manual.sqlite');
       relabeled.execute('DROP TABLE IF EXISTS window_checkpoints');
       relabeled.userVersion = 39;
@@ -660,7 +660,7 @@ void executionTests() {
       await File('$dir/old-carry.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-carry.json'));
       await store.snapshot('$dir/carry.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 46);
+      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 47);
       final old = sqlite3.open('$dir/carry.sqlite');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 36;
@@ -999,7 +999,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          46,
+          47,
         );
       } finally {
         await migrated.close();
@@ -2021,13 +2021,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 46);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 47);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/46',
+        'bodytmi-logical-export/47',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {

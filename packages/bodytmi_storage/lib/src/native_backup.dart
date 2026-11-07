@@ -145,6 +145,7 @@ final class NativeBackup {
           44,
           45,
           46,
+          47,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -284,6 +285,7 @@ final class NativeBackup {
             44,
             45,
             46,
+            47,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -779,15 +781,32 @@ final class NativeBackup {
           final checkpoint = WindowCheckpoint.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 47 && checkpoint.reserved)
+            invalid('Window clock reservations require schema v47.');
           if (checkpoint.id != row['id'] ||
               checkpoint.sessionId != row['session_id'])
             invalid('Window checkpoint row identity mismatch.');
           checkpoints.add(checkpoint);
         }
-        validateWindowCheckpoints(checkpoints, [
-          for (final row in db.select('SELECT snapshot FROM sessions'))
-            sessionFromJson(jsonDecode(row['snapshot'] as String)),
-        ]);
+        validateWindowCheckpoints(
+          checkpoints,
+          [
+            for (final row in db.select('SELECT snapshot FROM sessions'))
+              sessionFromJson(jsonDecode(row['snapshot'] as String)),
+          ],
+          timers: [
+            for (final row in db.select(
+              'SELECT snapshot FROM timing_activities',
+            ))
+              TimingActivity.fromJson(jsonDecode(row['snapshot'] as String)),
+          ],
+          executions: [
+            for (final row in db.select(
+              'SELECT snapshot FROM workout_executions',
+            ))
+              WorkoutExecution.fromJson(jsonDecode(row['snapshot'] as String)),
+          ],
+        );
       }
       return db.userVersion;
     } finally {

@@ -39,6 +39,9 @@ const storedCommandNames = [
   'store window-review',
   'checkpoint save',
   'checkpoint review',
+  'checkpoint reserve',
+  'checkpoint release',
+  'checkpoint action',
   'checkpoint show',
   'checkpoint list',
   'checkpoint delete',
@@ -238,6 +241,19 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'checkpoint save' => {'id', 'sessionId', 'expectedVersion', 'clock'},
+    'checkpoint reserve' => {'id', 'expectedVersion'},
+    'checkpoint release' => {'id', 'expectedVersion', 'confirm'},
+    'checkpoint action' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'expectedClockVersion',
+      'action',
+      'ownerId',
+      'ownerElapsedMilliseconds',
+      'toOccurrence',
+      'adjustmentMilliseconds',
+    },
     'checkpoint review' => {
       'id',
       'expectedVersion',
@@ -551,6 +567,38 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'sessionId'),
           integer('expectedVersion', min: 0),
           request['clock'],
+        )).toJson();
+      case 'checkpoint reserve':
+        data = (await checkpoints.reserve(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+        )).toJson();
+      case 'checkpoint release':
+        data = (await checkpoints.release(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          confirm: flag('confirm'),
+        )).toJson();
+      case 'checkpoint action':
+        data = (await checkpoints.action(
+          identifier(request, 'id'),
+          expectedVersion: integer('expectedVersion'),
+          expectedSessionVersion: integer('expectedSessionVersion'),
+          expectedClockVersion: integer('expectedClockVersion'),
+          action: requiredString(request, 'action'),
+          ownerId: request.containsKey('ownerId')
+              ? identifier(request, 'ownerId')
+              : null,
+          ownerElapsedMilliseconds:
+              request.containsKey('ownerElapsedMilliseconds')
+              ? integer('ownerElapsedMilliseconds', min: 0)
+              : null,
+          toOccurrence: request.containsKey('toOccurrence')
+              ? integer('toOccurrence', min: 0)
+              : null,
+          adjustmentMilliseconds: request.containsKey('adjustmentMilliseconds')
+              ? integer('adjustmentMilliseconds', min: 0)
+              : null,
         )).toJson();
       case 'checkpoint review':
         final result = await checkpoints.review(

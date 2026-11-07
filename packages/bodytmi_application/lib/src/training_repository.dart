@@ -10,6 +10,7 @@ import 'execution_service.dart';
 import 'derived_workout_preview.dart';
 import 'derived_plan_session.dart';
 import 'window_checkpoint.dart';
+import 'session_window_clock.dart';
 
 /// One repository transaction is the durability boundary of each operation.
 abstract interface class TrainingRepository {
@@ -449,6 +450,9 @@ final class StoredTrainingService {
       );
     }
     if ((await repository.timingActivities()).any((t) => t.sessionId == id) ||
+        (await repository.windowCheckpoints()).any(
+          (c) => c.sessionId == id && c.reserved,
+        ) ||
         (await repository.executions()).any((e) => e.sessionId == id)) {
       invalid(
         'A session plan cannot be refreshed after timing or traversal has started.',
@@ -527,6 +531,9 @@ final class StoredTrainingService {
     if ((await repository.timingActivities()).any(
           (timer) => timer.sessionId == id,
         ) ||
+        (await repository.windowCheckpoints()).any(
+          (c) => c.sessionId == id && c.reserved,
+        ) ||
         (await repository.executions()).any(
           (execution) => execution.sessionId == id,
         )) {
@@ -554,6 +561,9 @@ final class StoredTrainingService {
     if (current.contentVersion != expectedVersion) _conflict();
     if ((await repository.timingActivities()).any(
           (timer) => timer.sessionId == id,
+        ) ||
+        (await repository.windowCheckpoints()).any(
+          (c) => c.sessionId == id && c.reserved,
         ) ||
         (await repository.executions()).any(
           (execution) => execution.sessionId == id,
@@ -607,6 +617,35 @@ final class StoredTrainingService {
     (current) => const TrainingService().carryActual(current, setId, metric),
   );
 
+  Future<void> _validateReservedClockChange(
+    TrainingSession current,
+    TrainingSession next,
+  ) async {
+    final id = current.id;
+    for (final checkpoint in await repository.windowCheckpoints()) {
+      if (!checkpoint.reserved || checkpoint.sessionId != id) continue;
+      if (next.status == SessionStatus.finalized)
+        invalid(
+          'Release the reserved window clock before finishing the session.',
+        );
+      final wrapper = const SessionWindowClock().validateSnapshot(
+        current,
+        checkpoint.clock,
+      );
+      final clock = jsonObject(wrapper['clock'], 'window clock');
+      if (clock['status'] == 'running') {
+        final occurrence = clock['occurrence'] as int;
+        final plan = current.revision.definition.plan.occurrences().toList();
+        if (plan[occurrence].activity is Effort &&
+            canonicalJson(current.set(plan[occurrence].id).toJson()) !=
+                canonicalJson(next.set(plan[occurrence].id).toJson()))
+          invalid(
+            'Pause or recover the reserved window clock before changing its current effort.',
+          );
+      }
+    }
+  }
+
   Future<TrainingSession> _changeTargets(
     String id,
     int expectedVersion,
@@ -615,6 +654,7 @@ final class StoredTrainingService {
     final current = await session(id);
     if (current.contentVersion != expectedVersion) _conflict();
     final next = change(current);
+    await _validateReservedClockChange(current, next);
     if (identical(current, next)) return current;
     final changed = {
       for (var i = 0; i < current.sets.length; i++)
@@ -702,6 +742,7 @@ final class StoredTrainingService {
     final current = await session(id);
     if (current.contentVersion != expectedVersion) _conflict();
     final next = change(current);
+    await _validateReservedClockChange(current, next);
     for (final t in await repository.timingActivities()) {
       if (t.active &&
           t.sessionId == id &&

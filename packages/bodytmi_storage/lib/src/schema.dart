@@ -122,6 +122,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   44 => schemaV27, // v44 adds open-ended effort timers.
   45 => schemaV27, // v45 adds open-ended slot timing defaults.
   46 => schemaV46, // v46 adds inert scoped-clock checkpoints.
+  47 => schemaV46, // v47 adds scoped-clock reservations.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

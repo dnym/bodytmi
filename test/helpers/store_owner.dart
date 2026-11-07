@@ -7,11 +7,52 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 2 && args[1].startsWith('checkpoint-review-')) {
+    if (args.length == 2 && args[1].startsWith('checkpoint-action-')) {
+      Future<void> action() async {
+        await WindowCheckpointService(store).action(
+          'cp',
+          expectedVersion: 2,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          action: 'resume',
+          ownerId: 'crashed-epoch',
+        );
+      }
+
+      if (args[1].endsWith('rollback')) {
+        await store.transaction(() async {
+          await action();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await action();
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 2 && args[1].startsWith('checkpoint-reserve-')) {
+      Future<void> action() async {
+        await WindowCheckpointService(store).reserve('cp', 1);
+      }
+
+      if (args[1].endsWith('rollback')) {
+        await store.transaction(() async {
+          await action();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await action();
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 2 &&
+        (args[1].startsWith('checkpoint-review-') ||
+            args[1].startsWith('reserved-review-'))) {
       Future<void> action() async {
         await WindowCheckpointService(store).review(
           'cp',
-          expectedVersion: 1,
+          expectedVersion: args[1].startsWith('reserved-review-') ? 2 : 1,
           expectedSessionVersion: 1,
           expectedClockVersion: 1,
           toOccurrence: 1,

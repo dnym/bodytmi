@@ -188,7 +188,7 @@ void timingDefaultsTests() {
       check(open.plan.openEnded);
     }),
   );
-  test('schema v44 profiles migrate to v46 without losing revisions', () async {
+  test('schema v44 profiles migrate to v47 without losing revisions', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-v44-');
     final path = '${dir.path}/db.sqlite';
     var store = await TrainingStore.open(path);
@@ -206,7 +206,7 @@ void timingDefaultsTests() {
       );
       equal(
         (await store.backup('${dir.path}/migrated'))['databaseSchemaVersion'],
-        46,
+        47,
       );
     } finally {
       await store.close();
@@ -652,14 +652,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          46,
+          47,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/46',
+          'bodytmi-logical-export/47',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {

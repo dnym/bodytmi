@@ -31,6 +31,10 @@ final class ExecutionService {
       _conflict('This session already has a traversal.');
     if (s.status != SessionStatus.active || at.isBefore(s.startedAt))
       invalid('Execution needs an active session and valid start time.');
+    if ((await repository.windowCheckpoints()).any(
+      (c) => c.sessionId == sessionId && c.reserved,
+    ))
+      invalid('Release the reserved window clock before starting a traversal.');
     _validateManagedClocks(candidate, s, await repository.timingActivities());
     await repository.saveExecution(candidate);
     await _prepareRest(candidate, s, at);

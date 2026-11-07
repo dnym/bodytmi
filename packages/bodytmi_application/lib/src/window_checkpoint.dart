@@ -5,12 +5,18 @@ import 'session_window_clock.dart';
 import 'session_window_review.dart';
 import 'training_repository.dart';
 
-/// An inert, user-saved scoped-clock snapshot. It does not own a timer.
+/// A saved scoped clock, optionally reserving the profile's timing slot.
 final class WindowCheckpoint {
-  WindowCheckpoint._(this.id, this.sessionId, this.version, this._clockJson);
+  WindowCheckpoint._(
+    this.id,
+    this.sessionId,
+    this.version,
+    this._clockJson,
+    this.reserved,
+  );
   factory WindowCheckpoint.fromJson(Object? input) {
     final j = jsonObject(input, 'window checkpoint');
-    checkKeys(j, {'id', 'sessionId', 'version', 'clock'});
+    checkKeys(j, {'id', 'sessionId', 'version', 'clock', 'reserved'});
     final id = identifier(j, 'id');
     final sessionId = identifier(j, 'sessionId');
     final version = j['version'];
@@ -18,10 +24,19 @@ final class WindowCheckpoint {
     final clock = jsonObject(j['clock'], 'session window clock');
     if (clock['sessionId'] != sessionId)
       invalid('Checkpoint session identity mismatch.');
-    return WindowCheckpoint._(id, sessionId, version, canonicalJson(clock));
+    if (j.containsKey('reserved') && j['reserved'] != true)
+      invalid('reserved must be true when specified.');
+    return WindowCheckpoint._(
+      id,
+      sessionId,
+      version,
+      canonicalJson(clock),
+      j['reserved'] == true,
+    );
   }
   final String id, sessionId, _clockJson;
   final int version;
+  final bool reserved;
   Map<String, Object?> get clock =>
       jsonObject(jsonDecode(_clockJson), 'session window clock');
   Map<String, Object?> toJson() => {
@@ -29,22 +44,46 @@ final class WindowCheckpoint {
     'sessionId': sessionId,
     'version': version,
     'clock': clock,
+    if (reserved) 'reserved': true,
   };
 }
 
 void validateWindowCheckpoints(
   List<WindowCheckpoint> checkpoints,
-  List<TrainingSession> sessions,
-) {
+  List<TrainingSession> sessions, {
+  List<TimingActivity> timers = const [],
+  List<WorkoutExecution> executions = const [],
+}) {
   final bySession = {for (final s in sessions) s.id: s};
   final ids = <String>{};
+  var reservations = 0;
   for (final checkpoint in checkpoints) {
     if (!ids.add(checkpoint.id))
       invalid('Duplicate window checkpoint identity.');
     final session = bySession[checkpoint.sessionId];
     if (session == null) invalid('Window checkpoint session is missing.');
-    const SessionWindowClock().validateSnapshot(session, checkpoint.clock);
+    final wrapper = const SessionWindowClock().validateSnapshot(
+      session,
+      checkpoint.clock,
+    );
+    if (checkpoint.reserved) {
+      reservations++;
+      final status = jsonObject(wrapper['clock'], 'clock')['status'];
+      if (session.status != SessionStatus.active || status == 'complete')
+        invalid(
+          'A reserved window clock requires an active session and unfinished clock.',
+        );
+      if (executions.any(
+        (execution) => execution.sessionId == session.id && !execution.complete,
+      ))
+        invalid(
+          'A session cannot have both a reserved window clock and an active traversal.',
+        );
+    }
   }
+  if (reservations > 1 ||
+      (reservations > 0 && timers.any((timer) => timer.active)))
+    invalid('Only one logical timing activity may be active.');
 }
 
 final class WindowCheckpointService {
@@ -67,6 +106,8 @@ final class WindowCheckpointService {
       throw const BodyTmiException('conflict', 'Checkpoint version changed.');
     if (current != null && current.sessionId != sessionId)
       invalid('A checkpoint cannot change sessions.');
+    if (current?.reserved == true)
+      invalid('Release the reserved clock before replacing its snapshot.');
     if (current != null)
       const SessionWindowClock().validateSnapshot(session, current.clock);
     final clock = const SessionWindowClock().validateSnapshot(
@@ -92,15 +133,137 @@ final class WindowCheckpointService {
         ));
     final session = await repository.session(checkpoint.sessionId);
     if (session == null) invalid('Window checkpoint session is missing.');
-    const SessionWindowClock().validateSnapshot(session, checkpoint.clock);
+    validateWindowCheckpoints([checkpoint], [session]);
+    if (checkpoint.reserved)
+      validateWindowCheckpoints(
+        await repository.windowCheckpoints(),
+        await repository.sessions(),
+        timers: await repository.timingActivities(),
+        executions: await repository.executions(),
+      );
     return checkpoint;
   });
 
   Future<List<WindowCheckpoint>> list() => repository.transaction(() async {
     final checkpoints = await repository.windowCheckpoints();
-    validateWindowCheckpoints(checkpoints, await repository.sessions());
+    validateWindowCheckpoints(
+      checkpoints,
+      await repository.sessions(),
+      timers: await repository.timingActivities(),
+      executions: await repository.executions(),
+    );
     return checkpoints..sort((a, b) => a.id.compareTo(b.id));
   });
+
+  Future<WindowCheckpoint> reserve(
+    String id,
+    int expectedVersion,
+  ) => repository.transaction(() async {
+    final current = await show(id);
+    if (current.version != expectedVersion)
+      throw const BodyTmiException('conflict', 'Checkpoint version changed.');
+    if (current.reserved)
+      invalid('This checkpoint already reserves the clock.');
+    final session = await StoredTrainingService(
+      repository,
+    ).session(current.sessionId);
+    final state = jsonObject(current.clock['clock'], 'window clock');
+    if (session.status != SessionStatus.active ||
+        !{'paused', 'boundary'}.contains(state['status']))
+      invalid(
+        'Reserve requires an active session and a paused or boundary clock.',
+      );
+    if ((await repository.executions()).any(
+      (execution) => execution.sessionId == session.id && !execution.complete,
+    ))
+      invalid('Finish the session traversal before reserving a scoped clock.');
+    if ((await repository.timingActivities()).any((timer) => timer.active) ||
+        (await repository.windowCheckpoints()).any(
+          (checkpoint) => checkpoint.reserved,
+        ))
+      throw const BodyTmiException(
+        'conflict',
+        'Another timing activity is active.',
+      );
+    return _replace(current, current.clock, reserved: true);
+  });
+
+  Future<WindowCheckpoint> release(
+    String id,
+    int expectedVersion, {
+    required bool confirm,
+  }) => repository.transaction(() async {
+    if (!confirm) invalid('Releasing the clock requires confirm:true.');
+    final current = await show(id);
+    if (current.version != expectedVersion)
+      throw const BodyTmiException('conflict', 'Checkpoint version changed.');
+    if (!current.reserved ||
+        jsonObject(current.clock['clock'], 'clock')['status'] == 'running')
+      invalid('Pause or recover the reserved clock before releasing it.');
+    return _replace(current, current.clock, reserved: false);
+  });
+
+  Future<WindowCheckpoint> action(
+    String id, {
+    required int expectedVersion,
+    required int expectedSessionVersion,
+    required int expectedClockVersion,
+    required String action,
+    String? ownerId,
+    int? ownerElapsedMilliseconds,
+    int? toOccurrence,
+    int? adjustmentMilliseconds,
+  }) => repository.transaction(() async {
+    final current = await show(id);
+    if (current.version != expectedVersion)
+      throw const BodyTmiException('conflict', 'Checkpoint version changed.');
+    if (!current.reserved)
+      invalid('Reserve the checkpoint before clock actions.');
+    final session = await StoredTrainingService(
+      repository,
+    ).session(current.sessionId);
+    if (session.contentVersion != expectedSessionVersion)
+      throw const BodyTmiException(
+        'conflict',
+        'Session content version changed.',
+      );
+    final next = const SessionWindowClock().apply(
+      session,
+      current.clock,
+      expectedVersion: expectedClockVersion,
+      action: action,
+      ownerId: ownerId,
+      ownerElapsedMilliseconds: ownerElapsedMilliseconds,
+      toOccurrence: toOccurrence,
+      adjustmentMilliseconds: adjustmentMilliseconds,
+    );
+    final complete = jsonObject(next['clock'], 'clock')['status'] == 'complete';
+    return _replace(current, next, reserved: !complete);
+  });
+
+  Future<WindowCheckpoint> _replace(
+    WindowCheckpoint current,
+    Object? snapshot, {
+    required bool reserved,
+  }) async {
+    final session = await StoredTrainingService(
+      repository,
+    ).session(current.sessionId);
+    final clock = const SessionWindowClock().validateSnapshot(
+      session,
+      snapshot,
+    );
+    final next = WindowCheckpoint.fromJson({
+      'id': current.id,
+      'sessionId': current.sessionId,
+      'version': current.version + 1,
+      'clock': clock,
+      if (reserved) 'reserved': true,
+    });
+    validateWindowCheckpoints([next], [session]);
+    await repository.saveWindowCheckpoint(next);
+    return next;
+  }
 
   /// Explicitly review an effort and save its moved checkpoint atomically.
   Future<
@@ -142,11 +305,12 @@ final class WindowCheckpointService {
       expectedSessionVersion,
       (_) => result.session,
     );
-    final checkpoint = await save(
-      id,
-      session.id,
-      expectedVersion,
+    final complete =
+        jsonObject(result.clock['clock'], 'clock')['status'] == 'complete';
+    final checkpoint = await _replace(
+      current,
       result.clock,
+      reserved: current.reserved && !complete,
     );
     return (
       session: saved,
@@ -164,6 +328,8 @@ final class WindowCheckpointService {
     final current = await show(id);
     if (current.version != expectedVersion)
       throw const BodyTmiException('conflict', 'Checkpoint version changed.');
+    if (current.reserved)
+      invalid('Release the reserved clock before deleting its checkpoint.');
     await repository.deleteWindowCheckpoint(id);
   });
 }
