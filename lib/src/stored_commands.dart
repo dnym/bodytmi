@@ -38,6 +38,7 @@ const storedCommandNames = [
   'store window-clock',
   'store window-review',
   'checkpoint save',
+  'checkpoint review',
   'checkpoint show',
   'checkpoint list',
   'checkpoint delete',
@@ -237,6 +238,17 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'checkpoint save' => {'id', 'sessionId', 'expectedVersion', 'clock'},
+    'checkpoint review' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'expectedClockVersion',
+      'toOccurrence',
+      'action',
+      'actuals',
+      'acceptSuggested',
+      'confirm',
+    },
     'checkpoint show' => {'id'},
     'checkpoint list' => <String>{},
     'checkpoint delete' => {'id', 'expectedVersion', 'confirm'},
@@ -540,6 +552,23 @@ Future<Map<String, Object?>> executeStored(
           integer('expectedVersion', min: 0),
           request['clock'],
         )).toJson();
+      case 'checkpoint review':
+        final result = await checkpoints.review(
+          identifier(request, 'id'),
+          expectedVersion: integer('expectedVersion'),
+          expectedSessionVersion: integer('expectedSessionVersion'),
+          expectedClockVersion: integer('expectedClockVersion'),
+          toOccurrence: integer('toOccurrence', min: 0),
+          action: requiredString(request, 'action'),
+          actuals: metricsFromJson(request['actuals'] ?? <String, Object?>{}),
+          acceptSuggested: flag('acceptSuggested'),
+          confirm: flag('confirm'),
+        );
+        data = {
+          'session': result.session.toJson(),
+          'checkpoint': result.checkpoint.toJson(),
+          'occurrenceId': result.occurrenceId,
+        };
       case 'checkpoint show':
         data = (await checkpoints.show(identifier(request, 'id'))).toJson();
       case 'checkpoint list':

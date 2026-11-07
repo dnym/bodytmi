@@ -1434,6 +1434,217 @@ void activityTests() {
       }
     },
   );
+  test(
+    'checkpoint review commits result and clock together or rolls both back',
+    () async {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'rounds',
+        'type': 'repeat',
+        'count': 2,
+        'child': {
+          'id': 'window',
+          'type': 'window',
+          'durationSeconds': 5,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        },
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-checkpoint-review-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final checkpoints = WindowCheckpointService(store);
+        await checkpoints.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        Future<Object?> review({int destination = 1, int version = 1}) =>
+            checkpoints.review(
+              'cp',
+              expectedVersion: version,
+              expectedSessionVersion: 1,
+              expectedClockVersion: 1,
+              toOccurrence: destination,
+              action: 'complete',
+              actuals: session.sets.first.suggested,
+            );
+        await expectCheckpointFailure(review(destination: 2));
+        equal((await training.session('session')).contentVersion, 1);
+        equal((await checkpoints.show('cp')).version, 1);
+        final raw = sqlite3.open(path);
+        try {
+          raw.execute(
+            "CREATE TRIGGER test_checkpoint_failure BEFORE UPDATE ON window_checkpoints BEGIN SELECT RAISE(ABORT, 'forced checkpoint failure'); END",
+          );
+          var failed = false;
+          try {
+            await review();
+          } catch (_) {
+            failed = true;
+          }
+          check(failed);
+          equal((await training.session('session')).contentVersion, 1);
+          equal((await checkpoints.show('cp')).version, 1);
+          raw.execute('DROP TRIGGER test_checkpoint_failure');
+        } finally {
+          raw.close();
+        }
+        final result = await checkpoints.review(
+          'cp',
+          expectedVersion: 1,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          toOccurrence: 1,
+          action: 'complete',
+          actuals: session.sets.first.suggested,
+        );
+        equal(result.session.sets.first.status, SetStatus.completed);
+        equal(result.checkpoint.version, 2);
+        equal(
+          jsonObject(result.checkpoint.clock['clock'], 'clock')['occurrence'],
+          1,
+        );
+        await expectCheckpointFailure(review(), 'conflict');
+        final skipped = await checkpoints.review(
+          'cp',
+          expectedVersion: 2,
+          expectedSessionVersion: 2,
+          expectedClockVersion: 2,
+          toOccurrence: 2,
+          action: 'skip',
+          confirm: true,
+        );
+        equal(skipped.session.sets.last.status, SetStatus.skipped);
+        equal(skipped.checkpoint.version, 3);
+        equal(
+          jsonObject(skipped.checkpoint.clock['clock'], 'clock')['status'],
+          'complete',
+        );
+        await store.backup('${dir.path}/native');
+        equal(
+          NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
+          46,
+        );
+        await LogicalArchiveFiles.export(
+          await store.archive(),
+          '${dir.path}/archive.json',
+        );
+        final restored = await LogicalArchiveFiles.prepare(
+          '${dir.path}/archive.json',
+        );
+        try {
+          equal(restored.archive.windowCheckpoints.single.version, 3);
+          equal(restored.archive.sessions.single.contentVersion, 3);
+        } finally {
+          await restored.close();
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'checkpoint review survives process death before and after commit',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-checkpoint-crash-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final workout = definition();
+        await StoredTrainingService(store).publish(workout, 0);
+        final session = await StoredTrainingService(
+          store,
+        ).start('session', workout.id, 1, instant(1));
+        await WindowCheckpointService(
+          store,
+        ).save('cp', session.id, 0, const SessionWindowClock().start(session));
+        await store.close();
+        final binary = await compileNative(
+          'test/helpers/store_owner.dart',
+          '${dir.path}/owner',
+        );
+        for (final mode in [
+          'checkpoint-review-rollback',
+          'checkpoint-review-commit',
+        ]) {
+          final child = await Process.start(binary, [path, mode]);
+          final errors = child.stderr.transform(utf8.decoder).join();
+          try {
+            equal(
+              await child.stdout
+                  .transform(utf8.decoder)
+                  .transform(const LineSplitter())
+                  .first
+                  .timeout(const Duration(seconds: 15)),
+              'ready',
+            );
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+            equal(await errors, '');
+          } finally {
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+          }
+          final reopened = await TrainingStore.open(path);
+          try {
+            final committed = mode.endsWith('commit');
+            final saved = await StoredTrainingService(
+              reopened,
+            ).session('session');
+            final checkpoint = await WindowCheckpointService(
+              reopened,
+            ).show('cp');
+            equal(
+              saved.sets.first.status,
+              committed ? SetStatus.skipped : SetStatus.planned,
+            );
+            equal(saved.contentVersion, committed ? 2 : 1);
+            equal(checkpoint.version, committed ? 2 : 1);
+            equal(
+              jsonObject(checkpoint.clock['clock'], 'clock')['occurrence'],
+              committed ? 1 : 0,
+            );
+            if (committed) {
+              await expectCheckpointFailure(
+                WindowCheckpointService(reopened).review(
+                  'cp',
+                  expectedVersion: 1,
+                  expectedSessionVersion: 1,
+                  expectedClockVersion: 1,
+                  toOccurrence: 1,
+                  action: 'skip',
+                  confirm: true,
+                ),
+                'conflict',
+              );
+            }
+            await reopened.archive();
+          } finally {
+            await reopened.close();
+          }
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test('schema v45 migrates to an empty checkpoint collection', () async {
     final dir = await Directory.systemTemp.createTemp(
       'bodytmi-checkpoint-v45-',
@@ -1509,14 +1720,39 @@ void activityTests() {
           'clock': clock,
         });
         equal(stale.code, 5);
-        final refused = await command('checkpoint delete', {
+        final review = await command('checkpoint review', {
           'id': 'one',
           'expectedVersion': 1,
+          'expectedSessionVersion': 1,
+          'expectedClockVersion': 1,
+          'toOccurrence': 1,
+          'action': 'skip',
+          'confirm': true,
+        });
+        equal(review.code, 0);
+        final reviewed = jsonObject(
+          jsonObject(jsonDecode(review.output), 'response')['data'],
+          'data',
+        );
+        equal(jsonObject(reviewed['checkpoint'], 'checkpoint')['version'], 2);
+        final retry = await command('checkpoint review', {
+          'id': 'one',
+          'expectedVersion': 1,
+          'expectedSessionVersion': 1,
+          'expectedClockVersion': 1,
+          'toOccurrence': 1,
+          'action': 'skip',
+          'confirm': true,
+        });
+        equal(retry.code, 5);
+        final refused = await command('checkpoint delete', {
+          'id': 'one',
+          'expectedVersion': 2,
         });
         equal(refused.code, 2);
         final removed = await command('checkpoint delete', {
           'id': 'one',
-          'expectedVersion': 1,
+          'expectedVersion': 2,
           'confirm': true,
         });
         equal(removed.code, 0);

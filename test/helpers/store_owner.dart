@@ -7,7 +7,31 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 2 && args[1].startsWith('family-')) {
+    if (args.length == 2 && args[1].startsWith('checkpoint-review-')) {
+      Future<void> action() async {
+        await WindowCheckpointService(store).review(
+          'cp',
+          expectedVersion: 1,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          toOccurrence: 1,
+          action: 'skip',
+          confirm: true,
+        );
+      }
+
+      if (args[1].endsWith('rollback')) {
+        await store.transaction(() async {
+          await action();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await action();
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 2 && args[1].startsWith('family-')) {
       Future<void> publish() async {
         await FamilyService(store).publish(
           ExerciseFamily.fromJson({

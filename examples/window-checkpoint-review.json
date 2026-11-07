@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "window-checkpoint",
+  "expectedVersion": 1,
+  "expectedSessionVersion": 1,
+  "expectedClockVersion": 1,
+  "toOccurrence": 1,
+  "action": "skip",
+  "confirm": true
+}

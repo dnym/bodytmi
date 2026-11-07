@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
 import 'session_window_clock.dart';
+import 'session_window_review.dart';
 import 'training_repository.dart';
 
 /// An inert, user-saved scoped-clock snapshot. It does not own a timer.
@@ -99,6 +100,59 @@ final class WindowCheckpointService {
     final checkpoints = await repository.windowCheckpoints();
     validateWindowCheckpoints(checkpoints, await repository.sessions());
     return checkpoints..sort((a, b) => a.id.compareTo(b.id));
+  });
+
+  /// Explicitly review an effort and save its moved checkpoint atomically.
+  Future<
+    ({
+      TrainingSession session,
+      WindowCheckpoint checkpoint,
+      String occurrenceId,
+    })
+  >
+  review(
+    String id, {
+    required int expectedVersion,
+    required int expectedSessionVersion,
+    required int expectedClockVersion,
+    required int toOccurrence,
+    required String action,
+    Metrics actuals = const {},
+    bool acceptSuggested = false,
+    bool confirm = false,
+  }) => repository.transaction(() async {
+    final current = await show(id);
+    if (current.version != expectedVersion)
+      throw const BodyTmiException('conflict', 'Checkpoint version changed.');
+    final training = StoredTrainingService(repository);
+    final session = await training.session(current.sessionId);
+    final result = const SessionWindowReview().review(
+      session,
+      current.clock,
+      expectedSessionVersion: expectedSessionVersion,
+      expectedClockVersion: expectedClockVersion,
+      toOccurrence: toOccurrence,
+      action: action,
+      actuals: actuals,
+      acceptSuggested: acceptSuggested,
+      confirm: confirm,
+    );
+    final saved = await training.edit(
+      session.id,
+      expectedSessionVersion,
+      (_) => result.session,
+    );
+    final checkpoint = await save(
+      id,
+      session.id,
+      expectedVersion,
+      result.clock,
+    );
+    return (
+      session: saved,
+      checkpoint: checkpoint,
+      occurrenceId: result.occurrenceId,
+    );
   });
 
   Future<void> delete(
