@@ -34,6 +34,7 @@ final class WindowClock {
     String? ownerId,
     int? ownerElapsedMilliseconds,
     int? toOccurrence,
+    int? adjustmentMilliseconds,
   }) {
     final state = _validate(definition, input);
     if (state['version'] != expectedVersion)
@@ -44,6 +45,8 @@ final class WindowClock {
     final occurrence = state['occurrence'] as int;
     final starts = jsonObject(state['windowStarts'], 'windowStarts');
     final next = <String, Object?>{...state, 'version': version + 1};
+    if (action != 'recover' && adjustmentMilliseconds != null)
+      invalid('Only recovery accepts an elapsed adjustment.');
     switch (action) {
       case 'resume':
         if (status != 'paused' ||
@@ -105,9 +108,31 @@ final class WindowClock {
             ownerId != null ||
             ownerElapsedMilliseconds != null ||
             toOccurrence != null)
-          invalid('Recovery freezes an interrupted running clock.');
+          invalid('Recovery requires an interrupted running clock.');
+        final adjustment = adjustmentMilliseconds ?? 0;
+        if (adjustment < 0 ||
+            adjustment > _limit ||
+            elapsed + adjustment > _limit)
+          invalid(
+            'Recovery adjustment must fit within the logical-time limit.',
+          );
+        final sample = elapsed + adjustment;
+        final crossing = _deadlines.crossing(
+          definition: definition,
+          occurrence: occurrence,
+          previousElapsedMilliseconds: elapsed,
+          elapsedMilliseconds: sample,
+          windowStarts: starts,
+        );
+        final boundary = crossing['status'] == 'crossed'
+            ? jsonObject(
+                crossing['boundary'],
+                'boundary',
+              )['elapsedMilliseconds']
+            : null;
         next.addAll({
-          'status': 'paused',
+          'status': boundary == null ? 'paused' : 'boundary',
+          'elapsedMilliseconds': boundary ?? sample,
           'ownerId': null,
           'ownerElapsedMilliseconds': 0,
         });

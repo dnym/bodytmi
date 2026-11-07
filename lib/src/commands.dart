@@ -201,6 +201,7 @@ final class Commands {
           'ownerId',
           'ownerElapsedMilliseconds',
           'toOccurrence',
+          'adjustmentMilliseconds',
         });
         final definition = WorkoutDefinition.fromJson(request['definition']);
         final action = requiredString(request, 'action');
@@ -214,11 +215,14 @@ final class Commands {
           final version = request['expectedVersion'];
           final ownerElapsed = request['ownerElapsedMilliseconds'];
           final to = request['toOccurrence'];
+          final adjustment = request['adjustmentMilliseconds'];
           if (version is! int ||
               version < 1 ||
               (request.containsKey('ownerElapsedMilliseconds') &&
                   ownerElapsed is! int) ||
-              (request.containsKey('toOccurrence') && to is! int))
+              (request.containsKey('toOccurrence') && to is! int) ||
+              (request.containsKey('adjustmentMilliseconds') &&
+                  adjustment is! int))
             invalid(
               'Clock versions, samples and occurrence indices must be integers.',
             );
@@ -232,6 +236,7 @@ final class Commands {
                 : null,
             ownerElapsedMilliseconds: ownerElapsed as int?,
             toOccurrence: to as int?,
+            adjustmentMilliseconds: adjustment as int?,
           );
         }
       case 'tempo sample':
@@ -298,6 +303,7 @@ final class Commands {
           'ownerId',
           'ownerElapsedMilliseconds',
           'toOccurrence',
+          'adjustmentMilliseconds',
         });
         data = sessionWindowClockRequest(
           sessionFromJson(request['session']),

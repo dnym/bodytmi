@@ -675,6 +675,136 @@ void activityTests() {
     },
   );
   test(
+    'window clock recovery applies only explicit bounded elapsed time',
+    () async {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'outer',
+        'type': 'window',
+        'durationSeconds': 5,
+        'child': {
+          'id': 'inner',
+          'type': 'window',
+          'durationSeconds': 10,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        },
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      const service = WindowClock();
+      var clock = service.start(workout);
+      clock = service.apply(
+        workout,
+        clock,
+        expectedVersion: 1,
+        action: 'resume',
+        ownerId: 'epoch',
+      );
+      clock = service.apply(
+        workout,
+        clock,
+        expectedVersion: 2,
+        action: 'advance',
+        ownerId: 'epoch',
+        ownerElapsedMilliseconds: 3000,
+      );
+      final frozen = service.apply(
+        workout,
+        clock,
+        expectedVersion: 3,
+        action: 'recover',
+      );
+      equal(frozen['elapsedMilliseconds'], 3000);
+      equal(frozen['status'], 'paused');
+      final adjusted = service.apply(
+        workout,
+        clock,
+        expectedVersion: 3,
+        action: 'recover',
+        adjustmentMilliseconds: 1500,
+      );
+      equal(adjusted['elapsedMilliseconds'], 4500);
+      equal(adjusted['status'], 'paused');
+      equal(adjusted['ownerId'], null);
+      final boundary = service.apply(
+        workout,
+        clock,
+        expectedVersion: 3,
+        action: 'recover',
+        adjustmentMilliseconds: 9000,
+      );
+      equal(boundary['status'], 'boundary');
+      equal(boundary['elapsedMilliseconds'], 5000);
+      equal(jsonObject(boundary['windowStarts'], 'starts')['outer/inner'], 0);
+      check(!boundary.containsKey('results'));
+      rejects(
+        () => service.apply(
+          workout,
+          clock,
+          expectedVersion: 3,
+          action: 'recover',
+          adjustmentMilliseconds: -1,
+        ),
+      );
+      rejects(
+        () => service.apply(
+          workout,
+          clock,
+          expectedVersion: 3,
+          action: 'recover',
+          adjustmentMilliseconds: 2000000000,
+        ),
+      );
+      rejects(
+        () => service.apply(
+          workout,
+          clock,
+          expectedVersion: 3,
+          action: 'advance',
+          ownerId: 'epoch',
+          ownerElapsedMilliseconds: 3001,
+          adjustmentMilliseconds: 1,
+        ),
+      );
+      rejects(
+        () => service.apply(
+          workout,
+          frozen,
+          expectedVersion: 4,
+          action: 'recover',
+          adjustmentMilliseconds: 1,
+        ),
+      );
+      final request = {
+        'schemaVersion': 1,
+        'definition': input,
+        'action': 'recover',
+        'clock': clock,
+        'expectedVersion': 3,
+        'adjustmentMilliseconds': 9000,
+      };
+      jsonEqual(
+        const Commands().execute('activity window-clock', request)['data'],
+        boundary,
+      );
+      final cli = await invoke([
+        'activity',
+        'window-clock',
+      ], jsonEncode(request));
+      equal(cli.code, 0);
+      jsonEqual(
+        jsonObject(jsonDecode(cli.output), 'response')['data'],
+        boundary,
+      );
+      request['adjustmentMilliseconds'] = '1';
+      final bad = await invoke([
+        'activity',
+        'window-clock',
+      ], jsonEncode(request));
+      equal(bad.code, 2);
+      equal(bad.output, '');
+    },
+  );
+  test(
     'session window clocks require explicit review before movement',
     () async {
       final input = definition().toJson();
@@ -842,6 +972,18 @@ void activityTests() {
           'ownerId': 'cli',
         });
         equal(jsonObject(resumed['clock'], 'clock')['status'], 'running');
+        final recovered = await command('store window-clock', {
+          'id': 'session',
+          'action': 'recover',
+          'clock': resumed,
+          'expectedVersion': 2,
+          'adjustmentMilliseconds': 6000,
+        });
+        equal(jsonObject(recovered['clock'], 'clock')['status'], 'boundary');
+        equal(
+          jsonObject(recovered['clock'], 'clock')['elapsedMilliseconds'],
+          5000,
+        );
         final loaded = await command('store show', {'id': 'session'});
         jsonEqual(loaded, old.toJson());
       } finally {

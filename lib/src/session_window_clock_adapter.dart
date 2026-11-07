@@ -14,6 +14,7 @@ Map<String, Object?> sessionWindowClockRequest(
       'ownerId',
       'ownerElapsedMilliseconds',
       'toOccurrence',
+      'adjustmentMilliseconds',
     ].any(request.containsKey))
       invalid(
         'Starting a session window clock does not take clock action fields.',
@@ -23,10 +24,12 @@ Map<String, Object?> sessionWindowClockRequest(
   final version = request['expectedVersion'];
   final elapsed = request['ownerElapsedMilliseconds'];
   final destination = request['toOccurrence'];
+  final adjustment = request['adjustmentMilliseconds'];
   if (version is! int ||
       version < 1 ||
       (request.containsKey('ownerElapsedMilliseconds') && elapsed is! int) ||
-      (request.containsKey('toOccurrence') && destination is! int))
+      (request.containsKey('toOccurrence') && destination is! int) ||
+      (request.containsKey('adjustmentMilliseconds') && adjustment is! int))
     invalid('Clock versions, samples and occurrence indices must be integers.');
   return service.apply(
     session,
@@ -38,5 +41,6 @@ Map<String, Object?> sessionWindowClockRequest(
         : null,
     ownerElapsedMilliseconds: elapsed as int?,
     toOccurrence: destination as int?,
+    adjustmentMilliseconds: adjustment as int?,
   );
 }

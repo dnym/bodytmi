@@ -218,6 +218,7 @@ Future<Map<String, Object?>> executeStored(
       'ownerId',
       'ownerElapsedMilliseconds',
       'toOccurrence',
+      'adjustmentMilliseconds',
     },
     'store progression-preview' => {
       'id',

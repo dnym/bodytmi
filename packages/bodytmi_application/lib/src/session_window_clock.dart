@@ -20,6 +20,7 @@ final class SessionWindowClock {
     String? ownerId,
     int? ownerElapsedMilliseconds,
     int? toOccurrence,
+    int? adjustmentMilliseconds,
   }) {
     if (session.status != SessionStatus.active)
       invalid('A window clock requires an active session.');
@@ -70,6 +71,7 @@ final class SessionWindowClock {
       ownerId: ownerId,
       ownerElapsedMilliseconds: ownerElapsedMilliseconds,
       toOccurrence: toOccurrence,
+      adjustmentMilliseconds: adjustmentMilliseconds,
     );
     return _wrap(session, next);
   }
