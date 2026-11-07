@@ -37,6 +37,10 @@ const storedCommandNames = [
   'store summary',
   'store window-clock',
   'store window-review',
+  'checkpoint save',
+  'checkpoint show',
+  'checkpoint list',
+  'checkpoint delete',
   'store progression-preview',
   'store assess-objectives',
   'store series',
@@ -232,6 +236,10 @@ Future<Map<String, Object?>> executeStored(
       'acceptSuggested',
       'confirm',
     },
+    'checkpoint save' => {'id', 'sessionId', 'expectedVersion', 'clock'},
+    'checkpoint show' => {'id'},
+    'checkpoint list' => <String>{},
+    'checkpoint delete' => {'id', 'expectedVersion', 'confirm'},
     'store progression-preview' => {
       'id',
       'slotId',
@@ -522,8 +530,29 @@ Future<Map<String, Object?>> executeStored(
 
     Object? data;
     final timing = TimingService(store);
+    final checkpoints = WindowCheckpointService(store);
     final execution = ExecutionService(store);
     switch (command) {
+      case 'checkpoint save':
+        data = (await checkpoints.save(
+          identifier(request, 'id'),
+          identifier(request, 'sessionId'),
+          integer('expectedVersion', min: 0),
+          request['clock'],
+        )).toJson();
+      case 'checkpoint show':
+        data = (await checkpoints.show(identifier(request, 'id'))).toJson();
+      case 'checkpoint list':
+        final all = await checkpoints.list();
+        data = [for (final checkpoint in all) checkpoint.toJson()];
+      case 'checkpoint delete':
+        final id = identifier(request, 'id');
+        await checkpoints.delete(
+          id,
+          integer('expectedVersion'),
+          confirm: flag('confirm'),
+        );
+        data = {'id': id, 'deleted': true};
       case 'execution start':
         final e = await execution.start(
           identifier(request, 'id'),

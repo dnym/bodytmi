@@ -4,9 +4,25 @@ import 'dart:io';
 import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'package:bodytmi_storage/bodytmi_storage.dart';
+import 'package:crypto/crypto.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'fixtures.dart';
 import 'cli_test.dart';
 import 'support.dart';
+
+Future<void> expectCheckpointFailure(
+  Future<Object?> action, [
+  String code = 'validation',
+]) async {
+  try {
+    await action;
+  } on BodyTmiException catch (error) {
+    equal(error.code, code);
+    return;
+  }
+  throw StateError('Expected BodyTmiException($code).');
+}
 
 void activityTests() {
   test('manual rest is explicit and cannot imply a duration', () {
@@ -1170,6 +1186,344 @@ void activityTests() {
         final saved = await command('store show', {'id': 'session'});
         equal(saved['contentVersion'], 2);
       } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'inert window checkpoints persist, validate and survive portability',
+    () async {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'window',
+        'type': 'window',
+        'durationSeconds': 5,
+        'child': {'id': 'effort', 'type': 'effort', 'slot': 'bench-heavy'},
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      final dir = await Directory.systemTemp.createTemp('bodytmi-checkpoints-');
+      final path = '${dir.path}/db.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        const scoped = SessionWindowClock();
+        var clock = scoped.start(session);
+        final advanced = const WindowClock().apply(
+          workout,
+          jsonObject(clock['clock'], 'clock'),
+          expectedVersion: 1,
+          action: 'move',
+          toOccurrence: 1,
+        );
+        final forgedAhead = {...clock, 'clock': advanced};
+        await expectCheckpointFailure(
+          WindowCheckpointService(
+            store,
+          ).save('forged', session.id, 0, forgedAhead),
+        );
+        equal(await store.windowCheckpoint('forged'), null);
+        clock = scoped.apply(
+          session,
+          clock,
+          expectedVersion: 1,
+          action: 'resume',
+          ownerId: 'epoch',
+        );
+        clock = scoped.apply(
+          session,
+          clock,
+          expectedVersion: 2,
+          action: 'advance',
+          ownerId: 'epoch',
+          ownerElapsedMilliseconds: 1000,
+        );
+        var checkpoint = await WindowCheckpointService(
+          store,
+        ).save('checkpoint', session.id, 0, clock);
+        equal(checkpoint.version, 1);
+        try {
+          await store.transaction<void>(() async {
+            await WindowCheckpointService(
+              store,
+            ).save('rollback', session.id, 0, clock);
+            throw StateError('rollback');
+          });
+          throw StateError('Transaction unexpectedly committed.');
+        } on StateError catch (error) {
+          equal(error.message, 'rollback');
+        }
+        equal(await store.windowCheckpoint('rollback'), null);
+        await expectCheckpointFailure(
+          WindowCheckpointService(
+            store,
+          ).save('checkpoint', session.id, 0, clock),
+          'conflict',
+        );
+        final copy = checkpoint.clock;
+        copy['sessionId'] = 'other';
+        equal(checkpoint.clock['sessionId'], session.id);
+        await store.close();
+        store = await TrainingStore.open(path);
+        checkpoint = await WindowCheckpointService(store).show('checkpoint');
+        equal(canonicalJson(checkpoint.clock), canonicalJson(clock));
+        final frozen = scoped.apply(
+          await StoredTrainingService(store).session('session'),
+          checkpoint.clock,
+          expectedVersion: 3,
+          action: 'recover',
+        );
+        equal(
+          jsonObject(frozen['clock'], 'clock')['elapsedMilliseconds'],
+          1000,
+        );
+        checkpoint = await WindowCheckpointService(
+          store,
+        ).save('checkpoint', 'session', 1, frozen);
+        equal(checkpoint.version, 2);
+        await WindowCheckpointService(
+          store,
+        ).save('running', 'session', 0, clock);
+        final forgedArchive = copyJson((await store.archive()).toJson());
+        final row = jsonObject(
+          jsonList(forgedArchive, 'windowCheckpoints').first,
+          'checkpoint',
+        );
+        jsonObject(row['clock'], 'session clock')['sessionStartedAt'] =
+            '2026-01-01T00:00:00.000Z';
+        rejects(() => TrainingArchive.fromJson(forgedArchive));
+        final before = canonicalJson((await store.archive()).toJson());
+        await store.backup('${dir.path}/native');
+        await LogicalArchiveFiles.export(
+          await store.archive(),
+          '${dir.path}/logical.json',
+        );
+        final logical = await LogicalArchiveFiles.prepare(
+          '${dir.path}/logical.json',
+        );
+        try {
+          equal(canonicalJson(logical.archive.toJson()), before);
+          await store.restore(
+            logical.backup,
+            recoveryDestination: '${dir.path}/recovery',
+            confirm: true,
+          );
+        } finally {
+          await logical.close();
+          await store.close();
+        }
+        store = await TrainingStore.open(path);
+        equal(canonicalJson((await store.archive()).toJson()), before);
+        final restoredRunning = await WindowCheckpointService(
+          store,
+        ).show('running');
+        final restoredFrozen = scoped.apply(
+          await StoredTrainingService(store).session('session'),
+          restoredRunning.clock,
+          expectedVersion: 3,
+          action: 'recover',
+        );
+        equal(jsonObject(restoredFrozen['clock'], 'clock')['status'], 'paused');
+        final nativePrepared = await NativeBackup.prepare('${dir.path}/native');
+        try {
+          await store.restore(
+            nativePrepared,
+            recoveryDestination: '${dir.path}/recovery2',
+            confirm: true,
+          );
+        } finally {
+          await nativePrepared.close();
+          await store.close();
+        }
+        store = await TrainingStore.open(path);
+        equal(canonicalJson((await store.archive()).toJson()), before);
+        equal(
+          NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
+          46,
+        );
+        final archive = jsonObject(
+          jsonDecode(await File('${dir.path}/logical.json').readAsString()),
+          'archive',
+        );
+        archive['format'] = 'bodytmi-logical-export/45';
+        archive.remove('sha256');
+        archive['sha256'] = sha256
+            .convert(utf8.encode(canonicalJson(archive)))
+            .toString();
+        await File('${dir.path}/old.json').writeAsString(jsonEncode(archive));
+        await expectCheckpointFailure(
+          LogicalArchiveFiles.prepare('${dir.path}/old.json'),
+        );
+        final raw = sqlite3.open('${dir.path}/native/database.sqlite');
+        final originalSnapshot =
+            raw
+                    .select(
+                      "SELECT snapshot FROM window_checkpoints WHERE id = 'checkpoint'",
+                    )
+                    .single['snapshot']
+                as String;
+        final badSnapshot = jsonObject(
+          jsonDecode(originalSnapshot),
+          'checkpoint',
+        );
+        jsonObject(
+          jsonObject(badSnapshot['clock'], 'wrapper')['clock'],
+          'clock',
+        )['ownerElapsedMilliseconds'] = 1;
+        raw.execute(
+          "UPDATE window_checkpoints SET snapshot = ? WHERE id = 'checkpoint'",
+          [jsonEncode(badSnapshot)],
+        );
+        rejects(
+          () => NativeBackup.validateDatabase(
+            '${dir.path}/native/database.sqlite',
+          ),
+        );
+        raw.execute(
+          "UPDATE window_checkpoints SET snapshot = ? WHERE id = 'checkpoint'",
+          [originalSnapshot],
+        );
+        raw.userVersion = 45;
+        raw.close();
+        rejects(
+          () => NativeBackup.validateDatabase(
+            '${dir.path}/native/database.sqlite',
+          ),
+        );
+        final current = await StoredTrainingService(store).session('session');
+        await StoredTrainingService(store).edit(
+          'session',
+          current.contentVersion,
+          (s) => const TrainingService()
+              .complete(s, s.sets.single.id, s.sets.single.suggested)
+              .finish(instant(2)),
+        );
+        equal(
+          (await WindowCheckpointService(store).show('checkpoint')).version,
+          2,
+        );
+        equal((await store.archive()).windowCheckpoints.length, 2);
+        await store.backup('${dir.path}/finished-native');
+        equal(
+          NativeBackup.validateDatabase(
+            '${dir.path}/finished-native/database.sqlite',
+          ),
+          46,
+        );
+        await expectCheckpointFailure(
+          WindowCheckpointService(
+            store,
+          ).delete('checkpoint', 2, confirm: false),
+        );
+        await WindowCheckpointService(
+          store,
+        ).delete('checkpoint', 2, confirm: true);
+        await WindowCheckpointService(
+          store,
+        ).delete('running', 1, confirm: true);
+        equal((await WindowCheckpointService(store).list()).length, 0);
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test('schema v45 migrates to an empty checkpoint collection', () async {
+    final dir = await Directory.systemTemp.createTemp(
+      'bodytmi-checkpoint-v45-',
+    );
+    final path = '${dir.path}/db.sqlite';
+    var store = await TrainingStore.open(path);
+    try {
+      final workout = definition();
+      await StoredTrainingService(store).publish(workout, 0);
+      await StoredTrainingService(
+        store,
+      ).start('session', workout.id, 1, instant(1));
+      await store.close();
+      final raw = sqlite3.open(path);
+      raw.execute('DROP TABLE window_checkpoints');
+      raw.userVersion = 45;
+      raw.close();
+      store = await TrainingStore.open(path);
+      equal((await WindowCheckpointService(store).list()).length, 0);
+      equal(
+        (await StoredTrainingService(store).session('session')).id,
+        'session',
+      );
+      equal(
+        (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
+        46,
+      );
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
+  test(
+    'checkpoint CLI uses versions and explicit deletion across processes',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-checkpoint-cli-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final workout = definition();
+        await StoredTrainingService(store).publish(workout, 0);
+        final session = await StoredTrainingService(
+          store,
+        ).start('session', workout.id, 1, instant(1));
+        final clock = const SessionWindowClock().start(session);
+        await store.close();
+        Future<({int code, String output, String error})> command(
+          String action,
+          Map<String, Object?> args,
+        ) => invoke(
+          action.split(' '),
+          jsonEncode({'schemaVersion': 1, 'database': path, ...args}),
+        );
+        final saved = await command('checkpoint save', {
+          'id': 'one',
+          'sessionId': 'session',
+          'expectedVersion': 0,
+          'clock': clock,
+        });
+        equal(saved.code, 0);
+        final shown = await command('checkpoint show', {'id': 'one'});
+        equal(shown.code, 0);
+        jsonEqual(
+          jsonObject(jsonDecode(saved.output), 'result')['data'],
+          jsonObject(jsonDecode(shown.output), 'result')['data'],
+        );
+        final stale = await command('checkpoint save', {
+          'id': 'one',
+          'sessionId': 'session',
+          'expectedVersion': 0,
+          'clock': clock,
+        });
+        equal(stale.code, 5);
+        final refused = await command('checkpoint delete', {
+          'id': 'one',
+          'expectedVersion': 1,
+        });
+        equal(refused.code, 2);
+        final removed = await command('checkpoint delete', {
+          'id': 'one',
+          'expectedVersion': 1,
+          'confirm': true,
+        });
+        equal(removed.code, 0);
+        final missing = await command('checkpoint show', {'id': 'one'});
+        equal(missing.code, 3);
+      } finally {
+        await store.close();
         await dir.delete(recursive: true);
       }
     },

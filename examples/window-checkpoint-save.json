@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "window-checkpoint",
+  "sessionId": "window-session",
+  "expectedVersion": 0,
+  "clock": {
+    "policy": "bodytmi-session-window-clock/1",
+    "sessionId": "window-session",
+    "sessionStartedAt": "2026-11-01T08:00:00.000Z",
+    "revision": 1,
+    "sessionContentVersion": 1,
+    "clock": {
+      "policy": "bodytmi-window-clock/2",
+      "version": 1,
+      "definition": {
+        "id": "window-example",
+        "name": "Window scope example",
+        "slots": [
+          {
+            "id": "lift",
+            "exercise": "lift",
+            "implementation": "barbell",
+            "targets": {
+              "reps": {
+                "value": "5",
+                "unit": "rep",
+                "entered": {
+                  "value": "5",
+                  "unit": "rep"
+                }
+              }
+            },
+            "prefill": []
+          }
+        ],
+        "plan": {
+          "type": "repeat",
+          "id": "rounds",
+          "count": 3,
+          "child": {
+            "type": "window",
+            "id": "minute",
+            "durationSeconds": 60,
+            "child": {
+              "type": "effort",
+              "id": "set",
+              "slot": "lift",
+              "role": "work"
+            }
+          },
+          "restBetweenSeconds": 0
+        }
+      },
+      "status": "paused",
+      "occurrence": 0,
+      "occurrenceStartedMilliseconds": 0,
+      "elapsedMilliseconds": 0,
+      "windowStarts": {
+        "rounds[0]/minute": 0
+      },
+      "ownerId": null,
+      "ownerElapsedMilliseconds": 0
+    }
+  }
+}

@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/45';
+const _format = 'bodytmi-logical-export/46';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -106,6 +106,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/42',
       'bodytmi-logical-export/43',
       'bodytmi-logical-export/44',
+      'bodytmi-logical-export/45',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -114,7 +115,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final openEndedDefaultsData = input['format'] == _format;
+    final checkpointData = input['format'] == _format;
+    final openEndedDefaultsData =
+        checkpointData || input['format'] == 'bodytmi-logical-export/45';
     final openEndedTimingData =
         openEndedDefaultsData || input['format'] == 'bodytmi-logical-export/44';
     final unplannedTimingData =
@@ -208,6 +211,12 @@ final class LogicalArchiveFiles {
     // An empty graphs section carries no payload and is equivalent to its
     // absence in v26 and earlier; non-empty graphs remain a v27-only section.
     final hadGraphs = inputData.containsKey('graphs');
+    final hadWindowCheckpoints = inputData.containsKey('windowCheckpoints');
+    if (!checkpointData) {
+      final checkpoints = inputData['windowCheckpoints'];
+      if (checkpoints is List<Object?> && checkpoints.isEmpty)
+        inputData.remove('windowCheckpoints');
+    }
     if (!graphData) {
       final graphs = inputData['graphs'];
       if (graphs is List<Object?> && graphs.isEmpty) {
@@ -222,6 +231,7 @@ final class LogicalArchiveFiles {
       if (programData) ...programKeys,
       if (massData) 'bodyMass',
       if (timingData) 'timers',
+      if (checkpointData) 'windowCheckpoints',
       if (executionData) 'executions',
       if (familyData) 'families',
       if (graphData) 'graphs',
@@ -234,6 +244,8 @@ final class LogicalArchiveFiles {
       invalid('Logical v4 requires body-mass records.');
     if (timingData && !inputData.containsKey('timers'))
       invalid('Logical v7 requires timing records.');
+    if (checkpointData && !inputData.containsKey('windowCheckpoints'))
+      invalid('Logical v46 requires window checkpoint records.');
     if (executionData && !inputData.containsKey('executions'))
       invalid('Logical v8 requires execution records.');
     if (familyData && !inputData.containsKey('families'))
@@ -457,6 +469,8 @@ final class LogicalArchiveFiles {
     if (legacy) data.remove('progressions');
     if (!massData) data.remove('bodyMass');
     if (!timingData) data.remove('timers');
+    if (!checkpointData && !hadWindowCheckpoints)
+      data.remove('windowCheckpoints');
     if (!executionData) data.remove('executions');
     if (!familyData) data.remove('families');
     if (!graphData && !hadGraphs) data.remove('graphs');
@@ -478,11 +492,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV27.values) {
+          for (final ddl in schemaV46.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 45');
+          db.execute('PRAGMA user_version = 46');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
@@ -562,6 +576,12 @@ final class LogicalArchiveFiles {
             db.execute(
               'INSERT INTO timing_activities(id,session_id,set_id,snapshot) VALUES (?,?,?,?)',
               [t.id, t.sessionId, t.setId, canonicalJson(t.toJson())],
+            );
+          }
+          for (final c in archive.windowCheckpoints) {
+            db.execute(
+              'INSERT INTO window_checkpoints(id,session_id,snapshot) VALUES (?,?,?)',
+              [c.id, c.sessionId, canonicalJson(c.toJson())],
             );
           }
           for (final e in archive.executions) {

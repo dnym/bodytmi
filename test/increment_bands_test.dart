@@ -762,6 +762,7 @@ void incrementBandsTests() {
       await LogicalArchiveFiles.export(await store.archive(), '$dir/old.json');
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 22;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 22);
@@ -770,7 +771,7 @@ void incrementBandsTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), before);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          45,
+          46,
         );
       } finally {
         await migrated.close();
@@ -828,6 +829,7 @@ void incrementBandsTests() {
       await _fails(LogicalArchiveFiles.prepare('$dir/wrong.json'));
       final wrong = sqlite3.open('$dir/new/database.sqlite');
       wrong.execute('DROP TABLE derived_target_graphs');
+      wrong.execute('DROP TABLE IF EXISTS window_checkpoints');
       wrong.userVersion = 22;
       wrong.close();
       rejects(() => NativeBackup.validateDatabase('$dir/new/database.sqlite'));

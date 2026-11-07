@@ -169,6 +169,7 @@ void tempoTests() {
         await store.snapshot('${dir.path}/old.sqlite');
         final old = sqlite3.open('${dir.path}/old.sqlite');
         old.execute("DELETE FROM timing_activities WHERE id = 'clock'");
+        old.execute('DROP TABLE IF EXISTS window_checkpoints');
         old.userVersion = 43;
         old.close();
         rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -240,6 +241,7 @@ void tempoTests() {
         );
         await store.snapshot('${dir.path}/legacy.sqlite');
         final legacy = sqlite3.open('${dir.path}/legacy.sqlite');
+        legacy.execute('DROP TABLE IF EXISTS window_checkpoints');
         legacy.userVersion = 43;
         legacy.close();
         equal(NativeBackup.validateDatabase('${dir.path}/legacy.sqlite'), 43);
@@ -505,6 +507,7 @@ void tempoTests() {
         await _fails(LogicalArchiveFiles.prepare('${dir.path}/old.json'));
         await store.snapshot('${dir.path}/old.sqlite');
         final old = sqlite3.open('${dir.path}/old.sqlite');
+        old.execute('DROP TABLE IF EXISTS window_checkpoints');
         old.userVersion = 43;
         old.close();
         rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -700,6 +703,7 @@ void tempoTests() {
         );
         await store.snapshot('${dir.path}/legacy.sqlite');
         final legacyDb = sqlite3.open('${dir.path}/legacy.sqlite');
+        legacyDb.execute('DROP TABLE IF EXISTS window_checkpoints');
         legacyDb.userVersion = 42;
         legacyDb.close();
         equal(NativeBackup.validateDatabase('${dir.path}/legacy.sqlite'), 42);
@@ -941,6 +945,7 @@ void tempoTests() {
         await _fails(LogicalArchiveFiles.prepare('${dir.path}/old.json'));
         await store.snapshot('${dir.path}/old.sqlite');
         final oldDb = sqlite3.open('${dir.path}/old.sqlite');
+        oldDb.execute('DROP TABLE IF EXISTS window_checkpoints');
         oldDb.userVersion = 42;
         oldDb.close();
         rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -1024,6 +1029,7 @@ void tempoTests() {
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE family_revisions');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 9;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 9);
@@ -1034,7 +1040,7 @@ void tempoTests() {
         equal((await TimingService(migrated).show('clock')).plan.tempo, null);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          45,
+          46,
         );
       } finally {
         await migrated.close();
@@ -1337,13 +1343,13 @@ void tempoTests() {
       t = await timing.resume(t.id, t.version, 'epoch', instant(1));
       await timing.advance(t.id, t.version, 'epoch', 4500, instant(1));
       final expected = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 45);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 46);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/45',
+        'bodytmi-logical-export/46',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -1390,6 +1396,7 @@ void tempoTests() {
       final old = sqlite3.open('$dir/native/database.sqlite');
       old.execute('DROP TABLE family_revisions');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 9;
       old.close();
       rejects(

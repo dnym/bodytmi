@@ -8,6 +8,9 @@ final class WindowClock {
   static const _limit = 2000000000;
   static const _deadlines = WindowDeadlines();
 
+  Map<String, Object?> validate(WorkoutDefinition definition, Object? input) =>
+      _validate(definition, input);
+
   Map<String, Object?> start(WorkoutDefinition definition) {
     final scopes = activityGroups(
       definition.plan,

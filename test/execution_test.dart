@@ -156,6 +156,7 @@ void executionTests() {
     () => _withStore((store, dir) async {
       await store.snapshot('$dir/v39.sqlite');
       final old = sqlite3.open('$dir/v39.sqlite');
+      old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 39;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/v39.sqlite'), 39);
@@ -257,8 +258,9 @@ void executionTests() {
       await File('$dir/old-manual.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-manual.json'));
       await store.snapshot('$dir/manual.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 45);
+      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 46);
       final relabeled = sqlite3.open('$dir/manual.sqlite');
+      relabeled.execute('DROP TABLE IF EXISTS window_checkpoints');
       relabeled.userVersion = 39;
       relabeled.close();
       rejects(() => NativeBackup.validateDatabase('$dir/manual.sqlite'));
@@ -568,6 +570,7 @@ void executionTests() {
       final rest = await TimingService(store).show(advanced.clockId('rest'));
       await store.snapshot('$dir/v36.sqlite');
       final previous = sqlite3.open('$dir/v36.sqlite');
+      previous.execute('DROP TABLE IF EXISTS window_checkpoints');
       previous.userVersion = 36;
       previous.close();
       equal(NativeBackup.validateDatabase('$dir/v36.sqlite'), 36);
@@ -657,8 +660,9 @@ void executionTests() {
       await File('$dir/old-carry.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-carry.json'));
       await store.snapshot('$dir/carry.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 45);
+      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 46);
       final old = sqlite3.open('$dir/carry.sqlite');
+      old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 36;
       old.close();
       rejects(() => NativeBackup.validateDatabase('$dir/carry.sqlite'));
@@ -985,6 +989,7 @@ void executionTests() {
       final old = sqlite3.open('$dir/v8/database.sqlite');
       old.execute('DROP TABLE family_revisions');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 8;
       old.close();
       equal(await NativeBackup.validateDatabase('$dir/v8/database.sqlite'), 8);
@@ -994,7 +999,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          45,
+          46,
         );
       } finally {
         await migrated.close();
@@ -1074,6 +1079,7 @@ void executionTests() {
         final forged = sqlite3.open('$dir/native/database.sqlite');
         forged.execute('DROP TABLE family_revisions');
         forged.execute('DROP TABLE derived_target_graphs');
+        forged.execute('DROP TABLE IF EXISTS window_checkpoints');
         forged.userVersion = 8;
         forged.close();
         rejects(
@@ -2015,13 +2021,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 45);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 46);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/45',
+        'bodytmi-logical-export/46',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -2122,6 +2128,7 @@ void executionTests() {
         raw.execute('DROP TABLE family_revisions');
         raw.execute('DROP TABLE workout_executions');
         raw.execute('DROP TABLE derived_target_graphs');
+        raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('PRAGMA user_version = 7');
       } finally {
         raw.close();
@@ -2172,6 +2179,7 @@ void executionTests() {
           forged.execute('DROP TABLE family_revisions');
           forged.execute('DROP TABLE workout_executions');
           forged.execute('DROP TABLE derived_target_graphs');
+          forged.execute('DROP TABLE IF EXISTS window_checkpoints');
           forged.execute('PRAGMA user_version = 7');
         } finally {
           forged.close();

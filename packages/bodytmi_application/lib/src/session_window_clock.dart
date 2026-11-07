@@ -24,28 +24,8 @@ final class SessionWindowClock {
   }) {
     if (session.status != SessionStatus.active)
       invalid('A window clock requires an active session.');
-    final wrapper = jsonObject(input, 'session window clock');
-    checkKeys(wrapper, {
-      'policy',
-      'sessionId',
-      'sessionStartedAt',
-      'revision',
-      'sessionContentVersion',
-      'clock',
-    });
-    if (wrapper['policy'] != 'bodytmi-session-window-clock/1' ||
-        wrapper['sessionId'] != session.id ||
-        wrapper['revision'] != session.revision.number ||
-        wrapper['sessionStartedAt'] !=
-            session.startedAt.toUtc().toIso8601String())
-      invalid('Window clock belongs to a different session.');
-    final sourceVersion = wrapper['sessionContentVersion'];
-    if (sourceVersion is! int ||
-        sourceVersion < 1 ||
-        sourceVersion > session.contentVersion)
-      invalid('Window clock requires a current or newer session snapshot.');
+    final wrapper = validateSnapshot(session, input);
     final clock = jsonObject(wrapper['clock'], 'window clock');
-    // Validate the clock before using its cursor, including its pinned workout.
     if (action == 'move' && toOccurrence != null) {
       final occurrence = clock['occurrence'];
       final plan = session.revision.definition.plan.occurrences().toList();
@@ -74,6 +54,45 @@ final class SessionWindowClock {
       adjustmentMilliseconds: adjustmentMilliseconds,
     );
     return _wrap(session, next);
+  }
+
+  /// Check an inert snapshot against its owning session, including after finish.
+  Map<String, Object?> validateSnapshot(
+    TrainingSession session,
+    Object? input,
+  ) {
+    final wrapper = jsonObject(input, 'session window clock');
+    checkKeys(wrapper, {
+      'policy',
+      'sessionId',
+      'sessionStartedAt',
+      'revision',
+      'sessionContentVersion',
+      'clock',
+    });
+    if (wrapper['policy'] != 'bodytmi-session-window-clock/1' ||
+        wrapper['sessionId'] != session.id ||
+        wrapper['revision'] != session.revision.number ||
+        wrapper['sessionStartedAt'] !=
+            session.startedAt.toUtc().toIso8601String())
+      invalid('Window clock belongs to a different session.');
+    final sourceVersion = wrapper['sessionContentVersion'];
+    if (sourceVersion is! int ||
+        sourceVersion < 1 ||
+        sourceVersion > session.contentVersion)
+      invalid('Window clock requires a current or newer session snapshot.');
+    final clock = _clock.validate(
+      session.revision.definition,
+      wrapper['clock'],
+    );
+    final cursor = clock['occurrence'] as int;
+    final plan = session.revision.definition.plan.occurrences().toList();
+    for (var i = 0; i < cursor; i++) {
+      if (plan[i].activity is Effort &&
+          session.set(plan[i].id).status == SetStatus.planned)
+        invalid('Window clock cannot be past an unreviewed effort.');
+    }
+    return {...wrapper, 'clock': clock};
   }
 
   Map<String, Object?> _wrap(

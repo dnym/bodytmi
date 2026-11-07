@@ -526,7 +526,7 @@ void timingTests() {
         instant(1),
       );
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 45);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 46);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
@@ -606,6 +606,7 @@ void timingTests() {
         raw.execute('DROP TABLE workout_executions');
         raw.execute('DROP TABLE timing_activities');
         raw.execute('DROP TABLE derived_target_graphs');
+        raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('PRAGMA user_version = 6');
       } finally {
         raw.close();

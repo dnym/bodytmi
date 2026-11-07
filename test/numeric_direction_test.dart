@@ -534,6 +534,7 @@ void numericDirectionTests() {
       await store.close();
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 15;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 15);
@@ -542,7 +543,7 @@ void numericDirectionTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          45,
+          46,
         );
       } finally {
         await upgraded.close();
@@ -620,6 +621,7 @@ void numericDirectionTests() {
         }
         final forged = sqlite3.open('$dir/native/database.sqlite');
         forged.execute('DROP TABLE derived_target_graphs');
+        forged.execute('DROP TABLE IF EXISTS window_checkpoints');
         forged.userVersion = 15;
         forged.close();
         rejects(

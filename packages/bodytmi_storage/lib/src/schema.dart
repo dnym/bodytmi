@@ -59,6 +59,12 @@ const schemaV27 = {
       'CREATE TABLE "derived_target_graphs" ("graph_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("graph_id", "number"))',
 };
 
+const schemaV46 = {
+  ...schemaV27,
+  'window_checkpoints':
+      'CREATE TABLE "window_checkpoints" ("id" TEXT NOT NULL, "session_id" TEXT NOT NULL REFERENCES sessions (id), "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -115,6 +121,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   43 => schemaV27, // v43 adds explicit unplanned duration timers.
   44 => schemaV27, // v44 adds open-ended effort timers.
   45 => schemaV27, // v45 adds open-ended slot timing defaults.
+  46 => schemaV46, // v46 adds inert scoped-clock checkpoints.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

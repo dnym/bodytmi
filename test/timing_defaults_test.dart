@@ -188,7 +188,7 @@ void timingDefaultsTests() {
       check(open.plan.openEnded);
     }),
   );
-  test('schema v44 profiles migrate to v45 without losing revisions', () async {
+  test('schema v44 profiles migrate to v46 without losing revisions', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-v44-');
     final path = '${dir.path}/db.sqlite';
     var store = await TrainingStore.open(path);
@@ -196,6 +196,7 @@ void timingDefaultsTests() {
       await StoredTrainingService(store).publish(_definition(), 0);
       await store.close();
       final db = sqlite3.open(path);
+      db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('PRAGMA user_version = 44');
       db.close();
       store = await TrainingStore.open(path);
@@ -205,7 +206,7 @@ void timingDefaultsTests() {
       );
       equal(
         (await store.backup('${dir.path}/migrated'))['databaseSchemaVersion'],
-        45,
+        46,
       );
     } finally {
       await store.close();
@@ -313,6 +314,7 @@ void timingDefaultsTests() {
         await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
         await _fails(LogicalArchiveFiles.prepare('${dir.path}/old.json'));
         final native = sqlite3.open('${dir.path}/native/database.sqlite');
+        native.execute('DROP TABLE IF EXISTS window_checkpoints');
         native.execute('PRAGMA user_version = 44');
         native.close();
         rejects(
@@ -594,6 +596,7 @@ void timingDefaultsTests() {
       await store.backup('$dir/old');
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 12;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 12);
@@ -649,14 +652,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          45,
+          46,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/45',
+          'bodytmi-logical-export/46',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -695,6 +698,7 @@ void timingDefaultsTests() {
       }
       final forged = sqlite3.open('$dir/native/database.sqlite');
       forged.execute('DROP TABLE derived_target_graphs');
+      forged.execute('DROP TABLE IF EXISTS window_checkpoints');
       forged.userVersion = 12;
       forged.close();
       rejects(

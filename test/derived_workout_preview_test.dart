@@ -307,6 +307,7 @@ void derivedWorkoutPreviewTests() {
         final path = '${temp.path}/v27.sqlite';
         await store.snapshot(path);
         final db = sqlite3.open(path);
+        db.execute('DROP TABLE IF EXISTS window_checkpoints');
         db.userVersion = 27;
         db.close();
         equal(NativeBackup.validateDatabase(path), 27);
@@ -349,7 +350,7 @@ void derivedWorkoutPreviewTests() {
         }
         final reopened = sqlite3.open(path);
         try {
-          equal(reopened.userVersion, 45);
+          equal(reopened.userVersion, 46);
         } finally {
           reopened.close();
         }
@@ -421,8 +422,9 @@ void derivedWorkoutPreviewTests() {
         );
         final copy = '${temp.path}/snapshot.sqlite';
         await store.snapshot(copy);
-        equal(NativeBackup.validateDatabase(copy), 45);
+        equal(NativeBackup.validateDatabase(copy), 46);
         final db = sqlite3.open(copy);
+        db.execute('DROP TABLE IF EXISTS window_checkpoints');
         db.userVersion = 27;
         db.close();
         rejects(() => NativeBackup.validateDatabase(copy));

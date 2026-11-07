@@ -53,7 +53,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 45) {
+            if (native.userVersion > 46) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -114,7 +114,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 45);
+    validateSchema(schema.map((row) => row.data), 46);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -125,6 +125,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_mass_records), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM window_checkpoints), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM workout_executions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM family_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM derived_target_graphs), 0) AS bytes
@@ -430,6 +431,50 @@ final class TrainingStore implements TrainingRepository {
             snapshot: _snapshot(timer.toJson()),
           ),
         );
+  }
+
+  @override
+  Future<WindowCheckpoint?> windowCheckpoint(String id) async {
+    final row = await (_db.select(
+      _db.windowCheckpoints,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row == null) return null;
+    final checkpoint = WindowCheckpoint.fromJson(jsonDecode(row.snapshot));
+    if (checkpoint.id != row.id || checkpoint.sessionId != row.sessionId)
+      invalid('Window checkpoint row identity mismatch.');
+    return checkpoint;
+  }
+
+  @override
+  Future<List<WindowCheckpoint>> windowCheckpoints() async {
+    final result = <WindowCheckpoint>[];
+    for (final row in await _db.select(_db.windowCheckpoints).get()) {
+      final checkpoint = WindowCheckpoint.fromJson(jsonDecode(row.snapshot));
+      if (checkpoint.id != row.id || checkpoint.sessionId != row.sessionId)
+        invalid('Window checkpoint row identity mismatch.');
+      result.add(checkpoint);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveWindowCheckpoint(WindowCheckpoint checkpoint) async {
+    await _db
+        .into(_db.windowCheckpoints)
+        .insertOnConflictUpdate(
+          WindowCheckpointsCompanion.insert(
+            id: checkpoint.id,
+            sessionId: checkpoint.sessionId,
+            snapshot: _snapshot(checkpoint.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<void> deleteWindowCheckpoint(String id) async {
+    await (_db.delete(
+      _db.windowCheckpoints,
+    )..where((t) => t.id.equals(id))).go();
   }
 
   @override
