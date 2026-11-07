@@ -926,6 +926,77 @@ void activityTests() {
       );
       jsonEqual(session.toJson(), original);
       final old = session;
+      final reviewed = const SessionWindowReview().review(
+        session,
+        state,
+        expectedSessionVersion: session.contentVersion,
+        expectedClockVersion: 3,
+        toOccurrence: 1,
+        action: 'complete',
+        actuals: session.sets.first.suggested,
+      );
+      equal(reviewed.session.sets.first.status, SetStatus.completed);
+      equal(jsonObject(reviewed.clock['clock'], 'clock')['occurrence'], 1);
+      final pureReview = const Commands().execute('session window-review', {
+        'schemaVersion': 1,
+        'session': session.toJson(),
+        'clock': state,
+        'expectedSessionVersion': 1,
+        'expectedClockVersion': 3,
+        'toOccurrence': 1,
+        'action': 'complete',
+        'actuals': metricsToJson(session.sets.first.suggested),
+      });
+      jsonEqual(pureReview['data'], {
+        'session': reviewed.session.toJson(),
+        'clock': reviewed.clock,
+        'occurrenceId': reviewed.occurrenceId,
+      });
+      final skipped = const SessionWindowReview().review(
+        session,
+        state,
+        expectedSessionVersion: 1,
+        expectedClockVersion: 3,
+        toOccurrence: 1,
+        action: 'skip',
+        confirm: true,
+      );
+      equal(skipped.session.sets.first.status, SetStatus.skipped);
+      check(skipped.session.sets.first.actuals.isEmpty);
+      rejects(
+        () => const SessionWindowReview().review(
+          session,
+          state,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 3,
+          toOccurrence: 2,
+          action: 'complete',
+          actuals: session.sets.first.suggested,
+        ),
+      );
+      rejects(
+        () => const SessionWindowReview().review(
+          session,
+          state,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 3,
+          toOccurrence: 1,
+          action: 'skip',
+        ),
+      );
+      rejects(
+        () => const SessionWindowReview().review(
+          reviewed.session,
+          state,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 3,
+          toOccurrence: 1,
+          action: 'complete',
+          actuals: session.sets.first.suggested,
+        ),
+        'conflict',
+      );
+      jsonEqual(session.toJson(), original);
       session = training.complete(
         session,
         session.sets.first.id,
@@ -1055,6 +1126,49 @@ void activityTests() {
         );
         final loaded = await command('store show', {'id': 'session'});
         jsonEqual(loaded, old.toJson());
+        final payload = {
+          'id': 'session',
+          'clock': recovered,
+          'expectedSessionVersion': 1,
+          'expectedClockVersion': 3,
+          'toOccurrence': 1,
+          'action': 'complete',
+          'actuals': metricsToJson(old.sets.first.suggested),
+        };
+        final invalidMove = await invoke(
+          ['store', 'window-review'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': db,
+            ...payload,
+            'toOccurrence': 2,
+          }),
+        );
+        equal(invalidMove.code, 2);
+        equal(
+          (await command('store show', {'id': 'session'}))['contentVersion'],
+          1,
+        );
+        final storedReview = await command('store window-review', payload);
+        equal(
+          jsonObject(storedReview['session'], 'session')['contentVersion'],
+          2,
+        );
+        equal(
+          jsonObject(
+            jsonObject(storedReview['clock'], 'wrapper')['clock'],
+            'clock',
+          )['occurrence'],
+          1,
+        );
+        final retry = await invoke([
+          'store',
+          'window-review',
+        ], jsonEncode({'schemaVersion': 1, 'database': db, ...payload}));
+        equal(retry.code, 5);
+        equal(retry.output, '');
+        final saved = await command('store show', {'id': 'session'});
+        equal(saved['contentVersion'], 2);
       } finally {
         await dir.delete(recursive: true);
       }

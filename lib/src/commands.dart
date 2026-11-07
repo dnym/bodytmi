@@ -26,6 +26,7 @@ const commandNames = [
   'session show',
   'session summary',
   'session window-clock',
+  'session window-review',
   'session progression-preview',
   'history series',
   'history records',
@@ -309,6 +310,27 @@ final class Commands {
           sessionFromJson(request['session']),
           request,
         );
+      case 'session window-review':
+        keys({
+          'session',
+          'clock',
+          'expectedSessionVersion',
+          'expectedClockVersion',
+          'toOccurrence',
+          'action',
+          'actuals',
+          'acceptSuggested',
+          'confirm',
+        });
+        final result = sessionWindowReviewRequest(
+          sessionFromJson(request['session']),
+          request,
+        );
+        data = {
+          'session': result.session.toJson(),
+          'clock': result.clock,
+          'occurrenceId': result.occurrenceId,
+        };
       case 'session effective-load':
         keys({'session'});
         data = const EffectiveMassService().evaluate(

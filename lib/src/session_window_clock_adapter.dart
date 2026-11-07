@@ -1,6 +1,37 @@
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 
+({TrainingSession session, Map<String, Object?> clock, String occurrenceId})
+sessionWindowReviewRequest(
+  TrainingSession session,
+  Map<String, Object?> request,
+) {
+  int integer(String key, {int min = 1}) {
+    final value = request[key];
+    if (value is! int || value < min)
+      invalid('$key must be an integer >= $min.');
+    return value;
+  }
+
+  bool flag(String key) {
+    final value = request[key] ?? false;
+    if (value is! bool) invalid('$key must be a boolean.');
+    return value;
+  }
+
+  return const SessionWindowReview().review(
+    session,
+    request['clock'],
+    expectedSessionVersion: integer('expectedSessionVersion'),
+    expectedClockVersion: integer('expectedClockVersion'),
+    toOccurrence: integer('toOccurrence', min: 0),
+    action: requiredString(request, 'action'),
+    actuals: metricsFromJson(request['actuals'] ?? <String, Object?>{}),
+    acceptSuggested: flag('acceptSuggested'),
+    confirm: flag('confirm'),
+  );
+}
+
 Map<String, Object?> sessionWindowClockRequest(
   TrainingSession session,
   Map<String, Object?> request,

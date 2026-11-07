@@ -36,6 +36,7 @@ const storedCommandNames = [
   'store show',
   'store summary',
   'store window-clock',
+  'store window-review',
   'store progression-preview',
   'store assess-objectives',
   'store series',
@@ -219,6 +220,17 @@ Future<Map<String, Object?>> executeStored(
       'ownerElapsedMilliseconds',
       'toOccurrence',
       'adjustmentMilliseconds',
+    },
+    'store window-review' => {
+      'id',
+      'clock',
+      'expectedSessionVersion',
+      'expectedClockVersion',
+      'toOccurrence',
+      'action',
+      'actuals',
+      'acceptSuggested',
+      'confirm',
     },
     'store progression-preview' => {
       'id',
@@ -950,6 +962,24 @@ Future<Map<String, Object?>> executeStored(
           await service.session(identifier(request, 'id')),
           request,
         );
+      case 'store window-review':
+        data = await store.transaction(() async {
+          final id = identifier(request, 'id');
+          final result = sessionWindowReviewRequest(
+            await service.session(id),
+            request,
+          );
+          final saved = await service.edit(
+            id,
+            integer('expectedSessionVersion'),
+            (_) => result.session,
+          );
+          return {
+            'session': saved.toJson(),
+            'clock': result.clock,
+            'occurrenceId': result.occurrenceId,
+          };
+        });
       case 'store summary':
         data = const TrainingAnalytics().summary(
           await service.session(identifier(request, 'id')),
