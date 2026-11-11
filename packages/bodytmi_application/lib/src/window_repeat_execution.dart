@@ -110,7 +110,53 @@ final class WindowRepeatExecution {
     final round = cursor['round'] as int;
     final entries = [...jsonList(state, 'entries')];
     var nextCursor = cursor;
-    if (action == 'correct') {
+    if (action == 'revise') {
+      if (ownerId != null ||
+          ownerElapsedMilliseconds != null ||
+          adjustmentMilliseconds != null ||
+          review != null ||
+          correction == null)
+        invalid(
+          'Revision takes only an occurrence and explicit replacement result.',
+        );
+      if (cursor['status'] == 'running')
+        invalid('Pause or recover the repeat clock before revising results.');
+      checkKeys(correction, {
+        'occurrenceId',
+        'outcome',
+        'actuals',
+        'acceptSuggested',
+        'observations',
+      });
+      final occurrenceId = requiredString(correction, 'occurrenceId');
+      final entryIndex = entries.indexWhere(
+        (entry) => jsonObject(entry, 'entry')['id'] == occurrenceId,
+      );
+      if (entryIndex < 0) invalid('No reviewed occurrence has that identity.');
+      final existing = jsonObject(entries[entryIndex], 'entry');
+      final previous = existing['outcome'];
+      final outcome = requiredString(correction, 'outcome');
+      if (!((previous == 'skipped' && outcome == 'completed') ||
+          (previous == 'completed' && outcome == 'skipped')))
+        invalid(
+          'Revision changes a skipped effort to completed, or a completed effort to skipped.',
+        );
+      if ((outcome == 'skipped') != confirm)
+        invalid('Discarding completed actuals requires confirmation.');
+      final replacement = _reviewEntry(
+        loop,
+        plan[entryIndex % plan.length],
+        entryIndex ~/ plan.length,
+        {
+          for (final e in correction.entries)
+            if (e.key != 'occurrenceId') e.key: e.value,
+        },
+        confirm: confirm,
+      );
+      if (existing['reportedAfterBoundary'] == true)
+        replacement['reportedAfterBoundary'] = true;
+      entries[entryIndex] = replacement;
+    } else if (action == 'correct') {
       if (ownerId != null ||
           ownerElapsedMilliseconds != null ||
           adjustmentMilliseconds != null ||

@@ -26,6 +26,146 @@ Future<void> expectCheckpointFailure(
 }
 
 void activityTests() {
+  test(
+    'repeat outcome revisions repair skips and confirm discarding actuals',
+    () async {
+      final loop = WindowRepeatSpec.fromJson({
+        ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+        'maxRounds': 1,
+        'maxOccurrences': 2,
+      });
+      const engine = WindowRepeatExecution();
+      var state = engine.start(loop);
+      state = engine.apply(
+        state,
+        expectedVersion: 1,
+        action: 'review',
+        review: {'outcome': 'skipped'},
+        confirm: true,
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 2,
+        action: 'review',
+        review: {'outcome': 'completed', 'acceptSuggested': true},
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 3,
+        action: 'finish',
+        confirm: true,
+      );
+      equal(engine.view(state)['partialRounds'], 1);
+      final cursor = state['cursor'];
+      const first = 'amrap[0]/round/push-set';
+      const second = 'amrap[0]/round/pull-set';
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 4,
+          action: 'revise',
+          correction: {'occurrenceId': second, 'outcome': 'skipped'},
+        ),
+      );
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 4,
+          action: 'revise',
+          correction: {'occurrenceId': first, 'outcome': 'completed'},
+        ),
+      );
+      final request = {
+        'schemaVersion': 1,
+        'action': 'revise',
+        'execution': state,
+        'expectedVersion': 4,
+        'correction': {
+          'occurrenceId': first,
+          'outcome': 'completed',
+          'actuals': {
+            'reps': {'value': '4', 'unit': 'rep'},
+          },
+        },
+      };
+      final response = const Commands().execute(
+        'activity window-repeat-execution',
+        request,
+      );
+      final native = await invoke([
+        'activity',
+        'window-repeat-execution',
+      ], jsonEncode(request));
+      equal(native.code, 0);
+      jsonEqual(
+        jsonObject(jsonDecode(native.output), 'response')['data'],
+        response['data'],
+      );
+      final view = jsonObject(response['data'], 'data');
+      equal(view['confirmedRounds'], 1);
+      state = jsonObject(view['execution'], 'execution');
+      jsonEqual(state['cursor'], cursor);
+      try {
+        engine.apply(
+          state,
+          expectedVersion: 4,
+          action: 'revise',
+          correction: {'occurrenceId': second, 'outcome': 'skipped'},
+          confirm: true,
+        );
+        throw StateError('Expected stale conflict.');
+      } on BodyTmiException catch (error) {
+        equal(error.code, 'conflict');
+      }
+      state = engine.apply(
+        state,
+        expectedVersion: 5,
+        action: 'revise',
+        correction: {'occurrenceId': second, 'outcome': 'skipped'},
+        confirm: true,
+      );
+      final skipped = jsonObject((state['entries'] as List).last, 'entry');
+      equal(skipped['outcome'], 'skipped');
+      equal(skipped.containsKey('actuals'), false);
+      equal(engine.view(state)['partialRounds'], 1);
+      jsonEqual(state['cursor'], cursor);
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 6,
+          action: 'revise',
+          correction: {'occurrenceId': second, 'outcome': 'skipped'},
+          confirm: true,
+        ),
+      );
+      var active = engine.start(loop);
+      active = engine.apply(
+        active,
+        expectedVersion: 1,
+        action: 'review',
+        review: {'outcome': 'skipped'},
+        confirm: true,
+      );
+      active = engine.apply(
+        active,
+        expectedVersion: 2,
+        action: 'resume',
+        ownerId: 'owner',
+      );
+      rejects(
+        () => engine.apply(
+          active,
+          expectedVersion: 3,
+          action: 'revise',
+          correction: {
+            'occurrenceId': first,
+            'outcome': 'completed',
+            'acceptSuggested': true,
+          },
+        ),
+      );
+    },
+  );
   test('boundary batch reviews require explicit consecutive results', () async {
     final loop = WindowRepeatSpec.fromJson({
       ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
@@ -170,6 +310,23 @@ void activityTests() {
           'reps': {'value': '3', 'unit': 'rep'},
         },
       },
+    );
+    equal(
+      jsonObject(
+        (state['entries'] as List).first,
+        'entry',
+      )['reportedAfterBoundary'],
+      true,
+    );
+    state = engine.apply(
+      state,
+      expectedVersion: 6,
+      action: 'revise',
+      correction: {
+        'occurrenceId': 'amrap[0]/round/push-set',
+        'outcome': 'skipped',
+      },
+      confirm: true,
     );
     equal(
       jsonObject(
