@@ -219,6 +219,78 @@ final class WindowCheckpointService {
     return checkpoint;
   });
 
+  /// Derive an operational view without changing the checkpoint or session.
+  Future<Map<String, Object?>> status(String id) => repository.transaction(
+    () async {
+      final checkpoint = await show(id);
+      final session = await StoredTrainingService(
+        repository,
+      ).session(checkpoint.sessionId);
+      final wrapper = const SessionWindowClock().validateSnapshot(
+        session,
+        checkpoint.clock,
+      );
+      final clock = jsonObject(wrapper['clock'], 'window clock');
+      final definition = session.revision.definition;
+      final plan = definition.plan.occurrences().toList();
+      final index = clock['occurrence'] as int;
+      final elapsed = clock['elapsedMilliseconds'] as int;
+      final started = clock['occurrenceStartedMilliseconds'];
+      final complete = clock['status'] == 'complete';
+      final current = complete ? null : plan[index];
+      final set = current?.activity is Effort ? session.set(current!.id) : null;
+      final deadlines = complete
+          ? null
+          : const WindowDeadlines().evaluate(
+              definition: definition,
+              occurrence: index,
+              elapsedMilliseconds: elapsed,
+              windowStarts: jsonObject(clock['windowStarts'], 'windowStarts'),
+            );
+      Map<String, Object?>? boundary;
+      if (clock['status'] == 'boundary') {
+        final end = _expiredDestination(session, clock);
+        final sets = {for (final item in session.sets) item.id: item};
+        final pending = <String>[
+          for (var i = index; i < end; i++)
+            if (plan[i].activity is Effort &&
+                sets[plan[i].id]!.status == SetStatus.planned)
+              plan[i].id,
+        ];
+        boundary = {
+          'endOccurrence': end,
+          'pendingEfforts': pending,
+          'canAdvanceReviewed':
+              checkpoint.reserved &&
+              session.status == SessionStatus.active &&
+              pending.isEmpty,
+        };
+      }
+      return {
+        'policy': 'bodytmi-window-checkpoint-status/1',
+        'checkpoint': checkpoint.toJson(),
+        'sessionStatus': session.status.name,
+        'sessionContentVersion': session.contentVersion,
+        'currentOccurrence': current == null
+            ? null
+            : {
+                'index': index,
+                'id': current.id,
+                'type': current.activity.toJson()['type'],
+                if (set != null) 'setStatus': set.status.name,
+              },
+        'occurrenceElapsedMilliseconds': started is int
+            ? elapsed - started
+            : null,
+        'windows': deadlines?['windows'] ?? <Object?>[],
+        'earliestDeadlineMilliseconds':
+            deadlines?['earliestDeadlineMilliseconds'],
+        'boundary': boundary,
+        'requiresRecoveryBeforeNewOwner': clock['status'] == 'running',
+      };
+    },
+  );
+
   Future<List<WindowCheckpoint>> list() => repository.transaction(() async {
     final checkpoints = await repository.windowCheckpoints();
     validateWindowCheckpoints(

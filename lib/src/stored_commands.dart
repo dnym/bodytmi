@@ -49,6 +49,7 @@ const storedCommandNames = [
   'checkpoint action',
   'checkpoint run',
   'checkpoint show',
+  'checkpoint status',
   'checkpoint list',
   'checkpoint delete',
   'store progression-preview',
@@ -311,6 +312,7 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'checkpoint show' => {'id'},
+    'checkpoint status' => {'id'},
     'checkpoint list' => <String>{},
     'checkpoint delete' => {'id', 'expectedVersion', 'confirm'},
     'store progression-preview' => {
@@ -735,6 +737,8 @@ Future<Map<String, Object?>> executeStored(
         };
       case 'checkpoint show':
         data = (await checkpoints.show(identifier(request, 'id'))).toJson();
+      case 'checkpoint status':
+        data = await checkpoints.status(identifier(request, 'id'));
       case 'checkpoint list':
         final all = await checkpoints.list();
         data = [for (final checkpoint in all) checkpoint.toJson()];

@@ -27,6 +27,147 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'checkpoint status exposes deadlines, pending reviews and recovery without mutation',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-window-status-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'minute',
+          'type': 'window',
+          'durationSeconds': 1,
+          'child': {
+            'id': 'rounds',
+            'type': 'repeat',
+            'count': 2,
+            'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+          },
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final ids = session.sets.map((set) => set.id).toList();
+        final service = WindowCheckpointService(store);
+        final initial = const SessionWindowClock().start(session);
+        final legacyClock = {...jsonObject(initial['clock'], 'clock')}
+          ..['policy'] = 'bodytmi-window-clock/1'
+          ..remove('occurrenceStartedMilliseconds');
+        await service.save('legacy', session.id, 0, {
+          ...initial,
+          'clock': legacyClock,
+        });
+        equal(
+          (await service.status('legacy'))['occurrenceElapsedMilliseconds'],
+          null,
+        );
+        var cp = await service.save('cp', session.id, 0, initial);
+        cp = await service.reserve('cp', cp.version);
+        final paused = await service.status('cp');
+        equal(paused['policy'], 'bodytmi-window-checkpoint-status/1');
+        equal(paused['sessionContentVersion'], 1);
+        equal(paused['occurrenceElapsedMilliseconds'], 0);
+        equal(paused['earliestDeadlineMilliseconds'], 1000);
+        equal(
+          jsonObject(paused['currentOccurrence'], 'occurrence')['setStatus'],
+          'planned',
+        );
+        equal(paused['boundary'], null);
+        equal(paused['requiresRecoveryBeforeNewOwner'], false);
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          action: 'resume',
+          ownerId: 'owner',
+        );
+        equal(
+          (await service.status('cp'))['requiresRecoveryBeforeNewOwner'],
+          true,
+        );
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 2,
+          action: 'advance',
+          ownerId: 'owner',
+          ownerElapsedMilliseconds: 1200,
+        );
+        var view = await service.status('cp');
+        equal(view['occurrenceElapsedMilliseconds'], 1000);
+        var boundary = jsonObject(view['boundary'], 'boundary');
+        equal(boundary['endOccurrence'], 2);
+        jsonEqual(boundary['pendingEfforts'], ids);
+        equal(boundary['canAdvanceReviewed'], false);
+        final completed = await service.completeCurrent(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 3,
+          acceptSuggested: true,
+        );
+        cp = completed.checkpoint;
+        view = await service.status('cp');
+        boundary = jsonObject(view['boundary'], 'boundary');
+        jsonEqual(boundary['pendingEfforts'], [ids.last]);
+        equal(
+          jsonObject(view['currentOccurrence'], 'occurrence')['setStatus'],
+          'completed',
+        );
+        final skipped = await training.edit(
+          'session',
+          2,
+          (s) => const TrainingService().skip(s, ids.last, confirm: true),
+        );
+        view = await service.status('cp');
+        boundary = jsonObject(view['boundary'], 'boundary');
+        jsonEqual(boundary['pendingEfforts'], []);
+        equal(boundary['canAdvanceReviewed'], true);
+        final archiveBefore = canonicalJson((await store.archive()).toJson());
+        await store.close();
+        final response = await invoke([
+          'checkpoint',
+          'status',
+        ], jsonEncode({'schemaVersion': 1, 'database': path, 'id': 'cp'}));
+        equal(response.code, 0);
+        jsonEqual(
+          jsonObject(jsonDecode(response.output), 'response')['data'],
+          view,
+        );
+        store = await TrainingStore.open(path);
+        equal(canonicalJson((await store.archive()).toJson()), archiveBefore);
+        final resumedService = WindowCheckpointService(store);
+        final advanced = await resumedService.advanceReviewedBoundary(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: skipped.contentVersion,
+          expectedClockVersion: 3,
+        );
+        check(advanced != null);
+        final finished = await resumedService.status('cp');
+        equal(finished['currentOccurrence'], null);
+        equal(finished['occurrenceElapsedMilliseconds'], null);
+        equal(finished['earliestDeadlineMilliseconds'], null);
+        jsonEqual(finished['windows'], []);
+        equal(finished['boundary'], null);
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'reviewed window boundaries advance without certifying unreviewed work',
     () async {
       final dir = await Directory.systemTemp.createTemp('bodytmi-window-auto-');
