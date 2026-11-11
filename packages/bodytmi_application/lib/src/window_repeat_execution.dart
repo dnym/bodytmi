@@ -57,10 +57,26 @@ final class WindowRepeatExecution {
     }
     final step =
         (cursor['round'] as int) * plan.length + (cursor['occurrence'] as int);
+    final nextRound = entries.length ~/ plan.length;
+    final nextIndex = entries.length % plan.length;
+    final canReviewNext =
+        cursor['status'] == 'boundary' &&
+        entries.length < 10000 &&
+        nextRound < loop.maxRounds &&
+        (nextRound + 1) * plan.length <= loop.maxOccurrences;
     return {
       'execution': state,
       'current': cursorView['current'],
       'currentReviewed': entries.length > step,
+      if (cursor['status'] == 'boundary')
+        'nextBoundaryReview': canReviewNext
+            ? {
+                'id': '${loop.id}[$nextRound]/${plan[nextIndex].id}',
+                'round': nextRound,
+                'index': nextIndex,
+                'activity': plan[nextIndex].activity.toJson(),
+              }
+            : null,
       'confirmedRounds': confirmed,
       'partialRounds': partial,
       'rounds': rows,
@@ -133,6 +149,48 @@ final class WindowRepeatExecution {
         },
         confirm: false,
       );
+      if (existing['reportedAfterBoundary'] == true)
+        (entries[entryIndex] as Map<String, Object?>)['reportedAfterBoundary'] =
+            true;
+    } else if (action == 'review-batch') {
+      if (cursor['status'] != 'boundary' ||
+          !confirm ||
+          review == null ||
+          correction != null ||
+          ownerId != null ||
+          ownerElapsedMilliseconds != null ||
+          adjustmentMilliseconds != null)
+        invalid(
+          'Batch review requires a boundary, explicit confirmation and reviews.',
+        );
+      checkKeys(review, {'reviews'});
+      final reviews = jsonList(review, 'reviews');
+      if (reviews.isEmpty ||
+          reviews.length > 1000 ||
+          entries.length + reviews.length > 10000)
+        invalid(
+          'Batch review requires 1 to 1000 entries within the ledger limit.',
+        );
+      for (final value in reviews) {
+        final reviewIndex = entries.length;
+        final reviewRound = reviewIndex ~/ plan.length;
+        if (reviewRound >= loop.maxRounds ||
+            (reviewRound + 1) * plan.length > loop.maxOccurrences)
+          invalid('Batch review exceeds the repeat safety limit.');
+        final item = plan[reviewIndex % plan.length];
+        final explicit = jsonObject(value, 'batch review');
+        final expectedId = '${loop.id}[$reviewRound]/${item.id}';
+        if (explicit['occurrenceId'] != expectedId)
+          invalid('Batch reviews must name consecutive occurrence identities.');
+        final outcome = requiredString(explicit, 'outcome');
+        entries.add({
+          ..._reviewEntry(loop, item, reviewRound, {
+            for (final entry in explicit.entries)
+              if (entry.key != 'occurrenceId') entry.key: entry.value,
+          }, confirm: outcome != 'completed'),
+          'reportedAfterBoundary': true,
+        });
+      }
     } else if (action == 'review') {
       if (adjustmentMilliseconds != null ||
           review == null ||
@@ -285,17 +343,33 @@ final class WindowRepeatExecution {
             cursor['terminalReason'] == 'windowExpired');
     final boundaryEffort =
         boundary && plan[cursor['occurrence'] as int].activity is Effort;
+    final maximumReviewed = boundary
+        ? (loop.maxRounds * plan.length < loop.maxOccurrences
+              ? loop.maxRounds * plan.length
+              : (loop.maxOccurrences ~/ plan.length) * plan.length)
+        : step;
     if (raw.length > 10000 ||
         raw.length < step ||
-        raw.length > step + (boundaryEffort ? 1 : 0) ||
+        raw.length > maximumReviewed ||
         (cursor['status'] == 'finished' &&
             boundaryEffort &&
-            raw.length != step + 1))
+            raw.length < step + 1))
       invalid('Result ledger does not match the structural cursor.');
     final entries = <Map<String, Object?>>[];
     for (var i = 0; i < raw.length; i++) {
       final entry = jsonObject(raw[i], 'entry');
-      checkKeys(entry, {'id', 'outcome', 'actuals', 'observations'});
+      checkKeys(entry, {
+        'id',
+        'outcome',
+        'actuals',
+        'observations',
+        'reportedAfterBoundary',
+      });
+      if (entry.containsKey('reportedAfterBoundary') &&
+          (entry['reportedAfterBoundary'] != true || !boundary || i < step))
+        invalid('Invalid after-boundary review provenance.');
+      if (boundary && i > step && entry['reportedAfterBoundary'] != true)
+        invalid('Later boundary reviews require explicit provenance.');
       final item = plan[i % plan.length];
       final round = i ~/ plan.length;
       final id = '${loop.id}[$round]/${item.id}';
@@ -304,8 +378,10 @@ final class WindowRepeatExecution {
       final outcome = requiredString(entry, 'outcome');
       final normalized = _reviewEntry(loop, item, round, {
         for (final e in entry.entries)
-          if (e.key != 'id') e.key: e.value,
+          if (e.key != 'id' && e.key != 'reportedAfterBoundary') e.key: e.value,
       }, confirm: outcome != 'completed');
+      if (entry['reportedAfterBoundary'] == true)
+        normalized['reportedAfterBoundary'] = true;
       entries.add(normalized);
     }
     return {

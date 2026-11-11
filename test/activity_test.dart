@@ -26,6 +26,159 @@ Future<void> expectCheckpointFailure(
 }
 
 void activityTests() {
+  test('boundary batch reviews require explicit consecutive results', () async {
+    final loop = WindowRepeatSpec.fromJson({
+      ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+      'durationMilliseconds': 1000,
+      'maxRounds': 2,
+      'maxOccurrences': 4,
+    });
+    const engine = WindowRepeatExecution();
+    var state = engine.start(loop);
+    state = engine.apply(
+      state,
+      expectedVersion: 1,
+      action: 'resume',
+      ownerId: 'owner',
+    );
+    state = engine.apply(
+      state,
+      expectedVersion: 2,
+      action: 'advance',
+      ownerId: 'owner',
+      ownerElapsedMilliseconds: 1100,
+    );
+    equal(
+      jsonObject(engine.view(state)['nextBoundaryReview'], 'next')['id'],
+      'amrap[0]/round/push-set',
+    );
+    final reviews = [
+      {
+        'occurrenceId': 'amrap[0]/round/push-set',
+        'outcome': 'completed',
+        'acceptSuggested': true,
+      },
+      {
+        'occurrenceId': 'amrap[0]/round/pull-set',
+        'outcome': 'completed',
+        'actuals': {
+          'reps': {'value': '4', 'unit': 'rep'},
+        },
+      },
+      {
+        'occurrenceId': 'amrap[1]/round/push-set',
+        'outcome': 'completed',
+        'actuals': {
+          'reps': {'value': '2', 'unit': 'rep'},
+        },
+        'observations': {'terminationReason': 'interrupted'},
+      },
+      {'occurrenceId': 'amrap[1]/round/pull-set', 'outcome': 'skipped'},
+    ];
+    rejects(
+      () => engine.apply(
+        state,
+        expectedVersion: 3,
+        action: 'review-batch',
+        review: {'reviews': reviews},
+      ),
+    );
+    rejects(
+      () => engine.apply(
+        state,
+        expectedVersion: 3,
+        action: 'review-batch',
+        confirm: true,
+        review: {
+          'reviews': [reviews[1], reviews[0]],
+        },
+      ),
+    );
+    equal((state['entries'] as List).length, 0);
+    final request = {
+      'schemaVersion': 1,
+      'action': 'review-batch',
+      'execution': state,
+      'expectedVersion': 3,
+      'confirm': true,
+      'review': {'reviews': reviews},
+    };
+    final response = const Commands().execute(
+      'activity window-repeat-execution',
+      request,
+    );
+    final native = await invoke([
+      'activity',
+      'window-repeat-execution',
+    ], jsonEncode(request));
+    equal(native.code, 0);
+    jsonEqual(
+      jsonObject(jsonDecode(native.output), 'response')['data'],
+      response['data'],
+    );
+    final view = jsonObject(response['data'], 'data');
+    equal(view['confirmedRounds'], 1);
+    equal(view['partialRounds'], 1);
+    equal(view['nextBoundaryReview'], null);
+    state = jsonObject(view['execution'], 'execution');
+    final first = jsonObject((state['entries'] as List).first, 'entry');
+    equal(first['reportedAfterBoundary'], true);
+    final forged = (state['entries'] as List)
+        .map((entry) => jsonObject(entry, 'entry'))
+        .toList();
+    forged[1] = {...forged[1]}..remove('reportedAfterBoundary');
+    rejects(() => engine.view({...state, 'entries': forged}));
+    equal(jsonObject(state['cursor'], 'cursor')['occurrence'], 0);
+    rejects(
+      () => engine.apply(
+        state,
+        expectedVersion: 4,
+        action: 'review-batch',
+        confirm: true,
+        review: {
+          'reviews': [reviews.first],
+        },
+      ),
+    );
+    try {
+      engine.apply(
+        state,
+        expectedVersion: 3,
+        action: 'review-batch',
+        confirm: true,
+        review: {'reviews': reviews},
+      );
+      throw StateError('Expected stale conflict.');
+    } on BodyTmiException catch (error) {
+      equal(error.code, 'conflict');
+    }
+    state = engine.apply(
+      state,
+      expectedVersion: 4,
+      action: 'finish',
+      confirm: true,
+    );
+    equal(engine.view(state)['partialRounds'], 1);
+    equal((state['entries'] as List).length, 4);
+    state = engine.apply(
+      state,
+      expectedVersion: 5,
+      action: 'correct',
+      correction: {
+        'occurrenceId': 'amrap[0]/round/push-set',
+        'actuals': {
+          'reps': {'value': '3', 'unit': 'rep'},
+        },
+      },
+    );
+    equal(
+      jsonObject(
+        (state['entries'] as List).first,
+        'entry',
+      )['reportedAfterBoundary'],
+      true,
+    );
+  });
   test('running rest review yields to the window deadline', () {
     final loopJson = jsonObject(example('window-repeat-page')['loop'], 'loop');
     final definition = jsonObject(
