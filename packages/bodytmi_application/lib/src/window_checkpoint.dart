@@ -267,6 +267,69 @@ final class WindowCheckpointService {
     return next;
   }
 
+  /// Record the current effort without moving its scoped clock.
+  Future<
+    ({
+      TrainingSession session,
+      WindowCheckpoint checkpoint,
+      String occurrenceId,
+    })
+  >
+  completeCurrent(
+    String id, {
+    required int expectedVersion,
+    required int expectedSessionVersion,
+    required int expectedClockVersion,
+    Metrics actuals = const {},
+    bool acceptSuggested = false,
+  }) => repository.transaction(() async {
+    final current = await show(id);
+    if (current.version != expectedVersion)
+      throw const BodyTmiException('conflict', 'Checkpoint version changed.');
+    final training = StoredTrainingService(repository);
+    final session = await training.session(current.sessionId);
+    if (session.contentVersion != expectedSessionVersion)
+      throw const BodyTmiException(
+        'conflict',
+        'Session content version changed.',
+      );
+    if (session.status != SessionStatus.active)
+      invalid('Review requires an active session.');
+    final wrapper = const SessionWindowClock().validateSnapshot(
+      session,
+      current.clock,
+    );
+    final clock = jsonObject(wrapper['clock'], 'window clock');
+    if (clock['version'] != expectedClockVersion)
+      throw const BodyTmiException('conflict', 'Window clock version changed.');
+    if (!{'paused', 'boundary'}.contains(clock['status']))
+      invalid('Review requires a paused or boundary clock.');
+    final occurrence = clock['occurrence'] as int;
+    final occurrences = session.revision.definition.plan.occurrences().toList();
+    if (occurrence >= occurrences.length ||
+        occurrences[occurrence].activity is! Effort)
+      invalid('Review requires a current effort.');
+    final occurrenceId = occurrences[occurrence].id;
+    if (session.set(occurrenceId).status != SetStatus.planned)
+      invalid('Review requires a planned current effort.');
+    final updated = const TrainingService().complete(
+      session,
+      occurrenceId,
+      actuals,
+      acceptSuggested: acceptSuggested,
+    );
+    final saved = await training.edit(
+      session.id,
+      expectedSessionVersion,
+      (_) => updated,
+    );
+    final checkpoint = await _replace(current, {
+      ...wrapper,
+      'sessionContentVersion': saved.contentVersion,
+    }, reserved: current.reserved);
+    return (session: saved, checkpoint: checkpoint, occurrenceId: occurrenceId);
+  });
+
   /// Explicitly review an effort and save its moved checkpoint atomically.
   Future<
     ({
