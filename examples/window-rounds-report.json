@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "window-session",
+  "groupPath": "window/rounds"
+}

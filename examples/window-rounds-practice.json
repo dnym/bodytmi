@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "window-rounds-example",
+    "name": "Finite rounds in a time window",
+    "slots": [
+      {
+        "id": "push",
+        "exercise": "push",
+        "implementation": "bodyweight",
+        "targets": {"reps": {"value": "5", "unit": "rep"}}
+      },
+      {
+        "id": "pull",
+        "exercise": "pull",
+        "implementation": "bodyweight",
+        "targets": {"reps": {"value": "5", "unit": "rep"}}
+      }
+    ],
+    "plan": {
+      "id": "window",
+      "type": "window",
+      "durationSeconds": 600,
+      "child": {
+        "id": "rounds",
+        "type": "repeat",
+        "count": 5,
+        "child": {
+          "id": "pair",
+          "type": "sequence",
+          "children": [
+            {"id": "push-set", "type": "effort", "slot": "push"},
+            {"id": "pull-set", "type": "effort", "slot": "pull"}
+          ]
+        }
+      }
+    }
+  }
+}

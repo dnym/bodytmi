@@ -23,6 +23,7 @@ export 'src/window_clock.dart';
 export 'src/session_window_clock.dart';
 export 'src/session_window_review.dart';
 export 'src/window_checkpoint.dart';
+export 'src/round_progress.dart';
 export 'src/execution_service.dart';
 export 'src/training_analytics.dart';
 export 'src/family_service.dart';

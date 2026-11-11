@@ -36,6 +36,7 @@ const storedCommandNames = [
   'store start',
   'store show',
   'store summary',
+  'store rounds',
   'store window-clock',
   'store window-review',
   'checkpoint save',
@@ -227,6 +228,7 @@ Future<Map<String, Object?>> executeStored(
     'store show' => {'id'},
     'store assess-objectives' => {'id', 'setId', 'objectives'},
     'store summary' => {'id', 'includeWarmups', 'sumMetrics', 'roles'},
+    'store rounds' => {'id', 'groupPath'},
     'store window-clock' => {
       'id',
       'action',
@@ -1245,6 +1247,11 @@ Future<Map<String, Object?>> executeStored(
           includeWarmups: flag('includeWarmups'),
           sumMetrics: analyticsSums(request),
           roles: analyticsRoles(request),
+        );
+      case 'store rounds':
+        data = const RoundProgress().evaluate(
+          await service.session(identifier(request, 'id')),
+          requiredString(request, 'groupPath'),
         );
       case 'store progression-preview':
         if (flag('useTrack')) {

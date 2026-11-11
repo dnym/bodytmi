@@ -25,6 +25,7 @@ const commandNames = [
   'session start',
   'session show',
   'session summary',
+  'session rounds',
   'session window-clock',
   'session window-review',
   'session progression-preview',
@@ -377,6 +378,12 @@ final class Commands {
           includeWarmups: _bool(request, 'includeWarmups'),
           sumMetrics: analyticsSums(request),
           roles: analyticsRoles(request),
+        );
+      case 'session rounds':
+        keys({'session', 'groupPath'});
+        data = const RoundProgress().evaluate(
+          sessionFromJson(request['session']),
+          requiredString(request, 'groupPath'),
         );
       case 'session progression-preview':
         keys({'session', 'slotId', 'role', 'ruleType', 'rule', 'state'});

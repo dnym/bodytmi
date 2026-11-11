@@ -27,6 +27,183 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'round reports resolve nested repeat paths and reject rest-only rounds',
+    () {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'outer',
+        'type': 'repeat',
+        'count': 2,
+        'child': {
+          'id': 'inner',
+          'type': 'repeat',
+          'count': 2,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        },
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      final session = const TrainingService().start(
+        sessionId: 'nested',
+        revision: WorkoutRevision.publish(workout),
+        startedAt: instant(1),
+      );
+      final inner = const RoundProgress().evaluate(session, 'outer[0]/inner');
+      equal((inner['rounds'] as List).length, 2);
+      equal(inner['confirmedRounds'], 0);
+      equal(
+        (const RoundProgress().evaluate(session, 'outer')['rounds'] as List)
+            .length,
+        2,
+      );
+      input['plan'] = {
+        'id': 'plan',
+        'type': 'sequence',
+        'children': [
+          {
+            'id': 'breaks',
+            'type': 'repeat',
+            'count': 2,
+            'child': {'id': 'rest', 'type': 'rest', 'durationSeconds': 1},
+          },
+          {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        ],
+      };
+      final rests = WorkoutDefinition.fromJson(input);
+      final restSession = const TrainingService().start(
+        sessionId: 'rests',
+        revision: WorkoutRevision.publish(rests),
+        startedAt: instant(1),
+      );
+      rejects(() => const RoundProgress().evaluate(restSession, 'plan/breaks'));
+    },
+  );
+  test(
+    'round progress counts explicit results and preserves partial and skipped rounds',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-round-progress-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'window',
+          'type': 'window',
+          'durationSeconds': 600,
+          'child': {
+            'id': 'rounds',
+            'type': 'repeat',
+            'count': 5,
+            'restBetweenSeconds': 10,
+            'child': {
+              'id': 'pair',
+              'type': 'sequence',
+              'children': [
+                {'id': 'one', 'type': 'effort', 'slot': 'bench-heavy'},
+                {'id': 'two', 'type': 'effort', 'slot': 'bench-light'},
+              ],
+            },
+          },
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        var session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final ids = session.sets.map((set) => set.id).toList();
+        session = await training.edit('session', 1, (s) {
+          const engine = TrainingService();
+          for (final i in [0, 1, 2]) {
+            s = engine.complete(s, ids[i], const {}, acceptSuggested: true);
+          }
+          s = engine.completeWithObservations(
+            s,
+            ids[3],
+            const {},
+            acceptSuggested: true,
+            observations: SetObservations.fromJson({
+              'terminationReason': 'interrupted',
+            }),
+          );
+          for (final i in [4, 5, 6]) {
+            s = engine.skip(s, ids[i], confirm: true);
+          }
+          return s;
+        });
+        const progress = RoundProgress();
+        final view = progress.evaluate(session, 'window/rounds');
+        equal(view['confirmedRounds'], 1);
+        equal(view['partialRounds'], 1);
+        final rounds = view['rounds'] as List;
+        jsonEqual(
+          [for (final r in rounds) jsonObject(r, 'round')['status']],
+          ['confirmed', 'partial', 'skipped', 'incomplete', 'unstarted'],
+        );
+        final second = jsonObject(rounds[1], 'round');
+        final efforts = second['efforts'] as List;
+        final interrupted = jsonObject(efforts.last, 'effort');
+        equal(interrupted['eligibleForPerformance'], false);
+        equal(
+          jsonObject(
+            interrupted['observations'],
+            'observations',
+          )['terminationReason'],
+          'interrupted',
+        );
+        equal(jsonObject(rounds.first, 'round')['endOccurrence'], 2);
+        equal(jsonObject(rounds[1], 'round')['startOccurrence'], 3);
+        rejects(() => progress.evaluate(session, 'window'));
+        rejects(() => progress.evaluate(session, 'window/rounds[0]'));
+        final pure = const Commands().execute('session rounds', {
+          'schemaVersion': 1,
+          'session': session.toJson(),
+          'groupPath': 'window/rounds',
+        });
+        jsonEqual(pure['data'], view);
+        final before = canonicalJson((await store.archive()).toJson());
+        await store.close();
+        final response = await invoke(
+          ['store', 'rounds'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': path,
+            'id': 'session',
+            'groupPath': 'window/rounds',
+          }),
+        );
+        equal(response.code, 0);
+        jsonEqual(
+          jsonObject(jsonDecode(response.output), 'response')['data'],
+          view,
+        );
+        store = await TrainingStore.open(path);
+        equal(canonicalJson((await store.archive()).toJson()), before);
+        final current = StoredTrainingService(store);
+        final corrected = await current.edit(
+          'session',
+          session.contentVersion,
+          (s) => const TrainingService().annotate(
+            s,
+            ids[3],
+            SetObservations.fromJson({'notes': 'Corrected'}),
+          ),
+        );
+        final updated = progress.evaluate(corrected, 'window/rounds');
+        equal(updated['confirmedRounds'], 2);
+        equal(updated['partialRounds'], 0);
+        equal(updated['sessionContentVersion'], corrected.contentVersion);
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'window review atomically retains explicit interrupted effort observations',
     () async {
       final dir = await Directory.systemTemp.createTemp(
