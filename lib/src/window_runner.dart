@@ -17,8 +17,44 @@ Future<Map<String, Object?>> runWindowClock(
   int? runForMilliseconds,
   bool stream = false,
   bool advanceReviewed = false,
+  bool stopAtRest = false,
 }) async {
   final service = WindowCheckpointService(store);
+  int? restRemaining;
+  int? restDuration;
+  String? restOccurrenceId;
+  if (stopAtRest) {
+    final view = await service.status(id);
+    final checkpoint = jsonObject(view['checkpoint'], 'checkpoint');
+    final state = jsonObject(
+      jsonObject(checkpoint['clock'], 'clock')['clock'],
+      'clock',
+    );
+    if (checkpoint['version'] != expectedVersion ||
+        view['sessionContentVersion'] != expectedSessionVersion ||
+        state['version'] != expectedClockVersion)
+      throw const BodyTmiException(
+        'conflict',
+        'Checkpoint, session or clock version changed.',
+      );
+    final current = view['currentOccurrence'];
+    final restView = view['rest'];
+    if (current == null || restView == null)
+      invalid('stopAtRest requires a current timed rest.');
+    final rest = jsonObject(restView, 'rest');
+    if (rest['manual'] == true || rest['remainingMilliseconds'] is! int)
+      invalid(
+        'stopAtRest requires a timed rest with a known occurrence start.',
+      );
+    restRemaining = rest['remainingMilliseconds'] as int;
+    restDuration = rest['durationMilliseconds'] as int;
+    restOccurrenceId = jsonObject(current, 'occurrence')['id'] as String;
+  }
+  final limit = restRemaining == null
+      ? runForMilliseconds
+      : runForMilliseconds == null
+      ? restRemaining
+      : min(restRemaining, runForMilliseconds);
   final random = Random.secure();
   final owner =
       'window-${List.generate(4, (_) => random.nextInt(0x7fffffff).toRadixString(16)).join('-')}';
@@ -47,12 +83,10 @@ Future<Map<String, Object?>> runWindowClock(
     }
     var state = jsonObject(current.clock['clock'], 'clock');
     while (state['status'] == 'running') {
-      final sample = runForMilliseconds == null
+      final sample = limit == null
           ? watch.elapsedMilliseconds
-          : min(watch.elapsedMilliseconds, runForMilliseconds);
-      final pause =
-          interrupted ||
-          (runForMilliseconds != null && sample >= runForMilliseconds);
+          : min(watch.elapsedMilliseconds, limit);
+      final pause = interrupted || (limit != null && sample >= limit);
       current = await service.action(
         id,
         expectedVersion: current.version,
@@ -64,9 +98,7 @@ Future<Map<String, Object?>> runWindowClock(
       );
       state = jsonObject(current.clock['clock'], 'clock');
       if (state['status'] != 'running') break;
-      final remaining = runForMilliseconds == null
-          ? 50
-          : runForMilliseconds - watch.elapsedMilliseconds;
+      final remaining = limit == null ? 50 : limit - watch.elapsedMilliseconds;
       if (remaining > 0) {
         await Future<void>.delayed(Duration(milliseconds: min(50, remaining)));
       }
@@ -96,6 +128,19 @@ Future<Map<String, Object?>> runWindowClock(
           boundaryAdvanced = true;
         }
       }
+    } else if (stopAtRest &&
+        !interrupted &&
+        restRemaining != null &&
+        limit == restRemaining &&
+        state['status'] == 'paused') {
+      final cue = {
+        'type': 'window-rest-target',
+        'checkpointId': id,
+        'occurrenceId': restOccurrenceId,
+        'durationMilliseconds': restDuration,
+      };
+      cues.add(cue);
+      if (stream) stdout.writeln(jsonEncode({'schemaVersion': 1, 'data': cue}));
     }
     return {
       'checkpoint': current.toJson(),

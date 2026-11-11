@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "window-rest-example",
+    "name": "Scoped rest example",
+    "slots": [
+      {
+        "id": "lift",
+        "exercise": "lift",
+        "implementation": "barbell",
+        "targets": {"reps": {"value": "5", "unit": "rep"}}
+      }
+    ],
+    "plan": {
+      "id": "window",
+      "type": "window",
+      "durationSeconds": 60,
+      "child": {
+        "id": "sequence",
+        "type": "sequence",
+        "children": [
+          {"id": "rest", "type": "rest", "durationSeconds": 10},
+          {"id": "set", "type": "effort", "slot": "lift"}
+        ]
+      }
+    }
+  }
+}

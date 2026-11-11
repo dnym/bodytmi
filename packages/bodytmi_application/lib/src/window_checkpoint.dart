@@ -239,6 +239,14 @@ final class WindowCheckpointService {
       final complete = clock['status'] == 'complete';
       final current = complete ? null : plan[index];
       final set = current?.activity is Effort ? session.set(current!.id) : null;
+      final rest = current?.activity is Rest ? current!.activity as Rest : null;
+      final restElapsed = started is int ? elapsed - started : null;
+      if (rest?.durationSeconds != null &&
+          rest!.durationSeconds! > 9223372036854775)
+        invalid('Rest duration exceeds supported milliseconds.');
+      final restDuration = rest?.durationSeconds == null
+          ? null
+          : rest!.durationSeconds! * 1000;
       final deadlines = complete
           ? null
           : const WindowDeadlines().evaluate(
@@ -282,6 +290,14 @@ final class WindowCheckpointService {
         'occurrenceElapsedMilliseconds': started is int
             ? elapsed - started
             : null,
+        if (rest != null)
+          'rest': {
+            'manual': rest.isManual,
+            'durationMilliseconds': restDuration,
+            'remainingMilliseconds': restDuration == null || restElapsed == null
+                ? null
+                : (restDuration > restElapsed ? restDuration - restElapsed : 0),
+          },
         'windows': deadlines?['windows'] ?? <Object?>[],
         'earliestDeadlineMilliseconds':
             deadlines?['earliestDeadlineMilliseconds'],

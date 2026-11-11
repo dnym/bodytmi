@@ -27,6 +27,209 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'scoped timed rests stop at their target or enclosing window boundary',
+    () async {
+      for (final windowSeconds in [5, 1]) {
+        final dir = await Directory.systemTemp.createTemp(
+          'bodytmi-window-rest-',
+        );
+        final path = '${dir.path}/db.sqlite';
+        var store = await TrainingStore.open(path);
+        try {
+          final input = definition().toJson();
+          input['plan'] = {
+            'id': 'window',
+            'type': 'window',
+            'durationSeconds': windowSeconds,
+            'child': {
+              'id': 'sequence',
+              'type': 'sequence',
+              'children': [
+                {'id': 'rest', 'type': 'rest', 'durationSeconds': 1},
+                {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+              ],
+            },
+          };
+          final workout = WorkoutDefinition.fromJson(input);
+          final training = StoredTrainingService(store);
+          await training.publish(workout, 0);
+          final session = await training.start(
+            'session',
+            workout.id,
+            1,
+            instant(1),
+          );
+          final service = WindowCheckpointService(store);
+          final legacy = const SessionWindowClock().start(session);
+          final legacyState = {...jsonObject(legacy['clock'], 'clock')}
+            ..['policy'] = 'bodytmi-window-clock/1'
+            ..remove('occurrenceStartedMilliseconds');
+          await service.save('legacy', session.id, 0, {
+            ...legacy,
+            'clock': legacyState,
+          });
+          equal(
+            jsonObject(
+              (await service.status('legacy'))['rest'],
+              'rest',
+            )['remainingMilliseconds'],
+            null,
+          );
+          var cp = await service.save(
+            'cp',
+            session.id,
+            0,
+            const SessionWindowClock().start(session),
+          );
+          cp = await service.reserve('cp', cp.version);
+          final initial = await service.status('cp');
+          final rest = jsonObject(initial['rest'], 'rest');
+          equal(rest['durationMilliseconds'], 1000);
+          equal(rest['remainingMilliseconds'], 1000);
+          await store.close();
+          Future<Map<String, Object?>> run(
+            int version,
+            int clockVersion, {
+            int? limit,
+          }) async {
+            final response = await invoke(
+              ['checkpoint', 'run'],
+              jsonEncode({
+                'schemaVersion': 1,
+                'database': path,
+                'id': 'cp',
+                'expectedVersion': version,
+                'expectedSessionVersion': 1,
+                'expectedClockVersion': clockVersion,
+                'stopAtRest': true,
+                if (limit != null) 'runForMilliseconds': limit,
+              }),
+            );
+            equal(response.code, 0);
+            return jsonObject(
+              jsonObject(jsonDecode(response.output), 'response')['data'],
+              'run',
+            );
+          }
+
+          final early = await run(cp.version, 1, limit: 100);
+          equal(early['cueCount'], 0);
+          final earlyCp = jsonObject(early['checkpoint'], 'checkpoint');
+          final earlyClock = jsonObject(
+            jsonObject(earlyCp['clock'], 'binding')['clock'],
+            'clock',
+          );
+          equal(earlyClock['elapsedMilliseconds'], 100);
+          final reached = await run(
+            earlyCp['version'] as int,
+            earlyClock['version'] as int,
+          );
+          final result = jsonObject(reached['checkpoint'], 'checkpoint');
+          final clock = jsonObject(
+            jsonObject(result['clock'], 'binding')['clock'],
+            'clock',
+          );
+          equal(clock['elapsedMilliseconds'], 1000);
+          equal(clock['status'], windowSeconds == 1 ? 'boundary' : 'paused');
+          final cue = jsonObject((reached['cues'] as List).single, 'cue');
+          equal(
+            cue['type'],
+            windowSeconds == 1 ? 'window-boundary' : 'window-rest-target',
+          );
+          store = await TrainingStore.open(path);
+          final after = await WindowCheckpointService(store).status('cp');
+          equal(jsonObject(after['rest'], 'rest')['remainingMilliseconds'], 0);
+          equal(
+            (await StoredTrainingService(
+              store,
+            ).session('session')).sets.single.status,
+            SetStatus.planned,
+          );
+          await store.archive();
+          await store.backup('${dir.path}/backup');
+          equal(
+            NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
+            47,
+          );
+        } finally {
+          await store.close();
+          await dir.delete(recursive: true);
+        }
+      }
+    },
+  );
+  test(
+    'scoped rest runner rejects manual rests without starting an owner',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-window-manual-rest-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'window',
+          'type': 'window',
+          'durationSeconds': 10,
+          'child': {
+            'id': 'sequence',
+            'type': 'sequence',
+            'children': [
+              {'id': 'rest', 'type': 'rest', 'manual': true},
+              {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+            ],
+          },
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final service = WindowCheckpointService(store);
+        var cp = await service.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        cp = await service.reserve('cp', cp.version);
+        final view = await service.status('cp');
+        final rest = jsonObject(view['rest'], 'rest');
+        equal(rest['manual'], true);
+        equal(rest['remainingMilliseconds'], null);
+        await store.close();
+        final result = await invoke(
+          ['checkpoint', 'run'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': path,
+            'id': 'cp',
+            'expectedVersion': cp.version,
+            'expectedSessionVersion': 1,
+            'expectedClockVersion': 1,
+            'stopAtRest': true,
+          }),
+        );
+        equal(result.code, 2);
+        store = await TrainingStore.open(path);
+        final unchanged = await WindowCheckpointService(store).show('cp');
+        equal(unchanged.version, cp.version);
+        equal(
+          jsonObject(unchanged.clock['clock'], 'clock')['status'],
+          'paused',
+        );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'checkpoint status exposes deadlines, pending reviews and recovery without mutation',
     () async {
       final dir = await Directory.systemTemp.createTemp(

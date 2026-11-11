@@ -288,6 +288,7 @@ Future<Map<String, Object?>> executeStored(
       'runForMilliseconds',
       'stream',
       'advanceReviewed',
+      'stopAtRest',
     },
     'checkpoint action' => {
       'id',
@@ -662,6 +663,7 @@ Future<Map<String, Object?>> executeStored(
           runForMilliseconds: limit,
           stream: flag('stream'),
           advanceReviewed: flag('advanceReviewed'),
+          stopAtRest: flag('stopAtRest'),
         );
       case 'checkpoint advance-boundary':
         final result = await checkpoints.advanceReviewedBoundary(
