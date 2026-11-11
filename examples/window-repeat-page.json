@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "loop": {
+    "id": "amrap",
+    "durationMilliseconds": 600000,
+    "maxRounds": 100,
+    "maxOccurrences": 1000,
+    "roundDefinition": {
+      "id": "amrap-round",
+      "name": "AMRAP round template",
+      "slots": [
+        {
+          "id": "push",
+          "exercise": "push",
+          "implementation": "bodyweight",
+          "targets": {"reps": {"value": "5", "unit": "rep"}}
+        },
+        {
+          "id": "pull",
+          "exercise": "pull",
+          "implementation": "bodyweight",
+          "targets": {"reps": {"value": "5", "unit": "rep"}}
+        }
+      ],
+      "plan": {
+        "id": "round",
+        "type": "sequence",
+        "children": [
+          {"id": "push-set", "type": "effort", "slot": "push"},
+          {"id": "pull-set", "type": "effort", "slot": "pull"}
+        ]
+      }
+    }
+  },
+  "round": 0,
+  "elapsedMilliseconds": 0,
+  "offset": 0,
+  "limit": 100
+}

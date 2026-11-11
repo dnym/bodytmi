@@ -21,6 +21,7 @@ const commandNames = [
   'activity window-crossing',
   'activity window-transition',
   'activity window-clock',
+  'activity window-repeat-page',
   'tempo sample',
   'session start',
   'session show',
@@ -135,6 +136,23 @@ final class Commands {
               group.toJson(),
           ],
         };
+      case 'activity window-repeat-page':
+        keys({'loop', 'round', 'elapsedMilliseconds', 'offset', 'limit'});
+        int number(String key, {required int defaultValue}) {
+          final value = request.containsKey(key) ? request[key] : defaultValue;
+          if (value is! int) invalid('$key must be an integer.');
+          return value;
+        }
+        if (!request.containsKey('round') ||
+            !request.containsKey('elapsedMilliseconds'))
+          invalid('round and elapsedMilliseconds are required.');
+        data = const WindowRepeatPreview().page(
+          WindowRepeatSpec.fromJson(request['loop']),
+          round: number('round', defaultValue: 0),
+          elapsedMilliseconds: number('elapsedMilliseconds', defaultValue: 0),
+          offset: number('offset', defaultValue: 0),
+          limit: number('limit', defaultValue: 100),
+        );
       case 'activity window-status':
         keys({
           'definition',

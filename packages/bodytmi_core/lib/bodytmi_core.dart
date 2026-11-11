@@ -4,6 +4,7 @@ library;
 export 'src/errors.dart';
 export 'src/quantity.dart';
 export 'src/activity.dart';
+export 'src/window_repeat.dart';
 export 'src/workout.dart';
 export 'src/family.dart';
 export 'src/progression.dart';

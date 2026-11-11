@@ -27,6 +27,147 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'deadline-bounded repeat pages generate stable virtual rounds without execution',
+    () async {
+      final definitionJson = definition().toJson();
+      definitionJson['plan'] = {
+        'id': 'round',
+        'type': 'sequence',
+        'children': [
+          {'id': 'first', 'type': 'effort', 'slot': 'bench-heavy'},
+          {
+            'id': 'nested',
+            'type': 'repeat',
+            'count': 2,
+            'restBetweenSeconds': 2,
+            'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-light'},
+          },
+          {'id': 'rest', 'type': 'rest', 'manual': true},
+        ],
+      };
+      final loopJson = <String, Object?>{
+        'id': 'amrap',
+        'durationMilliseconds': 600000,
+        'maxRounds': 3,
+        'maxOccurrences': 12,
+        'roundDefinition': definitionJson,
+      };
+      final loop = WindowRepeatSpec.fromJson(loopJson);
+      final copy = WindowRepeatSpec.fromJson(loop.toJson());
+      jsonEqual(copy.toJson(), loop.toJson());
+      const preview = WindowRepeatPreview();
+      final first = preview.page(
+        loop,
+        round: 0,
+        elapsedMilliseconds: 100,
+        limit: 2,
+      );
+      equal(first['status'], 'ready');
+      equal(first['occurrenceCount'], 5);
+      equal(first['nextOffset'], 2);
+      final second = preview.page(
+        loop,
+        round: 0,
+        elapsedMilliseconds: 100,
+        offset: 2,
+        limit: 2,
+      );
+      equal(second['nextOffset'], 4);
+      final third = preview.page(
+        loop,
+        round: 0,
+        elapsedMilliseconds: 100,
+        offset: 4,
+        limit: 2,
+      );
+      equal(third['nextOffset'], null);
+      final all = [
+        ...first['occurrences'] as List,
+        ...second['occurrences'] as List,
+        ...third['occurrences'] as List,
+      ];
+      final full = preview.page(loop, round: 0, elapsedMilliseconds: 100);
+      jsonEqual(all, full['occurrences']);
+      equal(jsonObject(all.first, 'occurrence')['id'], 'amrap[0]/round/first');
+      final next = preview.page(loop, round: 1, elapsedMilliseconds: 500);
+      equal(
+        jsonObject((next['occurrences'] as List).first, 'occurrence')['id'],
+        'amrap[1]/round/first',
+      );
+      equal(next['status'], 'ready');
+      final limited = preview.page(loop, round: 2, elapsedMilliseconds: 500);
+      equal(limited['status'], 'resourceLimit');
+      equal(limited['limitReason'], 'maxOccurrences');
+      jsonEqual(limited['occurrences'], []);
+      equal(
+        preview.page(loop, round: 3, elapsedMilliseconds: 500)['limitReason'],
+        'maxRounds',
+      );
+      final expired = preview.page(loop, round: 3, elapsedMilliseconds: 600000);
+      equal(expired['status'], 'windowExpired');
+      equal(expired['limitReason'], null);
+      jsonEqual(expired['occurrences'], []);
+      final singleDefinition = definition().toJson()
+        ..['plan'] = {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'};
+      final large = WindowRepeatSpec.fromJson({
+        ...loopJson,
+        'maxRounds': 10000,
+        'maxOccurrences': 10000,
+        'roundDefinition': singleDefinition,
+      });
+      final distant = preview.page(large, round: 9999, elapsedMilliseconds: 1);
+      equal(distant['status'], 'ready');
+      equal((distant['occurrences'] as List).length, 1);
+      equal(
+        jsonObject((distant['occurrences'] as List).single, 'occurrence')['id'],
+        'amrap[9999]/set',
+      );
+      equal(
+        preview.page(large, round: 10000, elapsedMilliseconds: 1)['status'],
+        'resourceLimit',
+      );
+      rejects(() => preview.page(loop, round: 0, elapsedMilliseconds: -1));
+      rejects(
+        () => preview.page(loop, round: 0, elapsedMilliseconds: 0, offset: 6),
+      );
+      rejects(
+        () => preview.page(loop, round: 0, elapsedMilliseconds: 0, limit: 1001),
+      );
+      rejects(() => WindowRepeatSpec.fromJson({...loopJson, 'maxRounds': 0}));
+      rejects(() => WindowRepeatSpec.fromJson({...loopJson, 'extra': true}));
+      final request = {
+        'schemaVersion': 1,
+        'loop': loopJson,
+        'round': 0,
+        'elapsedMilliseconds': 100,
+        'offset': 2,
+        'limit': 2,
+      };
+      jsonEqual(
+        const Commands().execute(
+          'activity window-repeat-page',
+          request,
+        )['data'],
+        second,
+      );
+      final native = await invoke([
+        'activity',
+        'window-repeat-page',
+      ], jsonEncode(request));
+      equal(native.code, 0);
+      jsonEqual(
+        jsonObject(jsonDecode(native.output), 'response')['data'],
+        second,
+      );
+      rejects(
+        () => const Commands().execute('activity window-repeat-page', {
+          ...request,
+          'round': null,
+        }),
+      );
+    },
+  );
+  test(
     'expired batch reviews explicit work and preserves other results atomically',
     () async {
       final dir = await Directory.systemTemp.createTemp(
