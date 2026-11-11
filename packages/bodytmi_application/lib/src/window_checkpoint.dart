@@ -335,6 +335,74 @@ final class WindowCheckpointService {
     required int expectedSessionVersion,
     required int expectedClockVersion,
     required bool confirm,
+  }) async {
+    final result = await _resolveExpired(
+      id,
+      expectedVersion: expectedVersion,
+      expectedSessionVersion: expectedSessionVersion,
+      expectedClockVersion: expectedClockVersion,
+      confirm: confirm,
+    );
+    return (
+      session: result.session,
+      checkpoint: result.checkpoint,
+      skipped: result.skipped,
+    );
+  }
+
+  /// Complete the current effort and explicitly abandon remaining expired work.
+  Future<
+    ({
+      TrainingSession session,
+      WindowCheckpoint checkpoint,
+      List<String> skipped,
+      String occurrenceId,
+    })
+  >
+  reviewExpired(
+    String id, {
+    required int expectedVersion,
+    required int expectedSessionVersion,
+    required int expectedClockVersion,
+    required bool confirm,
+    Metrics actuals = const {},
+    bool acceptSuggested = false,
+  }) async {
+    final result = await _resolveExpired(
+      id,
+      expectedVersion: expectedVersion,
+      expectedSessionVersion: expectedSessionVersion,
+      expectedClockVersion: expectedClockVersion,
+      confirm: confirm,
+      reviewCurrent: true,
+      actuals: actuals,
+      acceptSuggested: acceptSuggested,
+    );
+    return (
+      session: result.session,
+      checkpoint: result.checkpoint,
+      skipped: result.skipped,
+      occurrenceId: result.occurrenceId!,
+    );
+  }
+
+  Future<
+    ({
+      TrainingSession session,
+      WindowCheckpoint checkpoint,
+      List<String> skipped,
+      String? occurrenceId,
+    })
+  >
+  _resolveExpired(
+    String id, {
+    required int expectedVersion,
+    required int expectedSessionVersion,
+    required int expectedClockVersion,
+    required bool confirm,
+    bool reviewCurrent = false,
+    Metrics actuals = const {},
+    bool acceptSuggested = false,
   }) => repository.transaction(() async {
     if (!confirm) invalid('Skipping expired work requires confirm:true.');
     final current = await show(id);
@@ -379,16 +447,31 @@ final class WindowCheckpointService {
         .map((scope) => scope.end)
         .reduce((a, b) => a > b ? a : b);
     final occurrences = definition.plan.occurrences().toList();
+    String? reviewed;
+    var updated = session;
+    if (reviewCurrent) {
+      if (occurrences[occurrence].activity is! Effort)
+        invalid('Review requires a current effort.');
+      reviewed = occurrences[occurrence].id;
+      if (session.set(reviewed).status != SetStatus.planned)
+        invalid('Review requires a planned current effort.');
+      updated = const TrainingService().complete(
+        session,
+        reviewed,
+        actuals,
+        acceptSuggested: acceptSuggested,
+      );
+    }
     final ids = <String>{
       for (var i = occurrence; i < destination; i++)
         if (occurrences[i].activity is Effort) occurrences[i].id,
     };
     final skipped = [
-      for (final set in session.sets)
+      for (final set in updated.sets)
         if (ids.contains(set.id) && set.status == SetStatus.planned) set.id,
     ];
-    final updated = const TrainingService().skipOccurrences(
-      session,
+    updated = const TrainingService().skipOccurrences(
+      updated,
       ids,
       confirm: true,
     );
@@ -399,7 +482,7 @@ final class WindowCheckpointService {
       action: 'move',
       toOccurrence: destination,
     );
-    final saved = skipped.isEmpty
+    final saved = skipped.isEmpty && !reviewCurrent
         ? session
         : await training.edit(
             session.id,
@@ -412,7 +495,12 @@ final class WindowCheckpointService {
       next,
       reserved: current.reserved && !complete,
     );
-    return (session: saved, checkpoint: checkpoint, skipped: skipped);
+    return (
+      session: saved,
+      checkpoint: checkpoint,
+      skipped: skipped,
+      occurrenceId: reviewed,
+    );
   });
 
   Future<void> delete(

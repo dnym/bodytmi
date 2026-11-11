@@ -41,6 +41,7 @@ const storedCommandNames = [
   'checkpoint save',
   'checkpoint review',
   'checkpoint skip-expired',
+  'checkpoint review-expired',
   'checkpoint reserve',
   'checkpoint release',
   'checkpoint action',
@@ -252,6 +253,15 @@ Future<Map<String, Object?>> executeStored(
       'expectedSessionVersion',
       'expectedClockVersion',
       'confirm',
+    },
+    'checkpoint review-expired' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'expectedClockVersion',
+      'confirm',
+      'actuals',
+      'acceptSuggested',
     },
     'checkpoint run' => {
       'id',
@@ -633,6 +643,22 @@ Future<Map<String, Object?>> executeStored(
           runForMilliseconds: limit,
           stream: flag('stream'),
         );
+      case 'checkpoint review-expired':
+        final result = await checkpoints.reviewExpired(
+          identifier(request, 'id'),
+          expectedVersion: integer('expectedVersion'),
+          expectedSessionVersion: integer('expectedSessionVersion'),
+          expectedClockVersion: integer('expectedClockVersion'),
+          confirm: flag('confirm'),
+          actuals: metricsFromJson(request['actuals'] ?? <String, Object?>{}),
+          acceptSuggested: flag('acceptSuggested'),
+        );
+        data = {
+          'session': result.session.toJson(),
+          'checkpoint': result.checkpoint.toJson(),
+          'occurrenceId': result.occurrenceId,
+          'skipped': result.skipped,
+        };
       case 'checkpoint skip-expired':
         final result = await checkpoints.skipExpired(
           identifier(request, 'id'),

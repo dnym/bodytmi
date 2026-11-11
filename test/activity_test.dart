@@ -27,6 +27,228 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'expired review of final effort releases reservation without inferred duration',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-review-last-');
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'window',
+          'type': 'window',
+          'durationSeconds': 1,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final service = WindowCheckpointService(store);
+        var cp = await service.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        cp = await service.reserve('cp', cp.version);
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          action: 'resume',
+          ownerId: 'owner',
+        );
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 2,
+          action: 'advance',
+          ownerId: 'owner',
+          ownerElapsedMilliseconds: 1000,
+        );
+        final result = await service.reviewExpired(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 3,
+          confirm: true,
+          actuals: session.sets.single.suggested,
+        );
+        jsonEqual(result.skipped, []);
+        equal(result.session.contentVersion, 2);
+        equal(result.session.sets.single.status, SetStatus.completed);
+        equal(result.session.sets.single.timing, null);
+        check(!result.checkpoint.reserved);
+        equal(
+          jsonObject(result.checkpoint.clock['clock'], 'clock')['status'],
+          'complete',
+        );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'expired review completes current effort and skips remaining work atomically',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-expired-review-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'plan',
+          'type': 'sequence',
+          'children': [
+            {
+              'id': 'window',
+              'type': 'window',
+              'durationSeconds': 1,
+              'child': {
+                'id': 'work',
+                'type': 'repeat',
+                'count': 3,
+                'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+              },
+            },
+            {'id': 'after', 'type': 'effort', 'slot': 'bench-light'},
+          ],
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final ids = session.sets.map((set) => set.id).toList();
+        final service = WindowCheckpointService(store);
+        var cp = await service.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        cp = await service.reserve('cp', cp.version);
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          action: 'resume',
+          ownerId: 'owner',
+        );
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 2,
+          action: 'advance',
+          ownerId: 'owner',
+          ownerElapsedMilliseconds: 1000,
+        );
+        Future<Object?> review({
+          bool confirm = true,
+          bool accept = true,
+          int version = 3,
+        }) => service.reviewExpired(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: version,
+          confirm: confirm,
+          acceptSuggested: accept,
+        );
+        await expectCheckpointFailure(review(confirm: false));
+        await expectCheckpointFailure(review(accept: false));
+        await expectCheckpointFailure(review(version: 2), 'conflict');
+        final raw = sqlite3.open(path);
+        try {
+          raw.execute(
+            "CREATE TRIGGER test_review_expired_failure BEFORE UPDATE ON window_checkpoints BEGIN SELECT RAISE(ABORT, 'forced checkpoint failure'); END",
+          );
+          var failed = false;
+          try {
+            await review();
+          } catch (_) {
+            failed = true;
+          }
+          check(failed);
+          final unchanged = await training.session(session.id);
+          equal(unchanged.contentVersion, 1);
+          for (final id in ids) {
+            equal(unchanged.set(id).status, SetStatus.planned);
+          }
+          equal((await service.show('cp')).version, cp.version);
+          raw.execute('DROP TRIGGER test_review_expired_failure');
+        } finally {
+          raw.close();
+        }
+        await store.close();
+        final payload = jsonEncode({
+          'schemaVersion': 1,
+          'database': path,
+          'id': 'cp',
+          'expectedVersion': cp.version,
+          'expectedSessionVersion': 1,
+          'expectedClockVersion': 3,
+          'confirm': true,
+          'acceptSuggested': true,
+        });
+        final response = await invoke([
+          'checkpoint',
+          'review-expired',
+        ], payload);
+        equal(response.code, 0);
+        final result = jsonObject(
+          jsonObject(jsonDecode(response.output), 'response')['data'],
+          'data',
+        );
+        equal(result['occurrenceId'], ids.first);
+        jsonEqual(result['skipped'], [ids[1], ids[2]]);
+        final retry = await invoke(['checkpoint', 'review-expired'], payload);
+        equal(retry.code, 5);
+        final reopened = await TrainingStore.open(path);
+        try {
+          final saved = await StoredTrainingService(
+            reopened,
+          ).session(session.id);
+          equal(saved.set(ids[0]).status, SetStatus.completed);
+          equal(saved.set(ids[1]).status, SetStatus.skipped);
+          equal(saved.set(ids[2]).status, SetStatus.skipped);
+          equal(saved.set(ids[3]).status, SetStatus.planned);
+          equal(saved.contentVersion, 3);
+          final updated = await WindowCheckpointService(reopened).show('cp');
+          equal(jsonObject(updated.clock['clock'], 'clock')['occurrence'], 3);
+          check(updated.reserved);
+          await reopened.archive();
+          await reopened.backup('${dir.path}/backup');
+          equal(
+            NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
+            47,
+          );
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'skip-expired CLI releases a finished window with no remaining work',
     () async {
       final dir = await Directory.systemTemp.createTemp('bodytmi-expired-cli-');
