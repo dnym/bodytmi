@@ -320,6 +320,7 @@ final class Commands {
           'action',
           'actuals',
           'acceptSuggested',
+          'observations',
           'confirm',
         });
         final result = sessionWindowReviewRequest(

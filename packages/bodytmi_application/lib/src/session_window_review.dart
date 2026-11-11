@@ -17,6 +17,7 @@ final class SessionWindowReview {
     Metrics actuals = const {},
     bool acceptSuggested = false,
     bool confirm = false,
+    SetObservations? observations,
   }) {
     if (session.contentVersion != expectedSessionVersion)
       throw const BodyTmiException(
@@ -27,7 +28,11 @@ final class SessionWindowReview {
       invalid('Window review requires an active session.');
     if (!{'complete', 'skip'}.contains(action))
       invalid('Window review action must be complete or skip.');
-    if (action == 'skip' && (!confirm || actuals.isNotEmpty || acceptSuggested))
+    if (action == 'skip' &&
+        (!confirm ||
+            actuals.isNotEmpty ||
+            acceptSuggested ||
+            observations != null))
       invalid('Skipping requires confirmation and no actuals.');
     if (action == 'complete' && confirm)
       invalid('Confirmation is only used for skipping.');
@@ -49,11 +54,12 @@ final class SessionWindowReview {
         'Review requires a planned effort; move past reviewed work explicitly.',
       );
     final updated = action == 'complete'
-        ? const TrainingService().complete(
+        ? const TrainingService().completeWithObservations(
             session,
             id,
             actuals,
             acceptSuggested: acceptSuggested,
+            observations: observations,
           )
         : const TrainingService().skip(session, id, confirm: true);
     final next = const SessionWindowClock().apply(

@@ -279,6 +279,27 @@ final class TrainingService {
     session.set(setId).complete(actuals, acceptSuggested: acceptSuggested),
   );
 
+  /// Complete an effort and optionally replace its explicit observations.
+  TrainingSession completeWithObservations(
+    TrainingSession session,
+    String setId,
+    Metrics actuals, {
+    bool acceptSuggested = false,
+    SetObservations? observations,
+  }) {
+    if (observations?.isEmpty == true)
+      invalid('Provide nonempty observations or omit them.');
+    final completed = complete(
+      session,
+      setId,
+      actuals,
+      acceptSuggested: acceptSuggested,
+    );
+    return observations == null
+        ? completed
+        : annotate(completed, setId, observations);
+  }
+
   TrainingSession annotate(
     TrainingSession session,
     String setId,

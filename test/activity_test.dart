@@ -27,6 +27,226 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'window review atomically retains explicit interrupted effort observations',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-window-observations-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'window',
+          'type': 'window',
+          'durationSeconds': 1,
+          'child': {
+            'id': 'rounds',
+            'type': 'repeat',
+            'count': 2,
+            'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+          },
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final actuals = {
+          ...session.sets.first.suggested,
+          'reps': Quantity('3', 'rep'),
+        };
+        final reports = SetObservations.fromJson({
+          'terminationReason': 'interrupted',
+          'notes': 'Window elapsed',
+          'rpe': {'value': '8', 'scale': '0-10'},
+        });
+        final initial = const SessionWindowClock().start(session);
+        final pure = const SessionWindowReview().review(
+          session,
+          initial,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          toOccurrence: 1,
+          action: 'complete',
+          actuals: actuals,
+          observations: reports,
+        );
+        check(!pure.session.sets.first.eligibleForPerformance);
+        equal(
+          pure.session.sets.first.observations!.terminationReason,
+          'interrupted',
+        );
+        final pureCli = const Commands().execute('session window-review', {
+          'schemaVersion': 1,
+          'session': session.toJson(),
+          'clock': initial,
+          'expectedSessionVersion': 1,
+          'expectedClockVersion': 1,
+          'toOccurrence': 1,
+          'action': 'complete',
+          'actuals': metricsToJson(actuals),
+          'observations': reports.toJson(),
+        });
+        jsonEqual(pureCli['data'], {
+          'session': pure.session.toJson(),
+          'clock': pure.clock,
+          'occurrenceId': pure.occurrenceId,
+        });
+        rejects(
+          () => const SessionWindowReview().review(
+            session,
+            initial,
+            expectedSessionVersion: 1,
+            expectedClockVersion: 1,
+            toOccurrence: 1,
+            action: 'skip',
+            confirm: true,
+            observations: reports,
+          ),
+        );
+        final service = WindowCheckpointService(store);
+        final other = await training.start('other', workout.id, 1, instant(1));
+        final otherClock = const SessionWindowClock().start(other);
+        await service.save('other-cp', other.id, 0, otherClock);
+        final early = await service.completeCurrent(
+          'other-cp',
+          expectedVersion: 1,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          actuals: actuals,
+          observations: reports,
+        );
+        check(!early.session.sets.first.eligibleForPerformance);
+        final third = await training.start('third', workout.id, 1, instant(1));
+        await service.save(
+          'third-cp',
+          third.id,
+          0,
+          const SessionWindowClock().start(third),
+        );
+        final moved = await service.review(
+          'third-cp',
+          expectedVersion: 1,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          toOccurrence: 1,
+          action: 'complete',
+          actuals: actuals,
+          observations: reports,
+        );
+        check(!moved.session.sets.first.eligibleForPerformance);
+        var cp = await service.save('cp', session.id, 0, initial);
+        cp = await service.reserve('cp', cp.version);
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          action: 'resume',
+          ownerId: 'owner',
+        );
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 2,
+          action: 'advance',
+          ownerId: 'owner',
+          ownerElapsedMilliseconds: 1000,
+        );
+        await expectCheckpointFailure(
+          service.reviewExpired(
+            'cp',
+            expectedVersion: cp.version,
+            expectedSessionVersion: 1,
+            expectedClockVersion: 3,
+            confirm: true,
+            actuals: actuals,
+            observations: SetObservations.fromJson(<String, Object?>{}),
+          ),
+        );
+        final raw = sqlite3.open(path);
+        try {
+          raw.execute(
+            "CREATE TRIGGER test_observation_failure BEFORE UPDATE ON window_checkpoints BEGIN SELECT RAISE(ABORT, 'forced checkpoint failure'); END",
+          );
+          var failed = false;
+          try {
+            await service.reviewExpired(
+              'cp',
+              expectedVersion: cp.version,
+              expectedSessionVersion: 1,
+              expectedClockVersion: 3,
+              confirm: true,
+              actuals: actuals,
+              observations: reports,
+            );
+          } catch (_) {
+            failed = true;
+          }
+          check(failed);
+          equal((await training.session('session')).contentVersion, 1);
+          equal(
+            (await training.session('session')).sets.first.observations,
+            null,
+          );
+          equal((await service.show('cp')).version, cp.version);
+          raw.execute('DROP TRIGGER test_observation_failure');
+        } finally {
+          raw.close();
+        }
+        await store.close();
+        final payload = jsonEncode({
+          'schemaVersion': 1,
+          'database': path,
+          'id': 'cp',
+          'expectedVersion': cp.version,
+          'expectedSessionVersion': 1,
+          'expectedClockVersion': 3,
+          'confirm': true,
+          'actuals': metricsToJson(actuals),
+          'observations': reports.toJson(),
+        });
+        final response = await invoke([
+          'checkpoint',
+          'review-expired',
+        ], payload);
+        equal(response.code, 0);
+        final retry = await invoke(['checkpoint', 'review-expired'], payload);
+        equal(retry.code, 5);
+        store = await TrainingStore.open(path);
+        final saved = await StoredTrainingService(store).session('session');
+        equal(saved.sets.first.status, SetStatus.completed);
+        check(!saved.sets.first.eligibleForPerformance);
+        equal(saved.sets.first.actuals['reps']!.value.toString(), '3');
+        jsonEqual(saved.sets.first.observations!.toJson(), reports.toJson());
+        equal(saved.sets.last.status, SetStatus.skipped);
+        equal(saved.contentVersion, 4);
+        equal(
+          jsonObject(
+            (await WindowCheckpointService(store).show('cp')).clock['clock'],
+            'clock',
+          )['status'],
+          'complete',
+        );
+        await store.archive();
+        await store.backup('${dir.path}/backup');
+        equal(
+          NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
+          47,
+        );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'scoped rest advancement prepares the next occurrence without recording work',
     () async {
       for (final windowSeconds in [5, 1]) {

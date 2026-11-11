@@ -29,6 +29,9 @@ sessionWindowReviewRequest(
     actuals: metricsFromJson(request['actuals'] ?? <String, Object?>{}),
     acceptSuggested: flag('acceptSuggested'),
     confirm: flag('confirm'),
+    observations: request.containsKey('observations')
+        ? SetObservations.fromJson(request['observations'])
+        : null,
   );
 }
 

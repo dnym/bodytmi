@@ -492,6 +492,7 @@ final class WindowCheckpointService {
     required int expectedClockVersion,
     Metrics actuals = const {},
     bool acceptSuggested = false,
+    SetObservations? observations,
   }) => repository.transaction(() async {
     final current = await show(id);
     if (current.version != expectedVersion)
@@ -522,11 +523,12 @@ final class WindowCheckpointService {
     final occurrenceId = occurrences[occurrence].id;
     if (session.set(occurrenceId).status != SetStatus.planned)
       invalid('Review requires a planned current effort.');
-    final updated = const TrainingService().complete(
+    final updated = const TrainingService().completeWithObservations(
       session,
       occurrenceId,
       actuals,
       acceptSuggested: acceptSuggested,
+      observations: observations,
     );
     final saved = await training.edit(
       session.id,
@@ -558,6 +560,7 @@ final class WindowCheckpointService {
     Metrics actuals = const {},
     bool acceptSuggested = false,
     bool confirm = false,
+    SetObservations? observations,
   }) => repository.transaction(() async {
     final current = await show(id);
     if (current.version != expectedVersion)
@@ -574,6 +577,7 @@ final class WindowCheckpointService {
       actuals: actuals,
       acceptSuggested: acceptSuggested,
       confirm: confirm,
+      observations: observations,
     );
     final saved = await training.edit(
       session.id,
@@ -640,6 +644,7 @@ final class WindowCheckpointService {
     required bool confirm,
     Metrics actuals = const {},
     bool acceptSuggested = false,
+    SetObservations? observations,
   }) async {
     final result = await _resolveExpired(
       id,
@@ -650,6 +655,7 @@ final class WindowCheckpointService {
       reviewCurrent: true,
       actuals: actuals,
       acceptSuggested: acceptSuggested,
+      observations: observations,
     );
     return (
       session: result.session,
@@ -676,6 +682,7 @@ final class WindowCheckpointService {
     bool reviewCurrent = false,
     Metrics actuals = const {},
     bool acceptSuggested = false,
+    SetObservations? observations,
   }) => repository.transaction(() async {
     if (!confirm) invalid('Skipping expired work requires confirm:true.');
     final current = await show(id);
@@ -711,11 +718,12 @@ final class WindowCheckpointService {
       reviewed = occurrences[occurrence].id;
       if (session.set(reviewed).status != SetStatus.planned)
         invalid('Review requires a planned current effort.');
-      updated = const TrainingService().complete(
+      updated = const TrainingService().completeWithObservations(
         session,
         reviewed,
         actuals,
         acceptSuggested: acceptSuggested,
+        observations: observations,
       );
     }
     final ids = <String>{

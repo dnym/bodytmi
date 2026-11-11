@@ -246,6 +246,7 @@ Future<Map<String, Object?>> executeStored(
       'action',
       'actuals',
       'acceptSuggested',
+      'observations',
       'confirm',
     },
     'checkpoint save' => {'id', 'sessionId', 'expectedVersion', 'clock'},
@@ -265,6 +266,7 @@ Future<Map<String, Object?>> executeStored(
       'expectedClockVersion',
       'actuals',
       'acceptSuggested',
+      'observations',
     },
     'checkpoint advance-boundary' => {
       'id',
@@ -287,6 +289,7 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
       'actuals',
       'acceptSuggested',
+      'observations',
     },
     'checkpoint run' => {
       'id',
@@ -319,6 +322,7 @@ Future<Map<String, Object?>> executeStored(
       'action',
       'actuals',
       'acceptSuggested',
+      'observations',
       'confirm',
     },
     'checkpoint show' => {'id'},
@@ -703,6 +707,9 @@ Future<Map<String, Object?>> executeStored(
           expectedClockVersion: integer('expectedClockVersion'),
           actuals: metricsFromJson(request['actuals'] ?? <String, Object?>{}),
           acceptSuggested: flag('acceptSuggested'),
+          observations: request.containsKey('observations')
+              ? SetObservations.fromJson(request['observations'])
+              : null,
         );
         data = {
           'session': result.session.toJson(),
@@ -718,6 +725,9 @@ Future<Map<String, Object?>> executeStored(
           confirm: flag('confirm'),
           actuals: metricsFromJson(request['actuals'] ?? <String, Object?>{}),
           acceptSuggested: flag('acceptSuggested'),
+          observations: request.containsKey('observations')
+              ? SetObservations.fromJson(request['observations'])
+              : null,
         );
         data = {
           'session': result.session.toJson(),
@@ -749,6 +759,9 @@ Future<Map<String, Object?>> executeStored(
           actuals: metricsFromJson(request['actuals'] ?? <String, Object?>{}),
           acceptSuggested: flag('acceptSuggested'),
           confirm: flag('confirm'),
+          observations: request.containsKey('observations')
+              ? SetObservations.fromJson(request['observations'])
+              : null,
         );
         data = {
           'session': result.session.toJson(),

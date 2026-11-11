@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "window-checkpoint",
+  "expectedVersion": 4,
+  "expectedSessionVersion": 1,
+  "expectedClockVersion": 3,
+  "confirm": true,
+  "actuals": {"reps": {"value": "3", "unit": "rep"}},
+  "observations": {"terminationReason": "interrupted", "notes": "Window elapsed"}
+}
