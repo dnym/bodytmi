@@ -18,8 +18,11 @@ Future<Map<String, Object?>> runWindowClock(
   bool stream = false,
   bool advanceReviewed = false,
   bool stopAtRest = false,
+  bool advanceRest = false,
 }) async {
   final service = WindowCheckpointService(store);
+  if (advanceRest && !stopAtRest)
+    invalid('advanceRest requires stopAtRest:true.');
   int? restRemaining;
   int? restDuration;
   String? restOccurrenceId;
@@ -106,6 +109,7 @@ Future<Map<String, Object?>> runWindowClock(
     watch.stop();
     final cues = <Map<String, Object?>>[];
     var boundaryAdvanced = false;
+    var restAdvanced = false;
     if (state['status'] == 'boundary') {
       final cue = {
         'type': 'window-boundary',
@@ -141,6 +145,15 @@ Future<Map<String, Object?>> runWindowClock(
       };
       cues.add(cue);
       if (stream) stdout.writeln(jsonEncode({'schemaVersion': 1, 'data': cue}));
+      if (advanceRest) {
+        current = await service.advanceRest(
+          id,
+          expectedVersion: current.version,
+          expectedSessionVersion: expectedSessionVersion,
+          expectedClockVersion: state['version'] as int,
+        );
+        restAdvanced = true;
+      }
     }
     return {
       'checkpoint': current.toJson(),
@@ -150,6 +163,7 @@ Future<Map<String, Object?>> runWindowClock(
       'interrupted': interrupted,
       'requiresRecovery': false,
       if (advanceReviewed) 'boundaryAdvanced': boundaryAdvanced,
+      if (advanceRest) 'restAdvanced': restAdvanced,
     };
   } finally {
     await subscription.cancel();

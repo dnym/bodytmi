@@ -165,6 +165,55 @@ final class WindowCheckpointService {
     return _replace(current, next, reserved: !complete);
   });
 
+  /// Acknowledge a completed timed rest or an explicitly confirmed manual rest.
+  Future<WindowCheckpoint> advanceRest(
+    String id, {
+    required int expectedVersion,
+    required int expectedSessionVersion,
+    required int expectedClockVersion,
+    bool confirm = false,
+  }) => repository.transaction(() async {
+    final view = await status(id);
+    final checkpoint = jsonObject(view['checkpoint'], 'checkpoint');
+    final clock = jsonObject(
+      jsonObject(checkpoint['clock'], 'clock')['clock'],
+      'clock',
+    );
+    if (checkpoint['version'] != expectedVersion ||
+        view['sessionContentVersion'] != expectedSessionVersion ||
+        clock['version'] != expectedClockVersion)
+      throw const BodyTmiException(
+        'conflict',
+        'Checkpoint, session or clock version changed.',
+      );
+    if (checkpoint['reserved'] != true)
+      invalid('Reserve the checkpoint before clock actions.');
+    if (clock['status'] != 'paused')
+      invalid(
+        'Rest advancement requires a paused clock before any window boundary.',
+      );
+    final restInput = view['rest'];
+    final occurrenceInput = view['currentOccurrence'];
+    if (restInput == null || occurrenceInput == null)
+      invalid('Rest advancement requires a current rest.');
+    final rest = jsonObject(restInput, 'rest');
+    if (rest['manual'] == true) {
+      if (!confirm) invalid('Manual rest advancement requires confirm:true.');
+    } else if (rest['remainingMilliseconds'] != 0) {
+      invalid('The timed rest target must be reached before advancement.');
+    }
+    final occurrence =
+        jsonObject(occurrenceInput, 'occurrence')['index'] as int;
+    return action(
+      id,
+      expectedVersion: expectedVersion,
+      expectedSessionVersion: expectedSessionVersion,
+      expectedClockVersion: expectedClockVersion,
+      action: 'move',
+      toOccurrence: occurrence + 1,
+    );
+  });
+
   Future<WindowCheckpoint> save(
     String id,
     String sessionId,

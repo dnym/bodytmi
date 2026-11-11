@@ -27,6 +27,223 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'scoped rest advancement prepares the next occurrence without recording work',
+    () async {
+      for (final windowSeconds in [5, 1]) {
+        final dir = await Directory.systemTemp.createTemp(
+          'bodytmi-advance-rest-',
+        );
+        final path = '${dir.path}/db.sqlite';
+        var store = await TrainingStore.open(path);
+        try {
+          final input = definition().toJson();
+          input['plan'] = {
+            'id': 'window',
+            'type': 'window',
+            'durationSeconds': windowSeconds,
+            'child': {
+              'id': 'sequence',
+              'type': 'sequence',
+              'children': [
+                {'id': 'rest', 'type': 'rest', 'durationSeconds': 1},
+                {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+              ],
+            },
+          };
+          final workout = WorkoutDefinition.fromJson(input);
+          final training = StoredTrainingService(store);
+          await training.publish(workout, 0);
+          final session = await training.start(
+            'session',
+            workout.id,
+            1,
+            instant(1),
+          );
+          final service = WindowCheckpointService(store);
+          var cp = await service.save(
+            'cp',
+            session.id,
+            0,
+            const SessionWindowClock().start(session),
+          );
+          cp = await service.reserve('cp', cp.version);
+          await expectCheckpointFailure(
+            service.advanceRest(
+              'cp',
+              expectedVersion: cp.version,
+              expectedSessionVersion: 1,
+              expectedClockVersion: 1,
+            ),
+          );
+          await store.close();
+          Future<({int code, Map<String, Object?>? data})> call(
+            List<String> command,
+            Map<String, Object?> args,
+          ) async {
+            final response = await invoke(
+              command,
+              jsonEncode({
+                'schemaVersion': 1,
+                'database': path,
+                'id': 'cp',
+                ...args,
+              }),
+            );
+            return (
+              code: response.code,
+              data: response.code == 0
+                  ? jsonObject(
+                      jsonObject(
+                        jsonDecode(response.output),
+                        'response',
+                      )['data'],
+                      'data',
+                    )
+                  : null,
+            );
+          }
+
+          final invalidOption = await call(
+            ['checkpoint', 'run'],
+            {
+              'expectedVersion': cp.version,
+              'expectedSessionVersion': 1,
+              'expectedClockVersion': 1,
+              'advanceRest': true,
+            },
+          );
+          equal(invalidOption.code, 2);
+          final run = await call(
+            ['checkpoint', 'run'],
+            {
+              'expectedVersion': cp.version,
+              'expectedSessionVersion': 1,
+              'expectedClockVersion': 1,
+              'stopAtRest': true,
+              'advanceRest': true,
+            },
+          );
+          equal(run.code, 0);
+          equal(run.data!['restAdvanced'], windowSeconds != 1);
+          final checkpoint = jsonObject(run.data!['checkpoint'], 'checkpoint');
+          final clock = jsonObject(
+            jsonObject(checkpoint['clock'], 'binding')['clock'],
+            'clock',
+          );
+          equal(clock['elapsedMilliseconds'], 1000);
+          equal(clock['status'], windowSeconds == 1 ? 'boundary' : 'paused');
+          equal(clock['occurrence'], windowSeconds == 1 ? 0 : 1);
+          final cue = jsonObject((run.data!['cues'] as List).single, 'cue');
+          equal(
+            cue['type'],
+            windowSeconds == 1 ? 'window-boundary' : 'window-rest-target',
+          );
+          final retry = await call(
+            ['checkpoint', 'advance-rest'],
+            {
+              'expectedVersion': cp.version,
+              'expectedSessionVersion': 1,
+              'expectedClockVersion': 1,
+            },
+          );
+          equal(retry.code, 5);
+          store = await TrainingStore.open(path);
+          final current = await StoredTrainingService(store).session('session');
+          equal(current.contentVersion, 1);
+          equal(current.sets.single.status, SetStatus.planned);
+          await store.archive();
+          await store.backup('${dir.path}/backup');
+          equal(
+            NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
+            47,
+          );
+        } finally {
+          await store.close();
+          await dir.delete(recursive: true);
+        }
+      }
+    },
+  );
+  test(
+    'manual scoped rests require explicit confirmation to advance',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-advance-manual-',
+      );
+      var store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'window',
+          'type': 'window',
+          'durationSeconds': 10,
+          'child': {
+            'id': 'sequence',
+            'type': 'sequence',
+            'children': [
+              {'id': 'rest', 'type': 'rest', 'manual': true},
+              {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+            ],
+          },
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final service = WindowCheckpointService(store);
+        var cp = await service.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        cp = await service.reserve('cp', cp.version);
+        await expectCheckpointFailure(
+          service.advanceRest(
+            'cp',
+            expectedVersion: cp.version,
+            expectedSessionVersion: 1,
+            expectedClockVersion: 1,
+          ),
+        );
+        await store.close();
+        final response = await invoke(
+          ['checkpoint', 'advance-rest'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': '${dir.path}/db.sqlite',
+            'id': 'cp',
+            'expectedVersion': cp.version,
+            'expectedSessionVersion': 1,
+            'expectedClockVersion': 1,
+            'confirm': true,
+          }),
+        );
+        equal(response.code, 0);
+        store = await TrainingStore.open('${dir.path}/db.sqlite');
+        final next = await WindowCheckpointService(store).show('cp');
+        final clock = jsonObject(next.clock['clock'], 'clock');
+        equal(clock['occurrence'], 1);
+        equal(clock['elapsedMilliseconds'], 0);
+        equal(clock['status'], 'paused');
+        equal(
+          (await StoredTrainingService(
+            store,
+          ).session('session')).sets.single.status,
+          SetStatus.planned,
+        );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'scoped timed rests stop at their target or enclosing window boundary',
     () async {
       for (final windowSeconds in [5, 1]) {

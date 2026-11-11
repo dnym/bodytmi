@@ -42,6 +42,7 @@ const storedCommandNames = [
   'checkpoint review',
   'checkpoint complete-current',
   'checkpoint advance-boundary',
+  'checkpoint advance-rest',
   'checkpoint skip-expired',
   'checkpoint review-expired',
   'checkpoint reserve',
@@ -271,6 +272,13 @@ Future<Map<String, Object?>> executeStored(
       'expectedSessionVersion',
       'expectedClockVersion',
     },
+    'checkpoint advance-rest' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'expectedClockVersion',
+      'confirm',
+    },
     'checkpoint review-expired' => {
       'id',
       'expectedVersion',
@@ -289,6 +297,7 @@ Future<Map<String, Object?>> executeStored(
       'stream',
       'advanceReviewed',
       'stopAtRest',
+      'advanceRest',
     },
     'checkpoint action' => {
       'id',
@@ -664,7 +673,16 @@ Future<Map<String, Object?>> executeStored(
           stream: flag('stream'),
           advanceReviewed: flag('advanceReviewed'),
           stopAtRest: flag('stopAtRest'),
+          advanceRest: flag('advanceRest'),
         );
+      case 'checkpoint advance-rest':
+        data = (await checkpoints.advanceRest(
+          identifier(request, 'id'),
+          expectedVersion: integer('expectedVersion'),
+          expectedSessionVersion: integer('expectedSessionVersion'),
+          expectedClockVersion: integer('expectedClockVersion'),
+          confirm: flag('confirm'),
+        )).toJson();
       case 'checkpoint advance-boundary':
         final result = await checkpoints.advanceReviewedBoundary(
           identifier(request, 'id'),
