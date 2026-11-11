@@ -134,15 +134,18 @@ final class WindowRepeatExecution {
         confirm: false,
       );
     } else if (action == 'review') {
-      if (ownerId != null ||
-          ownerElapsedMilliseconds != null ||
-          adjustmentMilliseconds != null ||
+      if (adjustmentMilliseconds != null ||
           review == null ||
           correction != null)
-        invalid('Review takes an explicit result and no clock action fields.');
+        invalid(
+          'Review takes an explicit result and an optional running clock sample.',
+        );
       final status = cursor['status'];
-      if (status != 'paused' && status != 'boundary')
-        invalid('Review requires a paused cursor or pending boundary.');
+      if (status != 'paused' && status != 'running' && status != 'boundary')
+        invalid('Review requires an active cursor or pending boundary.');
+      if (status != 'running' &&
+          (ownerId != null || ownerElapsedMilliseconds != null))
+        invalid('Only a running review takes an owner sample.');
       final step = round * plan.length + index;
       if (entries.length != step)
         invalid('The current occurrence is already reviewed.');
@@ -152,14 +155,17 @@ final class WindowRepeatExecution {
           'At a boundary, finish a rest without recording an elapsed result.',
         );
       final result = _reviewEntry(loop, item, round, review, confirm: confirm);
-      entries.add(result);
-      if (status == 'paused') {
+      if (status == 'paused' || status == 'running') {
         nextCursor = _cursor.apply(
           cursor,
           expectedVersion: cursor['version'] as int,
           action: 'acknowledge',
+          ownerId: ownerId,
+          ownerElapsedMilliseconds: ownerElapsedMilliseconds,
         );
       }
+      if (!(nextCursor['status'] == 'boundary' && item.activity is Rest))
+        entries.add(result);
     } else {
       if (review != null || correction != null || action == 'acknowledge')
         invalid('Use explicit review to advance the result ledger.');
@@ -286,8 +292,6 @@ final class WindowRepeatExecution {
             boundaryEffort &&
             raw.length != step + 1))
       invalid('Result ledger does not match the structural cursor.');
-    if (raw.length > step && version <= (cursor['version'] as int))
-      invalid('Execution version predates its boundary review.');
     final entries = <Map<String, Object?>>[];
     for (var i = 0; i < raw.length; i++) {
       final entry = jsonObject(raw[i], 'entry');

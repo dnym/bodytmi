@@ -26,6 +26,187 @@ Future<void> expectCheckpointFailure(
 }
 
 void activityTests() {
+  test('running rest review yields to the window deadline', () {
+    final loopJson = jsonObject(example('window-repeat-page')['loop'], 'loop');
+    final definition = jsonObject(
+      loopJson['roundDefinition'],
+      'roundDefinition',
+    );
+    final loop = WindowRepeatSpec.fromJson({
+      ...loopJson,
+      'durationMilliseconds': 1000,
+      'roundDefinition': {
+        ...definition,
+        'plan': {
+          'id': 'round',
+          'type': 'sequence',
+          'children': [
+            {'id': 'rest', 'type': 'rest', 'manual': true},
+            {'id': 'push-set', 'type': 'effort', 'slot': 'push'},
+          ],
+        },
+      },
+    });
+    const engine = WindowRepeatExecution();
+    var state = engine.start(loop);
+    state = engine.apply(
+      state,
+      expectedVersion: 1,
+      action: 'resume',
+      ownerId: 'owner',
+    );
+    state = engine.apply(
+      state,
+      expectedVersion: 2,
+      action: 'review',
+      ownerId: 'owner',
+      ownerElapsedMilliseconds: 1200,
+      review: {'outcome': 'rest'},
+      confirm: true,
+    );
+    final cursor = jsonObject(state['cursor'], 'cursor');
+    equal(cursor['status'], 'boundary');
+    equal(cursor['occurrence'], 0);
+    equal(cursor['unappliedMilliseconds'], 200);
+    equal((state['entries'] as List).length, 0);
+    state = engine.apply(
+      state,
+      expectedVersion: 3,
+      action: 'finish',
+      confirm: true,
+    );
+    equal(jsonObject(state['cursor'], 'cursor')['status'], 'finished');
+  });
+  test(
+    'running repeat reviews sample the clock and stop at its boundary',
+    () async {
+      final loop = WindowRepeatSpec.fromJson({
+        ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+        'durationMilliseconds': 1000,
+        'maxRounds': 2,
+        'maxOccurrences': 4,
+      });
+      const engine = WindowRepeatExecution();
+      var state = engine.start(loop);
+      state = engine.apply(
+        state,
+        expectedVersion: 1,
+        action: 'resume',
+        ownerId: 'owner',
+      );
+      final request = {
+        'schemaVersion': 1,
+        'action': 'review',
+        'execution': state,
+        'expectedVersion': 2,
+        'ownerId': 'owner',
+        'ownerElapsedMilliseconds': 400,
+        'review': {'outcome': 'completed', 'acceptSuggested': true},
+      };
+      final response = const Commands().execute(
+        'activity window-repeat-execution',
+        request,
+      );
+      final native = await invoke([
+        'activity',
+        'window-repeat-execution',
+      ], jsonEncode(request));
+      equal(native.code, 0);
+      jsonEqual(
+        jsonObject(jsonDecode(native.output), 'response')['data'],
+        response['data'],
+      );
+      state = jsonObject(
+        jsonObject(response['data'], 'data')['execution'],
+        'execution',
+      );
+      var cursor = jsonObject(state['cursor'], 'cursor');
+      equal(cursor['status'], 'running');
+      equal(cursor['elapsedMilliseconds'], 400);
+      equal(cursor['ownerElapsedMilliseconds'], 400);
+      equal(cursor['occurrence'], 1);
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 3,
+          action: 'review',
+          ownerId: 'owner',
+          ownerElapsedMilliseconds: 399,
+          review: {'outcome': 'completed', 'acceptSuggested': true},
+        ),
+      );
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 3,
+          action: 'review',
+          ownerId: 'other',
+          ownerElapsedMilliseconds: 500,
+          review: {'outcome': 'completed', 'acceptSuggested': true},
+        ),
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 3,
+        action: 'review',
+        ownerId: 'owner',
+        ownerElapsedMilliseconds: 1100,
+        review: {
+          'outcome': 'completed',
+          'acceptSuggested': true,
+          'observations': {'terminationReason': 'interrupted'},
+        },
+      );
+      cursor = jsonObject(state['cursor'], 'cursor');
+      equal(cursor['status'], 'boundary');
+      equal(cursor['occurrence'], 1);
+      equal(cursor['elapsedMilliseconds'], 1000);
+      equal(cursor['unappliedMilliseconds'], 100);
+      equal(engine.view(state)['partialRounds'], 1);
+      equal(engine.view(state)['currentReviewed'], true);
+      state = engine.apply(
+        state,
+        expectedVersion: 4,
+        action: 'finish',
+        confirm: true,
+      );
+      equal(jsonObject(state['cursor'], 'cursor')['status'], 'finished');
+      final limitedLoop = WindowRepeatSpec.fromJson({
+        ...loop.toJson(),
+        'maxRounds': 1,
+        'maxOccurrences': 2,
+      });
+      state = engine.start(limitedLoop);
+      state = engine.apply(
+        state,
+        expectedVersion: 1,
+        action: 'resume',
+        ownerId: 'owner',
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 2,
+        action: 'review',
+        ownerId: 'owner',
+        ownerElapsedMilliseconds: 100,
+        review: {'outcome': 'skipped'},
+        confirm: true,
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 3,
+        action: 'review',
+        ownerId: 'owner',
+        ownerElapsedMilliseconds: 200,
+        review: {'outcome': 'skipped'},
+        confirm: true,
+      );
+      cursor = jsonObject(state['cursor'], 'cursor');
+      equal(cursor['status'], 'limitReached');
+      equal(cursor['ownerId'], null);
+      equal(cursor['elapsedMilliseconds'], 200);
+    },
+  );
   test(
     'repeat corrections preserve cursor and update round assessment',
     () async {

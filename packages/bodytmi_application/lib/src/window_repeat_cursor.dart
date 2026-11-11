@@ -145,10 +145,43 @@ final class WindowRepeatCursor {
           next['unappliedMilliseconds'] = sample - loop.durationMilliseconds;
         }
       case 'acknowledge':
-        if (status != 'paused' ||
+        var acknowledgedElapsed = elapsed;
+        if (status == 'running') {
+          if (ownerId == null ||
+              ownerId != state['ownerId'] ||
+              ownerElapsedMilliseconds == null)
+            invalid(
+              'A running acknowledgment requires its owner and a cumulative sample.',
+            );
+          final prior = state['ownerElapsedMilliseconds'] as int;
+          if (ownerElapsedMilliseconds < prior ||
+              ownerElapsedMilliseconds > _limit ||
+              elapsed + ownerElapsedMilliseconds - prior > _limit)
+            invalid(
+              'Clock samples must be monotonic and within the logical-time limit.',
+            );
+          acknowledgedElapsed = elapsed + ownerElapsedMilliseconds - prior;
+          if (acknowledgedElapsed >= loop.durationMilliseconds) {
+            next.addAll({
+              'status': 'boundary',
+              'elapsedMilliseconds': loop.durationMilliseconds,
+              'ownerId': null,
+              'ownerElapsedMilliseconds': 0,
+              'terminalReason': 'windowExpired',
+              'unappliedMilliseconds':
+                  acknowledgedElapsed - loop.durationMilliseconds,
+            });
+            break;
+          }
+          next['elapsedMilliseconds'] = acknowledgedElapsed;
+          next['ownerElapsedMilliseconds'] = ownerElapsedMilliseconds;
+        } else if (status != 'paused' ||
             ownerId != null ||
-            ownerElapsedMilliseconds != null)
-          invalid('Acknowledgment requires a paused cursor.');
+            ownerElapsedMilliseconds != null) {
+          invalid(
+            'Acknowledgment requires a paused cursor or a running owner sample.',
+          );
+        }
         final count = loop.roundDefinition.plan.occurrences().length;
         final index = (state['occurrence'] as int) + 1;
         if (index < count) {
@@ -158,13 +191,15 @@ final class WindowRepeatCursor {
           final page = const WindowRepeatPreview().page(
             loop,
             round: round,
-            elapsedMilliseconds: elapsed,
+            elapsedMilliseconds: acknowledgedElapsed,
             limit: 1,
           );
           next.addAll({'round': round, 'occurrence': 0});
           if (page['status'] == 'resourceLimit') {
             next['status'] = 'limitReached';
             next['terminalReason'] = 'resourceLimit';
+            next['ownerId'] = null;
+            next['ownerElapsedMilliseconds'] = 0;
           }
         }
       case 'finish':
