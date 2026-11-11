@@ -23,6 +23,7 @@ const commandNames = [
   'activity window-clock',
   'activity window-repeat-page',
   'activity window-repeat-cursor',
+  'activity window-repeat-execution',
   'tempo sample',
   'session start',
   'session show',
@@ -137,6 +138,66 @@ final class Commands {
               group.toJson(),
           ],
         };
+      case 'activity window-repeat-execution':
+        keys({
+          'action',
+          'loop',
+          'execution',
+          'expectedVersion',
+          'ownerId',
+          'ownerElapsedMilliseconds',
+          'adjustmentMilliseconds',
+          'confirm',
+          'review',
+        });
+        final action = requiredString(request, 'action');
+        const repeatExecution = WindowRepeatExecution();
+        if (action == 'start') {
+          if (request.keys.any(
+            (key) => !{'schemaVersion', 'action', 'loop'}.contains(key),
+          ))
+            invalid('Starting a repeat execution takes only loop.');
+          data = repeatExecution.view(
+            repeatExecution.start(WindowRepeatSpec.fromJson(request['loop'])),
+          );
+        } else if (action == 'show') {
+          if (request.keys.any(
+            (key) => !{'schemaVersion', 'action', 'execution'}.contains(key),
+          ))
+            invalid('Showing a repeat execution takes only execution.');
+          data = repeatExecution.view(request['execution']);
+        } else {
+          if (request.containsKey('loop'))
+            invalid('Loop is pinned inside the execution.');
+          final version = request['expectedVersion'];
+          final sample = request['ownerElapsedMilliseconds'];
+          final adjustment = request['adjustmentMilliseconds'];
+          if (version is! int ||
+              version < 1 ||
+              (request.containsKey('ownerElapsedMilliseconds') &&
+                  sample is! int) ||
+              (request.containsKey('adjustmentMilliseconds') &&
+                  adjustment is! int))
+            invalid(
+              'Execution version, samples and adjustments must be integers.',
+            );
+          data = repeatExecution.view(
+            repeatExecution.apply(
+              request['execution'],
+              expectedVersion: version,
+              action: action,
+              ownerId: request.containsKey('ownerId')
+                  ? identifier(request, 'ownerId')
+                  : null,
+              ownerElapsedMilliseconds: sample as int?,
+              adjustmentMilliseconds: adjustment as int?,
+              confirm: _bool(request, 'confirm'),
+              review: request.containsKey('review')
+                  ? jsonObject(request['review'], 'review')
+                  : null,
+            ),
+          );
+        }
       case 'activity window-repeat-cursor':
         keys({
           'action',
