@@ -27,6 +27,280 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'skip-expired CLI releases a finished window with no remaining work',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-expired-cli-');
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'window',
+          'type': 'window',
+          'durationSeconds': 1,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        var session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        session = await training.edit(
+          session.id,
+          session.contentVersion,
+          (s) => const TrainingService().complete(
+            s,
+            s.sets.first.id,
+            const {},
+            acceptSuggested: true,
+          ),
+        );
+        final service = WindowCheckpointService(store);
+        var cp = await service.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        cp = await service.reserve('cp', cp.version);
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: session.contentVersion,
+          expectedClockVersion: 1,
+          action: 'resume',
+          ownerId: 'owner',
+        );
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: session.contentVersion,
+          expectedClockVersion: 2,
+          action: 'advance',
+          ownerId: 'owner',
+          ownerElapsedMilliseconds: 1000,
+        );
+        await store.close();
+        final result = await invoke(
+          ['checkpoint', 'skip-expired'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': path,
+            'id': 'cp',
+            'expectedVersion': cp.version,
+            'expectedSessionVersion': session.contentVersion,
+            'expectedClockVersion': 3,
+            'confirm': true,
+          }),
+        );
+        equal(result.code, 0);
+        final data = jsonObject(
+          jsonObject(jsonDecode(result.output), 'response')['data'],
+          'data',
+        );
+        jsonEqual(data['skipped'], []);
+        final checkpoint = jsonObject(data['checkpoint'], 'checkpoint');
+        equal(checkpoint['reserved'], null);
+        equal(
+          jsonObject(
+            jsonObject(checkpoint['clock'], 'wrapper')['clock'],
+            'clock',
+          )['status'],
+          'complete',
+        );
+        final reopened = await TrainingStore.open(path);
+        try {
+          equal(
+            (await StoredTrainingService(
+              reopened,
+            ).session(session.id)).contentVersion,
+            session.contentVersion,
+          );
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test('expired tied windows skip only planned descendants atomically', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-expired-skip-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    try {
+      final input = definition().toJson();
+      input['plan'] = {
+        'id': 'plan',
+        'type': 'sequence',
+        'children': [
+          {
+            'id': 'outer',
+            'type': 'window',
+            'durationSeconds': 1,
+            'child': {
+              'id': 'outer-work',
+              'type': 'sequence',
+              'children': [
+                {
+                  'id': 'inner',
+                  'type': 'window',
+                  'durationSeconds': 1,
+                  'child': {
+                    'id': 'inner-work',
+                    'type': 'sequence',
+                    'children': [
+                      {'id': 'one', 'type': 'effort', 'slot': 'bench-heavy'},
+                      {'id': 'two', 'type': 'effort', 'slot': 'bench-heavy'},
+                    ],
+                  },
+                },
+                {'id': 'three', 'type': 'effort', 'slot': 'bench-heavy'},
+              ],
+            },
+          },
+          {'id': 'after', 'type': 'effort', 'slot': 'bench-light'},
+        ],
+      };
+      final workout = WorkoutDefinition.fromJson(input);
+      final training = StoredTrainingService(store);
+      await training.publish(workout, 0);
+      var session = await training.start('session', workout.id, 1, instant(1));
+      final ids = session.sets.map((set) => set.id).toList();
+      session = await training.edit(
+        session.id,
+        session.contentVersion,
+        (s) => const TrainingService().complete(
+          s,
+          ids[0],
+          const {},
+          acceptSuggested: true,
+        ),
+      );
+      final service = WindowCheckpointService(store);
+      var checkpoint = await service.save(
+        'cp',
+        session.id,
+        0,
+        const SessionWindowClock().start(session),
+      );
+      checkpoint = await service.reserve('cp', checkpoint.version);
+      checkpoint = await service.action(
+        'cp',
+        expectedVersion: checkpoint.version,
+        expectedSessionVersion: session.contentVersion,
+        expectedClockVersion: 1,
+        action: 'resume',
+        ownerId: 'owner',
+      );
+      checkpoint = await service.action(
+        'cp',
+        expectedVersion: checkpoint.version,
+        expectedSessionVersion: session.contentVersion,
+        expectedClockVersion: 2,
+        action: 'advance',
+        ownerId: 'owner',
+        ownerElapsedMilliseconds: 1000,
+      );
+      await expectCheckpointFailure(
+        service.skipExpired(
+          'cp',
+          expectedVersion: checkpoint.version,
+          expectedSessionVersion: session.contentVersion,
+          expectedClockVersion: 3,
+          confirm: false,
+        ),
+      );
+      await expectCheckpointFailure(
+        service.skipExpired(
+          'cp',
+          expectedVersion: checkpoint.version,
+          expectedSessionVersion: session.contentVersion,
+          expectedClockVersion: 2,
+          confirm: true,
+        ),
+        'conflict',
+      );
+      equal((await service.show('cp')).version, checkpoint.version);
+      final raw = sqlite3.open('${dir.path}/db.sqlite');
+      try {
+        raw.execute(
+          "CREATE TRIGGER test_skip_failure BEFORE UPDATE ON window_checkpoints BEGIN SELECT RAISE(ABORT, 'forced checkpoint failure'); END",
+        );
+        var failed = false;
+        try {
+          await service.skipExpired(
+            'cp',
+            expectedVersion: checkpoint.version,
+            expectedSessionVersion: session.contentVersion,
+            expectedClockVersion: 3,
+            confirm: true,
+          );
+        } catch (_) {
+          failed = true;
+        }
+        check(failed);
+        equal(
+          (await training.session(session.id)).contentVersion,
+          session.contentVersion,
+        );
+        equal(
+          (await training.session(session.id)).set(ids[1]).status,
+          SetStatus.planned,
+        );
+        equal((await service.show('cp')).version, checkpoint.version);
+        raw.execute('DROP TRIGGER test_skip_failure');
+      } finally {
+        raw.close();
+      }
+      final result = await service.skipExpired(
+        'cp',
+        expectedVersion: checkpoint.version,
+        expectedSessionVersion: session.contentVersion,
+        expectedClockVersion: 3,
+        confirm: true,
+      );
+      jsonEqual(result.skipped, [ids[1], ids[2]]);
+      equal(result.session.set(ids[0]).status, SetStatus.completed);
+      equal(result.session.set(ids[1]).status, SetStatus.skipped);
+      equal(result.session.set(ids[2]).status, SetStatus.skipped);
+      equal(result.session.set(ids[3]).status, SetStatus.planned);
+      equal(result.session.contentVersion, session.contentVersion + 1);
+      final state = jsonObject(result.checkpoint.clock['clock'], 'clock');
+      equal(state['occurrence'], 3);
+      equal(state['status'], 'paused');
+      check(result.checkpoint.reserved);
+      await expectCheckpointFailure(
+        service.skipExpired(
+          'cp',
+          expectedVersion: checkpoint.version,
+          expectedSessionVersion: session.contentVersion,
+          expectedClockVersion: 3,
+          confirm: true,
+        ),
+        'conflict',
+      );
+      equal(
+        (await training.session(session.id)).contentVersion,
+        session.contentVersion + 1,
+      );
+      final archive = await store.archive();
+      equal(archive.windowCheckpoints.length, 1);
+      await store.backup('${dir.path}/backup');
+      equal(
+        NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
+        47,
+      );
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
+  test(
     'foreground scoped clock pauses at a deadline without logging effort',
     () async {
       final dir = await Directory.systemTemp.createTemp('bodytmi-window-run-');

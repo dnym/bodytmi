@@ -448,6 +448,22 @@ final class TrainingService {
     required bool confirm,
   }) => _skipPlanned(session, (_) => true, confirm: confirm);
 
+  /// Skip a specified set of planned occurrences without changing other results.
+  TrainingSession skipOccurrences(
+    TrainingSession session,
+    Set<String> occurrenceIds, {
+    required bool confirm,
+  }) {
+    final known = session.sets.map((set) => set.id).toSet();
+    if (!known.containsAll(occurrenceIds))
+      invalid('Unknown effort occurrence.');
+    return _skipPlanned(
+      session,
+      (set) => occurrenceIds.contains(set.id),
+      confirm: confirm,
+    );
+  }
+
   /// Skip planned efforts in a slot, optionally limited to one effort role.
   TrainingSession skipSlot(
     TrainingSession session,

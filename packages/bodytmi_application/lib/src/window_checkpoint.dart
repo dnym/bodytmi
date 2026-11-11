@@ -4,6 +4,8 @@ import 'canonical_json.dart';
 import 'session_window_clock.dart';
 import 'session_window_review.dart';
 import 'training_repository.dart';
+import 'training_service.dart';
+import 'window_deadlines.dart';
 
 /// A saved scoped clock, optionally reserving the profile's timing slot.
 final class WindowCheckpoint {
@@ -317,6 +319,100 @@ final class WindowCheckpointService {
       checkpoint: checkpoint,
       occurrenceId: result.occurrenceId,
     );
+  });
+
+  /// Explicitly abandon planned work in the expired scope and move past it.
+  Future<
+    ({
+      TrainingSession session,
+      WindowCheckpoint checkpoint,
+      List<String> skipped,
+    })
+  >
+  skipExpired(
+    String id, {
+    required int expectedVersion,
+    required int expectedSessionVersion,
+    required int expectedClockVersion,
+    required bool confirm,
+  }) => repository.transaction(() async {
+    if (!confirm) invalid('Skipping expired work requires confirm:true.');
+    final current = await show(id);
+    if (current.version != expectedVersion)
+      throw const BodyTmiException('conflict', 'Checkpoint version changed.');
+    final training = StoredTrainingService(repository);
+    final session = await training.session(current.sessionId);
+    if (session.contentVersion != expectedSessionVersion)
+      throw const BodyTmiException(
+        'conflict',
+        'Session content version changed.',
+      );
+    if (session.status != SessionStatus.active)
+      invalid('Skipping expired work requires an active session.');
+    final wrapper = const SessionWindowClock().validateSnapshot(
+      session,
+      current.clock,
+    );
+    final clock = jsonObject(wrapper['clock'], 'window clock');
+    if (clock['version'] != expectedClockVersion)
+      throw const BodyTmiException('conflict', 'Window clock version changed.');
+    if (clock['status'] != 'boundary')
+      invalid('Skipping expired work requires a window boundary.');
+    final occurrence = clock['occurrence'] as int;
+    final definition = session.revision.definition;
+    final deadline = const WindowDeadlines().evaluate(
+      definition: definition,
+      occurrence: occurrence,
+      elapsedMilliseconds: clock['elapsedMilliseconds'] as int,
+      windowStarts: jsonObject(clock['windowStarts'], 'windowStarts'),
+    );
+    final expired = (deadline['windows'] as List<Map<String, Object?>>)
+        .where((row) => row['expired'] == true)
+        .map((row) => row['path'] as String)
+        .toSet();
+    final scopes = activityGroups(
+      definition.plan,
+      containing: occurrence,
+    ).where((scope) => expired.contains(scope.path)).toList();
+    if (scopes.isEmpty) invalid('No expired window contains the occurrence.');
+    final destination = scopes
+        .map((scope) => scope.end)
+        .reduce((a, b) => a > b ? a : b);
+    final occurrences = definition.plan.occurrences().toList();
+    final ids = <String>{
+      for (var i = occurrence; i < destination; i++)
+        if (occurrences[i].activity is Effort) occurrences[i].id,
+    };
+    final skipped = [
+      for (final set in session.sets)
+        if (ids.contains(set.id) && set.status == SetStatus.planned) set.id,
+    ];
+    final updated = const TrainingService().skipOccurrences(
+      session,
+      ids,
+      confirm: true,
+    );
+    final next = const SessionWindowClock().apply(
+      updated,
+      wrapper,
+      expectedVersion: expectedClockVersion,
+      action: 'move',
+      toOccurrence: destination,
+    );
+    final saved = skipped.isEmpty
+        ? session
+        : await training.edit(
+            session.id,
+            expectedSessionVersion,
+            (_) => updated,
+          );
+    final complete = jsonObject(next['clock'], 'clock')['status'] == 'complete';
+    final checkpoint = await _replace(
+      current,
+      next,
+      reserved: current.reserved && !complete,
+    );
+    return (session: saved, checkpoint: checkpoint, skipped: skipped);
   });
 
   Future<void> delete(
