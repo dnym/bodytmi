@@ -92,6 +92,79 @@ final class WindowCheckpointService {
   const WindowCheckpointService(this.repository);
   final TrainingRepository repository;
 
+  int _expiredDestination(TrainingSession session, Map<String, Object?> clock) {
+    if (clock['status'] != 'boundary')
+      invalid('A window boundary is required.');
+    final occurrence = clock['occurrence'] as int;
+    final definition = session.revision.definition;
+    final deadline = const WindowDeadlines().evaluate(
+      definition: definition,
+      occurrence: occurrence,
+      elapsedMilliseconds: clock['elapsedMilliseconds'] as int,
+      windowStarts: jsonObject(clock['windowStarts'], 'windowStarts'),
+    );
+    final expired = (deadline['windows'] as List<Map<String, Object?>>)
+        .where((row) => row['expired'] == true)
+        .map((row) => row['path'] as String)
+        .toSet();
+    final scopes = activityGroups(
+      definition.plan,
+      containing: occurrence,
+    ).where((scope) => expired.contains(scope.path)).toList();
+    if (scopes.isEmpty) invalid('No expired window contains the occurrence.');
+    return scopes.map((scope) => scope.end).reduce((a, b) => a > b ? a : b);
+  }
+
+  /// Move past a boundary only when every crossed effort was already reviewed.
+  /// Null means planned work remains; no state is changed in that case.
+  Future<WindowCheckpoint?> advanceReviewedBoundary(
+    String id, {
+    required int expectedVersion,
+    required int expectedSessionVersion,
+    required int expectedClockVersion,
+  }) => repository.transaction(() async {
+    final current = await show(id);
+    if (current.version != expectedVersion)
+      throw const BodyTmiException('conflict', 'Checkpoint version changed.');
+    if (!current.reserved)
+      invalid('Reserve the checkpoint before clock actions.');
+    final session = await StoredTrainingService(
+      repository,
+    ).session(current.sessionId);
+    if (session.contentVersion != expectedSessionVersion)
+      throw const BodyTmiException(
+        'conflict',
+        'Session content version changed.',
+      );
+    if (session.status != SessionStatus.active)
+      invalid('An active session is required.');
+    final wrapper = const SessionWindowClock().validateSnapshot(
+      session,
+      current.clock,
+    );
+    final clock = jsonObject(wrapper['clock'], 'window clock');
+    if (clock['version'] != expectedClockVersion)
+      throw const BodyTmiException('conflict', 'Window clock version changed.');
+    final destination = _expiredDestination(session, clock);
+    final occurrence = clock['occurrence'] as int;
+    final plan = session.revision.definition.plan.occurrences().toList();
+    final sets = {for (final set in session.sets) set.id: set};
+    for (var i = occurrence; i < destination; i++) {
+      if (plan[i].activity is Effort &&
+          sets[plan[i].id]!.status == SetStatus.planned)
+        return null;
+    }
+    final next = const SessionWindowClock().apply(
+      session,
+      wrapper,
+      expectedVersion: expectedClockVersion,
+      action: 'move',
+      toOccurrence: destination,
+    );
+    final complete = jsonObject(next['clock'], 'clock')['status'] == 'complete';
+    return _replace(current, next, reserved: !complete);
+  });
+
   Future<WindowCheckpoint> save(
     String id,
     String sessionId,
@@ -491,24 +564,7 @@ final class WindowCheckpointService {
       invalid('Skipping expired work requires a window boundary.');
     final occurrence = clock['occurrence'] as int;
     final definition = session.revision.definition;
-    final deadline = const WindowDeadlines().evaluate(
-      definition: definition,
-      occurrence: occurrence,
-      elapsedMilliseconds: clock['elapsedMilliseconds'] as int,
-      windowStarts: jsonObject(clock['windowStarts'], 'windowStarts'),
-    );
-    final expired = (deadline['windows'] as List<Map<String, Object?>>)
-        .where((row) => row['expired'] == true)
-        .map((row) => row['path'] as String)
-        .toSet();
-    final scopes = activityGroups(
-      definition.plan,
-      containing: occurrence,
-    ).where((scope) => expired.contains(scope.path)).toList();
-    if (scopes.isEmpty) invalid('No expired window contains the occurrence.');
-    final destination = scopes
-        .map((scope) => scope.end)
-        .reduce((a, b) => a > b ? a : b);
+    final destination = _expiredDestination(session, clock);
     final occurrences = definition.plan.occurrences().toList();
     String? reviewed;
     var updated = session;

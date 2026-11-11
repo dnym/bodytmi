@@ -16,6 +16,7 @@ Future<Map<String, Object?>> runWindowClock(
   int expectedClockVersion, {
   int? runForMilliseconds,
   bool stream = false,
+  bool advanceReviewed = false,
 }) async {
   final service = WindowCheckpointService(store);
   final random = Random.secure();
@@ -72,6 +73,7 @@ Future<Map<String, Object?>> runWindowClock(
     }
     watch.stop();
     final cues = <Map<String, Object?>>[];
+    var boundaryAdvanced = false;
     if (state['status'] == 'boundary') {
       final cue = {
         'type': 'window-boundary',
@@ -82,6 +84,18 @@ Future<Map<String, Object?>> runWindowClock(
       if (stream) {
         stdout.writeln(jsonEncode({'schemaVersion': 1, 'data': cue}));
       }
+      if (advanceReviewed && !interrupted) {
+        final advanced = await service.advanceReviewedBoundary(
+          id,
+          expectedVersion: current.version,
+          expectedSessionVersion: expectedSessionVersion,
+          expectedClockVersion: state['version'] as int,
+        );
+        if (advanced != null) {
+          current = advanced;
+          boundaryAdvanced = true;
+        }
+      }
     }
     return {
       'checkpoint': current.toJson(),
@@ -90,6 +104,7 @@ Future<Map<String, Object?>> runWindowClock(
       'omittedCueCount': 0,
       'interrupted': interrupted,
       'requiresRecovery': false,
+      if (advanceReviewed) 'boundaryAdvanced': boundaryAdvanced,
     };
   } finally {
     await subscription.cancel();

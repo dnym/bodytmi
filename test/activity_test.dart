@@ -27,6 +27,186 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'reviewed window boundaries advance without certifying unreviewed work',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-window-auto-');
+      final path = '${dir.path}/db.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'rounds',
+          'type': 'repeat',
+          'count': 2,
+          'child': {
+            'id': 'minute',
+            'type': 'window',
+            'durationSeconds': 1,
+            'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+          },
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        var service = WindowCheckpointService(store);
+        var cp = await service.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        cp = await service.reserve('cp', cp.version);
+        final completed = await service.completeCurrent(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 1,
+          expectedClockVersion: 1,
+          acceptSuggested: true,
+        );
+        cp = completed.checkpoint;
+        await store.close();
+        Future<({int code, Map<String, Object?>? data})> call(
+          String command,
+          Map<String, Object?> args,
+        ) async {
+          final result = await invoke(
+            command.split(' '),
+            jsonEncode({
+              'schemaVersion': 1,
+              'database': path,
+              'id': 'cp',
+              ...args,
+            }),
+          );
+          return (
+            code: result.code,
+            data: result.code == 0
+                ? jsonObject(
+                    jsonObject(jsonDecode(result.output), 'response')['data'],
+                    'data',
+                  )
+                : null,
+          );
+        }
+
+        final first = await call('checkpoint run', {
+          'expectedVersion': cp.version,
+          'expectedSessionVersion': 2,
+          'expectedClockVersion': 1,
+          'runForMilliseconds': 1200,
+          'advanceReviewed': true,
+        });
+        equal(first.code, 0);
+        equal(first.data!['boundaryAdvanced'], true);
+        equal(first.data!['cueCount'], 1);
+        final cue = jsonObject((first.data!['cues'] as List).single, 'cue');
+        equal(
+          jsonObject(
+            cue['boundaryEvidence'],
+            'boundary',
+          )['deadlineMilliseconds'],
+          1000,
+        );
+        final firstCheckpoint = jsonObject(
+          first.data!['checkpoint'],
+          'checkpoint',
+        );
+        final firstClock = jsonObject(
+          jsonObject(firstCheckpoint['clock'], 'binding')['clock'],
+          'clock',
+        );
+        equal(firstClock['status'], 'paused');
+        equal(firstClock['occurrence'], 1);
+        equal(firstClock['elapsedMilliseconds'], 1000);
+        equal(
+          jsonObject(firstClock['windowStarts'], 'starts').values.single,
+          1000,
+        );
+        final second = await call('checkpoint run', {
+          'expectedVersion': firstCheckpoint['version'],
+          'expectedSessionVersion': 2,
+          'expectedClockVersion': firstClock['version'],
+          'runForMilliseconds': 1200,
+          'advanceReviewed': true,
+        });
+        equal(second.code, 0);
+        equal(second.data!['boundaryAdvanced'], false);
+        final boundary = jsonObject(second.data!['checkpoint'], 'checkpoint');
+        final boundaryClock = jsonObject(
+          jsonObject(boundary['clock'], 'binding')['clock'],
+          'clock',
+        );
+        equal(boundaryClock['status'], 'boundary');
+        equal(boundaryClock['elapsedMilliseconds'], 2000);
+        final rejected = await call('checkpoint advance-boundary', {
+          'expectedVersion': boundary['version'],
+          'expectedSessionVersion': 2,
+          'expectedClockVersion': boundaryClock['version'],
+        });
+        equal(rejected.code, 2);
+        store = await TrainingStore.open(path);
+        service = WindowCheckpointService(store);
+        cp = await service.show('cp');
+        final saved = await StoredTrainingService(store).session('session');
+        equal(saved.sets.first.status, SetStatus.completed);
+        equal(saved.sets.last.status, SetStatus.planned);
+        equal(saved.contentVersion, 2);
+        final reviewed = await service.completeCurrent(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 2,
+          expectedClockVersion: boundaryClock['version'] as int,
+          actuals: saved.sets.last.suggested,
+        );
+        cp = reviewed.checkpoint;
+        await store.close();
+        final last = await call('checkpoint advance-boundary', {
+          'expectedVersion': cp.version,
+          'expectedSessionVersion': 3,
+          'expectedClockVersion': boundaryClock['version'],
+        });
+        equal(last.code, 0);
+        final lastClock = jsonObject(
+          jsonObject(last.data!['clock'], 'binding')['clock'],
+          'clock',
+        );
+        equal(lastClock['status'], 'complete');
+        equal(last.data!['reserved'], null);
+        final retry = await call('checkpoint advance-boundary', {
+          'expectedVersion': cp.version,
+          'expectedSessionVersion': 3,
+          'expectedClockVersion': boundaryClock['version'],
+        });
+        equal(retry.code, 5);
+        store = await TrainingStore.open(path);
+        try {
+          final finalSession = await StoredTrainingService(
+            store,
+          ).session('session');
+          equal(finalSession.contentVersion, 3);
+          equal(finalSession.sets.last.status, SetStatus.completed);
+          await store.archive();
+          await store.backup('${dir.path}/backup');
+          equal(
+            NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
+            47,
+          );
+        } finally {
+          await store.close();
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'early completion preserves the EMOM boundary and rolls back atomically',
     () async {
       final dir = await Directory.systemTemp.createTemp(
@@ -637,6 +817,15 @@ void activityTests() {
         action: 'advance',
         ownerId: 'owner',
         ownerElapsedMilliseconds: 1000,
+      );
+      equal(
+        await service.advanceReviewedBoundary(
+          'cp',
+          expectedVersion: checkpoint.version,
+          expectedSessionVersion: session.contentVersion,
+          expectedClockVersion: 3,
+        ),
+        null,
       );
       await expectCheckpointFailure(
         service.skipExpired(

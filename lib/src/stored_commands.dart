@@ -41,6 +41,7 @@ const storedCommandNames = [
   'checkpoint save',
   'checkpoint review',
   'checkpoint complete-current',
+  'checkpoint advance-boundary',
   'checkpoint skip-expired',
   'checkpoint review-expired',
   'checkpoint reserve',
@@ -263,6 +264,12 @@ Future<Map<String, Object?>> executeStored(
       'actuals',
       'acceptSuggested',
     },
+    'checkpoint advance-boundary' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'expectedClockVersion',
+    },
     'checkpoint review-expired' => {
       'id',
       'expectedVersion',
@@ -279,6 +286,7 @@ Future<Map<String, Object?>> executeStored(
       'expectedClockVersion',
       'runForMilliseconds',
       'stream',
+      'advanceReviewed',
     },
     'checkpoint action' => {
       'id',
@@ -651,7 +659,20 @@ Future<Map<String, Object?>> executeStored(
           integer('expectedClockVersion'),
           runForMilliseconds: limit,
           stream: flag('stream'),
+          advanceReviewed: flag('advanceReviewed'),
         );
+      case 'checkpoint advance-boundary':
+        final result = await checkpoints.advanceReviewedBoundary(
+          identifier(request, 'id'),
+          expectedVersion: integer('expectedVersion'),
+          expectedSessionVersion: integer('expectedSessionVersion'),
+          expectedClockVersion: integer('expectedClockVersion'),
+        );
+        if (result == null)
+          invalid(
+            'Review or explicitly skip all remaining efforts before advancing.',
+          );
+        data = result.toJson();
       case 'checkpoint complete-current':
         final result = await checkpoints.completeCurrent(
           identifier(request, 'id'),
