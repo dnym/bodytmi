@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -25,6 +26,257 @@ Future<void> expectCheckpointFailure(
 }
 
 void activityTests() {
+  test(
+    'foreground scoped clock pauses at a deadline without logging effort',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-window-run-');
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'minute',
+          'type': 'window',
+          'durationSeconds': 1,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final checkpoints = WindowCheckpointService(store);
+        await checkpoints.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        await checkpoints.reserve('cp', 1);
+        await store.close();
+        Future<Map<String, Object?>> run(
+          int version,
+          int clockVersion,
+          int limit, {
+          bool stream = false,
+        }) async {
+          final result = await invoke(
+            ['checkpoint', 'run'],
+            jsonEncode({
+              'schemaVersion': 1,
+              'database': path,
+              'id': 'cp',
+              'expectedVersion': version,
+              'expectedSessionVersion': 1,
+              'expectedClockVersion': clockVersion,
+              'runForMilliseconds': limit,
+              'stream': stream,
+            }),
+          );
+          equal(result.code, 0);
+          final lines = const LineSplitter().convert(result.output);
+          if (stream) {
+            equal(lines.length, 3);
+            equal(
+              jsonObject(
+                jsonObject(jsonDecode(lines[0]), 'event')['data'],
+                'event',
+              )['type'],
+              'window-started',
+            );
+            equal(
+              jsonObject(
+                jsonObject(jsonDecode(lines[1]), 'event')['data'],
+                'event',
+              )['type'],
+              'window-boundary',
+            );
+          }
+          return jsonObject(
+            jsonObject(jsonDecode(lines.last), 'response')['data'],
+            'run',
+          );
+        }
+
+        final first = await run(2, 1, 100);
+        final checkpoint = jsonObject(first['checkpoint'], 'checkpoint');
+        final state = jsonObject(
+          jsonObject(checkpoint['clock'], 'binding')['clock'],
+          'clock',
+        );
+        equal(state['status'], 'paused');
+        equal(state['elapsedMilliseconds'], 100);
+        equal(first['cueCount'], 0);
+        final second = await run(
+          checkpoint['version'] as int,
+          state['version'] as int,
+          1500,
+          stream: true,
+        );
+        final finalCheckpoint = jsonObject(second['checkpoint'], 'checkpoint');
+        final finalState = jsonObject(
+          jsonObject(finalCheckpoint['clock'], 'binding')['clock'],
+          'clock',
+        );
+        equal(finalState['status'], 'boundary');
+        equal(finalState['elapsedMilliseconds'], 1000);
+        equal(second['cueCount'], 1);
+        check(finalState['boundaryEvidence'] != null);
+        final reopened = await TrainingStore.open(path);
+        try {
+          equal(
+            (await reopened.session('session'))!.sets.first.status,
+            SetStatus.planned,
+          );
+          check((await WindowCheckpointService(reopened).show('cp')).reserved);
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'scoped foreground interruption requires recovery or pauses on SIGINT',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-window-interrupt-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'window',
+          'type': 'window',
+          'durationSeconds': 60,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        final session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final checkpoints = WindowCheckpointService(store);
+        await checkpoints.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        await checkpoints.reserve('cp', 1);
+        await store.close();
+        final binary = await compileNative(
+          'bin/bodytmi.dart',
+          '${dir.path}/native',
+        );
+        Future<
+          ({Process child, StreamIterator<String> lines, Future<String> errors})
+        >
+        launch(int version, int clockVersion) async {
+          final child = await Process.start(binary, ['checkpoint', 'run']);
+          final lines = StreamIterator(
+            child.stdout
+                .transform(utf8.decoder)
+                .transform(const LineSplitter()),
+          );
+          final errors = child.stderr.transform(utf8.decoder).join();
+          child.stdin.writeln(
+            jsonEncode({
+              'schemaVersion': 1,
+              'database': path,
+              'id': 'cp',
+              'expectedVersion': version,
+              'expectedSessionVersion': 1,
+              'expectedClockVersion': clockVersion,
+              'stream': true,
+            }),
+          );
+          await child.stdin.close();
+          check(await lines.moveNext().timeout(const Duration(seconds: 10)));
+          equal(
+            jsonObject(
+              jsonObject(jsonDecode(lines.current), 'event')['data'],
+              'data',
+            )['type'],
+            'window-started',
+          );
+          return (child: child, lines: lines, errors: errors);
+        }
+
+        var process = await launch(2, 1);
+        process.child.kill(ProcessSignal.sigkill);
+        await process.child.exitCode;
+        await process.lines.cancel();
+        equal(await process.errors, '');
+        var reopened = await TrainingStore.open(path);
+        late WindowCheckpoint recovered;
+        try {
+          final service = WindowCheckpointService(reopened);
+          final running = await service.show('cp');
+          final state = jsonObject(running.clock['clock'], 'clock');
+          equal(state['status'], 'running');
+          recovered = await service.action(
+            'cp',
+            expectedVersion: running.version,
+            expectedSessionVersion: 1,
+            expectedClockVersion: state['version'] as int,
+            action: 'recover',
+          );
+          equal(
+            jsonObject(recovered.clock['clock'], 'clock')['status'],
+            'paused',
+          );
+        } finally {
+          await reopened.close();
+        }
+        final state = jsonObject(recovered.clock['clock'], 'clock');
+        process = await launch(recovered.version, state['version'] as int);
+        process.child.kill(ProcessSignal.sigint);
+        check(
+          await process.lines.moveNext().timeout(const Duration(seconds: 10)),
+        );
+        final response = jsonObject(
+          jsonObject(jsonDecode(process.lines.current), 'response')['data'],
+          'data',
+        );
+        equal(response['interrupted'], true);
+        final checkpoint = jsonObject(response['checkpoint'], 'checkpoint');
+        equal(
+          jsonObject(
+            jsonObject(checkpoint['clock'], 'binding')['clock'],
+            'clock',
+          )['status'],
+          'paused',
+        );
+        equal(await process.child.exitCode, 0);
+        await process.lines.cancel();
+        equal(await process.errors, '');
+        reopened = await TrainingStore.open(path);
+        try {
+          equal(
+            (await reopened.session('session'))!.sets.first.status,
+            SetStatus.planned,
+          );
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test('manual rest is explicit and cannot imply a duration', () {
     final rest =
         Activity.fromJson({'id': 'recover', 'type': 'rest', 'manual': true})

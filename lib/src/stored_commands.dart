@@ -1,5 +1,6 @@
 import 'execution_runner.dart';
 import 'timing_runner.dart';
+import 'window_runner.dart';
 import 'analytics_options.dart';
 import 'session_window_clock_adapter.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
@@ -42,6 +43,7 @@ const storedCommandNames = [
   'checkpoint reserve',
   'checkpoint release',
   'checkpoint action',
+  'checkpoint run',
   'checkpoint show',
   'checkpoint list',
   'checkpoint delete',
@@ -243,6 +245,14 @@ Future<Map<String, Object?>> executeStored(
     'checkpoint save' => {'id', 'sessionId', 'expectedVersion', 'clock'},
     'checkpoint reserve' => {'id', 'expectedVersion'},
     'checkpoint release' => {'id', 'expectedVersion', 'confirm'},
+    'checkpoint run' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'expectedClockVersion',
+      'runForMilliseconds',
+      'stream',
+    },
     'checkpoint action' => {
       'id',
       'expectedVersion',
@@ -600,6 +610,21 @@ Future<Map<String, Object?>> executeStored(
               ? integer('adjustmentMilliseconds', min: 0)
               : null,
         )).toJson();
+      case 'checkpoint run':
+        final limit = request.containsKey('runForMilliseconds')
+            ? integer('runForMilliseconds')
+            : null;
+        if (limit != null && limit > 86400000)
+          invalid('Foreground run limit exceeds 24 hours.');
+        data = await runWindowClock(
+          store,
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          integer('expectedSessionVersion'),
+          integer('expectedClockVersion'),
+          runForMilliseconds: limit,
+          stream: flag('stream'),
+        );
       case 'checkpoint review':
         final result = await checkpoints.review(
           identifier(request, 'id'),
