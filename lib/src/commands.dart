@@ -22,6 +22,7 @@ const commandNames = [
   'activity window-transition',
   'activity window-clock',
   'activity window-repeat-page',
+  'activity window-repeat-cursor',
   'tempo sample',
   'session start',
   'session show',
@@ -136,6 +137,62 @@ final class Commands {
               group.toJson(),
           ],
         };
+      case 'activity window-repeat-cursor':
+        keys({
+          'action',
+          'loop',
+          'cursor',
+          'expectedVersion',
+          'ownerId',
+          'ownerElapsedMilliseconds',
+          'adjustmentMilliseconds',
+          'confirm',
+        });
+        final action = requiredString(request, 'action');
+        const repeatCursor = WindowRepeatCursor();
+        if (action == 'start') {
+          if (request.keys.any(
+            (key) => !{'schemaVersion', 'action', 'loop'}.contains(key),
+          ))
+            invalid('Starting a repeat cursor takes only loop.');
+          data = repeatCursor.view(
+            repeatCursor.start(WindowRepeatSpec.fromJson(request['loop'])),
+          );
+        } else if (action == 'show') {
+          if (request.keys.any(
+            (key) => !{'schemaVersion', 'action', 'cursor'}.contains(key),
+          ))
+            invalid('Showing a repeat cursor takes only cursor.');
+          data = repeatCursor.view(request['cursor']);
+        } else {
+          if (request.containsKey('loop'))
+            invalid('Loop is pinned inside the cursor.');
+          final version = request['expectedVersion'];
+          final sample = request['ownerElapsedMilliseconds'];
+          final adjustment = request['adjustmentMilliseconds'];
+          if (version is! int ||
+              version < 1 ||
+              (request.containsKey('ownerElapsedMilliseconds') &&
+                  sample is! int) ||
+              (request.containsKey('adjustmentMilliseconds') &&
+                  adjustment is! int))
+            invalid(
+              'Cursor version, samples and adjustments must be integers.',
+            );
+          data = repeatCursor.view(
+            repeatCursor.apply(
+              request['cursor'],
+              expectedVersion: version,
+              action: action,
+              ownerId: request.containsKey('ownerId')
+                  ? identifier(request, 'ownerId')
+                  : null,
+              ownerElapsedMilliseconds: sample as int?,
+              adjustmentMilliseconds: adjustment as int?,
+              confirm: _bool(request, 'confirm'),
+            ),
+          );
+        }
       case 'activity window-repeat-page':
         keys({'loop', 'round', 'elapsedMilliseconds', 'offset', 'limit'});
         int number(String key, {required int defaultValue}) {

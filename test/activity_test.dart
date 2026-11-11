@@ -27,6 +27,225 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'caller-owned repeat cursor bounds time and requires explicit structural steps',
+    () async {
+      final loopJson = {
+        ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+        'durationMilliseconds': 1000,
+        'maxRounds': 2,
+        'maxOccurrences': 4,
+      };
+      final loop = WindowRepeatSpec.fromJson(loopJson);
+      const engine = WindowRepeatCursor();
+      var state = engine.start(loop);
+      equal(state['status'], 'paused');
+      try {
+        engine.apply(state, expectedVersion: 2, action: 'acknowledge');
+        throw StateError('Expected a stale cursor conflict.');
+      } on BodyTmiException catch (error) {
+        equal(error.code, 'conflict');
+      }
+      equal(
+        jsonObject(engine.view(state)['current'], 'current')['id'],
+        'amrap[0]/round/push-set',
+      );
+      rejects(() => engine.apply(state, expectedVersion: 1, action: 'resume'));
+      state = engine.apply(
+        state,
+        expectedVersion: 1,
+        action: 'resume',
+        ownerId: 'epoch',
+      );
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 2,
+          action: 'advance',
+          ownerId: 'wrong',
+          ownerElapsedMilliseconds: 1,
+        ),
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 2,
+        action: 'advance',
+        ownerId: 'epoch',
+        ownerElapsedMilliseconds: 300,
+      );
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 3,
+          action: 'pause',
+          ownerId: 'epoch',
+          ownerElapsedMilliseconds: 299,
+        ),
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 3,
+        action: 'pause',
+        ownerId: 'epoch',
+        ownerElapsedMilliseconds: 400,
+      );
+      state = engine.apply(state, expectedVersion: 4, action: 'acknowledge');
+      equal(state['elapsedMilliseconds'], 400);
+      equal(
+        jsonObject(engine.view(state)['current'], 'current')['id'],
+        'amrap[0]/round/pull-set',
+      );
+      state = engine.apply(state, expectedVersion: 5, action: 'acknowledge');
+      equal(state['round'], 1);
+      equal(
+        jsonObject(engine.view(state)['current'], 'current')['id'],
+        'amrap[1]/round/push-set',
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 6,
+        action: 'resume',
+        ownerId: 'next',
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 7,
+        action: 'advance',
+        ownerId: 'next',
+        ownerElapsedMilliseconds: 700,
+      );
+      equal(state['status'], 'boundary');
+      equal(state['elapsedMilliseconds'], 1000);
+      equal(state['unappliedMilliseconds'], 100);
+      equal(
+        jsonObject(engine.view(state)['current'], 'current')['id'],
+        'amrap[1]/round/push-set',
+      );
+      rejects(
+        () => engine.apply(state, expectedVersion: 8, action: 'acknowledge'),
+      );
+      rejects(() => engine.apply(state, expectedVersion: 8, action: 'finish'));
+      state = engine.apply(
+        state,
+        expectedVersion: 8,
+        action: 'finish',
+        confirm: true,
+      );
+      equal(state['status'], 'finished');
+      equal(state['terminalReason'], 'windowExpired');
+      equal(engine.view(state)['current'], null);
+      check(!state.containsKey('results'));
+      rejects(() => engine.view({...state, 'elapsedMilliseconds': 999}));
+      rejects(() => engine.view({...state, 'unappliedMilliseconds': -1}));
+      final limitedLoop = WindowRepeatSpec.fromJson({
+        ...loopJson,
+        'maxRounds': 1,
+      });
+      final tooSmall = WindowRepeatSpec.fromJson({
+        ...loopJson,
+        'maxOccurrences': 1,
+      });
+      equal(engine.start(tooSmall)['status'], 'limitReached');
+      var limited = engine.start(limitedLoop);
+      limited = engine.apply(
+        limited,
+        expectedVersion: 1,
+        action: 'acknowledge',
+      );
+      limited = engine.apply(
+        limited,
+        expectedVersion: 2,
+        action: 'acknowledge',
+      );
+      equal(limited['status'], 'limitReached');
+      equal(limited['terminalReason'], 'resourceLimit');
+      final stopped = engine.apply(
+        engine.start(loop),
+        expectedVersion: 1,
+        action: 'stop',
+        confirm: true,
+      );
+      equal(stopped['terminalReason'], 'stopped');
+      equal(stopped['status'], 'finished');
+      equal(limited['elapsedMilliseconds'], 0);
+      rejects(() => engine.view({...limited, 'round': 2, 'version': 8}));
+      rejects(() => engine.view({...engine.start(loop), 'round': 1}));
+      limited = engine.apply(
+        limited,
+        expectedVersion: 3,
+        action: 'finish',
+        confirm: true,
+      );
+      equal(limited['status'], 'finished');
+      equal(limited['terminalReason'], 'resourceLimit');
+      var interrupted = engine.start(loop);
+      interrupted = engine.apply(
+        interrupted,
+        expectedVersion: 1,
+        action: 'resume',
+        ownerId: 'interrupted',
+      );
+      interrupted = engine.apply(
+        interrupted,
+        expectedVersion: 2,
+        action: 'advance',
+        ownerId: 'interrupted',
+        ownerElapsedMilliseconds: 300,
+      );
+      interrupted = engine.apply(
+        interrupted,
+        expectedVersion: 3,
+        action: 'recover',
+        adjustmentMilliseconds: 800,
+      );
+      equal(interrupted['status'], 'boundary');
+      equal(interrupted['unappliedMilliseconds'], 100);
+      final request = {'schemaVersion': 1, 'action': 'start', 'loop': loopJson};
+      final pure = const Commands().execute(
+        'activity window-repeat-cursor',
+        request,
+      );
+      jsonEqual(pure['data'], engine.view(engine.start(loop)));
+      final native = await invoke([
+        'activity',
+        'window-repeat-cursor',
+      ], jsonEncode(request));
+      equal(native.code, 0);
+      jsonEqual(
+        jsonObject(jsonDecode(native.output), 'response')['data'],
+        pure['data'],
+      );
+      final resumeRequest = {
+        'schemaVersion': 1,
+        'action': 'resume',
+        'cursor': engine.start(loop),
+        'expectedVersion': 1,
+        'ownerId': 'native',
+      };
+      final nativeResume = await invoke([
+        'activity',
+        'window-repeat-cursor',
+      ], jsonEncode(resumeRequest));
+      equal(nativeResume.code, 0);
+      jsonEqual(
+        jsonObject(jsonDecode(nativeResume.output), 'response')['data'],
+        engine.view(
+          engine.apply(
+            engine.start(loop),
+            expectedVersion: 1,
+            action: 'resume',
+            ownerId: 'native',
+          ),
+        ),
+      );
+      rejects(
+        () => const Commands().execute('activity window-repeat-cursor', {
+          ...request,
+          'ownerId': 'extra',
+        }),
+      );
+    },
+  );
+  test(
     'deadline-bounded repeat pages generate stable virtual rounds without execution',
     () async {
       final definitionJson = definition().toJson();
