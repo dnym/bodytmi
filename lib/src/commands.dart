@@ -149,6 +149,7 @@ final class Commands {
           'adjustmentMilliseconds',
           'confirm',
           'review',
+          'correction',
         });
         final action = requiredString(request, 'action');
         const repeatExecution = WindowRepeatExecution();
@@ -194,6 +195,9 @@ final class Commands {
               confirm: _bool(request, 'confirm'),
               review: request.containsKey('review')
                   ? jsonObject(request['review'], 'review')
+                  : null,
+              correction: request.containsKey('correction')
+                  ? jsonObject(request['correction'], 'correction')
                   : null,
             ),
           );

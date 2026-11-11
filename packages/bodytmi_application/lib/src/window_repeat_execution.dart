@@ -76,6 +76,7 @@ final class WindowRepeatExecution {
     int? adjustmentMilliseconds,
     bool confirm = false,
     Map<String, Object?>? review,
+    Map<String, Object?>? correction,
   }) {
     final state = _validate(input);
     if (state['version'] != expectedVersion)
@@ -93,11 +94,51 @@ final class WindowRepeatExecution {
     final round = cursor['round'] as int;
     final entries = [...jsonList(state, 'entries')];
     var nextCursor = cursor;
-    if (action == 'review') {
+    if (action == 'correct') {
       if (ownerId != null ||
           ownerElapsedMilliseconds != null ||
           adjustmentMilliseconds != null ||
-          review == null)
+          confirm ||
+          review != null ||
+          correction == null)
+        invalid('Correction takes only an occurrence and replacement values.');
+      if (cursor['status'] == 'running')
+        invalid('Pause or recover the repeat clock before correcting results.');
+      checkKeys(correction, {'occurrenceId', 'actuals', 'observations'});
+      final occurrenceId = requiredString(correction, 'occurrenceId');
+      if (!correction.containsKey('actuals') &&
+          !correction.containsKey('observations'))
+        invalid('Correction requires actuals or observations.');
+      final entryIndex = entries.indexWhere(
+        (entry) => jsonObject(entry, 'entry')['id'] == occurrenceId,
+      );
+      if (entryIndex < 0) invalid('No reviewed occurrence has that identity.');
+      final existing = jsonObject(entries[entryIndex], 'entry');
+      if (existing['outcome'] != 'completed')
+        invalid('Only completed effort results can be corrected.');
+      entries[entryIndex] = _reviewEntry(
+        loop,
+        plan[entryIndex % plan.length],
+        entryIndex ~/ plan.length,
+        {
+          'outcome': 'completed',
+          'actuals': correction.containsKey('actuals')
+              ? jsonObject(correction['actuals'], 'actuals')
+              : existing['actuals'],
+          if (correction.containsKey('observations')) ...{
+            if (correction['observations'] != null)
+              'observations': correction['observations'],
+          } else if (existing.containsKey('observations'))
+            'observations': existing['observations'],
+        },
+        confirm: false,
+      );
+    } else if (action == 'review') {
+      if (ownerId != null ||
+          ownerElapsedMilliseconds != null ||
+          adjustmentMilliseconds != null ||
+          review == null ||
+          correction != null)
         invalid('Review takes an explicit result and no clock action fields.');
       final status = cursor['status'];
       if (status != 'paused' && status != 'boundary')
@@ -120,7 +161,7 @@ final class WindowRepeatExecution {
         );
       }
     } else {
-      if (review != null || action == 'acknowledge')
+      if (review != null || correction != null || action == 'acknowledge')
         invalid('Use explicit review to advance the result ledger.');
       if (action == 'finish' &&
           cursor['status'] == 'boundary' &&

@@ -26,6 +26,154 @@ Future<void> expectCheckpointFailure(
 }
 
 void activityTests() {
+  test(
+    'repeat corrections preserve cursor and update round assessment',
+    () async {
+      final loop = WindowRepeatSpec.fromJson({
+        ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+        'maxRounds': 1,
+        'maxOccurrences': 2,
+      });
+      const engine = WindowRepeatExecution();
+      var state = engine.start(loop);
+      state = engine.apply(
+        state,
+        expectedVersion: 1,
+        action: 'review',
+        review: {
+          'outcome': 'completed',
+          'acceptSuggested': true,
+          'observations': {'terminationReason': 'interrupted'},
+        },
+      );
+      state = engine.apply(
+        state,
+        expectedVersion: 2,
+        action: 'review',
+        review: {'outcome': 'completed', 'acceptSuggested': true},
+      );
+      equal(engine.view(state)['partialRounds'], 1);
+      state = engine.apply(
+        state,
+        expectedVersion: 3,
+        action: 'finish',
+        confirm: true,
+      );
+      final cursor = state['cursor'];
+      const occurrence = 'amrap[0]/round/push-set';
+      final request = {
+        'schemaVersion': 1,
+        'action': 'correct',
+        'execution': state,
+        'expectedVersion': 4,
+        'correction': {
+          'occurrenceId': occurrence,
+          'observations': null,
+          'actuals': {
+            'reps': {'value': '3', 'unit': 'rep'},
+          },
+        },
+      };
+      final response = const Commands().execute(
+        'activity window-repeat-execution',
+        request,
+      );
+      final native = await invoke([
+        'activity',
+        'window-repeat-execution',
+      ], jsonEncode(request));
+      equal(native.code, 0);
+      jsonEqual(
+        jsonObject(jsonDecode(native.output), 'response')['data'],
+        response['data'],
+      );
+      final view = jsonObject(response['data'], 'data');
+      state = jsonObject(view['execution'], 'execution');
+      jsonEqual(state['cursor'], cursor);
+      equal(view['confirmedRounds'], 1);
+      equal(view['partialRounds'], 0);
+      final entry = jsonObject((state['entries'] as List).first, 'entry');
+      equal(entry.containsKey('observations'), false);
+      equal(
+        jsonObject(
+          jsonObject(entry['actuals'], 'actuals')['reps'],
+          'reps',
+        )['value'],
+        '3',
+      );
+      try {
+        engine.apply(
+          state,
+          expectedVersion: 4,
+          action: 'correct',
+          correction: {'occurrenceId': occurrence, 'observations': null},
+        );
+        throw StateError('Expected stale conflict.');
+      } on BodyTmiException catch (error) {
+        equal(error.code, 'conflict');
+      }
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 5,
+          action: 'correct',
+          correction: {'occurrenceId': 'unknown', 'observations': null},
+        ),
+      );
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 5,
+          action: 'correct',
+          correction: {'occurrenceId': occurrence, 'actuals': null},
+        ),
+      );
+      final updated = engine.apply(
+        state,
+        expectedVersion: 5,
+        action: 'correct',
+        correction: {
+          'occurrenceId': occurrence,
+          'observations': {'terminationReason': 'interrupted'},
+        },
+      );
+      equal(engine.view(updated)['partialRounds'], 1);
+      jsonEqual(
+        jsonObject((updated['entries'] as List).first, 'entry')['actuals'],
+        entry['actuals'],
+      );
+      var active = engine.start(loop);
+      active = engine.apply(
+        active,
+        expectedVersion: 1,
+        action: 'review',
+        review: {'outcome': 'skipped'},
+        confirm: true,
+      );
+      rejects(
+        () => engine.apply(
+          active,
+          expectedVersion: 2,
+          action: 'correct',
+          correction: {'occurrenceId': occurrence, 'observations': null},
+        ),
+      );
+      active = engine.apply(
+        active,
+        expectedVersion: 2,
+        action: 'resume',
+        ownerId: 'owner',
+      );
+      rejects(
+        () => engine.apply(
+          active,
+          expectedVersion: 3,
+          action: 'correct',
+          correction: {'occurrenceId': occurrence, 'observations': null},
+        ),
+      );
+    },
+  );
   test('repeat execution recovery requires explicit boundary review', () {
     final loop = WindowRepeatSpec.fromJson({
       ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
