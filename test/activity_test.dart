@@ -27,6 +27,206 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'expired batch reviews explicit work and preserves other results atomically',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-window-batch-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        final input = definition().toJson();
+        input['plan'] = {
+          'id': 'plan',
+          'type': 'sequence',
+          'children': [
+            {
+              'id': 'window',
+              'type': 'window',
+              'durationSeconds': 1,
+              'child': {
+                'id': 'rounds',
+                'type': 'repeat',
+                'count': 4,
+                'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+              },
+            },
+            {'id': 'after', 'type': 'effort', 'slot': 'bench-light'},
+          ],
+        };
+        final workout = WorkoutDefinition.fromJson(input);
+        final training = StoredTrainingService(store);
+        await training.publish(workout, 0);
+        var session = await training.start(
+          'session',
+          workout.id,
+          1,
+          instant(1),
+        );
+        final ids = session.sets.map((set) => set.id).toList();
+        session = await training.edit(
+          'session',
+          1,
+          (s) => const TrainingService().complete(
+            s,
+            ids[2],
+            const {},
+            acceptSuggested: true,
+          ),
+        );
+        final prior = session.set(ids[2]).toJson();
+        final service = WindowCheckpointService(store);
+        var cp = await service.save(
+          'cp',
+          session.id,
+          0,
+          const SessionWindowClock().start(session),
+        );
+        cp = await service.reserve('cp', cp.version);
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 2,
+          expectedClockVersion: 1,
+          action: 'resume',
+          ownerId: 'owner',
+        );
+        cp = await service.action(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 2,
+          expectedClockVersion: 2,
+          action: 'advance',
+          ownerId: 'owner',
+          ownerElapsedMilliseconds: 1000,
+        );
+        final payloads = <Map<String, Object?>>[
+          {
+            'occurrenceId': ids[1],
+            'acceptSuggested': true,
+            'actuals': {
+              'reps': {'value': '3', 'unit': 'rep'},
+            },
+            'observations': {'terminationReason': 'interrupted'},
+          },
+          {'occurrenceId': ids[0], 'acceptSuggested': true},
+        ];
+        Future<Object?> attempt(
+          List<Map<String, Object?>> entries, {
+          bool confirm = true,
+          int clock = 3,
+        }) => service.reviewExpiredBatch(
+          'cp',
+          expectedVersion: cp.version,
+          expectedSessionVersion: 2,
+          expectedClockVersion: clock,
+          confirm: confirm,
+          reviews: [
+            for (final entry in entries) WindowEffortReview.fromJson(entry),
+          ],
+        );
+        await expectCheckpointFailure(attempt(payloads, confirm: false));
+        await expectCheckpointFailure(attempt(payloads, clock: 2), 'conflict');
+        await expectCheckpointFailure(
+          attempt([payloads.first, payloads.first]),
+        );
+        await expectCheckpointFailure(
+          attempt([
+            {'occurrenceId': ids[4], 'acceptSuggested': true},
+          ]),
+        );
+        await expectCheckpointFailure(
+          attempt([
+            {'occurrenceId': ids[2], 'acceptSuggested': true},
+          ]),
+        );
+        await expectCheckpointFailure(
+          attempt([
+            {'occurrenceId': ids[0]},
+          ]),
+        );
+        final raw = sqlite3.open(path);
+        try {
+          raw.execute(
+            "CREATE TRIGGER test_batch_failure BEFORE UPDATE ON window_checkpoints BEGIN SELECT RAISE(ABORT, 'forced checkpoint failure'); END",
+          );
+          var failed = false;
+          try {
+            await attempt(payloads);
+          } catch (_) {
+            failed = true;
+          }
+          check(failed);
+          equal((await training.session('session')).contentVersion, 2);
+          equal(
+            (await training.session('session')).sets.first.status,
+            SetStatus.planned,
+          );
+          equal((await service.show('cp')).version, cp.version);
+          raw.execute('DROP TRIGGER test_batch_failure');
+        } finally {
+          raw.close();
+        }
+        await store.close();
+        final request = jsonEncode({
+          'schemaVersion': 1,
+          'database': path,
+          'id': 'cp',
+          'expectedVersion': cp.version,
+          'expectedSessionVersion': 2,
+          'expectedClockVersion': 3,
+          'confirm': true,
+          'reviews': payloads,
+        });
+        final response = await invoke([
+          'checkpoint',
+          'review-expired-batch',
+        ], request);
+        equal(response.code, 0);
+        final result = jsonObject(
+          jsonObject(jsonDecode(response.output), 'response')['data'],
+          'data',
+        );
+        jsonEqual(result['reviewed'], [ids[0], ids[1]]);
+        jsonEqual(result['skipped'], [ids[3]]);
+        equal(
+          (await invoke(['checkpoint', 'review-expired-batch'], request)).code,
+          5,
+        );
+        store = await TrainingStore.open(path);
+        final saved = await StoredTrainingService(store).session('session');
+        equal(saved.contentVersion, 3);
+        equal(saved.set(ids[0]).status, SetStatus.completed);
+        equal(saved.set(ids[1]).actuals['reps']!.value.toString(), '3');
+        check(!saved.set(ids[1]).eligibleForPerformance);
+        jsonEqual(saved.set(ids[2]).toJson(), prior);
+        equal(saved.set(ids[3]).status, SetStatus.skipped);
+        equal(saved.set(ids[4]).status, SetStatus.planned);
+        final progress = const RoundProgress().evaluate(
+          saved,
+          'plan/window/rounds',
+        );
+        equal(progress['confirmedRounds'], 2);
+        equal(progress['partialRounds'], 1);
+        final clock = jsonObject(
+          (await WindowCheckpointService(store).show('cp')).clock['clock'],
+          'clock',
+        );
+        equal(clock['occurrence'], 4);
+        equal(clock['status'], 'paused');
+        await store.archive();
+        await store.backup('${dir.path}/backup');
+        equal(
+          NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
+          47,
+        );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'round reports resolve nested repeat paths and reject rest-only rounds',
     () {
       final input = definition().toJson();

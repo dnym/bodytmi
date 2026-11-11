@@ -46,6 +46,7 @@ const storedCommandNames = [
   'checkpoint advance-rest',
   'checkpoint skip-expired',
   'checkpoint review-expired',
+  'checkpoint review-expired-batch',
   'checkpoint reserve',
   'checkpoint release',
   'checkpoint action',
@@ -292,6 +293,14 @@ Future<Map<String, Object?>> executeStored(
       'actuals',
       'acceptSuggested',
       'observations',
+    },
+    'checkpoint review-expired-batch' => {
+      'id',
+      'expectedVersion',
+      'expectedSessionVersion',
+      'expectedClockVersion',
+      'confirm',
+      'reviews',
     },
     'checkpoint run' => {
       'id',
@@ -717,6 +726,24 @@ Future<Map<String, Object?>> executeStored(
           'session': result.session.toJson(),
           'checkpoint': result.checkpoint.toJson(),
           'occurrenceId': result.occurrenceId,
+        };
+      case 'checkpoint review-expired-batch':
+        final result = await checkpoints.reviewExpiredBatch(
+          identifier(request, 'id'),
+          expectedVersion: integer('expectedVersion'),
+          expectedSessionVersion: integer('expectedSessionVersion'),
+          expectedClockVersion: integer('expectedClockVersion'),
+          confirm: flag('confirm'),
+          reviews: [
+            for (final review in jsonList(request, 'reviews'))
+              WindowEffortReview.fromJson(review),
+          ],
+        );
+        data = {
+          'session': result.session.toJson(),
+          'checkpoint': result.checkpoint.toJson(),
+          'reviewed': result.reviewed,
+          'skipped': result.skipped,
         };
       case 'checkpoint review-expired':
         final result = await checkpoints.reviewExpired(

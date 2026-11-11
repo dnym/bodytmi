@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "window-checkpoint",
+  "expectedVersion": 4,
+  "expectedSessionVersion": 1,
+  "expectedClockVersion": 3,
+  "confirm": true,
+  "reviews": [
+    {
+      "occurrenceId": "window/rounds[0]/pair/push-set",
+      "acceptSuggested": true
+    },
+    {
+      "occurrenceId": "window/rounds[0]/pair/pull-set",
+      "actuals": {"reps": {"value": "3", "unit": "rep"}},
+      "observations": {"terminationReason": "interrupted"}
+    }
+  ]
+}

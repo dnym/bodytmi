@@ -7,6 +7,43 @@ import 'training_repository.dart';
 import 'training_service.dart';
 import 'window_deadlines.dart';
 
+/// One explicit result in an expired-window batch review.
+final class WindowEffortReview {
+  WindowEffortReview._(
+    this.occurrenceId,
+    Metrics actuals,
+    this.acceptSuggested,
+    this.observations,
+  ) : actuals = Map.unmodifiable(actuals);
+
+  factory WindowEffortReview.fromJson(Object? input) {
+    final json = jsonObject(input, 'window effort review');
+    checkKeys(json, {
+      'occurrenceId',
+      'actuals',
+      'acceptSuggested',
+      'observations',
+    });
+    final accept = json['acceptSuggested'] ?? false;
+    if (accept is! bool) invalid('acceptSuggested must be a boolean.');
+    final observations = json.containsKey('observations')
+        ? SetObservations.fromJson(json['observations'])
+        : null;
+    if (observations?.isEmpty == true)
+      invalid('Provide nonempty observations or omit them.');
+    return WindowEffortReview._(
+      requiredString(json, 'occurrenceId'),
+      metricsFromJson(json['actuals'] ?? <String, Object?>{}),
+      accept,
+      observations,
+    );
+  }
+  final String occurrenceId;
+  final Metrics actuals;
+  final bool acceptSuggested;
+  final SetObservations? observations;
+}
+
 /// A saved scoped clock, optionally reserving the profile's timing slot.
 final class WindowCheckpoint {
   WindowCheckpoint._(
@@ -764,6 +801,120 @@ final class WindowCheckpointService {
       checkpoint: checkpoint,
       skipped: skipped,
       occurrenceId: reviewed,
+    );
+  });
+
+  /// Explicitly review several efforts and skip the remaining expired work.
+  Future<
+    ({
+      TrainingSession session,
+      WindowCheckpoint checkpoint,
+      List<String> reviewed,
+      List<String> skipped,
+    })
+  >
+  reviewExpiredBatch(
+    String id, {
+    required int expectedVersion,
+    required int expectedSessionVersion,
+    required int expectedClockVersion,
+    required bool confirm,
+    required List<WindowEffortReview> reviews,
+  }) => repository.transaction(() async {
+    if (!confirm) invalid('Reviewing expired work requires confirm:true.');
+    if (reviews.isEmpty || reviews.length > 10000)
+      invalid('Provide between 1 and 10000 explicit effort reviews.');
+    final current = await show(id);
+    if (current.version != expectedVersion)
+      throw const BodyTmiException('conflict', 'Checkpoint version changed.');
+    final training = StoredTrainingService(repository);
+    final session = await training.session(current.sessionId);
+    if (session.contentVersion != expectedSessionVersion)
+      throw const BodyTmiException(
+        'conflict',
+        'Session content version changed.',
+      );
+    if (session.status != SessionStatus.active)
+      invalid('Review requires an active session.');
+    final wrapper = const SessionWindowClock().validateSnapshot(
+      session,
+      current.clock,
+    );
+    final clock = jsonObject(wrapper['clock'], 'window clock');
+    if (clock['version'] != expectedClockVersion)
+      throw const BodyTmiException('conflict', 'Window clock version changed.');
+    final destination = _expiredDestination(session, clock);
+    final occurrence = clock['occurrence'] as int;
+    final plan = session.revision.definition.plan.occurrences().toList();
+    final included = <String>{
+      for (var i = occurrence; i < destination; i++)
+        if (plan[i].activity is Effort) plan[i].id,
+    };
+    final byId = <String, WindowEffortReview>{};
+    for (final review in reviews) {
+      if (!included.contains(review.occurrenceId) ||
+          byId.containsKey(review.occurrenceId))
+        invalid(
+          'Reviews must identify distinct efforts in the expired window remainder.',
+        );
+      byId[review.occurrenceId] = review;
+    }
+    final reviewed = <String>[], skipped = <String>[], sets = <TrainingSet>[];
+    for (final set in session.sets) {
+      final review = byId[set.id];
+      if (review != null) {
+        if (set.status != SetStatus.planned)
+          invalid('Only planned efforts can be reviewed.');
+        var completed = set.complete(
+          review.actuals,
+          acceptSuggested: review.acceptSuggested,
+        );
+        if (review.observations != null)
+          completed = completed.annotate(review.observations!);
+        sets.add(completed);
+        reviewed.add(set.id);
+      } else if (included.contains(set.id) && set.status == SetStatus.planned) {
+        sets.add(set.skip(confirm: true));
+        skipped.add(set.id);
+      } else {
+        sets.add(set);
+      }
+    }
+    final updated = TrainingSession(
+      id: session.id,
+      revision: session.revision,
+      startedAt: session.startedAt,
+      sets: sets,
+      status: session.status,
+      finishedAt: session.finishedAt,
+      contentVersion: session.contentVersion + 1,
+      bodyMassInputs: session.bodyMassInputs,
+      initialBodyMassOverrides: session.initialBodyMassOverrides,
+      derivedPlanInput: session.derivedPlanInput,
+    );
+    final next = const SessionWindowClock().apply(
+      updated,
+      wrapper,
+      expectedVersion: expectedClockVersion,
+      action: 'move',
+      toOccurrence: destination,
+    );
+    final saved = await training.edit(
+      session.id,
+      expectedSessionVersion,
+      (_) => updated,
+    );
+    final complete = jsonObject(next['clock'], 'clock')['status'] == 'complete';
+    final checkpoint = await _replace(
+      current,
+      next,
+      reserved: current.reserved && !complete,
+    );
+    return (
+      session: saved,
+      checkpoint: checkpoint,
+      reviewed: reviewed,
+      skipped: skipped,
     );
   });
 
