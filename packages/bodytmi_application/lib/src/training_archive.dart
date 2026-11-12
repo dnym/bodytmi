@@ -231,6 +231,11 @@ final class TrainingArchive {
     if (repeatCheckpoints.map((c) => c.id).toSet().length !=
         repeatCheckpoints.length)
       invalid('Duplicate repeat checkpoint identity.');
+    validateRepeatClockReservations(
+      repeatCheckpoints,
+      timers: timers,
+      windows: windowCheckpoints,
+    );
     validateFamilyRevisions(families);
     validateDerivedTargetGraphRevisions(graphs);
     validateProgramPlanReferences(programRevisions, graphs);

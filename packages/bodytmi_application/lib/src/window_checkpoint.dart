@@ -427,6 +427,9 @@ final class WindowCheckpointService {
     ))
       invalid('Finish the session traversal before reserving a scoped clock.');
     if ((await repository.timingActivities()).any((timer) => timer.active) ||
+        (await repository.repeatCheckpoints()).any(
+          (checkpoint) => checkpoint.reserved,
+        ) ||
         (await repository.windowCheckpoints()).any(
           (checkpoint) => checkpoint.reserved,
         ))

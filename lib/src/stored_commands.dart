@@ -41,6 +41,8 @@ const storedCommandNames = [
   'store window-review',
   'repeat-checkpoint save',
   'repeat-checkpoint action',
+  'repeat-checkpoint reserve',
+  'repeat-checkpoint release',
   'repeat-checkpoint show',
   'repeat-checkpoint list',
   'repeat-checkpoint delete',
@@ -258,6 +260,8 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'repeat-checkpoint save' => {'id', 'expectedVersion', 'execution'},
+    'repeat-checkpoint reserve' => {'id', 'expectedVersion'},
+    'repeat-checkpoint release' => {'id', 'expectedVersion', 'confirm'},
     'repeat-checkpoint action' => {
       'id',
       'expectedVersion',
@@ -673,6 +677,17 @@ Future<Map<String, Object?>> executeStored(
           elapsedMilliseconds: request.containsKey('elapsedMilliseconds')
               ? integer('elapsedMilliseconds')
               : null,
+          confirm: flag('confirm'),
+        )).toJson();
+      case 'repeat-checkpoint reserve':
+        data = (await RepeatCheckpointService(store).reserve(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+        )).toJson();
+      case 'repeat-checkpoint release':
+        data = (await RepeatCheckpointService(store).release(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
           confirm: flag('confirm'),
         )).toJson();
       case 'repeat-checkpoint show':

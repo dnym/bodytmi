@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "amrap-checkpoint",
+  "expectedVersion": 2,
+  "confirm": true
+}

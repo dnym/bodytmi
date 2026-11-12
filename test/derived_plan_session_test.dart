@@ -231,7 +231,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/round.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/round.sqlite'), 48);
+      equal(NativeBackup.validateDatabase('$dir/round.sqlite'), 49);
       final oldLabel = sqlite3.open('$dir/round.sqlite');
       oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -343,7 +343,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/binary.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/binary.sqlite'), 48);
+      equal(NativeBackup.validateDatabase('$dir/binary.sqlite'), 49);
       final oldLabel = sqlite3.open('$dir/binary.sqlite');
       oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -578,7 +578,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 48);
+        equal(backup.manifest['databaseSchemaVersion'], 49);
       } finally {
         await backup.close();
       }
@@ -1435,7 +1435,7 @@ void derivedPlanSessionTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 48);
+      equal(NativeBackup.validateDatabase(snapshot), 49);
       final db = sqlite3.open(snapshot);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -1813,7 +1813,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 48);
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 49);
       final db = sqlite3.open('$dir/snapshot.sqlite');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -1921,7 +1921,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 48);
+        equal(reopened.userVersion, 49);
       } finally {
         reopened.close();
       }

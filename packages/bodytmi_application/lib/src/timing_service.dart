@@ -43,7 +43,8 @@ final class TimingService {
       return existing;
     }
     if (all.any((t) => t.active) ||
-        (await repository.windowCheckpoints()).any((c) => c.reserved))
+        (await repository.windowCheckpoints()).any((c) => c.reserved) ||
+        (await repository.repeatCheckpoints()).any((c) => c.reserved))
       _conflict(
         'Another timing activity is active; explicitly stop/discard it first.',
       );
@@ -101,7 +102,8 @@ final class TimingService {
       return existing;
     }
     if (all.any((t) => t.active) ||
-        (await repository.windowCheckpoints()).any((c) => c.reserved))
+        (await repository.windowCheckpoints()).any((c) => c.reserved) ||
+        (await repository.repeatCheckpoints()).any((c) => c.reserved))
       _conflict('Another timing activity is active.');
     final next = TimingActivity.create(
       id: id,

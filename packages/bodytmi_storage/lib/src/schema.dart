@@ -128,6 +128,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   44 => schemaV27, // v44 adds open-ended effort timers.
   45 => schemaV27, // v45 adds open-ended slot timing defaults.
   46 => schemaV46, // v46 adds inert scoped-clock checkpoints.
+  49 => schemaV48, // v49 adds repeat clock reservations.
   48 => schemaV48, // v48 adds inert repeat checkpoints.
   47 => schemaV46, // v47 adds scoped-clock reservations.
   _ => throw const BodyTmiException(

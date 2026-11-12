@@ -207,7 +207,7 @@ void timingDefaultsTests() {
       );
       equal(
         (await store.backup('${dir.path}/migrated'))['databaseSchemaVersion'],
-        48,
+        49,
       );
     } finally {
       await store.close();
@@ -655,14 +655,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          48,
+          49,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/48',
+          'bodytmi-logical-export/49',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {

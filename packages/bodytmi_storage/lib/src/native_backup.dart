@@ -147,6 +147,7 @@ final class NativeBackup {
           46,
           47,
           48,
+          49,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -288,6 +289,7 @@ final class NativeBackup {
             46,
             47,
             48,
+            49,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -778,6 +780,7 @@ final class NativeBackup {
           ],
         );
       }
+      final repeatCheckpoints = <RepeatCheckpoint>[];
       if (db.userVersion >= 48) {
         for (final row in db.select('SELECT * FROM repeat_checkpoints')) {
           final checkpoint = RepeatCheckpoint.fromJson(
@@ -785,7 +788,27 @@ final class NativeBackup {
           );
           if (checkpoint.id != row['id'])
             invalid('Repeat checkpoint row identity mismatch.');
+          if (db.userVersion < 49 && checkpoint.reserved)
+            invalid('Repeat reservations require schema v49.');
+          repeatCheckpoints.add(checkpoint);
         }
+      }
+      if (db.userVersion >= 48) {
+        validateRepeatClockReservations(
+          repeatCheckpoints,
+          timers: [
+            for (final row in db.select(
+              'SELECT snapshot FROM timing_activities',
+            ))
+              TimingActivity.fromJson(jsonDecode(row['snapshot'] as String)),
+          ],
+          windows: [
+            for (final row in db.select(
+              'SELECT snapshot FROM window_checkpoints',
+            ))
+              WindowCheckpoint.fromJson(jsonDecode(row['snapshot'] as String)),
+          ],
+        );
       }
       if (db.userVersion >= 46) {
         final checkpoints = <WindowCheckpoint>[];

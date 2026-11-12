@@ -26,6 +26,323 @@ Future<void> expectCheckpointFailure(
 }
 
 void activityTests() {
+  test('repeat reservation commits or rolls back on process death', () async {
+    final dir = await Directory.systemTemp.createTemp(
+      'bodytmi-repeat-reservation-crash-',
+    );
+    try {
+      final path = '${dir.path}/profile.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        await RepeatCheckpointService(store).save(
+          'repeat',
+          0,
+          const WindowRepeatExecution().start(
+            WindowRepeatSpec.fromJson(example('window-repeat-page')['loop']),
+          ),
+        );
+      } finally {
+        await store.close();
+      }
+      final binary = await compileNative(
+        'test/helpers/store_owner.dart',
+        '${dir.path}/owner',
+      );
+      for (final mode in ['repeat-reserve-rollback', 'repeat-reserve-commit']) {
+        final child = await Process.start(binary, [path, mode]);
+        final errors = child.stderr.transform(utf8.decoder).join();
+        try {
+          equal(
+            await child.stdout
+                .transform(utf8.decoder)
+                .transform(const LineSplitter())
+                .first
+                .timeout(const Duration(seconds: 15)),
+            'ready',
+          );
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+          equal(await errors, '');
+          final reopened = await TrainingStore.open(path);
+          try {
+            final saved = await RepeatCheckpointService(
+              reopened,
+            ).show('repeat');
+            final committed = mode.endsWith('commit');
+            equal(saved.version, committed ? 2 : 1);
+            equal(saved.reserved, committed);
+            if (committed)
+              await expectCheckpointFailure(
+                RepeatCheckpointService(reopened).reserve('repeat', 1),
+                'conflict',
+              );
+          } finally {
+            await reopened.close();
+          }
+        } finally {
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+        }
+      }
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
+  test('schema v48 repeat snapshots migrate without reservations', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-repeat-v48-');
+    final path = '${dir.path}/profile.sqlite';
+    try {
+      var store = await TrainingStore.open(path);
+      final execution = const WindowRepeatExecution().start(
+        WindowRepeatSpec.fromJson(example('window-repeat-page')['loop']),
+      );
+      await RepeatCheckpointService(store).save('repeat', 0, execution);
+      await store.close();
+      final raw = sqlite3.open(path);
+      raw.userVersion = 48;
+      raw.close();
+      store = await TrainingStore.open(path);
+      try {
+        final migrated = await RepeatCheckpointService(store).show('repeat');
+        check(!migrated.reserved);
+        equal(canonicalJson(migrated.execution), canonicalJson(execution));
+        equal(
+          (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
+          49,
+        );
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
+  test(
+    'repeat reservations share the profile clock and survive portability',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-repeat-reservation-',
+      );
+      final path = '${dir.path}/profile.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        final training = StoredTrainingService(store);
+        final otherWorkout = definition();
+        await training.publish(otherWorkout, 0);
+        final other = await training.start(
+          'other',
+          otherWorkout.id,
+          1,
+          instant(1),
+        );
+        final scopedInput = definition().toJson();
+        scopedInput['id'] = 'scoped-repeat-test';
+        scopedInput['plan'] = {
+          'id': 'window',
+          'type': 'window',
+          'durationSeconds': 5,
+          'child': {'id': 'set', 'type': 'effort', 'slot': 'bench-heavy'},
+        };
+        final scopedWorkout = WorkoutDefinition.fromJson(scopedInput);
+        await training.publish(scopedWorkout, 0);
+        final scoped = await training.start(
+          'scoped',
+          scopedWorkout.id,
+          1,
+          instant(1),
+        );
+        final windows = WindowCheckpointService(store);
+        await windows.save(
+          'window',
+          scoped.id,
+          0,
+          const SessionWindowClock().start(scoped),
+        );
+        final repeats = RepeatCheckpointService(store);
+        final loop = WindowRepeatSpec.fromJson(
+          example('window-repeat-page')['loop'],
+        );
+        final execution = const WindowRepeatExecution().start(loop);
+        await repeats.save('one', 0, execution);
+        await repeats.save('two', 0, execution);
+        var first = await repeats.reserve('one', 1);
+        equal(first.reserved, true);
+        await expectCheckpointFailure(repeats.reserve('two', 1), 'conflict');
+        await expectCheckpointFailure(windows.reserve('window', 1), 'conflict');
+        final plan = TimingPlan.fromJson({
+          'unplannedDuration': true,
+          'effortMilliseconds': 1000,
+        });
+        await expectCheckpointFailure(
+          TimingService(store).start(
+            'timer',
+            other.id,
+            other.sets.first.id,
+            'duration',
+            plan,
+            instant(1),
+          ),
+          'conflict',
+        );
+        await expectCheckpointFailure(repeats.save('one', 2, execution));
+        await expectCheckpointFailure(repeats.delete('one', 2, confirm: true));
+        await expectCheckpointFailure(
+          repeats.release('one', 2, confirm: false),
+        );
+        final duplicate = copyJson((await store.archive()).toJson());
+        jsonObject(
+          jsonList(duplicate, 'repeatCheckpoints').last,
+          'checkpoint',
+        )['reserved'] = true;
+        rejects(() => TrainingArchive.fromJson(duplicate));
+        await store.backup('${dir.path}/native');
+        final archive = '${dir.path}/logical.json';
+        await LogicalArchiveFiles.export(await store.archive(), archive);
+        final old = jsonObject(
+          jsonDecode(await File(archive).readAsString()),
+          'archive',
+        );
+        old['format'] = 'bodytmi-logical-export/48';
+        old.remove('sha256');
+        old['sha256'] = sha256
+            .convert(utf8.encode(canonicalJson(old)))
+            .toString();
+        final oldPath = '${dir.path}/old.json';
+        await File(oldPath).writeAsString(canonicalJson(old));
+        await expectCheckpointFailure(LogicalArchiveFiles.prepare(oldPath));
+        final oldDbPath = '${dir.path}/old.sqlite';
+        await File('${dir.path}/native/database.sqlite').copy(oldDbPath);
+        final oldDb = sqlite3.open(oldDbPath);
+        oldDb.userVersion = 48;
+        oldDb.close();
+        rejects(() => NativeBackup.validateDatabase(oldDbPath));
+        final collisionDbPath = '${dir.path}/collision.sqlite';
+        await File('${dir.path}/native/database.sqlite').copy(collisionDbPath);
+        final collisionDb = sqlite3.open(collisionDbPath);
+        final snapshot = jsonObject(
+          jsonDecode(
+            collisionDb
+                    .select(
+                      "SELECT snapshot FROM repeat_checkpoints WHERE id = 'two'",
+                    )
+                    .single['snapshot']
+                as String,
+          ),
+          'checkpoint',
+        );
+        snapshot['reserved'] = true;
+        collisionDb.execute(
+          "UPDATE repeat_checkpoints SET snapshot=? WHERE id='two'",
+          [canonicalJson(snapshot)],
+        );
+        collisionDb.close();
+        rejects(() => NativeBackup.validateDatabase(collisionDbPath));
+        final prepared = await LogicalArchiveFiles.prepare(archive);
+        try {
+          check(prepared.archive.repeatCheckpoints.first.reserved);
+        } finally {
+          await prepared.close();
+        }
+        final native = await NativeBackup.prepare('${dir.path}/native');
+        try {
+          final restored = await TrainingStore.open(
+            '${dir.path}/restored.sqlite',
+          );
+          try {
+            await restored.restore(
+              native,
+              recoveryDestination: '${dir.path}/recovery',
+              confirm: true,
+            );
+          } finally {
+            await restored.close();
+          }
+          final reopened = await TrainingStore.open(
+            '${dir.path}/restored.sqlite',
+          );
+          try {
+            check(
+              (await RepeatCheckpointService(reopened).show('one')).reserved,
+            );
+          } finally {
+            await reopened.close();
+          }
+        } finally {
+          await native.close();
+        }
+        await store.close();
+        final cli = await invoke([
+          'repeat-checkpoint',
+          'show',
+        ], jsonEncode({'schemaVersion': 1, 'database': path, 'id': 'one'}));
+        equal(cli.code, 0);
+        equal(
+          jsonObject(
+            jsonObject(jsonDecode(cli.output), 'response')['data'],
+            'checkpoint',
+          )['reserved'],
+          true,
+        );
+        store = await TrainingStore.open(path);
+        first = await RepeatCheckpointService(store).show('one');
+        check(first.reserved);
+        first = await RepeatCheckpointService(store).action(
+          'one',
+          expectedVersion: 2,
+          expectedExecutionVersion: 1,
+          action: 'elapse',
+          elapsedMilliseconds: 100,
+        );
+        check(first.reserved);
+        first = await RepeatCheckpointService(store).action(
+          'one',
+          expectedVersion: 3,
+          expectedExecutionVersion: 3,
+          action: 'stop',
+          confirm: true,
+        );
+        check(!first.reserved);
+        final timer = await TimingService(store).start(
+          'timer',
+          other.id,
+          other.sets.first.id,
+          'duration',
+          plan,
+          instant(1),
+        );
+        await expectCheckpointFailure(
+          RepeatCheckpointService(store).reserve('two', 1),
+          'conflict',
+        );
+        await TimingService(store).stop(
+          timer.id,
+          timer.version,
+          instant(1),
+          confirm: true,
+          discard: true,
+        );
+        final window = await WindowCheckpointService(
+          store,
+        ).reserve('window', 1);
+        await expectCheckpointFailure(
+          RepeatCheckpointService(store).reserve('two', 1),
+          'conflict',
+        );
+        await WindowCheckpointService(
+          store,
+        ).release('window', window.version, confirm: true);
+        final second = await RepeatCheckpointService(store).reserve('two', 1);
+        check(second.reserved);
+        final released = await RepeatCheckpointService(
+          store,
+        ).release('two', second.version, confirm: true);
+        check(!released.reserved);
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test(
     'stored repeat elapsed review commits or rolls back on process death',
     () async {
@@ -550,7 +867,7 @@ void activityTests() {
           } finally {
             await prepared.close();
           }
-          equal(NativeBackup.validateDatabase('$backup/database.sqlite'), 48);
+          equal(NativeBackup.validateDatabase('$backup/database.sqlite'), 49);
         } finally {
           await store.close();
         }
@@ -899,7 +1216,7 @@ void activityTests() {
           (await store.backup(
             '${directory.path}/migrated',
           ))['databaseSchemaVersion'],
-          48,
+          49,
         );
       } finally {
         await store.close();
@@ -2583,7 +2900,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          48,
+          49,
         );
       } finally {
         await store.close();
@@ -2980,7 +3297,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          48,
+          49,
         );
       } finally {
         await store.close();
@@ -3117,7 +3434,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            48,
+            49,
           );
         } finally {
           await store.close();
@@ -3328,7 +3645,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            48,
+            49,
           );
         } finally {
           await store.close();
@@ -3718,7 +4035,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            48,
+            49,
           );
         } finally {
           await store.close();
@@ -3873,7 +4190,7 @@ void activityTests() {
           NativeBackup.validateDatabase(
             '${dir.path}/early-backup/database.sqlite',
           ),
-          48,
+          49,
         );
         await expectCheckpointFailure(
           service.completeCurrent(
@@ -3931,7 +4248,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          48,
+          49,
         );
       } finally {
         await store.close();
@@ -4150,7 +4467,7 @@ void activityTests() {
           await reopened.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            48,
+            49,
           );
         } finally {
           await reopened.close();
@@ -4437,7 +4754,7 @@ void activityTests() {
       await store.backup('${dir.path}/backup');
       equal(
         NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-        48,
+        49,
       );
     } finally {
       await store.close();
@@ -6015,7 +6332,7 @@ void activityTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          48,
+          49,
         );
         final archive = jsonObject(
           jsonDecode(await File('${dir.path}/logical.json').readAsString()),
@@ -6084,7 +6401,7 @@ void activityTests() {
           NativeBackup.validateDatabase(
             '${dir.path}/finished-native/database.sqlite',
           ),
-          48,
+          49,
         );
         await expectCheckpointFailure(
           WindowCheckpointService(
@@ -6206,7 +6523,7 @@ void activityTests() {
         await store.backup('${dir.path}/native');
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          48,
+          49,
         );
         await LogicalArchiveFiles.export(
           await store.archive(),
@@ -6961,7 +7278,7 @@ void activityTests() {
       equal(checkpoint.version, 1);
       equal(
         (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-        48,
+        49,
       );
     } finally {
       await store.close();
@@ -6994,7 +7311,7 @@ void activityTests() {
       );
       equal(
         (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-        48,
+        49,
       );
     } finally {
       await store.close();
