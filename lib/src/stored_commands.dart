@@ -1,6 +1,7 @@
 import 'execution_runner.dart';
 import 'timing_runner.dart';
 import 'window_runner.dart';
+import 'repeat_runner.dart';
 import 'analytics_options.dart';
 import 'session_window_clock_adapter.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
@@ -41,6 +42,7 @@ const storedCommandNames = [
   'store window-review',
   'repeat-checkpoint save',
   'repeat-checkpoint action',
+  'repeat-checkpoint run',
   'repeat-checkpoint reserve',
   'repeat-checkpoint release',
   'repeat-checkpoint show',
@@ -260,6 +262,13 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'repeat-checkpoint save' => {'id', 'expectedVersion', 'execution'},
+    'repeat-checkpoint run' => {
+      'id',
+      'expectedVersion',
+      'expectedExecutionVersion',
+      'runForMilliseconds',
+      'stream',
+    },
     'repeat-checkpoint reserve' => {'id', 'expectedVersion'},
     'repeat-checkpoint release' => {'id', 'expectedVersion', 'confirm'},
     'repeat-checkpoint action' => {
@@ -692,6 +701,20 @@ Future<Map<String, Object?>> executeStored(
               : null,
           confirm: flag('confirm'),
         )).toJson();
+      case 'repeat-checkpoint run':
+        final limit = request.containsKey('runForMilliseconds')
+            ? integer('runForMilliseconds')
+            : null;
+        if (limit != null && limit > 86400000)
+          invalid('Foreground run limit exceeds 24 hours.');
+        data = await runRepeatClock(
+          store,
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          integer('expectedExecutionVersion'),
+          runForMilliseconds: limit,
+          stream: flag('stream'),
+        );
       case 'repeat-checkpoint reserve':
         data = (await RepeatCheckpointService(store).reserve(
           identifier(request, 'id'),

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "amrap-checkpoint",
+  "expectedVersion": 2,
+  "expectedExecutionVersion": 1,
+  "runForMilliseconds": 10000,
+  "stream": false
+}

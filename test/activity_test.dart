@@ -27,6 +27,257 @@ Future<void> expectCheckpointFailure(
 
 void activityTests() {
   test(
+    'foreground repeat runner recovers after kill and pauses on SIGINT',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-repeat-interrupt-',
+      );
+      final path = '${dir.path}/profile.sqlite';
+      try {
+        final initialStore = await TrainingStore.open(path);
+        try {
+          final loop = WindowRepeatSpec.fromJson({
+            ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+            'durationMilliseconds': 60000,
+          });
+          final service = RepeatCheckpointService(initialStore);
+          await service.save(
+            'repeat',
+            0,
+            const WindowRepeatExecution().start(loop),
+          );
+          await service.reserve('repeat', 1);
+        } finally {
+          await initialStore.close();
+        }
+        final binary = await compileNative(
+          'bin/bodytmi.dart',
+          '${dir.path}/native',
+        );
+        Future<
+          ({Process child, StreamIterator<String> lines, Future<String> errors})
+        >
+        launch(int checkpointVersion, int executionVersion) async {
+          final child = await Process.start(binary, [
+            'repeat-checkpoint',
+            'run',
+          ]);
+          final lines = StreamIterator(
+            child.stdout
+                .transform(utf8.decoder)
+                .transform(const LineSplitter()),
+          );
+          final errors = child.stderr.transform(utf8.decoder).join();
+          child.stdin.writeln(
+            jsonEncode({
+              'schemaVersion': 1,
+              'database': path,
+              'id': 'repeat',
+              'expectedVersion': checkpointVersion,
+              'expectedExecutionVersion': executionVersion,
+              'stream': true,
+            }),
+          );
+          await child.stdin.close();
+          check(await lines.moveNext().timeout(const Duration(seconds: 10)));
+          equal(
+            jsonObject(
+              jsonObject(jsonDecode(lines.current), 'event')['data'],
+              'event',
+            )['type'],
+            'repeat-started',
+          );
+          return (child: child, lines: lines, errors: errors);
+        }
+
+        var process = await launch(2, 1);
+        process.child.kill(ProcessSignal.sigkill);
+        await process.child.exitCode;
+        await process.lines.cancel();
+        equal(await process.errors, '');
+        var store = await TrainingStore.open(path);
+        late RepeatCheckpoint recovered;
+        try {
+          final service = RepeatCheckpointService(store);
+          final running = await service.show('repeat');
+          check(running.reserved);
+          equal(
+            jsonObject(running.execution['cursor'], 'cursor')['status'],
+            'running',
+          );
+          final before = jsonObject(
+            running.execution['cursor'],
+            'cursor',
+          )['elapsedMilliseconds'];
+          await expectCheckpointFailure(
+            service.release('repeat', running.version, confirm: true),
+          );
+          await expectCheckpointFailure(
+            service.action(
+              'repeat',
+              expectedVersion: running.version,
+              expectedExecutionVersion: running.execution['version'] as int,
+              action: 'resume',
+              ownerId: 'fresh',
+            ),
+          );
+          recovered = await service.action(
+            'repeat',
+            expectedVersion: running.version,
+            expectedExecutionVersion: running.execution['version'] as int,
+            action: 'recover',
+          );
+          equal(
+            jsonObject(
+              recovered.execution['cursor'],
+              'cursor',
+            )['elapsedMilliseconds'],
+            before,
+          );
+          equal(
+            jsonObject(recovered.execution['cursor'], 'cursor')['status'],
+            'paused',
+          );
+        } finally {
+          await store.close();
+        }
+        process = await launch(
+          recovered.version,
+          recovered.execution['version'] as int,
+        );
+        process.child.kill(ProcessSignal.sigint);
+        check(
+          await process.lines.moveNext().timeout(const Duration(seconds: 10)),
+        );
+        final data = jsonObject(
+          jsonObject(jsonDecode(process.lines.current), 'response')['data'],
+          'data',
+        );
+        equal(data['interrupted'], true);
+        final checkpoint = jsonObject(data['checkpoint'], 'checkpoint');
+        final execution = jsonObject(checkpoint['execution'], 'execution');
+        equal(jsonObject(execution['cursor'], 'cursor')['status'], 'paused');
+        equal((execution['entries'] as List).length, 0);
+        equal(await process.child.exitCode, 0);
+        await process.lines.cancel();
+        equal(await process.errors, '');
+        store = await TrainingStore.open(path);
+        try {
+          check((await RepeatCheckpointService(store).show('repeat')).reserved);
+        } finally {
+          await store.close();
+        }
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'foreground repeat runner pauses at limits and deadline without recording work',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-repeat-run-');
+      final path = '${dir.path}/profile.sqlite';
+      try {
+        final initialStore = await TrainingStore.open(path);
+        try {
+          final loop = WindowRepeatSpec.fromJson({
+            ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+            'durationMilliseconds': 400,
+          });
+          final service = RepeatCheckpointService(initialStore);
+          await service.save(
+            'repeat',
+            0,
+            const WindowRepeatExecution().start(loop),
+          );
+          await service.reserve('repeat', 1);
+        } finally {
+          await initialStore.close();
+        }
+        Future<Map<String, Object?>> run(
+          int checkpointVersion,
+          int executionVersion,
+          int duration, {
+          bool stream = false,
+        }) async {
+          final response = await invoke(
+            ['repeat-checkpoint', 'run'],
+            jsonEncode({
+              'schemaVersion': 1,
+              'database': path,
+              'id': 'repeat',
+              'expectedVersion': checkpointVersion,
+              'expectedExecutionVersion': executionVersion,
+              'runForMilliseconds': duration,
+              'stream': stream,
+            }),
+          );
+          equal(response.code, 0);
+          final lines = const LineSplitter().convert(response.output);
+          if (stream) {
+            equal(
+              jsonObject(
+                jsonObject(jsonDecode(lines.first), 'event')['data'],
+                'data',
+              )['type'],
+              'repeat-started',
+            );
+          }
+          return jsonObject(
+            jsonObject(jsonDecode(lines.last), 'response')['data'],
+            'data',
+          );
+        }
+
+        final first = await run(2, 1, 100);
+        var checkpoint = jsonObject(first['checkpoint'], 'checkpoint');
+        var execution = jsonObject(checkpoint['execution'], 'execution');
+        var cursor = jsonObject(execution['cursor'], 'cursor');
+        equal(cursor['status'], 'paused');
+        equal(cursor['elapsedMilliseconds'], 100);
+        equal(first['cueCount'], 0);
+        check(checkpoint['reserved'] == true);
+        final second = await run(
+          checkpoint['version'] as int,
+          execution['version'] as int,
+          1000,
+          stream: true,
+        );
+        checkpoint = jsonObject(second['checkpoint'], 'checkpoint');
+        execution = jsonObject(checkpoint['execution'], 'execution');
+        cursor = jsonObject(execution['cursor'], 'cursor');
+        equal(cursor['status'], 'boundary');
+        equal(cursor['elapsedMilliseconds'], 400);
+        equal(second['cueCount'], 1);
+        equal(
+          jsonObject((second['cues'] as List).single, 'cue')['type'],
+          'repeat-boundary',
+        );
+        equal((execution['entries'] as List).length, 0);
+        equal(checkpoint['reserved'], true);
+        final store = await TrainingStore.open(path);
+        try {
+          final service = RepeatCheckpointService(store);
+          final saved = await service.show('repeat');
+          equal(saved.version, checkpoint['version']);
+          await expectCheckpointFailure(
+            service.action(
+              'repeat',
+              expectedVersion: saved.version,
+              expectedExecutionVersion: saved.execution['version'] as int,
+              action: 'finish',
+              confirm: true,
+            ),
+          );
+        } finally {
+          await store.close();
+        }
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'reserved repeat clocks pause with monotonic owner samples before release',
     () async {
       final dir = await Directory.systemTemp.createTemp(
