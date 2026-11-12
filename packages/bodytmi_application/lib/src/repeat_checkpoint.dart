@@ -107,6 +107,7 @@ final class RepeatCheckpointService {
       'finish',
       'stop',
       'elapse',
+      'review-elapsed',
     }.contains(action))
       invalid('Unknown inert repeat checkpoint action.');
     final current = await show(id);
@@ -117,14 +118,14 @@ final class RepeatCheckpointService {
       );
     const engine = WindowRepeatExecution();
     late final Map<String, Object?> execution;
-    if (action == 'elapse') {
+    if (action == 'elapse' || action == 'review-elapsed') {
       if (elapsedMilliseconds == null ||
           elapsedMilliseconds < 1 ||
-          review != null ||
           correction != null ||
-          confirm)
+          (action == 'elapse' && (review != null || confirm)) ||
+          (action == 'review-elapsed' && review == null))
         invalid(
-          'Elapse requires a positive explicit duration and no review fields.',
+          'Elapsed actions require a positive duration and compatible review fields.',
         );
       const owner = 'repeat-checkpoint-sample';
       final running = engine.apply(
@@ -133,16 +134,38 @@ final class RepeatCheckpointService {
         action: 'resume',
         ownerId: owner,
       );
-      execution = engine.apply(
-        running,
-        expectedVersion: running['version'] as int,
-        action: 'pause',
-        ownerId: owner,
-        ownerElapsedMilliseconds: elapsedMilliseconds,
-      );
+      if (action == 'elapse') {
+        execution = engine.apply(
+          running,
+          expectedVersion: running['version'] as int,
+          action: 'pause',
+          ownerId: owner,
+          ownerElapsedMilliseconds: elapsedMilliseconds,
+        );
+      } else {
+        final reviewed = engine.apply(
+          running,
+          expectedVersion: running['version'] as int,
+          action: 'review',
+          ownerId: owner,
+          ownerElapsedMilliseconds: elapsedMilliseconds,
+          review: review,
+          confirm: confirm,
+        );
+        execution =
+            jsonObject(reviewed['cursor'], 'cursor')['status'] == 'running'
+            ? engine.apply(
+                reviewed,
+                expectedVersion: reviewed['version'] as int,
+                action: 'pause',
+                ownerId: owner,
+                ownerElapsedMilliseconds: elapsedMilliseconds,
+              )
+            : reviewed;
+      }
     } else {
       if (elapsedMilliseconds != null)
-        invalid('Only elapse takes an elapsed duration.');
+        invalid('Only elapsed actions take an elapsed duration.');
       execution = engine.apply(
         current.execution,
         expectedVersion: expectedExecutionVersion,
