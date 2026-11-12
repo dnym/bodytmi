@@ -26,6 +26,327 @@ Future<void> expectCheckpointFailure(
 }
 
 void activityTests() {
+  test('stored repeat review commits or rolls back on process death', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-repeat-crash-');
+    try {
+      final path = '${dir.path}/profile.sqlite';
+      final store = await TrainingStore.open(path);
+      try {
+        final loop = WindowRepeatSpec.fromJson(
+          example('window-repeat-page')['loop'],
+        );
+        await RepeatCheckpointService(
+          store,
+        ).save('repeat', 0, const WindowRepeatExecution().start(loop));
+      } finally {
+        await store.close();
+      }
+      final binary = await compileNative(
+        'test/helpers/store_owner.dart',
+        '${dir.path}/owner',
+      );
+      for (final mode in ['repeat-action-rollback', 'repeat-action-commit']) {
+        final child = await Process.start(binary, [path, mode]);
+        final errors = child.stderr.transform(utf8.decoder).join();
+        try {
+          equal(
+            await child.stdout
+                .transform(utf8.decoder)
+                .transform(const LineSplitter())
+                .first
+                .timeout(const Duration(seconds: 15)),
+            'ready',
+          );
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+          equal(await errors, '');
+          final reopened = await TrainingStore.open(path);
+          try {
+            final saved = await RepeatCheckpointService(
+              reopened,
+            ).show('repeat');
+            final committed = mode.endsWith('commit');
+            equal(saved.version, committed ? 2 : 1);
+            equal(saved.execution['version'], committed ? 2 : 1);
+            equal(
+              (saved.execution['entries'] as List).length,
+              committed ? 1 : 0,
+            );
+            if (committed) {
+              await expectCheckpointFailure(
+                RepeatCheckpointService(reopened).action(
+                  'repeat',
+                  expectedVersion: 1,
+                  expectedExecutionVersion: 1,
+                  action: 'review',
+                  review: {'outcome': 'completed', 'acceptSuggested': true},
+                ),
+                'conflict',
+              );
+            }
+          } finally {
+            await reopened.close();
+          }
+        } finally {
+          child.kill(ProcessSignal.sigkill);
+          await child.exitCode;
+        }
+      }
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
+  test(
+    'stored repeat batch review survives logical export and refuses clock actions',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-repeat-batch-',
+      );
+      try {
+        final loop = WindowRepeatSpec.fromJson({
+          ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+          'durationMilliseconds': 1000,
+        });
+        const engine = WindowRepeatExecution();
+        var state = engine.start(loop);
+        state = engine.apply(
+          state,
+          expectedVersion: 1,
+          action: 'resume',
+          ownerId: 'owner',
+        );
+        state = engine.apply(
+          state,
+          expectedVersion: 2,
+          action: 'advance',
+          ownerId: 'owner',
+          ownerElapsedMilliseconds: 1100,
+        );
+        final store = await TrainingStore.open('${dir.path}/profile.sqlite');
+        try {
+          final service = RepeatCheckpointService(store);
+          await service.save('repeat', 0, state);
+          await expectCheckpointFailure(
+            service.action(
+              'repeat',
+              expectedVersion: 1,
+              expectedExecutionVersion: 3,
+              action: 'recover',
+            ),
+          );
+          final batch = {
+            'reviews': [
+              {
+                'occurrenceId': 'amrap[0]/round/push-set',
+                'outcome': 'completed',
+                'acceptSuggested': true,
+              },
+              {'occurrenceId': 'amrap[0]/round/pull-set', 'outcome': 'skipped'},
+            ],
+          };
+          await expectCheckpointFailure(
+            service.action(
+              'repeat',
+              expectedVersion: 1,
+              expectedExecutionVersion: 3,
+              action: 'review-batch',
+              review: batch,
+            ),
+          );
+          final result = await service.action(
+            'repeat',
+            expectedVersion: 1,
+            expectedExecutionVersion: 3,
+            action: 'review-batch',
+            review: batch,
+            confirm: true,
+          );
+          equal(engine.view(result.execution)['partialRounds'], 1);
+          equal(engine.view(result.execution)['reportedAfterBoundary'], 2);
+          final file = '${dir.path}/export.json';
+          await LogicalArchiveFiles.export(await store.archive(), file);
+          final prepared = await LogicalArchiveFiles.prepare(file);
+          try {
+            equal(
+              canonicalJson(prepared.archive.repeatCheckpoints.single.toJson()),
+              canonicalJson(result.toJson()),
+            );
+          } finally {
+            await prepared.close();
+          }
+        } finally {
+          await store.close();
+        }
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'stored repeat actions atomically review and correct inert checkpoints',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-repeat-action-',
+      );
+      final path = '${dir.path}/profile.sqlite';
+      try {
+        final loop = WindowRepeatSpec.fromJson({
+          ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+          'maxRounds': 1,
+          'maxOccurrences': 2,
+        });
+        var store = await TrainingStore.open(path);
+        var service = RepeatCheckpointService(store);
+        await service.save(
+          'repeat',
+          0,
+          const WindowRepeatExecution().start(loop),
+        );
+        await expectCheckpointFailure(
+          service.action(
+            'repeat',
+            expectedVersion: 1,
+            expectedExecutionVersion: 1,
+            action: 'resume',
+          ),
+        );
+        await expectCheckpointFailure(
+          service.action(
+            'repeat',
+            expectedVersion: 1,
+            expectedExecutionVersion: 1,
+            action: 'review',
+            review: {'outcome': 'completed'},
+          ),
+        );
+        equal((await service.show('repeat')).version, 1);
+        var result = await service.action(
+          'repeat',
+          expectedVersion: 1,
+          expectedExecutionVersion: 1,
+          action: 'review',
+          review: {'outcome': 'completed', 'acceptSuggested': true},
+        );
+        equal(result.version, 2);
+        equal(result.execution['version'], 2);
+        await expectCheckpointFailure(
+          service.action(
+            'repeat',
+            expectedVersion: 1,
+            expectedExecutionVersion: 2,
+            action: 'review',
+            review: {'outcome': 'skipped'},
+            confirm: true,
+          ),
+          'conflict',
+        );
+        await expectCheckpointFailure(
+          service.action(
+            'repeat',
+            expectedVersion: 2,
+            expectedExecutionVersion: 1,
+            action: 'review',
+            review: {'outcome': 'skipped'},
+            confirm: true,
+          ),
+          'conflict',
+        );
+        equal((await service.show('repeat')).version, 2);
+        await store.close();
+        final request = {
+          'schemaVersion': 1,
+          'database': path,
+          'id': 'repeat',
+          'expectedVersion': 2,
+          'expectedExecutionVersion': 2,
+          'action': 'review',
+          'review': {'outcome': 'skipped'},
+          'confirm': true,
+        };
+        final cli = await invoke([
+          'repeat-checkpoint',
+          'action',
+        ], jsonEncode(request));
+        equal(cli.code, 0);
+        equal(
+          jsonObject(
+            jsonObject(jsonDecode(cli.output), 'response')['data'],
+            'checkpoint',
+          )['version'],
+          3,
+        );
+        final retry = await invoke([
+          'repeat-checkpoint',
+          'action',
+        ], jsonEncode(request));
+        check(retry.code != 0);
+        store = await TrainingStore.open(path);
+        service = RepeatCheckpointService(store);
+        result = await service.action(
+          'repeat',
+          expectedVersion: 3,
+          expectedExecutionVersion: 3,
+          action: 'finish',
+          confirm: true,
+        );
+        result = await service.action(
+          'repeat',
+          expectedVersion: 4,
+          expectedExecutionVersion: 4,
+          action: 'revise',
+          correction: {
+            'occurrenceId': 'amrap[0]/round/pull-set',
+            'outcome': 'completed',
+            'actuals': {
+              'reps': {'value': '3', 'unit': 'rep'},
+            },
+          },
+        );
+        equal(
+          const WindowRepeatExecution().view(
+            result.execution,
+          )['confirmedRounds'],
+          1,
+        );
+        equal(
+          jsonObject(result.execution['cursor'], 'cursor')['status'],
+          'finished',
+        );
+        await store.backup('${dir.path}/backup');
+        await store.close();
+        final prepared = await NativeBackup.prepare('${dir.path}/backup');
+        try {
+          final restored = await TrainingStore.open(
+            '${dir.path}/restored.sqlite',
+          );
+          try {
+            await restored.restore(
+              prepared,
+              recoveryDestination: '${dir.path}/recovery',
+              confirm: true,
+            );
+          } finally {
+            await restored.close();
+          }
+        } finally {
+          await prepared.close();
+        }
+        final restored = await TrainingStore.open(
+          '${dir.path}/restored.sqlite',
+        );
+        try {
+          equal(
+            (await RepeatCheckpointService(restored).show('repeat')).version,
+            5,
+          );
+        } finally {
+          await restored.close();
+        }
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test('schema v47 migrates to empty repeat checkpoints', () async {
     final directory = await Directory.systemTemp.createTemp(
       'bodytmi-repeat-migration-',

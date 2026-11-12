@@ -40,6 +40,7 @@ const storedCommandNames = [
   'store window-clock',
   'store window-review',
   'repeat-checkpoint save',
+  'repeat-checkpoint action',
   'repeat-checkpoint show',
   'repeat-checkpoint list',
   'repeat-checkpoint delete',
@@ -257,6 +258,15 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'repeat-checkpoint save' => {'id', 'expectedVersion', 'execution'},
+    'repeat-checkpoint action' => {
+      'id',
+      'expectedVersion',
+      'expectedExecutionVersion',
+      'action',
+      'review',
+      'correction',
+      'confirm',
+    },
     'repeat-checkpoint show' => {'id'},
     'repeat-checkpoint list' => <String>{},
     'repeat-checkpoint delete' => {'id', 'expectedVersion', 'confirm'},
@@ -646,6 +656,20 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'id'),
           integer('expectedVersion', min: 0),
           request['execution'],
+        )).toJson();
+      case 'repeat-checkpoint action':
+        data = (await RepeatCheckpointService(store).action(
+          identifier(request, 'id'),
+          expectedVersion: integer('expectedVersion'),
+          expectedExecutionVersion: integer('expectedExecutionVersion'),
+          action: requiredString(request, 'action'),
+          review: request.containsKey('review')
+              ? jsonObject(request['review'], 'review')
+              : null,
+          correction: request.containsKey('correction')
+              ? jsonObject(request['correction'], 'correction')
+              : null,
+          confirm: flag('confirm'),
         )).toJson();
       case 'repeat-checkpoint show':
         data = (await RepeatCheckpointService(

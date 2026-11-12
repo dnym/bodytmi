@@ -87,6 +87,48 @@ final class RepeatCheckpointService {
     await repository.saveRepeatCheckpoint(next);
     return next;
   });
+
+  /// Apply a non-clock action atomically to the stored inert execution.
+  Future<RepeatCheckpoint> action(
+    String id, {
+    required int expectedVersion,
+    required int expectedExecutionVersion,
+    required String action,
+    Map<String, Object?>? review,
+    Map<String, Object?>? correction,
+    bool confirm = false,
+  }) => repository.transaction(() async {
+    if (!{
+      'review',
+      'review-batch',
+      'correct',
+      'revise',
+      'finish',
+      'stop',
+    }.contains(action))
+      invalid('Stored repeat actions cannot start or sample a clock.');
+    final current = await show(id);
+    if (current.version != expectedVersion)
+      throw const BodyTmiException(
+        'conflict',
+        'Repeat checkpoint version changed.',
+      );
+    final execution = const WindowRepeatExecution().apply(
+      current.execution,
+      expectedVersion: expectedExecutionVersion,
+      action: action,
+      review: review,
+      correction: correction,
+      confirm: confirm,
+    );
+    final next = RepeatCheckpoint.fromJson({
+      'id': id,
+      'version': current.version + 1,
+      'execution': execution,
+    });
+    await repository.saveRepeatCheckpoint(next);
+    return next;
+  });
   Future<void> delete(
     String id,
     int expectedVersion, {

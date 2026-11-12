@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "amrap-checkpoint",
+  "expectedVersion": 1,
+  "expectedExecutionVersion": 1,
+  "action": "review",
+  "review": {
+    "outcome": "completed",
+    "acceptSuggested": true
+  }
+}

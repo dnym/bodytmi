@@ -7,7 +7,29 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 2 && args[1].startsWith('checkpoint-action-')) {
+    if (args.length == 2 && args[1].startsWith('repeat-action-')) {
+      Future<void> action() async {
+        await RepeatCheckpointService(store).action(
+          'repeat',
+          expectedVersion: 1,
+          expectedExecutionVersion: 1,
+          action: 'review',
+          review: {'outcome': 'completed', 'acceptSuggested': true},
+        );
+      }
+
+      if (args[1].endsWith('rollback')) {
+        await store.transaction(() async {
+          await action();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await action();
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 2 && args[1].startsWith('checkpoint-action-')) {
       Future<void> action() async {
         await WindowCheckpointService(store).action(
           'cp',
