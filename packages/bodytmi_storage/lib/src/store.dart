@@ -53,7 +53,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 47) {
+            if (native.userVersion > 48) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -114,7 +114,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 47);
+    validateSchema(schema.map((row) => row.data), 48);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -126,6 +126,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_mass_records), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM window_checkpoints), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM repeat_checkpoints), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM workout_executions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM family_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM derived_target_graphs), 0) AS bytes
@@ -431,6 +432,49 @@ final class TrainingStore implements TrainingRepository {
             snapshot: _snapshot(timer.toJson()),
           ),
         );
+  }
+
+  @override
+  Future<RepeatCheckpoint?> repeatCheckpoint(String id) async {
+    final row = await (_db.select(
+      _db.repeatCheckpoints,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row == null) return null;
+    final result = RepeatCheckpoint.fromJson(jsonDecode(row.snapshot));
+    if (result.id != row.id)
+      invalid('Repeat checkpoint row identity mismatch.');
+    return result;
+  }
+
+  @override
+  Future<List<RepeatCheckpoint>> repeatCheckpoints() async {
+    final result = <RepeatCheckpoint>[];
+    for (final row in await _db.select(_db.repeatCheckpoints).get()) {
+      final checkpoint = RepeatCheckpoint.fromJson(jsonDecode(row.snapshot));
+      if (checkpoint.id != row.id)
+        invalid('Repeat checkpoint row identity mismatch.');
+      result.add(checkpoint);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveRepeatCheckpoint(RepeatCheckpoint checkpoint) async {
+    await _db
+        .into(_db.repeatCheckpoints)
+        .insertOnConflictUpdate(
+          RepeatCheckpointsCompanion.insert(
+            id: checkpoint.id,
+            snapshot: _snapshot(checkpoint.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<void> deleteRepeatCheckpoint(String id) async {
+    await (_db.delete(
+      _db.repeatCheckpoints,
+    )..where((t) => t.id.equals(id))).go();
   }
 
   @override

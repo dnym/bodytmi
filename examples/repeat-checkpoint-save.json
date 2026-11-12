@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "amrap-checkpoint",
+  "expectedVersion": 0,
+  "execution": {
+    "policy": "bodytmi-window-repeat-execution/1",
+    "version": 1,
+    "cursor": {
+      "policy": "bodytmi-window-repeat-cursor/1",
+      "loop": {
+        "id": "amrap",
+        "durationMilliseconds": 600000,
+        "maxRounds": 100,
+        "maxOccurrences": 1000,
+        "roundDefinition": {
+          "id": "amrap-round",
+          "name": "AMRAP round template",
+          "slots": [
+            {
+              "id": "push",
+              "exercise": "push",
+              "implementation": "bodyweight",
+              "targets": {
+                "reps": {
+                  "value": "5",
+                  "unit": "rep",
+                  "entered": {
+                    "value": "5",
+                    "unit": "rep"
+                  }
+                }
+              },
+              "prefill": []
+            },
+            {
+              "id": "pull",
+              "exercise": "pull",
+              "implementation": "bodyweight",
+              "targets": {
+                "reps": {
+                  "value": "5",
+                  "unit": "rep",
+                  "entered": {
+                    "value": "5",
+                    "unit": "rep"
+                  }
+                }
+              },
+              "prefill": []
+            }
+          ],
+          "plan": {
+            "type": "sequence",
+            "id": "round",
+            "children": [
+              {
+                "type": "effort",
+                "id": "push-set",
+                "slot": "push",
+                "role": "work"
+              },
+              {
+                "type": "effort",
+                "id": "pull-set",
+                "slot": "pull",
+                "role": "work"
+              }
+            ]
+          }
+        }
+      },
+      "version": 1,
+      "status": "paused",
+      "round": 0,
+      "occurrence": 0,
+      "elapsedMilliseconds": 0,
+      "ownerId": null,
+      "ownerElapsedMilliseconds": 0
+    },
+    "entries": []
+  }
+}

@@ -3698,6 +3698,218 @@ class WindowCheckpointsCompanion
   }
 }
 
+class $RepeatCheckpointsTable extends RepeatCheckpoints
+    with TableInfo<$RepeatCheckpointsTable, StoredRepeatCheckpoint> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RepeatCheckpointsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'repeat_checkpoints';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredRepeatCheckpoint> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredRepeatCheckpoint map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredRepeatCheckpoint(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $RepeatCheckpointsTable createAlias(String alias) {
+    return $RepeatCheckpointsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredRepeatCheckpoint extends DataClass
+    implements Insertable<StoredRepeatCheckpoint> {
+  final String id;
+  final String snapshot;
+  const StoredRepeatCheckpoint({required this.id, required this.snapshot});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  RepeatCheckpointsCompanion toCompanion(bool nullToAbsent) {
+    return RepeatCheckpointsCompanion(id: Value(id), snapshot: Value(snapshot));
+  }
+
+  factory StoredRepeatCheckpoint.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredRepeatCheckpoint(
+      id: serializer.fromJson<String>(json['id']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredRepeatCheckpoint copyWith({String? id, String? snapshot}) =>
+      StoredRepeatCheckpoint(
+        id: id ?? this.id,
+        snapshot: snapshot ?? this.snapshot,
+      );
+  StoredRepeatCheckpoint copyWithCompanion(RepeatCheckpointsCompanion data) {
+    return StoredRepeatCheckpoint(
+      id: data.id.present ? data.id.value : this.id,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredRepeatCheckpoint(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredRepeatCheckpoint &&
+          other.id == this.id &&
+          other.snapshot == this.snapshot);
+}
+
+class RepeatCheckpointsCompanion
+    extends UpdateCompanion<StoredRepeatCheckpoint> {
+  final Value<String> id;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const RepeatCheckpointsCompanion({
+    this.id = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RepeatCheckpointsCompanion.insert({
+    required String id,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       snapshot = Value(snapshot);
+  static Insertable<StoredRepeatCheckpoint> custom({
+    Expression<String>? id,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RepeatCheckpointsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return RepeatCheckpointsCompanion(
+      id: id ?? this.id,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RepeatCheckpointsCompanion(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
@@ -3731,6 +3943,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
       $DerivedTargetGraphsTable(this);
   late final $WindowCheckpointsTable windowCheckpoints =
       $WindowCheckpointsTable(this);
+  late final $RepeatCheckpointsTable repeatCheckpoints =
+      $RepeatCheckpointsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3750,6 +3964,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     workoutExecutions,
     derivedTargetGraphs,
     windowCheckpoints,
+    repeatCheckpoints,
   ];
 }
 
@@ -8086,6 +8301,173 @@ typedef $$WindowCheckpointsTableProcessedTableManager =
       StoredWindowCheckpoint,
       PrefetchHooks Function({bool sessionId})
     >;
+typedef $$RepeatCheckpointsTableCreateCompanionBuilder =
+    RepeatCheckpointsCompanion Function({
+      required String id,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$RepeatCheckpointsTableUpdateCompanionBuilder =
+    RepeatCheckpointsCompanion Function({
+      Value<String> id,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$RepeatCheckpointsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $RepeatCheckpointsTable> {
+  $$RepeatCheckpointsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RepeatCheckpointsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $RepeatCheckpointsTable> {
+  $$RepeatCheckpointsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RepeatCheckpointsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $RepeatCheckpointsTable> {
+  $$RepeatCheckpointsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$RepeatCheckpointsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $RepeatCheckpointsTable,
+          StoredRepeatCheckpoint,
+          $$RepeatCheckpointsTableFilterComposer,
+          $$RepeatCheckpointsTableOrderingComposer,
+          $$RepeatCheckpointsTableAnnotationComposer,
+          $$RepeatCheckpointsTableCreateCompanionBuilder,
+          $$RepeatCheckpointsTableUpdateCompanionBuilder,
+          (
+            StoredRepeatCheckpoint,
+            BaseReferences<
+              _$TrainingDatabase,
+              $RepeatCheckpointsTable,
+              StoredRepeatCheckpoint
+            >,
+          ),
+          StoredRepeatCheckpoint,
+          PrefetchHooks Function()
+        > {
+  $$RepeatCheckpointsTableTableManager(
+    _$TrainingDatabase db,
+    $RepeatCheckpointsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RepeatCheckpointsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RepeatCheckpointsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RepeatCheckpointsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RepeatCheckpointsCompanion(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => RepeatCheckpointsCompanion.insert(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$RepeatCheckpointsTable, StoredRepeatCheckpoint>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $RepeatCheckpointsTable,
+                    StoredRepeatCheckpoint
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RepeatCheckpointsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $RepeatCheckpointsTable,
+      StoredRepeatCheckpoint,
+      $$RepeatCheckpointsTableFilterComposer,
+      $$RepeatCheckpointsTableOrderingComposer,
+      $$RepeatCheckpointsTableAnnotationComposer,
+      $$RepeatCheckpointsTableCreateCompanionBuilder,
+      $$RepeatCheckpointsTableUpdateCompanionBuilder,
+      (
+        StoredRepeatCheckpoint,
+        BaseReferences<
+          _$TrainingDatabase,
+          $RepeatCheckpointsTable,
+          StoredRepeatCheckpoint
+        >,
+      ),
+      StoredRepeatCheckpoint,
+      PrefetchHooks Function()
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -8118,4 +8500,6 @@ class $TrainingDatabaseManager {
       $$DerivedTargetGraphsTableTableManager(_db, _db.derivedTargetGraphs);
   $$WindowCheckpointsTableTableManager get windowCheckpoints =>
       $$WindowCheckpointsTableTableManager(_db, _db.windowCheckpoints);
+  $$RepeatCheckpointsTableTableManager get repeatCheckpoints =>
+      $$RepeatCheckpointsTableTableManager(_db, _db.repeatCheckpoints);
 }

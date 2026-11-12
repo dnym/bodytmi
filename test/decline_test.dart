@@ -335,6 +335,7 @@ void declineTests() {
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE family_revisions');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 10;
       old.close();
@@ -345,7 +346,7 @@ void declineTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), before);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          47,
+          48,
         );
       } finally {
         await migrated.close();
@@ -367,7 +368,7 @@ void declineTests() {
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/47',
+          'bodytmi-logical-export/48',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -409,6 +410,7 @@ void declineTests() {
       final forged = sqlite3.open('$dir/native/database.sqlite');
       forged.execute('DROP TABLE family_revisions');
       forged.execute('DROP TABLE derived_target_graphs');
+      forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       forged.execute('DROP TABLE IF EXISTS window_checkpoints');
       forged.userVersion = 10;
       forged.close();

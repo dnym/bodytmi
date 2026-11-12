@@ -39,6 +39,10 @@ const storedCommandNames = [
   'store rounds',
   'store window-clock',
   'store window-review',
+  'repeat-checkpoint save',
+  'repeat-checkpoint show',
+  'repeat-checkpoint list',
+  'repeat-checkpoint delete',
   'checkpoint save',
   'checkpoint review',
   'checkpoint complete-current',
@@ -252,6 +256,10 @@ Future<Map<String, Object?>> executeStored(
       'observations',
       'confirm',
     },
+    'repeat-checkpoint save' => {'id', 'expectedVersion', 'execution'},
+    'repeat-checkpoint show' => {'id'},
+    'repeat-checkpoint list' => <String>{},
+    'repeat-checkpoint delete' => {'id', 'expectedVersion', 'confirm'},
     'checkpoint save' => {'id', 'sessionId', 'expectedVersion', 'clock'},
     'checkpoint reserve' => {'id', 'expectedVersion'},
     'checkpoint release' => {'id', 'expectedVersion', 'confirm'},
@@ -633,6 +641,27 @@ Future<Map<String, Object?>> executeStored(
     final checkpoints = WindowCheckpointService(store);
     final execution = ExecutionService(store);
     switch (command) {
+      case 'repeat-checkpoint save':
+        data = (await RepeatCheckpointService(store).save(
+          identifier(request, 'id'),
+          integer('expectedVersion', min: 0),
+          request['execution'],
+        )).toJson();
+      case 'repeat-checkpoint show':
+        data = (await RepeatCheckpointService(
+          store,
+        ).show(identifier(request, 'id'))).toJson();
+      case 'repeat-checkpoint list':
+        data = [
+          for (final c in await RepeatCheckpointService(store).list())
+            c.toJson(),
+        ];
+      case 'repeat-checkpoint delete':
+        final id = identifier(request, 'id');
+        await RepeatCheckpointService(
+          store,
+        ).delete(id, integer('expectedVersion'), confirm: flag('confirm'));
+        data = {'id': id, 'deleted': true};
       case 'checkpoint save':
         data = (await checkpoints.save(
           identifier(request, 'id'),

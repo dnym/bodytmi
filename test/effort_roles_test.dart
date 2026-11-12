@@ -671,6 +671,7 @@ void effortRolesTests() {
       final progression = StoredProgressionService(store);
       await store.snapshot('${dir.path}/v41.sqlite');
       final oldProfile = sqlite3.open('${dir.path}/v41.sqlite');
+      oldProfile.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       oldProfile.execute('DROP TABLE IF EXISTS window_checkpoints');
       oldProfile.userVersion = 41;
       oldProfile.close();
@@ -678,7 +679,7 @@ void effortRolesTests() {
       final migrated = await TrainingStore.open('${dir.path}/v41.sqlite');
       await migrated.close();
       final migratedDb = sqlite3.open('${dir.path}/v41.sqlite');
-      equal(migratedDb.userVersion, 47);
+      equal(migratedDb.userVersion, 48);
       migratedDb.close();
       await training.publish(_definition(), 0);
       var session = await training.start(
@@ -846,6 +847,7 @@ void effortRolesTests() {
       );
       await store.snapshot('${dir.path}/old.sqlite');
       final old = sqlite3.open('${dir.path}/old.sqlite');
+      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 41;
       old.close();
@@ -1227,6 +1229,7 @@ void effortRolesTests() {
         await training.publish(definition(), 0);
         await store.snapshot('${dir.path}/v40.sqlite');
         final previous = sqlite3.open('${dir.path}/v40.sqlite');
+        previous.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         previous.execute('DROP TABLE IF EXISTS window_checkpoints');
         previous.userVersion = 40;
         previous.close();
@@ -1309,8 +1312,9 @@ void effortRolesTests() {
           throwsA(isA<BodyTmiException>()),
         );
         await store.snapshot('${dir.path}/roles.sqlite');
-        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 47);
+        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 48);
         final relabeled = sqlite3.open('${dir.path}/roles.sqlite');
+        relabeled.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         relabeled.execute('DROP TABLE IF EXISTS window_checkpoints');
         relabeled.userVersion = 40;
         relabeled.close();

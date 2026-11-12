@@ -146,6 +146,7 @@ void sessionBodyMassTests() {
       await _fails(LogicalArchiveFiles.prepare('$dir/captured-v34.json'));
       await store.snapshot('$dir/captured.sqlite');
       final db = sqlite3.open('$dir/captured.sqlite');
+      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.userVersion = 34;
       db.close();
@@ -521,6 +522,7 @@ void sessionBodyMassTests() {
       );
       await store.snapshot('$dir/old.sqlite');
       final old = sqlite3.open('$dir/old.sqlite');
+      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 33;
       old.close();
@@ -563,8 +565,9 @@ void sessionBodyMassTests() {
       await File('$dir/rebind-v33.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/rebind-v33.json'));
       await store.snapshot('$dir/rebind.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/rebind.sqlite'), 47);
+      equal(NativeBackup.validateDatabase('$dir/rebind.sqlite'), 48);
       final raw = sqlite3.open('$dir/rebind.sqlite');
+      raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       raw.execute('DROP TABLE IF EXISTS window_checkpoints');
       raw.userVersion = 33;
       raw.close();
@@ -1455,7 +1458,7 @@ void sessionBodyMassTests() {
       await service.edit(s.id, s.contentVersion, finished);
       await mass.delete('training', 1, confirm: true);
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 47);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 48);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/export.json',
@@ -1516,6 +1519,7 @@ void sessionBodyMassTests() {
         raw.execute('DROP TABLE workout_executions');
         raw.execute('DROP TABLE timing_activities');
         raw.execute('DROP TABLE derived_target_graphs');
+        raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('PRAGMA user_version = 4');
       } finally {
@@ -1563,6 +1567,7 @@ void sessionBodyMassTests() {
         raw.execute('DROP TABLE workout_executions');
         raw.execute('DROP TABLE timing_activities');
         raw.execute('DROP TABLE derived_target_graphs');
+        raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('PRAGMA user_version = 4');
       } finally {
@@ -1583,7 +1588,7 @@ void sessionBodyMassTests() {
       }
       final check = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(check.userVersion, 47);
+        equal(check.userVersion, 48);
       } finally {
         check.close();
       }

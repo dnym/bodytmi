@@ -337,6 +337,7 @@ void programTests() {
         final previousProfile = '${dir.path}/v35.sqlite';
         await store.snapshot(previousProfile);
         final oldDb = sqlite3.open(previousProfile);
+        oldDb.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         oldDb.execute('DROP TABLE IF EXISTS window_checkpoints');
         oldDb.userVersion = 35;
         oldDb.close();
@@ -403,8 +404,9 @@ void programTests() {
         );
         final snapshot = '${dir.path}/manual.sqlite';
         await store.snapshot(snapshot);
-        equal(NativeBackup.validateDatabase(snapshot), 47);
+        equal(NativeBackup.validateDatabase(snapshot), 48);
         final oldLabel = sqlite3.open(snapshot);
+        oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
         oldLabel.userVersion = 35;
         oldLabel.close();
@@ -847,14 +849,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          47,
+          48,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/47',
+          'bodytmi-logical-export/48',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
@@ -1327,6 +1329,7 @@ void programTests() {
         try {
           for (final ddl in schemaV2.values) db.execute(ddl);
           db.execute('PRAGMA application_id = 1112821065');
+          db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
           db.execute('DROP TABLE IF EXISTS window_checkpoints');
           db.execute('PRAGMA user_version = 2');
           db.execute('INSERT INTO revisions VALUES (?,?,?)', [

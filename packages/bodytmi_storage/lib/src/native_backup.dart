@@ -146,6 +146,7 @@ final class NativeBackup {
           45,
           46,
           47,
+          48,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -286,6 +287,7 @@ final class NativeBackup {
             45,
             46,
             47,
+            48,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -310,6 +312,7 @@ final class NativeBackup {
         if (db.userVersion >= 4) 'body_mass_records',
         if (db.userVersion >= 7) 'timing_activities',
         if (db.userVersion >= 46) 'window_checkpoints',
+        if (db.userVersion >= 48) 'repeat_checkpoints',
         if (db.userVersion >= 8) 'workout_executions',
         if (db.userVersion >= 12) 'family_revisions',
         if (db.userVersion >= 27) 'derived_target_graphs',
@@ -774,6 +777,15 @@ final class NativeBackup {
               TimingActivity.fromJson(jsonDecode(row['snapshot'] as String)),
           ],
         );
+      }
+      if (db.userVersion >= 48) {
+        for (final row in db.select('SELECT * FROM repeat_checkpoints')) {
+          final checkpoint = RepeatCheckpoint.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (checkpoint.id != row['id'])
+            invalid('Repeat checkpoint row identity mismatch.');
+        }
       }
       if (db.userVersion >= 46) {
         final checkpoints = <WindowCheckpoint>[];

@@ -102,6 +102,7 @@ void storedBodyMassTests() {
       await mass.save(_observation('legacy', '75'), 0);
       await store.snapshot('$dir/legacy.sqlite');
       final old = sqlite3.open('$dir/legacy.sqlite');
+      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 34;
       old.close();
@@ -139,8 +140,9 @@ void storedBodyMassTests() {
       await File('$dir/old-meta.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-meta.json'));
       await store.snapshot('$dir/meta.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/meta.sqlite'), 47);
+      equal(NativeBackup.validateDatabase('$dir/meta.sqlite'), 48);
       final db = sqlite3.open('$dir/meta.sqlite');
+      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.userVersion = 34;
       db.close();
@@ -367,13 +369,13 @@ void storedBodyMassTests() {
       final resolved = canonicalJson(
         (await service.resolve(_query())).toJson(),
       );
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 47);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 48);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/export.json',
         ))['format'],
-        'bodytmi-logical-export/47',
+        'bodytmi-logical-export/48',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/export.json');
       try {
@@ -481,6 +483,7 @@ void storedBodyMassTests() {
         raw.execute('DROP TABLE workout_executions');
         raw.execute('DROP TABLE timing_activities');
         raw.execute('DROP TABLE derived_target_graphs');
+        raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('PRAGMA user_version = 3');
         validateSchema(
@@ -512,7 +515,7 @@ void storedBodyMassTests() {
       }
       final upgraded = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(upgraded.userVersion, 47);
+        equal(upgraded.userVersion, 48);
       } finally {
         upgraded.close();
       }

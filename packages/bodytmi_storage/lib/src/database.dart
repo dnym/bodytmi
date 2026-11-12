@@ -131,6 +131,14 @@ class WindowCheckpoints extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('StoredRepeatCheckpoint')
+class RepeatCheckpoints extends Table {
+  TextColumn get id => text()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DriftDatabase(
   tables: [
     Revisions,
@@ -147,18 +155,19 @@ class WindowCheckpoints extends Table {
     WorkoutExecutions,
     DerivedTargetGraphs,
     WindowCheckpoints,
+    RepeatCheckpoints,
   ],
 )
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 47;
+  int get schemaVersion => 48;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
-      await customStatement('PRAGMA user_version = 47');
+      await customStatement('PRAGMA user_version = 48');
       await validateMigration();
     }),
     onUpgrade: (m, from, to) async {
@@ -209,8 +218,9 @@ class TrainingDatabase extends _$TrainingDatabase {
             44,
             45,
             46,
+            47,
           }.contains(from) ||
-          to != 47)
+          to != 48)
         throw StateError('Unsupported database migration $from -> $to.');
       await transaction(() async {
         final schema = await customSelect(
@@ -230,9 +240,10 @@ class TrainingDatabase extends _$TrainingDatabase {
         if (from < 12) await m.createTable(familyRevisions);
         if (from < 27) await m.createTable(derivedTargetGraphs);
         if (from < 46) await m.createTable(windowCheckpoints);
+        if (from < 48) await m.createTable(repeatCheckpoints);
         // Drift also writes this after the callback. Writing it within our
         // transaction prevents a crash leaving new DDL with the old version.
-        await customStatement('PRAGMA user_version = 47');
+        await customStatement('PRAGMA user_version = 48');
         await validateMigration();
       });
     },
@@ -249,7 +260,7 @@ class TrainingDatabase extends _$TrainingDatabase {
     final schema = await customSelect(
       'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
     ).get();
-    validateSchema(schema.map((row) => row.data), 47);
+    validateSchema(schema.map((row) => row.data), 48);
     if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
       throw const BodyTmiException(
         'storage',

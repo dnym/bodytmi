@@ -418,6 +418,7 @@ void storedThresholdTests() {
       await store.backup('$dir/old');
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 13;
       old.close();
@@ -443,7 +444,7 @@ void storedThresholdTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          47,
+          48,
         );
       } finally {
         await upgraded.close();
@@ -460,14 +461,14 @@ void storedThresholdTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          47,
+          48,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/47',
+          'bodytmi-logical-export/48',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {
@@ -505,6 +506,7 @@ void storedThresholdTests() {
       }
       final forged = sqlite3.open('$dir/native/database.sqlite');
       forged.execute('DROP TABLE derived_target_graphs');
+      forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       forged.execute('DROP TABLE IF EXISTS window_checkpoints');
       forged.userVersion = 13;
       forged.close();

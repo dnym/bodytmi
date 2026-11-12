@@ -65,6 +65,12 @@ const schemaV46 = {
       'CREATE TABLE "window_checkpoints" ("id" TEXT NOT NULL, "session_id" TEXT NOT NULL REFERENCES sessions (id), "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
 };
 
+const schemaV48 = {
+  ...schemaV46,
+  'repeat_checkpoints':
+      'CREATE TABLE "repeat_checkpoints" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -122,6 +128,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   44 => schemaV27, // v44 adds open-ended effort timers.
   45 => schemaV27, // v45 adds open-ended slot timing defaults.
   46 => schemaV46, // v46 adds inert scoped-clock checkpoints.
+  48 => schemaV48, // v48 adds inert repeat checkpoints.
   47 => schemaV46, // v47 adds scoped-clock reservations.
   _ => throw const BodyTmiException(
     'validation',

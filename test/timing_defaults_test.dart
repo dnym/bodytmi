@@ -196,6 +196,7 @@ void timingDefaultsTests() {
       await StoredTrainingService(store).publish(_definition(), 0);
       await store.close();
       final db = sqlite3.open(path);
+      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('PRAGMA user_version = 44');
       db.close();
@@ -206,7 +207,7 @@ void timingDefaultsTests() {
       );
       equal(
         (await store.backup('${dir.path}/migrated'))['databaseSchemaVersion'],
-        47,
+        48,
       );
     } finally {
       await store.close();
@@ -314,6 +315,7 @@ void timingDefaultsTests() {
         await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
         await _fails(LogicalArchiveFiles.prepare('${dir.path}/old.json'));
         final native = sqlite3.open('${dir.path}/native/database.sqlite');
+        native.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         native.execute('DROP TABLE IF EXISTS window_checkpoints');
         native.execute('PRAGMA user_version = 44');
         native.close();
@@ -596,6 +598,7 @@ void timingDefaultsTests() {
       await store.backup('$dir/old');
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 12;
       old.close();
@@ -652,14 +655,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          47,
+          48,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/47',
+          'bodytmi-logical-export/48',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -698,6 +701,7 @@ void timingDefaultsTests() {
       }
       final forged = sqlite3.open('$dir/native/database.sqlite');
       forged.execute('DROP TABLE derived_target_graphs');
+      forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       forged.execute('DROP TABLE IF EXISTS window_checkpoints');
       forged.userVersion = 12;
       forged.close();

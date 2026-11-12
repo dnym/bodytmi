@@ -248,6 +248,7 @@ void familyTests() {
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE family_revisions');
       old.execute('DROP TABLE derived_target_graphs');
+      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.userVersion = 11;
       old.close();
@@ -276,7 +277,7 @@ void familyTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          47,
+          48,
         );
       } finally {
         await migrated.close();
@@ -295,7 +296,7 @@ void familyTests() {
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/47',
+          'bodytmi-logical-export/48',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {

@@ -26,6 +26,249 @@ Future<void> expectCheckpointFailure(
 }
 
 void activityTests() {
+  test('schema v47 migrates to empty repeat checkpoints', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'bodytmi-repeat-migration-',
+    );
+    final path = '${directory.path}/profile.sqlite';
+    try {
+      final initial = await TrainingStore.open(path);
+      await initial.close();
+      final raw = sqlite3.open(path);
+      raw.execute('DROP TABLE repeat_checkpoints');
+      raw.userVersion = 47;
+      raw.close();
+      final store = await TrainingStore.open(path);
+      try {
+        equal((await store.repeatCheckpoints()).length, 0);
+        equal(
+          (await store.backup(
+            '${directory.path}/migrated',
+          ))['databaseSchemaVersion'],
+          48,
+        );
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+  test(
+    'inert repeat checkpoints persist, reject conflicts and survive archives',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'bodytmi-repeat-checkpoint-',
+      );
+      final path = '${directory.path}/profile.sqlite';
+      try {
+        final loop = WindowRepeatSpec.fromJson(
+          example('window-repeat-page')['loop'],
+        );
+        const engine = WindowRepeatExecution();
+        var state = engine.start(loop);
+        var store = await TrainingStore.open(path);
+        var service = RepeatCheckpointService(store);
+        var saved = await service.save('repeat-one', 0, state);
+        equal(saved.version, 1);
+        await expectCheckpointFailure(
+          service.save('repeat-one', 0, state),
+          'conflict',
+        );
+        final running = engine.apply(
+          state,
+          expectedVersion: 1,
+          action: 'resume',
+          ownerId: 'owner',
+        );
+        await expectCheckpointFailure(service.save('repeat-one', 1, running));
+        state = engine.apply(
+          state,
+          expectedVersion: 1,
+          action: 'review',
+          review: {'outcome': 'completed', 'acceptSuggested': true},
+        );
+        saved = await service.save('repeat-one', 1, state);
+        equal(saved.version, 2);
+        equal(canonicalJson(saved.execution), canonicalJson(state));
+        final existingEntry = jsonObject(
+          (state['entries'] as List).single,
+          'entry',
+        );
+        final forgedState = {
+          ...state,
+          'entries': [
+            {
+              ...existingEntry,
+              'actuals': {
+                'reps': {'value': '7', 'unit': 'rep'},
+              },
+            },
+          ],
+        };
+        await expectCheckpointFailure(
+          service.save('repeat-one', 2, forgedState),
+        );
+        await expectCheckpointFailure(
+          service.save('repeat-one', 2, engine.start(loop)),
+        );
+        final changedLoop = WindowRepeatSpec.fromJson({
+          ...loop.toJson(),
+          'durationMilliseconds': 999,
+        });
+        await expectCheckpointFailure(
+          service.save('repeat-one', 2, engine.start(changedLoop)),
+        );
+        equal((await service.show('repeat-one')).version, 2);
+        final backupPath = '${directory.path}/backup';
+        await store.backup(backupPath);
+        final archivePath = '${directory.path}/archive.json';
+        await LogicalArchiveFiles.export(await store.archive(), archivePath);
+        final oldEnvelope = jsonObject(
+          jsonDecode(await File(archivePath).readAsString()),
+          'archive',
+        );
+        oldEnvelope['format'] = 'bodytmi-logical-export/47';
+        oldEnvelope.remove('sha256');
+        oldEnvelope['sha256'] = sha256
+            .convert(utf8.encode(canonicalJson(oldEnvelope)))
+            .toString();
+        final forgedPath = '${directory.path}/old-label.json';
+        await File(forgedPath).writeAsString(canonicalJson(oldEnvelope));
+        await expectCheckpointFailure(LogicalArchiveFiles.prepare(forgedPath));
+        final forgedDbPath = '${directory.path}/forged.sqlite';
+        await File('$backupPath/database.sqlite').copy(forgedDbPath);
+        final forgedDb = sqlite3.open(forgedDbPath);
+        forgedDb.execute("UPDATE repeat_checkpoints SET id='wrong'");
+        forgedDb.close();
+        rejects(() => NativeBackup.validateDatabase(forgedDbPath));
+        await store.close();
+        store = await TrainingStore.open(path);
+        service = RepeatCheckpointService(store);
+        equal(
+          canonicalJson((await service.show('repeat-one')).execution),
+          canonicalJson(state),
+        );
+        equal((await service.list()).length, 1);
+        await expectCheckpointFailure(
+          service.delete('repeat-one', 2, confirm: false),
+        );
+        await expectCheckpointFailure(
+          service.delete('repeat-one', 1, confirm: true),
+          'conflict',
+        );
+        final native = await NativeBackup.prepare(backupPath);
+        try {
+          await store.restore(
+            native,
+            recoveryDestination: '${directory.path}/recovery',
+            confirm: true,
+          );
+        } finally {
+          await native.close();
+        }
+        await store.close();
+        store = await TrainingStore.open(path);
+        equal(
+          canonicalJson(
+            (await RepeatCheckpointService(store).show('repeat-one')).execution,
+          ),
+          canonicalJson(state),
+        );
+        await store.close();
+        final logical = await LogicalArchiveFiles.prepare(archivePath);
+        try {
+          equal(
+            canonicalJson(logical.archive.repeatCheckpoints.single.execution),
+            canonicalJson(state),
+          );
+          final restored = await TrainingStore.open(
+            '${directory.path}/logical.sqlite',
+          );
+          try {
+            await restored.restore(
+              logical.backup,
+              recoveryDestination: '${directory.path}/logical-recovery',
+              confirm: true,
+            );
+          } finally {
+            await restored.close();
+          }
+          final reopened = await TrainingStore.open(
+            '${directory.path}/logical.sqlite',
+          );
+          try {
+            equal(
+              canonicalJson(
+                (await RepeatCheckpointService(
+                  reopened,
+                ).show('repeat-one')).execution,
+              ),
+              canonicalJson(state),
+            );
+          } finally {
+            await reopened.close();
+          }
+        } finally {
+          await logical.close();
+        }
+        final show = await invoke(
+          ['repeat-checkpoint', 'show'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': path,
+            'id': 'repeat-one',
+          }),
+        );
+        equal(show.code, 0);
+        jsonEqual(
+          jsonObject(jsonDecode(show.output), 'response')['data'],
+          saved.toJson(),
+        );
+        final delete = await invoke(
+          ['repeat-checkpoint', 'delete'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': path,
+            'id': 'repeat-one',
+            'expectedVersion': 2,
+            'confirm': true,
+          }),
+        );
+        equal(delete.code, 0);
+        final list = await invoke([
+          'repeat-checkpoint',
+          'list',
+        ], jsonEncode({'schemaVersion': 1, 'database': path}));
+        equal(list.code, 0);
+        equal(
+          (jsonObject(jsonDecode(list.output), 'response')['data'] as List)
+              .length,
+          0,
+        );
+        final create = await invoke(
+          ['repeat-checkpoint', 'save'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': path,
+            'id': 'created-by-cli',
+            'expectedVersion': 0,
+            'execution': state,
+          }),
+        );
+        equal(create.code, 0);
+        equal(
+          jsonObject(
+            jsonObject(jsonDecode(create.output), 'response')['data'],
+            'checkpoint',
+          )['version'],
+          1,
+        );
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    },
+  );
   test(
     'repeat outcome revisions repair skips and confirm discarding actuals',
     () async {
@@ -1486,7 +1729,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          47,
+          48,
         );
       } finally {
         await store.close();
@@ -1883,7 +2126,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          47,
+          48,
         );
       } finally {
         await store.close();
@@ -2020,7 +2263,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            47,
+            48,
           );
         } finally {
           await store.close();
@@ -2231,7 +2474,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            47,
+            48,
           );
         } finally {
           await store.close();
@@ -2621,7 +2864,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            47,
+            48,
           );
         } finally {
           await store.close();
@@ -2776,7 +3019,7 @@ void activityTests() {
           NativeBackup.validateDatabase(
             '${dir.path}/early-backup/database.sqlite',
           ),
-          47,
+          48,
         );
         await expectCheckpointFailure(
           service.completeCurrent(
@@ -2834,7 +3077,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          47,
+          48,
         );
       } finally {
         await store.close();
@@ -3053,7 +3296,7 @@ void activityTests() {
           await reopened.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            47,
+            48,
           );
         } finally {
           await reopened.close();
@@ -3340,7 +3583,7 @@ void activityTests() {
       await store.backup('${dir.path}/backup');
       equal(
         NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-        47,
+        48,
       );
     } finally {
       await store.close();
@@ -4918,7 +5161,7 @@ void activityTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          47,
+          48,
         );
         final archive = jsonObject(
           jsonDecode(await File('${dir.path}/logical.json').readAsString()),
@@ -4987,7 +5230,7 @@ void activityTests() {
           NativeBackup.validateDatabase(
             '${dir.path}/finished-native/database.sqlite',
           ),
-          47,
+          48,
         );
         await expectCheckpointFailure(
           WindowCheckpointService(
@@ -5109,7 +5352,7 @@ void activityTests() {
         await store.backup('${dir.path}/native');
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          47,
+          48,
         );
         await LogicalArchiveFiles.export(
           await store.archive(),
@@ -5855,6 +6098,7 @@ void activityTests() {
       ).save('cp', session.id, 0, const SessionWindowClock().start(session));
       await store.close();
       final raw = sqlite3.open(path);
+      raw.execute('DROP TABLE repeat_checkpoints');
       raw.userVersion = 46;
       raw.close();
       store = await TrainingStore.open(path);
@@ -5863,7 +6107,7 @@ void activityTests() {
       equal(checkpoint.version, 1);
       equal(
         (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-        47,
+        48,
       );
     } finally {
       await store.close();
@@ -5884,6 +6128,7 @@ void activityTests() {
       ).start('session', workout.id, 1, instant(1));
       await store.close();
       final raw = sqlite3.open(path);
+      raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       raw.execute('DROP TABLE window_checkpoints');
       raw.userVersion = 45;
       raw.close();
@@ -5895,7 +6140,7 @@ void activityTests() {
       );
       equal(
         (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-        47,
+        48,
       );
     } finally {
       await store.close();

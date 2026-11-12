@@ -615,6 +615,7 @@ void effortTargetsTests() {
       await _fails(LogicalArchiveFiles.prepare('$dir/wrong.json'));
       final db = sqlite3.open('$dir/native/database.sqlite');
       db.execute('DROP TABLE derived_target_graphs');
+      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.userVersion = 23;
       db.close();
@@ -663,6 +664,7 @@ void effortTargetsTests() {
         await store.close();
         final old = sqlite3.open('${dir.path}/old/database.sqlite');
         old.execute('DROP TABLE derived_target_graphs');
+        old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         old.execute('DROP TABLE IF EXISTS window_checkpoints');
         old.userVersion = 23;
         old.close();
@@ -674,7 +676,7 @@ void effortTargetsTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          47,
+          48,
         );
       } finally {
         await store.close();

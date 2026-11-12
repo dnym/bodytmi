@@ -8,6 +8,7 @@ import 'stored_body_mass_service.dart';
 import 'timing_service.dart';
 import 'execution_service.dart';
 import 'window_checkpoint.dart';
+import 'repeat_checkpoint.dart';
 
 /// Full logical representation of the records currently persisted by training.
 /// This is a profile replacement contract, not a neutral external-history import.
@@ -24,10 +25,15 @@ final class TrainingArchive {
     List<BodyMassRecord> bodyMass = const [],
     List<TimingActivity> timers = const [],
     List<WindowCheckpoint> windowCheckpoints = const [],
+    List<RepeatCheckpoint> repeatCheckpoints = const [],
     List<WorkoutExecution> executions = const [],
     List<FamilyRevision> families = const [],
     List<DerivedTargetGraphRevision> graphs = const [],
-  }) : windowCheckpoints = List<WindowCheckpoint>.unmodifiable(
+  }) : repeatCheckpoints = List<RepeatCheckpoint>.unmodifiable(
+         <RepeatCheckpoint>[...repeatCheckpoints]
+           ..sort((a, b) => a.id.compareTo(b.id)),
+       ),
+       windowCheckpoints = List<WindowCheckpoint>.unmodifiable(
          <WindowCheckpoint>[...windowCheckpoints]
            ..sort((a, b) => a.id.compareTo(b.id)),
        ),
@@ -104,6 +110,7 @@ final class TrainingArchive {
       'bodyMass',
       'timers',
       'windowCheckpoints',
+      'repeatCheckpoints',
       'executions',
       'families',
       'graphs',
@@ -133,6 +140,10 @@ final class TrainingArchive {
         for (final e in optional('executions')) WorkoutExecution.fromJson(e),
       ],
       timers: [for (final t in optional('timers')) TimingActivity.fromJson(t)],
+      repeatCheckpoints: [
+        for (final c in optional('repeatCheckpoints'))
+          RepeatCheckpoint.fromJson(c),
+      ],
       windowCheckpoints: [
         for (final c in optional('windowCheckpoints'))
           WindowCheckpoint.fromJson(c),
@@ -169,6 +180,7 @@ final class TrainingArchive {
   final List<DerivedTargetGraphRevision> graphs;
   final List<TimingActivity> timers;
   final List<WindowCheckpoint> windowCheckpoints;
+  final List<RepeatCheckpoint> repeatCheckpoints;
   final List<BodyMassRecord> bodyMass;
   final List<WorkoutRevision> revisions;
   final List<TrainingSession> sessions;
@@ -185,6 +197,7 @@ final class TrainingArchive {
     'executions': [for (final e in executions) e.toJson()],
     'timers': [for (final t in timers) t.toJson()],
     'windowCheckpoints': [for (final c in windowCheckpoints) c.toJson()],
+    'repeatCheckpoints': [for (final c in repeatCheckpoints) c.toJson()],
     'bodyMass': [for (final r in bodyMass) r.toJson()],
     'revisions': [for (final r in revisions) r.toJson()],
     'sessions': [for (final s in sessions) s.toJson()],
@@ -202,6 +215,7 @@ final class TrainingArchive {
     'executions': executions.length,
     'timers': timers.length,
     'windowCheckpoints': windowCheckpoints.length,
+    'repeatCheckpoints': repeatCheckpoints.length,
     'bodyMass': bodyMass.length,
     'revisions': revisions.length,
     'sessions': sessions.length,
@@ -214,6 +228,9 @@ final class TrainingArchive {
   };
 
   void _validate() {
+    if (repeatCheckpoints.map((c) => c.id).toSet().length !=
+        repeatCheckpoints.length)
+      invalid('Duplicate repeat checkpoint identity.');
     validateFamilyRevisions(families);
     validateDerivedTargetGraphRevisions(graphs);
     validateProgramPlanReferences(programRevisions, graphs);
