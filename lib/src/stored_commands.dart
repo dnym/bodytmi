@@ -47,6 +47,7 @@ const storedCommandNames = [
   'repeat-checkpoint release',
   'repeat-checkpoint show',
   'repeat-checkpoint list',
+  'repeat-checkpoint series',
   'repeat-checkpoint delete',
   'checkpoint save',
   'checkpoint review',
@@ -291,6 +292,15 @@ Future<Map<String, Object?>> executeStored(
     },
     'repeat-checkpoint show' => {'id'},
     'repeat-checkpoint list' => {'sessionId'},
+    'repeat-checkpoint series' => {
+      'sessionId',
+      'runId',
+      'metric',
+      'from',
+      'until',
+      'includeWarmups',
+      'includeActive',
+    },
     'repeat-checkpoint delete' => {'id', 'expectedVersion', 'confirm'},
     'checkpoint save' => {'id', 'sessionId', 'expectedVersion', 'clock'},
     'checkpoint reserve' => {'id', 'expectedVersion'},
@@ -746,6 +756,34 @@ Future<Map<String, Object?>> executeStored(
           for (final c in await RepeatCheckpointService(store).list())
             if (sessionId == null || c.sessionId == sessionId) c.toJson(),
         ];
+      case 'repeat-checkpoint series':
+        data = await store.transaction(
+          () async => const RepeatHistory().series(
+            await store.repeatCheckpoints(),
+            await store.sessions(),
+            runBySession: {
+              for (final b in await store.sessionPrograms())
+                b.sessionId: b.runId,
+            },
+            sessionId: request.containsKey('sessionId')
+                ? identifier(request, 'sessionId')
+                : null,
+            runId: request.containsKey('runId')
+                ? identifier(request, 'runId')
+                : null,
+            metric: request.containsKey('metric')
+                ? identifier(request, 'metric')
+                : null,
+            from: request.containsKey('from')
+                ? parseInstant(request['from'], 'from')
+                : null,
+            until: request.containsKey('until')
+                ? parseInstant(request['until'], 'until')
+                : null,
+            includeWarmups: flag('includeWarmups'),
+            includeActive: flag('includeActive'),
+          ),
+        );
       case 'repeat-checkpoint delete':
         final id = identifier(request, 'id');
         await RepeatCheckpointService(

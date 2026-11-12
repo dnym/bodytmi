@@ -33,6 +33,7 @@ const commandNames = [
   'session window-review',
   'session progression-preview',
   'history series',
+  'history repeat-series',
   'history records',
   'family validate',
   'session mass-status',
@@ -568,6 +569,44 @@ final class Commands {
           family: request.containsKey('family')
               ? FamilyRevision.fromJson(request['family'])
               : null,
+        );
+      case 'history repeat-series':
+        keys({
+          'checkpoints',
+          'sessions',
+          'runBySession',
+          'sessionId',
+          'runId',
+          'metric',
+          'from',
+          'until',
+          'includeWarmups',
+          'includeActive',
+        });
+        data = const RepeatHistory().series(
+          [
+            for (final c in jsonList(request, 'checkpoints'))
+              RepeatCheckpoint.fromJson(c),
+          ],
+          [for (final s in jsonList(request, 'sessions')) sessionFromJson(s)],
+          runBySession: analyticsBindings(request),
+          sessionId: request.containsKey('sessionId')
+              ? identifier(request, 'sessionId')
+              : null,
+          runId: request.containsKey('runId')
+              ? identifier(request, 'runId')
+              : null,
+          metric: request.containsKey('metric')
+              ? identifier(request, 'metric')
+              : null,
+          from: request.containsKey('from')
+              ? parseInstant(request['from'], 'from')
+              : null,
+          until: request.containsKey('until')
+              ? parseInstant(request['until'], 'until')
+              : null,
+          includeWarmups: _bool(request, 'includeWarmups'),
+          includeActive: _bool(request, 'includeActive'),
         );
       case 'history series':
         keys({

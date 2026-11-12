@@ -69,6 +69,227 @@ Future<TrainingSession> _done(TrainingStore store, TrainingSession session) =>
 
 void programTests() {
   test(
+    'repeat history preserves run context, corrections, and CLI parity',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-repeat-series-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      late Map<String, Object?> pureRequest;
+      late Map<String, Object?> expected;
+      try {
+        await _setup(store);
+        final strength = await _start(
+          store,
+          'strength-run',
+          'strength-session',
+          1,
+        );
+        final cardio = await _start(store, 'cardio-run', 'cardio-session', 1);
+        final service = RepeatCheckpointService(store);
+        final loop = WindowRepeatSpec.fromJson(
+          example('window-repeat-page')['loop'],
+        );
+        for (final session in [strength, cardio]) {
+          final id = '${session.id}-repeat';
+          await service.save(
+            id,
+            0,
+            const WindowRepeatExecution().start(loop),
+            sessionId: session.id,
+          );
+          await service.action(
+            id,
+            expectedVersion: 1,
+            expectedExecutionVersion: 1,
+            action: 'review',
+            review: {
+              'outcome': 'completed',
+              'acceptSuggested': true,
+              if (session.id == cardio.id)
+                'observations': {'terminationReason': 'interrupted'},
+            },
+          );
+          await service.action(
+            id,
+            expectedVersion: 2,
+            expectedExecutionVersion: 2,
+            action: 'stop',
+            confirm: true,
+          );
+        }
+        await service.save(
+          'unassociated',
+          0,
+          const WindowRepeatExecution().start(loop),
+        );
+        await service.action(
+          'unassociated',
+          expectedVersion: 1,
+          expectedExecutionVersion: 1,
+          action: 'review',
+          review: {'outcome': 'completed', 'acceptSuggested': true},
+        );
+        final sessions = await store.sessions();
+        final checkpoints = await store.repeatCheckpoints();
+        final bindings = {
+          for (final b in await store.sessionPrograms()) b.sessionId: b.runId,
+        };
+        final history = const RepeatHistory();
+        equal(
+          jsonList(
+            history.series(checkpoints, sessions, runBySession: bindings),
+            'series',
+          ).length,
+          0,
+        );
+        equal(
+          jsonList(
+            history.series(
+              checkpoints,
+              sessions,
+              runBySession: bindings,
+              includeActive: true,
+            ),
+            'series',
+          ).length,
+          2,
+        );
+        await _done(store, strength);
+        await _done(store, cardio);
+        await service.action(
+          'strength-session-repeat',
+          expectedVersion: 3,
+          expectedExecutionVersion: 3,
+          action: 'correct',
+          correction: {
+            'occurrenceId': 'amrap[0]/round/push-set',
+            'actuals': {
+              'reps': {'value': '3', 'unit': 'rep'},
+            },
+          },
+        );
+        final currentSessions = await store.sessions();
+        final currentCheckpoints = await store.repeatCheckpoints();
+        expected = history.series(
+          currentCheckpoints,
+          currentSessions,
+          runBySession: bindings,
+        );
+        final rows = jsonList(expected, 'series');
+        equal(rows.length, 2);
+        final strengthRow = jsonObject(
+          rows.firstWhere(
+            (r) => jsonObject(r, 'row')['runId'] == 'strength-run',
+          ),
+          'row',
+        );
+        equal(strengthRow['checkpointVersion'], 4);
+        final point = jsonObject(
+          jsonList(strengthRow, 'points').single,
+          'point',
+        );
+        equal(jsonObject(point['actual'], 'actual')['value'], '3');
+        final cardioRow = jsonObject(
+          rows.firstWhere((r) => jsonObject(r, 'row')['runId'] == 'cardio-run'),
+          'row',
+        );
+        equal(
+          jsonObject(
+            jsonList(cardioRow, 'points').single,
+            'point',
+          )['performanceEligible'],
+          false,
+        );
+        equal(
+          jsonList(
+            history.series(
+              currentCheckpoints,
+              currentSessions,
+              runBySession: bindings,
+              runId: 'strength-run',
+            ),
+            'series',
+          ).length,
+          1,
+        );
+        equal(
+          jsonList(
+            history.series(
+              currentCheckpoints,
+              currentSessions,
+              runBySession: bindings,
+              metric: 'mass',
+            ),
+            'series',
+          ).length,
+          0,
+        );
+        equal(
+          jsonList(
+            history.series(
+              currentCheckpoints,
+              currentSessions,
+              runBySession: bindings,
+              until: instant(1),
+            ),
+            'series',
+          ).length,
+          0,
+        );
+        rejects(
+          () => history.series(
+            currentCheckpoints,
+            currentSessions,
+            runBySession: {'missing': 'run'},
+          ),
+        );
+        rejects(
+          () => history.series([
+            currentCheckpoints.first,
+            currentCheckpoints.first,
+          ], currentSessions),
+        );
+        equal((await ProgramService(store).run('strength-run')).cursor, 1);
+        pureRequest = {
+          'schemaVersion': 1,
+          'checkpoints': [for (final c in currentCheckpoints) c.toJson()],
+          'sessions': [for (final session in currentSessions) session.toJson()],
+          'runBySession': bindings,
+        };
+      } finally {
+        await store.close();
+      }
+      try {
+        final stored = await invoke([
+          'repeat-checkpoint',
+          'series',
+        ], jsonEncode({'schemaVersion': 1, 'database': path}));
+        equal(stored.code, 0);
+        final pure = await invoke([
+          'history',
+          'repeat-series',
+        ], jsonEncode(pureRequest));
+        equal(pure.code, 0);
+        equal(
+          canonicalJson(
+            jsonObject(jsonDecode(stored.output), 'response')['data'],
+          ),
+          canonicalJson(expected),
+        );
+        equal(
+          canonicalJson(
+            jsonObject(jsonDecode(pure.output), 'response')['data'],
+          ),
+          canonicalJson(expected),
+        );
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'associated repeat finalization and program cursor commit together on process death',
     () async {
       final dir = await Directory.systemTemp.createTemp(

@@ -38,3 +38,5 @@ export 'src/derived_workout_preview.dart';
 export 'src/derived_plan_session.dart';
 
 export 'src/repeat_checkpoint.dart';
+
+export 'src/repeat_history.dart';
