@@ -26,6 +26,217 @@ Future<void> expectCheckpointFailure(
 }
 
 void activityTests() {
+  test(
+    'stored repeat elapsed samples commit or roll back on process death',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-repeat-elapse-crash-',
+      );
+      try {
+        final path = '${dir.path}/profile.sqlite';
+        final store = await TrainingStore.open(path);
+        try {
+          await RepeatCheckpointService(store).save(
+            'repeat',
+            0,
+            const WindowRepeatExecution().start(
+              WindowRepeatSpec.fromJson(example('window-repeat-page')['loop']),
+            ),
+          );
+        } finally {
+          await store.close();
+        }
+        final binary = await compileNative(
+          'test/helpers/store_owner.dart',
+          '${dir.path}/owner',
+        );
+        for (final mode in ['repeat-elapse-rollback', 'repeat-elapse-commit']) {
+          final child = await Process.start(binary, [path, mode]);
+          final errors = child.stderr.transform(utf8.decoder).join();
+          try {
+            equal(
+              await child.stdout
+                  .transform(utf8.decoder)
+                  .transform(const LineSplitter())
+                  .first
+                  .timeout(const Duration(seconds: 15)),
+              'ready',
+            );
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+            equal(await errors, '');
+            final reopened = await TrainingStore.open(path);
+            try {
+              final saved = await RepeatCheckpointService(
+                reopened,
+              ).show('repeat');
+              final committed = mode.endsWith('commit');
+              equal(saved.version, committed ? 2 : 1);
+              equal(saved.execution['version'], committed ? 3 : 1);
+              equal(
+                jsonObject(
+                  saved.execution['cursor'],
+                  'cursor',
+                )['elapsedMilliseconds'],
+                committed ? 400 : 0,
+              );
+              equal((saved.execution['entries'] as List).length, 0);
+            } finally {
+              await reopened.close();
+            }
+          } finally {
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+          }
+        }
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'stored repeat elapsed samples stop at the deadline without logging work',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-repeat-elapse-',
+      );
+      final path = '${dir.path}/profile.sqlite';
+      try {
+        final loop = WindowRepeatSpec.fromJson({
+          ...jsonObject(example('window-repeat-page')['loop'], 'loop'),
+          'durationMilliseconds': 1000,
+        });
+        var store = await TrainingStore.open(path);
+        var service = RepeatCheckpointService(store);
+        await service.save(
+          'repeat',
+          0,
+          const WindowRepeatExecution().start(loop),
+        );
+        await expectCheckpointFailure(
+          service.action(
+            'repeat',
+            expectedVersion: 1,
+            expectedExecutionVersion: 1,
+            action: 'elapse',
+            elapsedMilliseconds: 0,
+          ),
+        );
+        await expectCheckpointFailure(
+          service.action(
+            'repeat',
+            expectedVersion: 1,
+            expectedExecutionVersion: 1,
+            action: 'elapse',
+            elapsedMilliseconds: 400,
+            review: {'outcome': 'skipped'},
+          ),
+        );
+        equal((await service.show('repeat')).version, 1);
+        var checkpoint = await service.action(
+          'repeat',
+          expectedVersion: 1,
+          expectedExecutionVersion: 1,
+          action: 'elapse',
+          elapsedMilliseconds: 400,
+        );
+        equal(checkpoint.version, 2);
+        equal(checkpoint.execution['version'], 3);
+        var cursor = jsonObject(checkpoint.execution['cursor'], 'cursor');
+        equal(cursor['status'], 'paused');
+        equal(cursor['elapsedMilliseconds'], 400);
+        equal((checkpoint.execution['entries'] as List).length, 0);
+        await expectCheckpointFailure(
+          service.action(
+            'repeat',
+            expectedVersion: 1,
+            expectedExecutionVersion: 1,
+            action: 'elapse',
+            elapsedMilliseconds: 400,
+          ),
+          'conflict',
+        );
+        await expectCheckpointFailure(
+          service.action(
+            'repeat',
+            expectedVersion: 2,
+            expectedExecutionVersion: 2,
+            action: 'elapse',
+            elapsedMilliseconds: 400,
+          ),
+          'conflict',
+        );
+        await store.close();
+        final request = {
+          'schemaVersion': 1,
+          'database': path,
+          'id': 'repeat',
+          'expectedVersion': 2,
+          'expectedExecutionVersion': 3,
+          'action': 'elapse',
+          'elapsedMilliseconds': 700,
+        };
+        final result = await invoke([
+          'repeat-checkpoint',
+          'action',
+        ], jsonEncode(request));
+        equal(result.code, 0);
+        final json = jsonObject(
+          jsonObject(jsonDecode(result.output), 'response')['data'],
+          'checkpoint',
+        );
+        equal(json['version'], 3);
+        final execution = jsonObject(json['execution'], 'execution');
+        equal(execution['version'], 5);
+        cursor = jsonObject(execution['cursor'], 'cursor');
+        equal(cursor['status'], 'boundary');
+        equal(cursor['elapsedMilliseconds'], 1000);
+        equal(cursor['unappliedMilliseconds'], 100);
+        equal((execution['entries'] as List).length, 0);
+        store = await TrainingStore.open(path);
+        service = RepeatCheckpointService(store);
+        try {
+          await expectCheckpointFailure(
+            service.action(
+              'repeat',
+              expectedVersion: 3,
+              expectedExecutionVersion: 5,
+              action: 'elapse',
+              elapsedMilliseconds: 1,
+            ),
+          );
+          checkpoint = await service.action(
+            'repeat',
+            expectedVersion: 3,
+            expectedExecutionVersion: 5,
+            action: 'review',
+            review: {'outcome': 'skipped'},
+            confirm: true,
+          );
+          equal(checkpoint.version, 4);
+          equal((checkpoint.execution['entries'] as List).length, 1);
+          final backup = '${dir.path}/backup';
+          await store.backup(backup);
+          final archive = '${dir.path}/archive.json';
+          await LogicalArchiveFiles.export(await store.archive(), archive);
+          final prepared = await LogicalArchiveFiles.prepare(archive);
+          try {
+            equal(
+              canonicalJson(prepared.archive.repeatCheckpoints.single.toJson()),
+              canonicalJson(checkpoint.toJson()),
+            );
+          } finally {
+            await prepared.close();
+          }
+          equal(NativeBackup.validateDatabase('$backup/database.sqlite'), 48);
+        } finally {
+          await store.close();
+        }
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test('stored repeat review commits or rolls back on process death', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-repeat-crash-');
     try {

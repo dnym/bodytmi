@@ -88,7 +88,7 @@ final class RepeatCheckpointService {
     return next;
   });
 
-  /// Apply a non-clock action atomically to the stored inert execution.
+  /// Apply an inert action or an explicit elapsed-time sample atomically.
   Future<RepeatCheckpoint> action(
     String id, {
     required int expectedVersion,
@@ -96,6 +96,7 @@ final class RepeatCheckpointService {
     required String action,
     Map<String, Object?>? review,
     Map<String, Object?>? correction,
+    int? elapsedMilliseconds,
     bool confirm = false,
   }) => repository.transaction(() async {
     if (!{
@@ -105,22 +106,52 @@ final class RepeatCheckpointService {
       'revise',
       'finish',
       'stop',
+      'elapse',
     }.contains(action))
-      invalid('Stored repeat actions cannot start or sample a clock.');
+      invalid('Unknown inert repeat checkpoint action.');
     final current = await show(id);
     if (current.version != expectedVersion)
       throw const BodyTmiException(
         'conflict',
         'Repeat checkpoint version changed.',
       );
-    final execution = const WindowRepeatExecution().apply(
-      current.execution,
-      expectedVersion: expectedExecutionVersion,
-      action: action,
-      review: review,
-      correction: correction,
-      confirm: confirm,
-    );
+    const engine = WindowRepeatExecution();
+    late final Map<String, Object?> execution;
+    if (action == 'elapse') {
+      if (elapsedMilliseconds == null ||
+          elapsedMilliseconds < 1 ||
+          review != null ||
+          correction != null ||
+          confirm)
+        invalid(
+          'Elapse requires a positive explicit duration and no review fields.',
+        );
+      const owner = 'repeat-checkpoint-sample';
+      final running = engine.apply(
+        current.execution,
+        expectedVersion: expectedExecutionVersion,
+        action: 'resume',
+        ownerId: owner,
+      );
+      execution = engine.apply(
+        running,
+        expectedVersion: running['version'] as int,
+        action: 'pause',
+        ownerId: owner,
+        ownerElapsedMilliseconds: elapsedMilliseconds,
+      );
+    } else {
+      if (elapsedMilliseconds != null)
+        invalid('Only elapse takes an elapsed duration.');
+      execution = engine.apply(
+        current.execution,
+        expectedVersion: expectedExecutionVersion,
+        action: action,
+        review: review,
+        correction: correction,
+        confirm: confirm,
+      );
+    }
     final next = RepeatCheckpoint.fromJson({
       'id': id,
       'version': current.version + 1,
