@@ -34,6 +34,7 @@ const commandNames = [
   'session progression-preview',
   'history series',
   'history repeat-series',
+  'history repeat-rounds',
   'history records',
   'family validate',
   'session mass-status',
@@ -569,6 +570,38 @@ final class Commands {
           family: request.containsKey('family')
               ? FamilyRevision.fromJson(request['family'])
               : null,
+        );
+      case 'history repeat-rounds':
+        keys({
+          'checkpoints',
+          'sessions',
+          'runBySession',
+          'sessionId',
+          'runId',
+          'from',
+          'until',
+          'includeActive',
+        });
+        data = const RepeatHistory().rounds(
+          [
+            for (final c in jsonList(request, 'checkpoints'))
+              RepeatCheckpoint.fromJson(c),
+          ],
+          [for (final s in jsonList(request, 'sessions')) sessionFromJson(s)],
+          runBySession: analyticsBindings(request),
+          sessionId: request.containsKey('sessionId')
+              ? identifier(request, 'sessionId')
+              : null,
+          runId: request.containsKey('runId')
+              ? identifier(request, 'runId')
+              : null,
+          from: request.containsKey('from')
+              ? parseInstant(request['from'], 'from')
+              : null,
+          until: request.containsKey('until')
+              ? parseInstant(request['until'], 'until')
+              : null,
+          includeActive: _bool(request, 'includeActive'),
         );
       case 'history repeat-series':
         keys({

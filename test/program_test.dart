@@ -69,6 +69,224 @@ Future<TrainingSession> _done(TrainingStore store, TrainingSession session) =>
 
 void programTests() {
   test(
+    'repeat rounds report preserves empty and corrected attempts across runs',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-repeat-rounds-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      final store = await TrainingStore.open(path);
+      late Map<String, Object?> pureRequest;
+      late Map<String, Object?> expected;
+      try {
+        await _setup(store);
+        final strength = await _start(
+          store,
+          'strength-run',
+          'strength-session',
+          1,
+        );
+        final cardio = await _start(store, 'cardio-run', 'cardio-session', 1);
+        final service = RepeatCheckpointService(store);
+        final loop = WindowRepeatSpec.fromJson(
+          example('window-repeat-page')['loop'],
+        );
+        for (final session in [strength, cardio]) {
+          await service.save(
+            '${session.id}-repeat',
+            0,
+            const WindowRepeatExecution().start(loop),
+            sessionId: session.id,
+          );
+        }
+        final id = 'strength-session-repeat';
+        for (var v = 1; v <= 2; v++) {
+          await service.action(
+            id,
+            expectedVersion: v,
+            expectedExecutionVersion: v,
+            action: 'review',
+            review: {'outcome': 'completed', 'acceptSuggested': true},
+          );
+        }
+        var repeat = await service.action(
+          id,
+          expectedVersion: 3,
+          expectedExecutionVersion: 3,
+          action: 'review-elapsed',
+          elapsedMilliseconds: loop.durationMilliseconds,
+          review: {'outcome': 'completed', 'acceptSuggested': true},
+        );
+        equal(
+          jsonObject(repeat.execution['cursor'], 'cursor')['status'],
+          'boundary',
+        );
+        repeat = await service.action(
+          id,
+          expectedVersion: repeat.version,
+          expectedExecutionVersion: repeat.execution['version'] as int,
+          action: 'finish',
+          confirm: true,
+        );
+        await service.action(
+          'cardio-session-repeat',
+          expectedVersion: 1,
+          expectedExecutionVersion: 1,
+          action: 'stop',
+          confirm: true,
+        );
+        final history = const RepeatHistory();
+        final bindings = {
+          for (final b in await store.sessionPrograms()) b.sessionId: b.runId,
+        };
+        equal(
+          jsonList(
+            history.rounds(
+              await store.repeatCheckpoints(),
+              await store.sessions(),
+              runBySession: bindings,
+            ),
+            'attempts',
+          ).length,
+          0,
+        );
+        equal(
+          jsonList(
+            history.rounds(
+              await store.repeatCheckpoints(),
+              await store.sessions(),
+              runBySession: bindings,
+              includeActive: true,
+            ),
+            'attempts',
+          ).length,
+          2,
+        );
+        await _done(store, strength);
+        await _done(store, cardio);
+        var report = history.rounds(
+          await store.repeatCheckpoints(),
+          await store.sessions(),
+          runBySession: bindings,
+        );
+        var attempts = jsonList(report, 'attempts');
+        equal(attempts.length, 2);
+        var strengthAttempt = jsonObject(
+          attempts.firstWhere(
+            (r) => jsonObject(r, 'attempt')['runId'] == 'strength-run',
+          ),
+          'attempt',
+        );
+        final cardioAttempt = jsonObject(
+          attempts.firstWhere(
+            (r) => jsonObject(r, 'attempt')['runId'] == 'cardio-run',
+          ),
+          'attempt',
+        );
+        equal(cardioAttempt['confirmedRounds'], 0);
+        equal(jsonList(cardioAttempt, 'rounds').length, 0);
+        equal(strengthAttempt['confirmedRounds'], 1);
+        equal(strengthAttempt['partialRounds'], 1);
+        equal(strengthAttempt['reportedAfterBoundary'], 1);
+        equal(strengthAttempt['terminalReason'], 'windowExpired');
+        await service.action(
+          id,
+          expectedVersion: repeat.version,
+          expectedExecutionVersion: repeat.execution['version'] as int,
+          action: 'correct',
+          correction: {
+            'occurrenceId': 'amrap[0]/round/push-set',
+            'observations': {'terminationReason': 'interrupted'},
+          },
+        );
+        final checkpoints = await store.repeatCheckpoints();
+        final sessions = await store.sessions();
+        expected = history.rounds(
+          checkpoints,
+          sessions,
+          runBySession: bindings,
+        );
+        attempts = jsonList(expected, 'attempts');
+        strengthAttempt = jsonObject(
+          attempts.firstWhere(
+            (r) => jsonObject(r, 'attempt')['runId'] == 'strength-run',
+          ),
+          'attempt',
+        );
+        equal(strengthAttempt['confirmedRounds'], 0);
+        equal(strengthAttempt['partialRounds'], 2);
+        equal(strengthAttempt['reportedAfterBoundary'], 1);
+        equal(
+          jsonList(
+            history.rounds(
+              checkpoints,
+              sessions,
+              runBySession: bindings,
+              runId: 'cardio-run',
+            ),
+            'attempts',
+          ).length,
+          1,
+        );
+        equal(
+          jsonList(
+            history.rounds(
+              checkpoints,
+              sessions,
+              runBySession: bindings,
+              until: instant(1),
+            ),
+            'attempts',
+          ).length,
+          0,
+        );
+        rejects(
+          () => history.rounds(
+            checkpoints,
+            sessions,
+            from: instant(1),
+            until: instant(1),
+          ),
+        );
+        equal((await ProgramService(store).run('strength-run')).cursor, 1);
+        pureRequest = {
+          'schemaVersion': 1,
+          'checkpoints': [for (final c in checkpoints) c.toJson()],
+          'sessions': [for (final session in sessions) session.toJson()],
+          'runBySession': bindings,
+        };
+      } finally {
+        await store.close();
+      }
+      try {
+        final stored = await invoke([
+          'repeat-checkpoint',
+          'rounds',
+        ], jsonEncode({'schemaVersion': 1, 'database': path}));
+        final pure = await invoke([
+          'history',
+          'repeat-rounds',
+        ], jsonEncode(pureRequest));
+        equal(stored.code, 0);
+        equal(pure.code, 0);
+        equal(
+          canonicalJson(
+            jsonObject(jsonDecode(stored.output), 'response')['data'],
+          ),
+          canonicalJson(expected),
+        );
+        equal(
+          canonicalJson(
+            jsonObject(jsonDecode(pure.output), 'response')['data'],
+          ),
+          canonicalJson(expected),
+        );
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'repeat history preserves run context, corrections, and CLI parity',
     () async {
       final dir = await Directory.systemTemp.createTemp(
