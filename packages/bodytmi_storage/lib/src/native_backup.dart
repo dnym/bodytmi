@@ -148,6 +148,7 @@ final class NativeBackup {
           47,
           48,
           49,
+          50,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -290,6 +291,7 @@ final class NativeBackup {
             47,
             48,
             49,
+            50,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -788,6 +790,10 @@ final class NativeBackup {
           );
           if (checkpoint.id != row['id'])
             invalid('Repeat checkpoint row identity mismatch.');
+          if (db.userVersion < 50 &&
+              jsonObject(checkpoint.execution['cursor'], 'cursor')['status'] ==
+                  'running')
+            invalid('Running repeat clocks require schema v50.');
           if (db.userVersion < 49 && checkpoint.reserved)
             invalid('Repeat reservations require schema v49.');
           repeatCheckpoints.add(checkpoint);

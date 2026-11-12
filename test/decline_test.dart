@@ -346,7 +346,7 @@ void declineTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), before);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          49,
+          50,
         );
       } finally {
         await migrated.close();
@@ -368,7 +368,7 @@ void declineTests() {
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/49',
+          'bodytmi-logical-export/50',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {

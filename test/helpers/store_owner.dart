@@ -7,7 +7,38 @@ import 'package:bodytmi_storage/bodytmi_storage.dart';
 Future<void> main(List<String> args) async {
   final store = await TrainingStore.open(args[0]);
   try {
-    if (args.length == 2 && args[1].startsWith('repeat-reserve-')) {
+    if (args.length == 2 && args[1].startsWith('repeat-clock-')) {
+      Future<void> action() async {
+        final service = RepeatCheckpointService(store);
+        await service.action(
+          'repeat',
+          expectedVersion: 2,
+          expectedExecutionVersion: 1,
+          action: 'resume',
+          ownerId: 'crashed-epoch',
+        );
+        await service.action(
+          'repeat',
+          expectedVersion: 3,
+          expectedExecutionVersion: 2,
+          action: 'advance',
+          ownerId: 'crashed-epoch',
+          ownerElapsedMilliseconds: 400,
+        );
+      }
+
+      if (args[1].endsWith('rollback')) {
+        await store.transaction(() async {
+          await action();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await action();
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
+    } else if (args.length == 2 && args[1].startsWith('repeat-reserve-')) {
       Future<void> action() async {
         await RepeatCheckpointService(store).reserve('repeat', 1);
       }

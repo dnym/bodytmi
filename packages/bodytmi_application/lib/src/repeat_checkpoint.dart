@@ -5,7 +5,7 @@ import 'training_repository.dart';
 import 'window_repeat_execution.dart';
 import 'window_checkpoint.dart';
 
-/// An inert, independently saved repeat ledger. It is not a training session.
+/// An independently saved repeat ledger. It is not a training session.
 final class RepeatCheckpoint {
   RepeatCheckpoint._(this.id, this.version, this._execution, this.reserved);
   factory RepeatCheckpoint.fromJson(Object? input) {
@@ -19,17 +19,14 @@ final class RepeatCheckpoint {
       const WindowRepeatExecution().view(json['execution'])['execution'],
       'execution',
     );
-    if (jsonObject(execution['cursor'], 'cursor')['status'] == 'running')
-      invalid('Only inert repeat snapshots can be stored.');
     if (json.containsKey('reserved') && json['reserved'] != true)
       invalid('reserved must be true when specified.');
     final reserved = json['reserved'] == true;
-    if (reserved &&
-        !{
-          'paused',
-          'boundary',
-        }.contains(jsonObject(execution['cursor'], 'cursor')['status']))
-      invalid('A repeat reservation requires a paused or boundary cursor.');
+    final status = jsonObject(execution['cursor'], 'cursor')['status'];
+    if (status == 'running' && !reserved)
+      invalid('A running repeat requires a timing reservation.');
+    if (reserved && !{'paused', 'running', 'boundary'}.contains(status))
+      invalid('A repeat reservation requires an active cursor.');
     return RepeatCheckpoint._(id, version, canonicalJson(execution), reserved);
   }
   final String id;
@@ -158,6 +155,9 @@ final class RepeatCheckpointService {
         'Repeat checkpoint version changed.',
       );
     if (!current.reserved) invalid('This repeat does not reserve the clock.');
+    if (jsonObject(current.execution['cursor'], 'cursor')['status'] ==
+        'running')
+      invalid('Pause or recover the repeat clock before releasing it.');
     final next = RepeatCheckpoint.fromJson({
       'id': id,
       'version': current.version + 1,
@@ -167,7 +167,7 @@ final class RepeatCheckpointService {
     return next;
   });
 
-  /// Apply an inert action or an explicit elapsed-time sample atomically.
+  /// Apply a review or owner-sampled clock action atomically.
   Future<RepeatCheckpoint> action(
     String id, {
     required int expectedVersion,
@@ -176,6 +176,9 @@ final class RepeatCheckpointService {
     Map<String, Object?>? review,
     Map<String, Object?>? correction,
     int? elapsedMilliseconds,
+    String? ownerId,
+    int? ownerElapsedMilliseconds,
+    int? adjustmentMilliseconds,
     bool confirm = false,
   }) => repository.transaction(() async {
     if (!{
@@ -187,6 +190,10 @@ final class RepeatCheckpointService {
       'stop',
       'elapse',
       'review-elapsed',
+      'resume',
+      'advance',
+      'pause',
+      'recover',
     }.contains(action))
       invalid('Unknown inert repeat checkpoint action.');
     final current = await show(id);
@@ -195,11 +202,17 @@ final class RepeatCheckpointService {
         'conflict',
         'Repeat checkpoint version changed.',
       );
+    if ({'resume', 'advance', 'pause', 'recover'}.contains(action) &&
+        !current.reserved)
+      invalid('Reserve the repeat timing slot before clock actions.');
     const engine = WindowRepeatExecution();
     late final Map<String, Object?> execution;
     if (action == 'elapse' || action == 'review-elapsed') {
       if (elapsedMilliseconds == null ||
           elapsedMilliseconds < 1 ||
+          ownerId != null ||
+          ownerElapsedMilliseconds != null ||
+          adjustmentMilliseconds != null ||
           correction != null ||
           (action == 'elapse' && (review != null || confirm)) ||
           (action == 'review-elapsed' && review == null))
@@ -249,6 +262,9 @@ final class RepeatCheckpointService {
         current.execution,
         expectedVersion: expectedExecutionVersion,
         action: action,
+        ownerId: ownerId,
+        ownerElapsedMilliseconds: ownerElapsedMilliseconds,
+        adjustmentMilliseconds: adjustmentMilliseconds,
         review: review,
         correction: correction,
         confirm: confirm,
@@ -261,6 +277,7 @@ final class RepeatCheckpointService {
       if (current.reserved &&
           {
             'paused',
+            'running',
             'boundary',
           }.contains(jsonObject(execution['cursor'], 'cursor')['status']))
         'reserved': true,

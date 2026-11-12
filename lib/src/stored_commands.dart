@@ -271,6 +271,9 @@ Future<Map<String, Object?>> executeStored(
       'correction',
       'confirm',
       'elapsedMilliseconds',
+      'ownerId',
+      'ownerElapsedMilliseconds',
+      'adjustmentMilliseconds',
     },
     'repeat-checkpoint show' => {'id'},
     'repeat-checkpoint list' => <String>{},
@@ -676,6 +679,16 @@ Future<Map<String, Object?>> executeStored(
               : null,
           elapsedMilliseconds: request.containsKey('elapsedMilliseconds')
               ? integer('elapsedMilliseconds')
+              : null,
+          ownerId: request.containsKey('ownerId')
+              ? identifier(request, 'ownerId')
+              : null,
+          ownerElapsedMilliseconds:
+              request.containsKey('ownerElapsedMilliseconds')
+              ? integer('ownerElapsedMilliseconds', min: 0)
+              : null,
+          adjustmentMilliseconds: request.containsKey('adjustmentMilliseconds')
+              ? integer('adjustmentMilliseconds', min: 0)
               : null,
           confirm: flag('confirm'),
         )).toJson();

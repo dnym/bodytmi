@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "amrap-checkpoint",
+  "expectedVersion": 3,
+  "expectedExecutionVersion": 2,
+  "action": "pause",
+  "ownerId": "example-epoch",
+  "ownerElapsedMilliseconds": 10000
+}
