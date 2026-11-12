@@ -30,7 +30,7 @@ final class WindowRepeatExecution {
         (rounds[i ~/ plan.length] ??= []).add(entry);
       }
     }
-    var confirmed = 0, partial = 0;
+    var confirmed = 0, partial = 0, afterBoundary = 0;
     final rows = <Map<String, Object?>>[];
     for (final group in rounds.entries) {
       final performed = group.value
@@ -43,6 +43,10 @@ final class WindowRepeatExecution {
       }).length;
       final fullyConfirmed = eligible == effortCount;
       final isPartial = !fullyConfirmed && performed.isNotEmpty;
+      final reportedLate = group.value
+          .where((entry) => entry['reportedAfterBoundary'] == true)
+          .length;
+      afterBoundary += reportedLate;
       if (fullyConfirmed) confirmed++;
       if (isPartial) partial++;
       rows.add({
@@ -53,6 +57,7 @@ final class WindowRepeatExecution {
             ? 'partial'
             : 'unconfirmed',
         'reviewedEfforts': group.value.length,
+        'reportedAfterBoundary': reportedLate,
       });
     }
     final step =
@@ -79,6 +84,7 @@ final class WindowRepeatExecution {
             : null,
       'confirmedRounds': confirmed,
       'partialRounds': partial,
+      'reportedAfterBoundary': afterBoundary,
       'rounds': rows,
     };
   }
@@ -160,7 +166,6 @@ final class WindowRepeatExecution {
       if (ownerId != null ||
           ownerElapsedMilliseconds != null ||
           adjustmentMilliseconds != null ||
-          confirm ||
           review != null ||
           correction == null)
         invalid('Correction takes only an occurrence and replacement values.');
@@ -178,6 +183,14 @@ final class WindowRepeatExecution {
       final existing = jsonObject(entries[entryIndex], 'entry');
       if (existing['outcome'] != 'completed')
         invalid('Only completed effort results can be corrected.');
+      final clearsObservations =
+          correction.containsKey('observations') &&
+          correction['observations'] == null &&
+          existing.containsKey('observations');
+      if (clearsObservations && !confirm)
+        invalid('Confirm before clearing observations.');
+      if (confirm && !clearsObservations)
+        invalid('Confirmation is only accepted when clearing observations.');
       entries[entryIndex] = _reviewEntry(
         loop,
         plan[entryIndex % plan.length],
@@ -268,6 +281,8 @@ final class WindowRepeatExecution {
           ownerElapsedMilliseconds: ownerElapsedMilliseconds,
         );
       }
+      if (nextCursor['status'] == 'boundary' && item.activity is Effort)
+        result['reportedAfterBoundary'] = true;
       if (!(nextCursor['status'] == 'boundary' && item.activity is Rest))
         entries.add(result);
     } else {

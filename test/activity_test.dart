@@ -474,6 +474,14 @@ void activityTests() {
       equal(cursor['unappliedMilliseconds'], 100);
       equal(engine.view(state)['partialRounds'], 1);
       equal(engine.view(state)['currentReviewed'], true);
+      equal(engine.view(state)['reportedAfterBoundary'], 1);
+      equal(
+        jsonObject(
+          (state['entries'] as List).last,
+          'entry',
+        )['reportedAfterBoundary'],
+        true,
+      );
       state = engine.apply(
         state,
         expectedVersion: 4,
@@ -552,11 +560,20 @@ void activityTests() {
       );
       final cursor = state['cursor'];
       const occurrence = 'amrap[0]/round/push-set';
+      rejects(
+        () => engine.apply(
+          state,
+          expectedVersion: 4,
+          action: 'correct',
+          correction: {'occurrenceId': occurrence, 'observations': null},
+        ),
+      );
       final request = {
         'schemaVersion': 1,
         'action': 'correct',
         'execution': state,
         'expectedVersion': 4,
+        'confirm': true,
         'correction': {
           'occurrenceId': occurrence,
           'observations': null,
