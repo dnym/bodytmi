@@ -261,7 +261,12 @@ Future<Map<String, Object?>> executeStored(
       'observations',
       'confirm',
     },
-    'repeat-checkpoint save' => {'id', 'expectedVersion', 'execution'},
+    'repeat-checkpoint save' => {
+      'id',
+      'expectedVersion',
+      'execution',
+      'sessionId',
+    },
     'repeat-checkpoint run' => {
       'id',
       'expectedVersion',
@@ -285,7 +290,7 @@ Future<Map<String, Object?>> executeStored(
       'adjustmentMilliseconds',
     },
     'repeat-checkpoint show' => {'id'},
-    'repeat-checkpoint list' => <String>{},
+    'repeat-checkpoint list' => {'sessionId'},
     'repeat-checkpoint delete' => {'id', 'expectedVersion', 'confirm'},
     'checkpoint save' => {'id', 'sessionId', 'expectedVersion', 'clock'},
     'checkpoint reserve' => {'id', 'expectedVersion'},
@@ -673,6 +678,9 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'id'),
           integer('expectedVersion', min: 0),
           request['execution'],
+          sessionId: request.containsKey('sessionId')
+              ? identifier(request, 'sessionId')
+              : null,
         )).toJson();
       case 'repeat-checkpoint action':
         data = (await RepeatCheckpointService(store).action(
@@ -731,9 +739,12 @@ Future<Map<String, Object?>> executeStored(
           store,
         ).show(identifier(request, 'id'))).toJson();
       case 'repeat-checkpoint list':
+        final sessionId = request.containsKey('sessionId')
+            ? identifier(request, 'sessionId')
+            : null;
         data = [
           for (final c in await RepeatCheckpointService(store).list())
-            c.toJson(),
+            if (sessionId == null || c.sessionId == sessionId) c.toJson(),
         ];
       case 'repeat-checkpoint delete':
         final id = identifier(request, 'id');

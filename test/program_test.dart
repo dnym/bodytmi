@@ -69,6 +69,205 @@ Future<TrainingSession> _done(TrainingStore store, TrainingSession session) =>
 
 void programTests() {
   test(
+    'associated repeat finalization and program cursor commit together on process death',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-run-repeat-crash-',
+      );
+      final path = '${dir.path}/db.sqlite';
+      try {
+        final store = await TrainingStore.open(path);
+        try {
+          await _setup(store);
+          final session = await _start(store, 'strength-run', 'session', 1);
+          final service = RepeatCheckpointService(store);
+          final loop = WindowRepeatSpec.fromJson(
+            example('window-repeat-page')['loop'],
+          );
+          await service.save(
+            'repeat',
+            0,
+            const WindowRepeatExecution().start(loop),
+            sessionId: session.id,
+          );
+          await service.action(
+            'repeat',
+            expectedVersion: 1,
+            expectedExecutionVersion: 1,
+            action: 'stop',
+            confirm: true,
+          );
+        } finally {
+          await store.close();
+        }
+        final binary = await compileNative(
+          'test/helpers/store_owner.dart',
+          '${dir.path}/owner',
+        );
+        for (final mode in ['finish-rollback', 'finish-commit']) {
+          final child = await Process.start(binary, [
+            path,
+            mode,
+            'session',
+            instant(1).add(const Duration(hours: 1)).toIso8601String(),
+          ]);
+          final errors = child.stderr.transform(utf8.decoder).join();
+          try {
+            equal(
+              await child.stdout
+                  .transform(utf8.decoder)
+                  .transform(const LineSplitter())
+                  .first
+                  .timeout(const Duration(seconds: 15)),
+              'ready',
+            );
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+            equal(await errors, '');
+            final recovered = await TrainingStore.open(path);
+            try {
+              final committed = mode.endsWith('commit');
+              equal(
+                (await StoredTrainingService(
+                  recovered,
+                ).session('session')).status,
+                committed ? SessionStatus.finalized : SessionStatus.active,
+              );
+              equal(
+                (await ProgramService(recovered).run('strength-run')).cursor,
+                committed ? 1 : 0,
+              );
+              equal(
+                (await ProgramService(recovered).run('cardio-run')).cursor,
+                0,
+              );
+              equal(
+                (await RepeatCheckpointService(
+                  recovered,
+                ).show('repeat')).sessionId,
+                'session',
+              );
+            } finally {
+              await recovered.close();
+            }
+          } finally {
+            child.kill(ProcessSignal.sigkill);
+            await child.exitCode;
+          }
+        }
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'associated repeats block only their session finalization and do not replay program advancement',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-run-repeat-binding-',
+      );
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        await _setup(store);
+        final strength = await _start(
+          store,
+          'strength-run',
+          'strength-session',
+          1,
+        );
+        final cardio = await _start(store, 'cardio-run', 'cardio-session', 1);
+        final service = RepeatCheckpointService(store);
+        final loop = WindowRepeatSpec.fromJson(
+          example('window-repeat-page')['loop'],
+        );
+        final start = const WindowRepeatExecution().start(loop);
+        var repeat = await service.save(
+          'strength-repeat',
+          0,
+          start,
+          sessionId: strength.id,
+        );
+        equal(repeat.sessionId, strength.id);
+        await expectLater(
+          _done(store, strength),
+          throwsA(isA<BodyTmiException>()),
+        );
+        equal((await ProgramService(store).run('strength-run')).cursor, 0);
+        final cardioDone = await _done(store, cardio);
+        equal((await ProgramService(store).run('cardio-run')).cursor, 1);
+        equal((await ProgramService(store).run('strength-run')).cursor, 0);
+        await expectLater(
+          service.save('bad', 0, start, sessionId: cardioDone.id),
+          throwsA(isA<BodyTmiException>()),
+        );
+        await expectLater(
+          service.save('missing', 0, start, sessionId: 'unknown'),
+          throwsA(isA<BodyTmiException>()),
+        );
+        await expectLater(
+          service.save('strength-repeat', 1, start, sessionId: cardio.id),
+          throwsA(isA<BodyTmiException>()),
+        );
+        repeat = await service.action(
+          'strength-repeat',
+          expectedVersion: 1,
+          expectedExecutionVersion: 1,
+          action: 'review',
+          review: {'outcome': 'completed', 'acceptSuggested': true},
+        );
+        repeat = await service.action(
+          'strength-repeat',
+          expectedVersion: 2,
+          expectedExecutionVersion: 2,
+          action: 'stop',
+          confirm: true,
+        );
+        equal(repeat.sessionId, strength.id);
+        final finishedStrength = await _done(store, strength);
+        equal((await ProgramService(store).run('strength-run')).cursor, 1);
+        repeat = await service.action(
+          'strength-repeat',
+          expectedVersion: 3,
+          expectedExecutionVersion: 3,
+          action: 'correct',
+          correction: {
+            'occurrenceId': 'amrap[0]/round/push-set',
+            'actuals': {
+              'reps': {'value': '3', 'unit': 'rep'},
+            },
+          },
+        );
+        equal(repeat.sessionId, strength.id);
+        await StoredTrainingService(store).edit(
+          finishedStrength.id,
+          finishedStrength.contentVersion,
+          (session) => session.finish(session.finishedAt!),
+        );
+        equal((await ProgramService(store).run('strength-run')).cursor, 1);
+        final reopened = {...start, 'version': 5};
+        await expectLater(
+          service.save('strength-repeat', 4, reopened),
+          throwsA(isA<BodyTmiException>()),
+        );
+        final forged = copyJson((await store.archive()).toJson());
+        jsonObject(
+          jsonList(forged, 'repeatCheckpoints').single,
+          'repeat',
+        )['sessionId'] = 'missing';
+        rejects(() => TrainingArchive.fromJson(forged));
+        final unfinished = copyJson((await store.archive()).toJson());
+        jsonObject(
+          jsonList(unfinished, 'repeatCheckpoints').single,
+          'repeat',
+        )['execution'] = start;
+        rejects(() => TrainingArchive.fromJson(unfinished));
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'guided target edits stay within the selected active program run',
     () async {
       final dir = await Directory.systemTemp.createTemp('bodytmi-run-target-');
@@ -404,7 +603,7 @@ void programTests() {
         );
         final snapshot = '${dir.path}/manual.sqlite';
         await store.snapshot(snapshot);
-        equal(NativeBackup.validateDatabase(snapshot), 50);
+        equal(NativeBackup.validateDatabase(snapshot), 51);
         final oldLabel = sqlite3.open(snapshot);
         oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -849,14 +1048,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          50,
+          51,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/50',
+          'bodytmi-logical-export/51',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',

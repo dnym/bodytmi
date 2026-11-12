@@ -5,12 +5,18 @@ import 'training_repository.dart';
 import 'window_repeat_execution.dart';
 import 'window_checkpoint.dart';
 
-/// An independently saved repeat ledger. It is not a training session.
+/// A repeat ledger, optionally associated with an existing training session.
 final class RepeatCheckpoint {
-  RepeatCheckpoint._(this.id, this.version, this._execution, this.reserved);
+  RepeatCheckpoint._(
+    this.id,
+    this.version,
+    this._execution,
+    this.reserved,
+    this.sessionId,
+  );
   factory RepeatCheckpoint.fromJson(Object? input) {
     final json = jsonObject(input, 'repeat checkpoint');
-    checkKeys(json, {'id', 'version', 'execution', 'reserved'});
+    checkKeys(json, {'id', 'version', 'execution', 'reserved', 'sessionId'});
     final id = identifier(json, 'id');
     final version = json['version'];
     if (version is! int || version < 1 || version > 2000000000)
@@ -27,11 +33,21 @@ final class RepeatCheckpoint {
       invalid('A running repeat requires a timing reservation.');
     if (reserved && !{'paused', 'running', 'boundary'}.contains(status))
       invalid('A repeat reservation requires an active cursor.');
-    return RepeatCheckpoint._(id, version, canonicalJson(execution), reserved);
+    final sessionId = json.containsKey('sessionId')
+        ? identifier(json, 'sessionId')
+        : null;
+    return RepeatCheckpoint._(
+      id,
+      version,
+      canonicalJson(execution),
+      reserved,
+      sessionId,
+    );
   }
   final String id;
   final int version;
   final bool reserved;
+  final String? sessionId;
   final String _execution;
   Map<String, Object?> get execution =>
       jsonObject(jsonDecode(_execution), 'execution');
@@ -40,7 +56,25 @@ final class RepeatCheckpoint {
     'version': version,
     'execution': execution,
     if (reserved) 'reserved': true,
+    if (sessionId != null) 'sessionId': sessionId,
   };
+}
+
+void validateRepeatSessionBindings(
+  List<RepeatCheckpoint> checkpoints,
+  List<TrainingSession> sessions,
+) {
+  final byId = {for (final session in sessions) session.id: session};
+  for (final checkpoint in checkpoints) {
+    final sessionId = checkpoint.sessionId;
+    if (sessionId == null) continue;
+    final session = byId[sessionId];
+    if (session == null) invalid('Repeat checkpoint session is missing.');
+    if (session.status == SessionStatus.finalized &&
+        jsonObject(checkpoint.execution['cursor'], 'cursor')['status'] !=
+            'finished')
+      invalid('A finalized session requires finished repeat checkpoints.');
+  }
 }
 
 void validateRepeatClockReservations(
@@ -73,8 +107,9 @@ final class RepeatCheckpointService {
   Future<RepeatCheckpoint> save(
     String id,
     int expectedVersion,
-    Object? execution,
-  ) => repository.transaction(() async {
+    Object? execution, {
+    String? sessionId,
+  }) => repository.transaction(() async {
     identifier({'id': id}, 'id');
     final existing = await repository.repeatCheckpoint(id);
     if ((existing?.version ?? 0) != expectedVersion)
@@ -84,10 +119,24 @@ final class RepeatCheckpointService {
       );
     if (existing?.reserved == true)
       invalid('Release the repeat clock before replacing its snapshot.');
+    if (sessionId != null) identifier({'id': sessionId}, 'id');
+    if (existing != null &&
+        sessionId != null &&
+        sessionId != existing.sessionId)
+      invalid('A repeat checkpoint cannot change its session association.');
+    final binding = existing?.sessionId ?? sessionId;
+    if (existing == null && binding != null) {
+      final session = await repository.session(binding);
+      if (session == null)
+        throw const BodyTmiException('not_found', 'Session not found.');
+      if (session.status != SessionStatus.active)
+        invalid('A repeat can only be associated with an active session.');
+    }
     final next = RepeatCheckpoint.fromJson({
       'id': id,
       'version': expectedVersion + 1,
       'execution': execution,
+      if (binding != null) 'sessionId': binding,
     });
     if (existing != null) {
       final oldLoop = jsonObject(
@@ -106,7 +155,14 @@ final class RepeatCheckpointService {
       if (next.execution['version'] == existing.execution['version'] &&
           canonicalJson(next.execution) != canonicalJson(existing.execution))
         invalid('Repeat execution content changed without a new version.');
+      if (jsonObject(existing.execution['cursor'], 'cursor')['status'] ==
+              'finished' &&
+          jsonObject(next.execution['cursor'], 'cursor')['status'] !=
+              'finished')
+        invalid('A finished repeat cannot be reopened.');
     }
+    if (binding != null)
+      validateRepeatSessionBindings([next], await repository.sessions());
     await repository.saveRepeatCheckpoint(next);
     return next;
   });
@@ -137,6 +193,7 @@ final class RepeatCheckpointService {
       'version': current.version + 1,
       'execution': current.execution,
       'reserved': true,
+      if (current.sessionId != null) 'sessionId': current.sessionId,
     });
     await repository.saveRepeatCheckpoint(next);
     return next;
@@ -162,6 +219,7 @@ final class RepeatCheckpointService {
       'id': id,
       'version': current.version + 1,
       'execution': current.execution,
+      if (current.sessionId != null) 'sessionId': current.sessionId,
     });
     await repository.saveRepeatCheckpoint(next);
     return next;
@@ -274,6 +332,7 @@ final class RepeatCheckpointService {
       'id': id,
       'version': current.version + 1,
       'execution': execution,
+      if (current.sessionId != null) 'sessionId': current.sessionId,
       if (current.reserved &&
           {
             'paused',

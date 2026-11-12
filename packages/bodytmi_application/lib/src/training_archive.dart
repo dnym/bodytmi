@@ -236,6 +236,7 @@ final class TrainingArchive {
       timers: timers,
       windows: windowCheckpoints,
     );
+    validateRepeatSessionBindings(repeatCheckpoints, sessions);
     validateFamilyRevisions(families);
     validateDerivedTargetGraphRevisions(graphs);
     validateProgramPlanReferences(programRevisions, graphs);

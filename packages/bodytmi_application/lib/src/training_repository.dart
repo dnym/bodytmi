@@ -804,6 +804,16 @@ final class StoredTrainingService {
       invalid(
         'Acknowledge all execution occurrences before finishing the session.',
       );
+    if (next.status == SessionStatus.finalized &&
+        (await repository.repeatCheckpoints()).any(
+          (checkpoint) =>
+              checkpoint.sessionId == id &&
+              jsonObject(checkpoint.execution['cursor'], 'cursor')['status'] !=
+                  'finished',
+        ))
+      invalid(
+        'Finish or explicitly discard associated repeats before finishing the session.',
+      );
     validateExecutionData(executions, [
       for (final s in await repository.sessions()) s.id == id ? next : s,
     ], await repository.timingActivities());
