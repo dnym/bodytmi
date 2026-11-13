@@ -3910,6 +3910,227 @@ class RepeatCheckpointsCompanion
   }
 }
 
+class $ProgressionReconciliationsTable extends ProgressionReconciliations
+    with
+        TableInfo<$ProgressionReconciliationsTable, ProgressionReconciliation> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProgressionReconciliationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'progression_reconciliations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ProgressionReconciliation> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ProgressionReconciliation map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProgressionReconciliation(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $ProgressionReconciliationsTable createAlias(String alias) {
+    return $ProgressionReconciliationsTable(attachedDatabase, alias);
+  }
+}
+
+class ProgressionReconciliation extends DataClass
+    implements Insertable<ProgressionReconciliation> {
+  final String id;
+  final String snapshot;
+  const ProgressionReconciliation({required this.id, required this.snapshot});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  ProgressionReconciliationsCompanion toCompanion(bool nullToAbsent) {
+    return ProgressionReconciliationsCompanion(
+      id: Value(id),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory ProgressionReconciliation.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProgressionReconciliation(
+      id: serializer.fromJson<String>(json['id']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  ProgressionReconciliation copyWith({String? id, String? snapshot}) =>
+      ProgressionReconciliation(
+        id: id ?? this.id,
+        snapshot: snapshot ?? this.snapshot,
+      );
+  ProgressionReconciliation copyWithCompanion(
+    ProgressionReconciliationsCompanion data,
+  ) {
+    return ProgressionReconciliation(
+      id: data.id.present ? data.id.value : this.id,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProgressionReconciliation(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProgressionReconciliation &&
+          other.id == this.id &&
+          other.snapshot == this.snapshot);
+}
+
+class ProgressionReconciliationsCompanion
+    extends UpdateCompanion<ProgressionReconciliation> {
+  final Value<String> id;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const ProgressionReconciliationsCompanion({
+    this.id = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProgressionReconciliationsCompanion.insert({
+    required String id,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       snapshot = Value(snapshot);
+  static Insertable<ProgressionReconciliation> custom({
+    Expression<String>? id,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProgressionReconciliationsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return ProgressionReconciliationsCompanion(
+      id: id ?? this.id,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProgressionReconciliationsCompanion(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
@@ -3945,6 +4166,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
       $WindowCheckpointsTable(this);
   late final $RepeatCheckpointsTable repeatCheckpoints =
       $RepeatCheckpointsTable(this);
+  late final $ProgressionReconciliationsTable progressionReconciliations =
+      $ProgressionReconciliationsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3965,6 +4188,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     derivedTargetGraphs,
     windowCheckpoints,
     repeatCheckpoints,
+    progressionReconciliations,
   ];
 }
 
@@ -8468,6 +8692,180 @@ typedef $$RepeatCheckpointsTableProcessedTableManager =
       StoredRepeatCheckpoint,
       PrefetchHooks Function()
     >;
+typedef $$ProgressionReconciliationsTableCreateCompanionBuilder =
+    ProgressionReconciliationsCompanion Function({
+      required String id,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$ProgressionReconciliationsTableUpdateCompanionBuilder =
+    ProgressionReconciliationsCompanion Function({
+      Value<String> id,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$ProgressionReconciliationsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $ProgressionReconciliationsTable> {
+  $$ProgressionReconciliationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ProgressionReconciliationsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $ProgressionReconciliationsTable> {
+  $$ProgressionReconciliationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ProgressionReconciliationsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $ProgressionReconciliationsTable> {
+  $$ProgressionReconciliationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$ProgressionReconciliationsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $ProgressionReconciliationsTable,
+          ProgressionReconciliation,
+          $$ProgressionReconciliationsTableFilterComposer,
+          $$ProgressionReconciliationsTableOrderingComposer,
+          $$ProgressionReconciliationsTableAnnotationComposer,
+          $$ProgressionReconciliationsTableCreateCompanionBuilder,
+          $$ProgressionReconciliationsTableUpdateCompanionBuilder,
+          (
+            ProgressionReconciliation,
+            BaseReferences<
+              _$TrainingDatabase,
+              $ProgressionReconciliationsTable,
+              ProgressionReconciliation
+            >,
+          ),
+          ProgressionReconciliation,
+          PrefetchHooks Function()
+        > {
+  $$ProgressionReconciliationsTableTableManager(
+    _$TrainingDatabase db,
+    $ProgressionReconciliationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProgressionReconciliationsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ProgressionReconciliationsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ProgressionReconciliationsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ProgressionReconciliationsCompanion(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => ProgressionReconciliationsCompanion.insert(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ProgressionReconciliationsTable,
+                    ProgressionReconciliation
+                  >(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $ProgressionReconciliationsTable,
+                    ProgressionReconciliation
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ProgressionReconciliationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $ProgressionReconciliationsTable,
+      ProgressionReconciliation,
+      $$ProgressionReconciliationsTableFilterComposer,
+      $$ProgressionReconciliationsTableOrderingComposer,
+      $$ProgressionReconciliationsTableAnnotationComposer,
+      $$ProgressionReconciliationsTableCreateCompanionBuilder,
+      $$ProgressionReconciliationsTableUpdateCompanionBuilder,
+      (
+        ProgressionReconciliation,
+        BaseReferences<
+          _$TrainingDatabase,
+          $ProgressionReconciliationsTable,
+          ProgressionReconciliation
+        >,
+      ),
+      ProgressionReconciliation,
+      PrefetchHooks Function()
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -8502,4 +8900,10 @@ class $TrainingDatabaseManager {
       $$WindowCheckpointsTableTableManager(_db, _db.windowCheckpoints);
   $$RepeatCheckpointsTableTableManager get repeatCheckpoints =>
       $$RepeatCheckpointsTableTableManager(_db, _db.repeatCheckpoints);
+  $$ProgressionReconciliationsTableTableManager
+  get progressionReconciliations =>
+      $$ProgressionReconciliationsTableTableManager(
+        _db,
+        _db.progressionReconciliations,
+      );
 }

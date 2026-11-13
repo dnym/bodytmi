@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/51';
+const _format = 'bodytmi-logical-export/52';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -112,6 +112,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/48',
       'bodytmi-logical-export/49',
       'bodytmi-logical-export/50',
+      'bodytmi-logical-export/51',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -120,7 +121,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final repeatBindingData = input['format'] == _format;
+    final reconciliationData = input['format'] == _format;
+    final repeatBindingData =
+        reconciliationData || input['format'] == 'bodytmi-logical-export/51';
     final repeatRunningData =
         repeatBindingData || input['format'] == 'bodytmi-logical-export/50';
     final repeatReservationData =
@@ -227,6 +230,12 @@ final class LogicalArchiveFiles {
     // absence in v26 and earlier; non-empty graphs remain a v27-only section.
     final hadGraphs = inputData.containsKey('graphs');
     final hadRepeatCheckpoints = inputData.containsKey('repeatCheckpoints');
+    final hadReconciliations = inputData.containsKey('reconciliations');
+    if (!reconciliationData &&
+        inputData['reconciliations'] is List &&
+        (inputData['reconciliations'] as List).isEmpty) {
+      inputData.remove('reconciliations');
+    }
     if (!repeatData &&
         inputData['repeatCheckpoints'] is List &&
         (inputData['repeatCheckpoints'] as List).isEmpty) {
@@ -254,6 +263,7 @@ final class LogicalArchiveFiles {
       if (timingData) 'timers',
       if (checkpointData) 'windowCheckpoints',
       if (repeatData) 'repeatCheckpoints',
+      if (reconciliationData) 'reconciliations',
       if (executionData) 'executions',
       if (familyData) 'families',
       if (graphData) 'graphs',
@@ -268,6 +278,8 @@ final class LogicalArchiveFiles {
       invalid('Logical v7 requires timing records.');
     if (repeatData && !inputData.containsKey('repeatCheckpoints'))
       invalid('Logical v48 requires repeat checkpoints.');
+    if (reconciliationData && !inputData.containsKey('reconciliations'))
+      invalid('Logical v52 requires progression reconciliations.');
     if (checkpointData && !inputData.containsKey('windowCheckpoints'))
       invalid('Logical v46 requires window checkpoint records.');
     if (executionData && !inputData.containsKey('executions'))
@@ -296,6 +308,8 @@ final class LogicalArchiveFiles {
       }
     }
     final archive = TrainingArchive.fromJson(inputData);
+    if (!reconciliationData && archive.reconciliations.isNotEmpty)
+      invalid('Progression reconciliations require logical v52.');
     if (!repeatBindingData &&
         archive.repeatCheckpoints.any((c) => c.sessionId != null))
       invalid('Repeat session associations require logical v51.');
@@ -507,6 +521,9 @@ final class LogicalArchiveFiles {
       invalid('Effective-mass models require logical format v6.');
     final data = archive.toJson();
     if (!repeatData && !hadRepeatCheckpoints) data.remove('repeatCheckpoints');
+    if (!reconciliationData && !hadReconciliations) {
+      data.remove('reconciliations');
+    }
     if (legacy) data.remove('progressions');
     if (!massData) data.remove('bodyMass');
     if (!timingData) data.remove('timers');
@@ -533,11 +550,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV48.values) {
+          for (final ddl in schemaV52.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 51');
+          db.execute('PRAGMA user_version = 52');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
@@ -581,6 +598,11 @@ final class LogicalArchiveFiles {
               ],
             );
           }
+          for (final receipt in archive.reconciliations)
+            db.execute(
+              'INSERT INTO progression_reconciliations(id,snapshot) VALUES (?,?)',
+              [receipt.id, canonicalJson(receipt.toJson())],
+            );
           for (final p in archive.programRevisions)
             db.execute(
               'INSERT INTO program_revisions(program_id,number,snapshot) VALUES (?,?,?)',

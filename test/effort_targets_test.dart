@@ -617,6 +617,7 @@ void effortTargetsTests() {
       db.execute('DROP TABLE derived_target_graphs');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.userVersion = 23;
       db.close();
       rejects(
@@ -666,6 +667,7 @@ void effortTargetsTests() {
         old.execute('DROP TABLE derived_target_graphs');
         old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         old.execute('DROP TABLE IF EXISTS window_checkpoints');
+        old.execute('DROP TABLE IF EXISTS progression_reconciliations');
         old.userVersion = 23;
         old.close();
         equal(
@@ -676,7 +678,7 @@ void effortTargetsTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          51,
+          52,
         );
       } finally {
         await store.close();

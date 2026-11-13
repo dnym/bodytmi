@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "reanchor-bench-heavy",
+  "templateId": "upper-a",
+  "revision": 2,
+  "slotId": "bench-heavy",
+  "role": "work",
+  "expectedSequence": 1,
+  "kinds": ["slotTarget"],
+  "reconciledAt": "2026-10-03T09:00:00Z",
+  "resetFailures": false,
+  "resetCursor": false,
+  "confirm": true
+}

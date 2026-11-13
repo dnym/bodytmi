@@ -576,6 +576,7 @@ void leverSelectionTests() {
       old.execute('DROP TABLE derived_target_graphs');
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
+      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.userVersion = 16;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 16);
@@ -584,7 +585,7 @@ void leverSelectionTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          51,
+          52,
         );
       } finally {
         await upgraded.close();
@@ -665,6 +666,7 @@ void leverSelectionTests() {
         forged.execute('DROP TABLE derived_target_graphs');
         forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         forged.execute('DROP TABLE IF EXISTS window_checkpoints');
+        forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
         forged.userVersion = 16;
         forged.close();
         rejects(

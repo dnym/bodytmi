@@ -659,6 +659,7 @@ void numericScaleTests() {
       old.execute('DROP TABLE derived_target_graphs');
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
+      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.userVersion = 17;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 17);
@@ -667,7 +668,7 @@ void numericScaleTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          51,
+          52,
         );
       } finally {
         await upgraded.close();
@@ -747,6 +748,7 @@ void numericScaleTests() {
         forged.execute('DROP TABLE derived_target_graphs');
         forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         forged.execute('DROP TABLE IF EXISTS window_checkpoints');
+        forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
         forged.userVersion = 17;
         forged.close();
         rejects(
@@ -1122,6 +1124,7 @@ void fixedRangeTests() {
       old.execute('DROP TABLE derived_target_graphs');
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
+      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.userVersion = 18;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 18);
@@ -1130,7 +1133,7 @@ void fixedRangeTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          51,
+          52,
         );
       } finally {
         await upgraded.close();
@@ -1213,6 +1216,7 @@ void fixedRangeTests() {
         forged.execute('DROP TABLE derived_target_graphs');
         forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         forged.execute('DROP TABLE IF EXISTS window_checkpoints');
+        forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
         forged.userVersion = 18;
         forged.close();
         rejects(

@@ -244,10 +244,11 @@ void derivedTargetlessSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 51);
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 52);
       final db = sqlite3.open('$dir/snapshot.sqlite');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.userVersion = 31;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/snapshot.sqlite'));
@@ -263,6 +264,7 @@ void derivedTargetlessSessionTests() {
       final db = sqlite3.open('$dir/old.sqlite');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.userVersion = 31;
       db.close();
       final reopened = await TrainingStore.open('$dir/old.sqlite');
@@ -273,7 +275,7 @@ void derivedTargetlessSessionTests() {
         await reopened.close();
       }
       final migrated = sqlite3.open('$dir/old.sqlite');
-      equal(migrated.userVersion, 51);
+      equal(migrated.userVersion, 52);
       migrated.close();
     }),
   );

@@ -104,6 +104,7 @@ void storedBodyMassTests() {
       final old = sqlite3.open('$dir/legacy.sqlite');
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
+      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.userVersion = 34;
       old.close();
       final upgraded = await TrainingStore.open('$dir/legacy.sqlite');
@@ -140,10 +141,11 @@ void storedBodyMassTests() {
       await File('$dir/old-meta.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-meta.json'));
       await store.snapshot('$dir/meta.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/meta.sqlite'), 51);
+      equal(NativeBackup.validateDatabase('$dir/meta.sqlite'), 52);
       final db = sqlite3.open('$dir/meta.sqlite');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.userVersion = 34;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/meta.sqlite'));
@@ -369,13 +371,13 @@ void storedBodyMassTests() {
       final resolved = canonicalJson(
         (await service.resolve(_query())).toJson(),
       );
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 51);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 52);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/export.json',
         ))['format'],
-        'bodytmi-logical-export/51',
+        'bodytmi-logical-export/52',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/export.json');
       try {
@@ -485,6 +487,7 @@ void storedBodyMassTests() {
         raw.execute('DROP TABLE derived_target_graphs');
         raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
+        raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('PRAGMA user_version = 3');
         validateSchema(
           raw.select(
@@ -515,7 +518,7 @@ void storedBodyMassTests() {
       }
       final upgraded = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(upgraded.userVersion, 51);
+        equal(upgraded.userVersion, 52);
       } finally {
         upgraded.close();
       }

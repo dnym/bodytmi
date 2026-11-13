@@ -764,6 +764,7 @@ void incrementBandsTests() {
       old.execute('DROP TABLE derived_target_graphs');
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
+      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.userVersion = 22;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 22);
@@ -772,7 +773,7 @@ void incrementBandsTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), before);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          51,
+          52,
         );
       } finally {
         await migrated.close();
@@ -832,6 +833,7 @@ void incrementBandsTests() {
       wrong.execute('DROP TABLE derived_target_graphs');
       wrong.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       wrong.execute('DROP TABLE IF EXISTS window_checkpoints');
+      wrong.execute('DROP TABLE IF EXISTS progression_reconciliations');
       wrong.userVersion = 22;
       wrong.close();
       rejects(() => NativeBackup.validateDatabase('$dir/new/database.sqlite'));

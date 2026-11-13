@@ -386,6 +386,7 @@ void setObservationsTests() {
         old.execute('DROP TABLE derived_target_graphs');
         old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         old.execute('DROP TABLE IF EXISTS window_checkpoints');
+        old.execute('DROP TABLE IF EXISTS progression_reconciliations');
         old.userVersion = 20;
         old.close();
         equal(
@@ -396,7 +397,7 @@ void setObservationsTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          51,
+          52,
         );
         final logical = jsonObject(
           jsonDecode(await File('${dir.path}/legacy.json').readAsString()),
@@ -575,6 +576,7 @@ void setObservationsTests() {
           db.execute('DROP TABLE derived_target_graphs');
           db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
           db.execute('DROP TABLE IF EXISTS window_checkpoints');
+          db.execute('DROP TABLE IF EXISTS progression_reconciliations');
           db.userVersion = 20;
           db.close();
           rejects(

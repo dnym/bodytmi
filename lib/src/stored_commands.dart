@@ -106,7 +106,10 @@ const storedCommandNames = [
   'archive restore',
   'progression propose',
   'progression track',
+  'progression reconcile',
   'progression reconcile-status',
+  'progression reconcile-show',
+  'progression reconcile-list',
   'progression show',
   'progression accept',
   'progression decline',
@@ -523,6 +526,23 @@ Future<Map<String, Object?>> executeStored(
       'runId',
       'asOf',
     },
+    'progression reconcile' => {
+      'id',
+      'templateId',
+      'revision',
+      'slotId',
+      'role',
+      'runId',
+      'sessionId',
+      'expectedSequence',
+      'kinds',
+      'reconciledAt',
+      'rule',
+      'ruleType',
+      'resetFailures',
+      'resetCursor',
+      'confirm',
+    },
     'progression reconcile-status' => {
       'templateId',
       'revision',
@@ -534,6 +554,8 @@ Future<Map<String, Object?>> executeStored(
       'rule',
       'ruleType',
     },
+    'progression reconcile-show' => {'id'},
+    'progression reconcile-list' => const <String>{},
     'progression show' => {'sessionId', 'slotId', 'role'},
     'progression accept' => {
       'sessionId',
@@ -1342,6 +1364,56 @@ Future<Map<String, Object?>> executeStored(
               ? requiredString(request, 'ruleType')
               : 'double',
         );
+      case 'progression reconcile':
+        {
+          final kinds = [
+            for (final value in jsonList(request, 'kinds'))
+              value is String ? value : invalid('Invalid reconciliation kind.'),
+          ];
+          final receipt = await StoredProgressionService(store).reconcile(
+            id: identifier(request, 'id'),
+            templateId: identifier(request, 'templateId'),
+            revision: integer('revision'),
+            slotId: identifier(request, 'slotId'),
+            expectedSequence: integer('expectedSequence', min: 0),
+            kinds: kinds,
+            reconciledAt: parseInstant(request['reconciledAt'], 'reconciledAt'),
+            confirm: request['confirm'] == true,
+            role: request.containsKey('role')
+                ? requiredString(request, 'role')
+                : 'work',
+            runId: request.containsKey('runId')
+                ? identifier(request, 'runId')
+                : null,
+            sessionId: request.containsKey('sessionId')
+                ? identifier(request, 'sessionId')
+                : null,
+            rule: request.containsKey('rule')
+                ? jsonObject(request['rule'], 'rule')
+                : null,
+            ruleType: request.containsKey('ruleType')
+                ? requiredString(request, 'ruleType')
+                : 'double',
+            resetFailures: request['resetFailures'] == true,
+            resetCursor: request['resetCursor'] == true,
+          );
+          data = reconciliationView(receipt);
+        }
+      case 'progression reconcile-show':
+        data = reconciliationView(
+          await StoredProgressionService(
+            store,
+          ).reconciliation(identifier(request, 'id')),
+        );
+      case 'progression reconcile-list':
+        data = {
+          'reconciliations': [
+            for (final receipt in await StoredProgressionService(
+              store,
+            ).reconciliations())
+              reconciliationView(receipt),
+          ],
+        };
       case 'progression propose':
       case 'progression show':
       case 'progression accept':

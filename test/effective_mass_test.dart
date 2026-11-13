@@ -317,13 +317,13 @@ void effectiveMassTests() {
       final next = await service.start('next', definition().id, 2, instant(11));
       equal(_value(_estimate(next)), '109.5');
       equal(canonicalJson(_view(await service.session('old'))), original);
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 51);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 52);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/51',
+        'bodytmi-logical-export/52',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -395,6 +395,7 @@ void effectiveMassTests() {
         raw.execute('DROP TABLE derived_target_graphs');
         raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
+        raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('PRAGMA user_version = 5');
       } finally {
         raw.close();
@@ -444,6 +445,7 @@ void effectiveMassTests() {
         raw.execute('DROP TABLE derived_target_graphs');
         raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
+        raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('PRAGMA user_version = 5');
       } finally {
         raw.close();

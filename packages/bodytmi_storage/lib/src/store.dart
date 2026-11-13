@@ -7,6 +7,7 @@ import 'package:drift/native.dart';
 import 'database.dart'
     hide
         ProgressionDecision,
+        ProgressionReconciliation,
         ProgramRevision,
         ProgramRun,
         ProgramReceipt,
@@ -53,7 +54,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 51) {
+            if (native.userVersion > 52) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -114,7 +115,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 51);
+    validateSchema(schema.map((row) => row.data), 52);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -127,6 +128,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM window_checkpoints), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM repeat_checkpoints), 0)
+            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM progression_reconciliations), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM workout_executions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM family_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM derived_target_graphs), 0) AS bytes
@@ -276,6 +278,47 @@ final class TrainingStore implements TrainingRepository {
           ProgressionDecisionsCompanion.insert(
             sessionId: decision.session.id,
             slotId: decision.storageSlotKey,
+            snapshot: snapshot,
+          ),
+        );
+  }
+
+  @override
+  Future<List<ReconciliationReceipt>> progressionReconciliations() async {
+    final result = <ReconciliationReceipt>[];
+    for (final row in await _db.select(_db.progressionReconciliations).get()) {
+      final receipt = ReconciliationReceipt.fromJson(jsonDecode(row.snapshot));
+      if (receipt.id != row.id)
+        invalid('Reconciliation row identity does not match its key.');
+      result.add(receipt);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveProgressionReconciliation(
+    ReconciliationReceipt reconciliation,
+  ) async {
+    final snapshot = canonicalJson(reconciliation.toJson());
+    if (utf8.encode(snapshot).length > 8 * 1024 * 1024)
+      invalid('Progression reconciliation exceeds the 8 MiB resource limit.');
+    final old = await (_db.select(
+      _db.progressionReconciliations,
+    )..where((r) => r.id.equals(reconciliation.id))).getSingleOrNull();
+    if (old != null) {
+      if (canonicalJson(jsonDecode(old.snapshot)) !=
+          canonicalJson(reconciliation.toJson()))
+        throw const BodyTmiException(
+          'conflict',
+          'A progression reconciliation is immutable.',
+        );
+      return;
+    }
+    await _db
+        .into(_db.progressionReconciliations)
+        .insert(
+          ProgressionReconciliationsCompanion.insert(
+            id: reconciliation.id,
             snapshot: snapshot,
           ),
         );

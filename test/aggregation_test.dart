@@ -490,6 +490,7 @@ void aggregationTests() {
       db.execute('DROP TABLE derived_target_graphs');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.userVersion = 14;
       db.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 14);
@@ -498,7 +499,7 @@ void aggregationTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          51,
+          52,
         );
       } finally {
         await upgraded.close();
@@ -569,6 +570,7 @@ void aggregationTests() {
         forged.execute('DROP TABLE derived_target_graphs');
         forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         forged.execute('DROP TABLE IF EXISTS window_checkpoints');
+        forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
         forged.userVersion = 14;
         forged.close();
         rejects(

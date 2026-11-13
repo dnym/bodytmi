@@ -1,10 +1,11 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'session_codec.dart';
 import 'canonical_json.dart';
+import 'progression_anchor.dart';
 import 'progression_evaluation.dart';
 
 /// Stable exposure identity includes role, never a result content version.
-final class ProgressionDecision {
+final class ProgressionDecision implements ProgressionAnchor {
   ProgressionDecision({
     required this.session,
     required this.slotId,
@@ -144,16 +145,14 @@ final class ProgressionDecision {
       ? proposal.nextSets
       : List.unmodifiable([for (final set in sets) set.suggested]);
   late final ExerciseSlot slot = session.revision.definition.slot(slotId);
-  late final String contextKey = canonicalJson([
-    runId,
-    session.revision.definition.id,
-    slot.id,
-    slot.exerciseId,
-    slot.implementation,
-    slot.equipmentId,
-    slot.setupNote,
-    if (role != 'work') role,
-  ]);
+  @override
+  String get templateId => session.revision.definition.id;
+  @override
+  int get revisionNumber => session.revision.number;
+  @override
+  WorkoutRevision get pinnedRevision => session.revision;
+  @override
+  String get contextKey => anchorContextKey(runId, templateId, slot, role);
   late final List<TrainingSet> sets = List.unmodifiable(
     session.sets.where((s) => s.slotId == slotId && s.role == role),
   );
@@ -237,31 +236,44 @@ ProgressionDecision? latestApplication(
   ExerciseSlot slot, {
   String? runId,
   String role = 'work',
-}) {
-  ProgressionDecision? latest;
-  for (final d in decisions) {
-    if (d.runId == runId &&
-        d.role == role &&
-        d.resolvedAt != null &&
-        d.matches(templateId, slot) &&
-        (latest == null || d.sequence > latest.sequence))
-      latest = d;
-  }
-  return latest;
-}
+}) =>
+    latestAnchor(decisions, templateId, slot, runId: runId, role: role)
+        as ProgressionDecision?;
+
+/// The current baseline for a context across resolved decisions and explicit
+/// reconciliations. Sequences are unique per context in a valid store.
+ProgressionAnchor? latestTrack(
+  Iterable<ProgressionDecision> decisions,
+  Iterable<ProgressionAnchor> anchors,
+  String templateId,
+  ExerciseSlot slot, {
+  String? runId,
+  String role = 'work',
+}) => latestAnchor(
+  <ProgressionAnchor>[...decisions, ...anchors],
+  templateId,
+  slot,
+  runId: runId,
+  role: role,
+);
 
 void validateProgressionDecisions(
   List<ProgressionDecision> decisions,
   List<TrainingSession> sessions, [
   Map<String, String> runBySession = const {},
+  List<ProgressionAnchor> anchors = const [],
 ]) {
   final byId = <String, ProgressionDecision>{};
+  final byAnchor = <String, ProgressionAnchor>{
+    for (final anchor in anchors) anchor.id: anchor,
+  };
   final sequences = <String, Set<int>>{};
   final current = {for (final s in sessions) s.id: s};
   for (final d in decisions) {
-    if (byId.containsKey(d.id))
+    if (byId.containsKey(d.id) || byAnchor.containsKey(d.id))
       invalid('Duplicate progression exposure identity.');
     byId[d.id] = d;
+    byAnchor[d.id] = d;
     if (d.runId != runBySession[d.session.id])
       invalid('Progression ownership does not match session program binding.');
     if (d.resolvedAt != null &&
@@ -300,7 +312,7 @@ void validateProgressionDecisions(
   for (final d in decisions) {
     final before = d.previousApplication == null
         ? null
-        : byId[d.previousApplication];
+        : byAnchor[d.previousApplication];
     if (before == null) {
       if (d.previousApplication != null ||
           d.previousSequence != 0 ||
@@ -310,7 +322,7 @@ void validateProgressionDecisions(
         invalid('Initial coordinator cursor must be zero.');
     } else {
       if (before.resolvedAt == null ||
-          !d.sameContext(before) ||
+          !sameAnchorContext(d, before) ||
           d.previousSequence != before.sequence ||
           d.previousFailures != before.failedSessions ||
           d.ruleType != before.ruleType ||
@@ -337,7 +349,7 @@ Object? _freeze(Object? value) {
 
 bool matchesProgressionBaseline(
   ProgressionDecision decision,
-  ProgressionDecision before,
+  ProgressionAnchor before,
 ) => matchesSessionProgressionBaseline(
   decision.session,
   decision.slotId,
@@ -352,7 +364,7 @@ bool matchesSessionProgressionBaseline(
   String slotId,
   String role,
   Set<String> controlledMetrics,
-  ProgressionDecision before,
+  ProgressionAnchor before,
 ) {
   final sets = session.sets
       .where((s) => s.slotId == slotId && s.role == role)
@@ -375,7 +387,7 @@ bool matchesSessionProgressionBaseline(
       return false;
   }
   final currentPlan = session.revision.definition;
-  final priorPlan = before.session.revision.definition;
+  final priorPlan = before.pinnedRevision.definition;
   if (currentPlan.hasEffortTargets || priorPlan.hasEffortTargets) {
     final authored = currentPlan.roleTargets(slotId, role);
     final prior = priorPlan.roleTargets(before.slotId, before.role);

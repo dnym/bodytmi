@@ -1,6 +1,8 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
+import 'progression_anchor.dart';
 import 'progression_decision.dart';
+import 'reconciliation_receipt.dart';
 
 /// Explicit differences that stop a new prescription, session or rule from
 /// continuing an accepted progression track. None is ever resolved implicitly.
@@ -63,7 +65,7 @@ final class ProgressionReconciliation {
   /// An existing session whose frozen suggestions are also compared, or null
   /// when only the published prescription is a candidate for a later start.
   final TrainingSession? session;
-  final ProgressionDecision? track;
+  final ProgressionAnchor? track;
   final Set<String> controlledMetrics;
   final List<ReconciliationBlocker> blockers;
 
@@ -96,31 +98,7 @@ final class ProgressionReconciliation {
     'runId': runId,
     'asOf': asOf?.toUtc().toIso8601String(),
     'controlledMetrics': controlledMetrics.toList()..sort(),
-    'track': track == null
-        ? null
-        : {
-            'decisionId': track!.id,
-            'sourceSessionId': track!.session.id,
-            'sourceRevision': track!.session.revision.number,
-            'sourceSessionContentVersion': track!.session.contentVersion,
-            'resolvedAt': track!.resolvedAt!.toUtc().toIso8601String(),
-            'status': track!.status,
-            'ruleType': track!.ruleType,
-            'rule': track!.rule,
-            'sequence': track!.sequence,
-            'workingSetCount': track!.sets.length,
-            'state': {
-              'failedSessions': track!.failedSessions,
-              if (track!.ruleType == 'threshold') 'cursor': track!.cursor,
-              'nextSets': [
-                for (final set in track!.nextSets)
-                  metricsToJson({
-                    for (final metric in controlledMetrics)
-                      metric: set[metric]!,
-                  }),
-              ],
-            },
-          },
+    'track': track == null ? null : _trackView(track!, controlledMetrics),
     'candidate': {
       'sessionId': session?.id,
       'sessionContentVersion': session?.contentVersion,
@@ -166,7 +144,7 @@ ProgressionReconciliation assessProgressionReconciliation({
   required int revision,
   required String slotId,
   required String role,
-  ProgressionDecision? track,
+  ProgressionAnchor? track,
   TrainingSession? session,
   String? runId,
   DateTime? asOf,
@@ -214,11 +192,11 @@ ProgressionReconciliation assessProgressionReconciliation({
 
 List<ReconciliationBlocker> _reconciliationBlockers(
   ProgressionReconciliation candidate,
-  ProgressionDecision track,
+  ProgressionAnchor track,
 ) {
   final metrics = track.controlledMetrics, blockers = <ReconciliationBlocker>[];
   final priorCount = track.nextSets.length;
-  final priorAuthored = track.session.revision.definition.roleTargets(
+  final priorAuthored = track.pinnedRevision.definition.roleTargets(
     track.slotId,
     track.role,
   );
@@ -270,7 +248,7 @@ List<ReconciliationBlocker> _reconciliationBlockers(
   }
   final authored =
       candidate.prescription.definition.hasEffortTargets ||
-      track.session.revision.definition.hasEffortTargets;
+      track.pinnedRevision.definition.hasEffortTargets;
   final shared = proposedAuthored.length < priorAuthored.length
       ? proposedAuthored.length
       : priorAuthored.length;
@@ -379,6 +357,36 @@ List<ReconciliationBlocker> _reconciliationBlockers(
     );
   }
   return blockers;
+}
+
+/// The current baseline a candidate is compared with, whether it came from a
+/// resolved exposure or an explicit reconciliation receipt.
+Map<String, Object?> _trackView(ProgressionAnchor track, Set<String> metrics) {
+  final decision = track is ProgressionDecision ? track : null;
+  final receipt = track is ReconciliationReceipt ? track : null;
+  return {
+    'decisionId': track.id,
+    'sourceKind': receipt == null ? 'decision' : 'reconciliation',
+    'sourceSessionId': decision?.session.id ?? receipt?.sourceSessionId,
+    'sourceRevision':
+        decision?.session.revision.number ?? receipt?.revisionNumber,
+    'sourceSessionContentVersion': decision?.session.contentVersion,
+    'resolvedAt': track.resolvedAt!.toUtc().toIso8601String(),
+    'status': track.status,
+    'ruleType': track.ruleType,
+    'rule': track.rule,
+    'sequence': track.sequence,
+    'workingSetCount': track.sets.length,
+    if (receipt != null) 'acknowledgedKinds': receipt.acknowledgedKinds,
+    'state': {
+      'failedSessions': track.failedSessions,
+      if (track.ruleType == 'threshold') 'cursor': track.cursor,
+      'nextSets': [
+        for (final set in track.nextSets)
+          metricsToJson({for (final metric in metrics) metric: set[metric]!}),
+      ],
+    },
+  };
 }
 
 /// A conflict naming every explicit reconciliation kind that it needs.

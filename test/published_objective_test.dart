@@ -835,6 +835,7 @@ void publishedObjectiveTests() {
       db.execute('DROP TABLE derived_target_graphs');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.userVersion = 25;
       db.close();
       rejects(
@@ -875,6 +876,7 @@ void publishedObjectiveTests() {
         db.execute('DROP TABLE derived_target_graphs');
         db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         db.execute('DROP TABLE IF EXISTS window_checkpoints');
+        db.execute('DROP TABLE IF EXISTS progression_reconciliations');
         db.userVersion = 25;
         db.close();
         equal(
@@ -885,7 +887,7 @@ void publishedObjectiveTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          51,
+          52,
         );
       } finally {
         await store.close();

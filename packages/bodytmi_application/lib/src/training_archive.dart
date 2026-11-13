@@ -3,6 +3,7 @@ import 'derived_plan_session.dart';
 import 'session_codec.dart';
 import 'canonical_json.dart';
 import 'progression_decision.dart';
+import 'reconciliation_receipt.dart';
 import 'program_service.dart';
 import 'stored_body_mass_service.dart';
 import 'timing_service.dart';
@@ -29,7 +30,12 @@ final class TrainingArchive {
     List<WorkoutExecution> executions = const [],
     List<FamilyRevision> families = const [],
     List<DerivedTargetGraphRevision> graphs = const [],
-  }) : repeatCheckpoints = List<RepeatCheckpoint>.unmodifiable(
+    List<ReconciliationReceipt> reconciliations = const [],
+  }) : reconciliations = List<ReconciliationReceipt>.unmodifiable(
+         <ReconciliationReceipt>[...reconciliations]
+           ..sort((a, b) => a.id.compareTo(b.id)),
+       ),
+       repeatCheckpoints = List<RepeatCheckpoint>.unmodifiable(
          <RepeatCheckpoint>[...repeatCheckpoints]
            ..sort((a, b) => a.id.compareTo(b.id)),
        ),
@@ -111,6 +117,7 @@ final class TrainingArchive {
       'timers',
       'windowCheckpoints',
       'repeatCheckpoints',
+      'reconciliations',
       'executions',
       'families',
       'graphs',
@@ -172,6 +179,10 @@ final class TrainingArchive {
                 : jsonList(json, 'progressions')))
           ProgressionDecision.fromJson(item),
       ],
+      reconciliations: [
+        for (final item in optional('reconciliations'))
+          ReconciliationReceipt.fromJson(item),
+      ],
     );
   }
 
@@ -186,6 +197,7 @@ final class TrainingArchive {
   final List<TrainingSession> sessions;
   final List<String> finalizations;
   final List<ProgressionDecision> progressions;
+  final List<ReconciliationReceipt> reconciliations;
   final List<ProgramRevision> programRevisions;
   final List<ProgramRun> programRuns;
   final List<SessionProgramBinding> sessionPrograms;
@@ -203,6 +215,7 @@ final class TrainingArchive {
     'sessions': [for (final s in sessions) s.toJson()],
     'finalizations': finalizations,
     'progressions': [for (final d in progressions) d.toJson()],
+    'reconciliations': [for (final r in reconciliations) r.toJson()],
     'programRevisions': [for (final p in programRevisions) p.toJson()],
     'programRuns': [for (final r in programRuns) r.toJson()],
     'sessionPrograms': [for (final b in sessionPrograms) b.toJson()],
@@ -221,6 +234,7 @@ final class TrainingArchive {
     'sessions': sessions.length,
     'finalizations': finalizations.length,
     'progressions': progressions.length,
+    'reconciliations': reconciliations.length,
     'programRevisions': programRevisions.length,
     'programRuns': programRuns.length,
     'sessionPrograms': sessionPrograms.length,
@@ -263,9 +277,15 @@ final class TrainingArchive {
       sessions: sessions,
       finalizations: finalizations,
     );
+    validateProgressionReconciliations(
+      reconciliations,
+      progressions,
+      revisions,
+      sessions,
+    );
     validateProgressionDecisions(progressions, sessions, {
       for (final b in sessionPrograms) b.sessionId: b.runId,
-    });
+    }, reconciliations);
     final byRevision = <String, WorkoutRevision>{};
     final numbers = <String, int>{};
     for (final revision in revisions) {

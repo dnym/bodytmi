@@ -71,6 +71,12 @@ const schemaV48 = {
       'CREATE TABLE "repeat_checkpoints" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
 };
 
+const schemaV52 = {
+  ...schemaV48,
+  'progression_reconciliations':
+      'CREATE TABLE "progression_reconciliations" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -128,11 +134,12 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   44 => schemaV27, // v44 adds open-ended effort timers.
   45 => schemaV27, // v45 adds open-ended slot timing defaults.
   46 => schemaV46, // v46 adds inert scoped-clock checkpoints.
-  51 => schemaV48, // v51 associates repeats with sessions.
-  50 => schemaV48, // v50 adds running repeat clocks.
-  49 => schemaV48, // v49 adds repeat clock reservations.
-  48 => schemaV48, // v48 adds inert repeat checkpoints.
   47 => schemaV46, // v47 adds scoped-clock reservations.
+  48 => schemaV48, // v48 adds inert repeat checkpoints.
+  49 => schemaV48, // v49 adds repeat clock reservations.
+  50 => schemaV48, // v50 adds running repeat clocks.
+  51 => schemaV48, // v51 associates repeats with sessions.
+  52 => schemaV52, // v52 adds durable progression reconciliation receipts.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

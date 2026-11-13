@@ -2,7 +2,9 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'training_service.dart';
 import 'training_archive.dart';
 import 'progression_decision.dart';
+import 'progression_anchor.dart';
 import 'progression_reconciliation.dart';
+import 'reconciliation_receipt.dart';
 import 'program_service.dart';
 import 'canonical_json.dart';
 import 'stored_body_mass_service.dart';
@@ -28,6 +30,8 @@ abstract interface class TrainingRepository {
   Future<List<String>> finalizationIds();
   Future<List<ProgressionDecision>> progressionDecisions();
   Future<void> saveProgressionDecision(ProgressionDecision decision);
+  Future<List<ReconciliationReceipt>> progressionReconciliations();
+  Future<void> saveProgressionReconciliation(ReconciliationReceipt receipt);
   Future<List<ProgramRevision>> programRevisions();
   Future<void> insertProgramRevision(ProgramRevision revision);
   Future<WorkoutExecution?> execution(String id);
@@ -76,6 +80,7 @@ final class StoredTrainingService {
       timers: await repository.timingActivities(),
       windowCheckpoints: await repository.windowCheckpoints(),
       repeatCheckpoints: await repository.repeatCheckpoints(),
+      reconciliations: await repository.progressionReconciliations(),
       executions: await repository.executions(),
       programRuns: await repository.programRuns(),
       sessionPrograms: await repository.sessionPrograms(),
@@ -163,12 +168,16 @@ final class StoredTrainingService {
           !d.resolvedAt!.isAfter(startedAt) &&
           d.session.startedAt.isBefore(startedAt),
     );
+    final receipts = (await repository.progressionReconciliations()).where(
+      (r) => r.runId == runId && !r.reconciledAt.isAfter(startedAt),
+    );
     final sets = <TrainingSet>[];
-    final bySlot = {
+    final bySlot = <(String, String), ProgressionAnchor?>{
       for (final slot in prescription.definition.slots)
         for (final role in ['work', 'warmup', 'backoff', 'drop'])
-          (slot.id, role): latestApplication(
+          (slot.id, role): latestTrack(
             decisions,
+            receipts,
             prescription.definition.id,
             slot,
             runId: runId,
@@ -194,7 +203,7 @@ final class StoredTrainingService {
     final previousAuthored = {
       for (final entry in bySlot.entries)
         if (entry.value != null)
-          entry.key: entry.value!.session.revision.definition.roleTargets(
+          entry.key: entry.value!.pinnedRevision.definition.roleTargets(
             entry.key.$1,
             entry.key.$2,
           ),
@@ -347,7 +356,7 @@ final class StoredTrainingService {
     required List<TrainingSet> sets,
     required DerivedPlanRef reference,
     required String? runId,
-    required Map<(String, String), ProgressionDecision?> bySlot,
+    required Map<(String, String), ProgressionAnchor?> bySlot,
     required bool incrementSetVersions,
     Map<String, Object?>? reviewedPreview,
   }) async {
@@ -514,11 +523,15 @@ final class StoredTrainingService {
           !d.resolvedAt!.isAfter(current.startedAt) &&
           d.session.startedAt.isBefore(current.startedAt),
     );
-    final bySlot = {
+    final receipts = (await repository.progressionReconciliations()).where(
+      (r) => r.runId == runId && !r.reconciledAt.isAfter(current.startedAt),
+    );
+    final bySlot = <(String, String), ProgressionAnchor?>{
       for (final slot in current.revision.definition.slots)
         for (final role in ['work', 'warmup', 'backoff', 'drop'])
-          (slot.id, role): latestApplication(
+          (slot.id, role): latestTrack(
             decisions,
+            receipts,
             current.revision.definition.id,
             slot,
             runId: runId,
@@ -894,7 +907,7 @@ Never _startReconciliationRequired(
   WorkoutRevision prescription,
   String slotId,
   String role,
-  ProgressionDecision applied,
+  ProgressionAnchor applied,
   DateTime asOf,
   String? runId,
 ) {

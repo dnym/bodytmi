@@ -536,6 +536,7 @@ void numericDirectionTests() {
       old.execute('DROP TABLE derived_target_graphs');
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
+      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.userVersion = 15;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 15);
@@ -544,7 +545,7 @@ void numericDirectionTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          51,
+          52,
         );
       } finally {
         await upgraded.close();
@@ -624,6 +625,7 @@ void numericDirectionTests() {
         forged.execute('DROP TABLE derived_target_graphs');
         forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         forged.execute('DROP TABLE IF EXISTS window_checkpoints');
+        forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
         forged.userVersion = 15;
         forged.close();
         rejects(

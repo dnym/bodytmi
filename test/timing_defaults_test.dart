@@ -198,6 +198,7 @@ void timingDefaultsTests() {
       final db = sqlite3.open(path);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.execute('PRAGMA user_version = 44');
       db.close();
       store = await TrainingStore.open(path);
@@ -207,7 +208,7 @@ void timingDefaultsTests() {
       );
       equal(
         (await store.backup('${dir.path}/migrated'))['databaseSchemaVersion'],
-        51,
+        52,
       );
     } finally {
       await store.close();
@@ -317,6 +318,7 @@ void timingDefaultsTests() {
         final native = sqlite3.open('${dir.path}/native/database.sqlite');
         native.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         native.execute('DROP TABLE IF EXISTS window_checkpoints');
+        native.execute('DROP TABLE IF EXISTS progression_reconciliations');
         native.execute('PRAGMA user_version = 44');
         native.close();
         rejects(
@@ -600,6 +602,7 @@ void timingDefaultsTests() {
       old.execute('DROP TABLE derived_target_graphs');
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
+      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.userVersion = 12;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 12);
@@ -655,14 +658,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          51,
+          52,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/51',
+          'bodytmi-logical-export/52',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -703,6 +706,7 @@ void timingDefaultsTests() {
       forged.execute('DROP TABLE derived_target_graphs');
       forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       forged.execute('DROP TABLE IF EXISTS window_checkpoints');
+      forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
       forged.userVersion = 12;
       forged.close();
       rejects(

@@ -354,6 +354,7 @@ void derivedPlanBodyMassTests() {
       final db = sqlite3.open('$dir/derived-meta.sqlite');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.userVersion = 34;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/derived-meta.sqlite'));
@@ -785,10 +786,11 @@ void derivedPlanBodyMassTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 51);
+      equal(NativeBackup.validateDatabase(snapshot), 52);
       final db = sqlite3.open(snapshot);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.userVersion = 29;
       db.close();
       rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -982,6 +984,7 @@ void derivedPlanBodyMassTests() {
       ]);
       forgedDb.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       forgedDb.execute('DROP TABLE IF EXISTS window_checkpoints');
+      forgedDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
       forgedDb.userVersion = 29;
       forgedDb.close();
       rejects(() => NativeBackup.validateDatabase(forgedPath));
@@ -991,6 +994,7 @@ void derivedPlanBodyMassTests() {
       final db = sqlite3.open(path);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
+      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.userVersion = 29;
       db.close();
       equal(NativeBackup.validateDatabase(path), 29);

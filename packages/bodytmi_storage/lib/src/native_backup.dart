@@ -150,6 +150,7 @@ final class NativeBackup {
           49,
           50,
           51,
+          52,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -294,6 +295,7 @@ final class NativeBackup {
             49,
             50,
             51,
+            52,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -319,6 +321,7 @@ final class NativeBackup {
         if (db.userVersion >= 7) 'timing_activities',
         if (db.userVersion >= 46) 'window_checkpoints',
         if (db.userVersion >= 48) 'repeat_checkpoints',
+        if (db.userVersion >= 52) 'progression_reconciliations',
         if (db.userVersion >= 8) 'workout_executions',
         if (db.userVersion >= 12) 'family_revisions',
         if (db.userVersion >= 27) 'derived_target_graphs',
@@ -535,6 +538,19 @@ final class NativeBackup {
       } finally {
         sessions.close();
       }
+      final reconciliations = <ReconciliationReceipt>[];
+      if (db.userVersion >= 52) {
+        for (final row in db.select(
+          'SELECT id,snapshot FROM progression_reconciliations',
+        )) {
+          final receipt = ReconciliationReceipt.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (receipt.id != row['id'])
+            invalid('Reconciliation row identity does not match its key.');
+          reconciliations.add(receipt);
+        }
+      }
       if (db.userVersion >= 2) {
         final decisions = <ProgressionDecision>[];
         for (final row in db.select(
@@ -603,7 +619,9 @@ final class NativeBackup {
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ];
         if (db.userVersion < 3) {
-          validateProgressionDecisions(decisions, sources);
+          validateProgressionDecisions(decisions, sources, const {}, [
+            ...reconciliations,
+          ]);
         } else {
           final programs = <ProgramRevision>[];
           for (final row in db.select('SELECT * FROM program_revisions')) {
@@ -674,9 +692,19 @@ final class NativeBackup {
             sessions: allSessions,
             finalizations: finalizations,
           );
-          validateProgressionDecisions(decisions, allSessions, {
-            for (final b in bindings) b.sessionId: b.runId,
-          });
+          validateProgressionDecisions(
+            decisions,
+            allSessions,
+            {for (final b in bindings) b.sessionId: b.runId},
+            [...reconciliations],
+          );
+          if (reconciliations.isNotEmpty)
+            validateProgressionReconciliations(
+              reconciliations,
+              decisions,
+              allRevisions,
+              allSessions,
+            );
         }
       }
       if (db.userVersion >= 4) {

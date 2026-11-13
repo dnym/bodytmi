@@ -53,6 +53,7 @@ Future<void> _v1(String path) async {
     db.execute('PRAGMA application_id = 1112821065');
     db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
     db.execute('DROP TABLE IF EXISTS window_checkpoints');
+    db.execute('DROP TABLE IF EXISTS progression_reconciliations');
     db.execute('PRAGMA user_version = 1');
     final rev = revision();
     db.execute('INSERT INTO revisions VALUES (?,?,?)', [
@@ -511,7 +512,7 @@ void storedProgressionTests() {
         );
         final original = canonicalJson((await store.archive()).toJson());
         final manifest = await store.backup('${dir.path}/native');
-        equal(manifest['databaseSchemaVersion'], 51);
+        equal(manifest['databaseSchemaVersion'], 52);
         await LogicalArchiveFiles.export(
           await store.archive(),
           '${dir.path}/logical.json',
@@ -619,7 +620,7 @@ void storedProgressionTests() {
         }
         final db = sqlite3.open(old);
         try {
-          equal(db.userVersion, 51);
+          equal(db.userVersion, 52);
         } finally {
           db.close();
         }
