@@ -739,7 +739,7 @@ void linkConsumptionTests() {
         equal(archived.linkRetirements.length, 1);
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          55,
+          56,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
       } finally {
@@ -748,7 +748,7 @@ void linkConsumptionTests() {
       try {
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          55,
+          56,
         );
         final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
         try {
@@ -816,6 +816,7 @@ void linkConsumptionTests() {
         final dropped = sqlite3.open('${dir.path}/dropped.sqlite');
         dropped.execute('DROP TABLE shared_lever_applications');
         dropped.execute('DROP TABLE link_retirement_anchors');
+        dropped.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         dropped.userVersion = 53;
         dropped.close();
         check(
@@ -841,7 +842,7 @@ void linkConsumptionTests() {
             (await plainStore.backup(
               '${dir.path}/plain-native',
             ))['databaseSchemaVersion'],
-            55,
+            56,
           );
         } finally {
           await plainStore.close();
@@ -849,6 +850,7 @@ void linkConsumptionTests() {
         final aged = sqlite3.open('${dir.path}/plain-native/database.sqlite');
         aged.execute('DROP TABLE shared_lever_applications');
         aged.execute('DROP TABLE link_retirement_anchors');
+        aged.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         aged.userVersion = 53;
         aged.close();
         equal(
@@ -874,7 +876,7 @@ void linkConsumptionTests() {
             (await migrated.backup(
               '${dir.path}/upgraded',
             ))['databaseSchemaVersion'],
-            55,
+            56,
           );
           final state = await LeverLinkService(migrated).state('idle-link');
           equal((state['chain']! as List).length, 0);

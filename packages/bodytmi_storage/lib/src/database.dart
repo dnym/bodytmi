@@ -172,6 +172,15 @@ class LinkRetirementAnchors extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('StoredProgramUpgradeReceipt')
+class ProgramUpgradeReceipts extends Table {
+  TextColumn get runId => text()();
+  TextColumn get requestId => text()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {runId, requestId};
+}
+
 @DriftDatabase(
   tables: [
     Revisions,
@@ -193,18 +202,19 @@ class LinkRetirementAnchors extends Table {
     LeverLinkRevisions,
     SharedLeverApplications,
     LinkRetirementAnchors,
+    ProgramUpgradeReceipts,
   ],
 )
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 55;
+  int get schemaVersion => 56;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
-      await customStatement('PRAGMA user_version = 55');
+      await customStatement('PRAGMA user_version = 56');
       await validateMigration();
     }),
     onUpgrade: (m, from, to) async {
@@ -263,8 +273,9 @@ class TrainingDatabase extends _$TrainingDatabase {
             52,
             53,
             54,
+            55,
           }.contains(from) ||
-          to != 55)
+          to != 56)
         throw StateError('Unsupported database migration $from -> $to.');
       await transaction(() async {
         final schema = await customSelect(
@@ -287,13 +298,14 @@ class TrainingDatabase extends _$TrainingDatabase {
         if (from < 48) await m.createTable(repeatCheckpoints);
         if (from < 52) await m.createTable(progressionReconciliations);
         if (from < 53) await m.createTable(leverLinkRevisions);
+        if (from < 56) await m.createTable(programUpgradeReceipts);
         if (from < 54) {
           await m.createTable(sharedLeverApplications);
           await m.createTable(linkRetirementAnchors);
         }
         // Drift also writes this after the callback. Writing it within our
         // transaction prevents a crash leaving new DDL with the old version.
-        await customStatement('PRAGMA user_version = 55');
+        await customStatement('PRAGMA user_version = 56');
         await validateMigration();
       });
     },
@@ -310,7 +322,7 @@ class TrainingDatabase extends _$TrainingDatabase {
     final schema = await customSelect(
       'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
     ).get();
-    validateSchema(schema.map((row) => row.data), 55);
+    validateSchema(schema.map((row) => row.data), 56);
     if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
       throw const BodyTmiException(
         'storage',

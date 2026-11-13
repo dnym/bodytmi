@@ -640,6 +640,7 @@ void maxEffortTests() {
       db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.execute('DROP TABLE IF EXISTS shared_lever_applications');
       db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       db.userVersion = 24;
       db.close();
       rejects(
@@ -685,6 +686,7 @@ void maxEffortTests() {
         old.execute('DROP TABLE IF EXISTS lever_link_revisions');
         old.execute('DROP TABLE IF EXISTS shared_lever_applications');
         old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+        old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         old.userVersion = 24;
         old.close();
         equal(
@@ -695,7 +697,7 @@ void maxEffortTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          55,
+          56,
         );
       } finally {
         await store.close();

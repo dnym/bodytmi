@@ -424,6 +424,7 @@ void storedThresholdTests() {
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
       old.execute('DROP TABLE IF EXISTS shared_lever_applications');
       old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       old.userVersion = 13;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 13);
@@ -448,7 +449,7 @@ void storedThresholdTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          55,
+          56,
         );
       } finally {
         await upgraded.close();
@@ -465,14 +466,14 @@ void storedThresholdTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          55,
+          56,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/55',
+          'bodytmi-logical-export/56',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {
@@ -516,6 +517,7 @@ void storedThresholdTests() {
       forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
       forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
       forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      forged.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       forged.userVersion = 13;
       forged.close();
       rejects(

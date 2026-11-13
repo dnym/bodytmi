@@ -254,6 +254,7 @@ void familyTests() {
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
       old.execute('DROP TABLE IF EXISTS shared_lever_applications');
       old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       old.userVersion = 11;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 11);
@@ -281,7 +282,7 @@ void familyTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          55,
+          56,
         );
       } finally {
         await migrated.close();
@@ -300,7 +301,7 @@ void familyTests() {
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/55',
+          'bodytmi-logical-export/56',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {

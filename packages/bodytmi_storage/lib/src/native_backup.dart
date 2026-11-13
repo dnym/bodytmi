@@ -154,6 +154,7 @@ final class NativeBackup {
           53,
           54,
           55,
+          56,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -302,6 +303,7 @@ final class NativeBackup {
             53,
             54,
             55,
+            56,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -331,6 +333,7 @@ final class NativeBackup {
         if (db.userVersion >= 53) 'lever_link_revisions',
         if (db.userVersion >= 54) 'shared_lever_applications',
         if (db.userVersion >= 54) 'link_retirement_anchors',
+        if (db.userVersion >= 56) 'program_upgrade_receipts',
         if (db.userVersion >= 8) 'workout_executions',
         if (db.userVersion >= 12) 'family_revisions',
         if (db.userVersion >= 27) 'derived_target_graphs',
@@ -694,6 +697,20 @@ final class NativeBackup {
             for (final row in db.select('SELECT session_id FROM finalizations'))
               row['session_id'] as String,
           ];
+          final upgrades = <ProgramUpgradeReceipt>[];
+          if (db.userVersion >= 56) {
+            for (final row in db.select(
+              'SELECT run_id,request_id,snapshot FROM program_upgrade_receipts',
+            )) {
+              final u = ProgramUpgradeReceipt.fromJson(
+                jsonDecode(row['snapshot'] as String),
+              );
+              if (u.runId != row['run_id'] || u.requestId != row['request_id'])
+                invalid('Program upgrade row identity mismatch.');
+              upgrades.add(u);
+            }
+          }
+          validateProgramUpgrades(programs, runs, upgrades);
           validateProgramData(
             programs: programs,
             runs: runs,

@@ -183,6 +183,109 @@ final class ProgramService {
         await repository.saveProgramRun(next);
         return next;
       });
+
+  /// Explicitly re-pin one run onto a newer published revision of the same
+  /// program. Completed occurrences must retain their exact pinned day, the
+  /// current day must be resolved first, and no cursor state changes.
+  Future<ProgramUpgradeReceipt> upgrade(
+    String runId,
+    int expectedVersion,
+    int toRevision,
+    String requestId,
+    DateTime at,
+  ) => repository.transaction(() async {
+    identifier({'id': requestId}, 'id');
+    if (toRevision < 1) invalid('Program upgrade revision must be positive.');
+    final current = await run(runId);
+    final prior = (await repository.programUpgrades())
+        .where((u) => u.runId == runId && u.requestId == requestId)
+        .firstOrNull;
+    if (prior != null) {
+      if (prior.toRevision != toRevision || prior.occurredAt != at)
+        programConflict(
+          'Upgrade request identity was reused with different inputs.',
+        );
+      return prior;
+    }
+    if (current.contentVersion != expectedVersion)
+      programConflict('Run version changed.');
+    if (current.status == 'completed')
+      programConflict(
+        'Completed finite runs cannot upgrade; create a new run.',
+      );
+    if (at.isBefore(current.startedAt))
+      invalid('Upgrade cannot precede its program run.');
+    final target = await revision(current.program.definition.id, toRevision);
+    if (target.number == current.program.number)
+      programConflict('Run already pins this program revision.');
+    if (!current.loop && target.definition.dayCount <= current.cursor)
+      programConflict(
+        'Program upgrade must publish enough days to hold the run cursor.',
+      );
+    if (current.cursor > 0) {
+      final previous = current.program.definition.plan.occurrences().toList();
+      final next = target.definition.plan.occurrences().toList();
+      if (previous.length != next.length)
+        programConflict(
+          'Program upgrade cannot change cycle length after a run has advanced.',
+        );
+      final covered = current.cursor < previous.length
+          ? current.cursor
+          : previous.length;
+      for (var index = 0; index < covered; index++) {
+        if (canonicalJson(previous[index].toJson()) !=
+            canonicalJson(next[index].toJson())) {
+          programConflict(
+            'Completed program days must retain their pinned prescription.',
+          );
+        }
+      }
+    }
+    if ((await repository.sessionPrograms()).any(
+      (b) => b.runId == runId && b.ordinal == current.cursor,
+    ))
+      programConflict(
+        'Current program day already has a session; finish or skip it '
+        'before upgrading.',
+      );
+    final receipt = ProgramUpgradeReceipt(
+      runId: runId,
+      programId: current.program.definition.id,
+      fromRevision: current.program.number,
+      toRevision: target.number,
+      occurredAt: at,
+      requestId: requestId,
+    );
+    await repository.insertProgramUpgrade(receipt);
+    await repository.saveProgramRun(
+      ProgramRun(
+        id: current.id,
+        program: target,
+        startedAt: current.startedAt,
+        loop: current.loop,
+        cursor: current.cursor,
+        contentVersion: current.contentVersion + 1,
+        status: current.status,
+      ),
+    );
+    return receipt;
+  });
+
+  Future<List<ProgramUpgradeReceipt>> upgrades(String runId) =>
+      repository.transaction(() async {
+        identifier({'id': runId}, 'id');
+        await run(runId);
+        final upgrades =
+            (await repository.programUpgrades())
+                .where((u) => u.runId == runId)
+                .toList()
+              ..sort((a, b) {
+                final time = a.occurredAt.compareTo(b.occurredAt);
+                return time == 0 ? a.requestId.compareTo(b.requestId) : time;
+              });
+        return upgrades;
+      });
+
   Future<TrainingSession> start(
     String runId,
     int expectedVersion,
@@ -446,6 +549,50 @@ void validateProgramData({
           (i > 0 && rows[i].occurredAt.isBefore(rows[i - 1].occurredAt)))
         invalid('Program receipt sequence is inconsistent.');
     }
+  }
+}
+
+/// Check durable explicit run re-pins: every upgrade names one run and two
+/// published revisions of its own program, times are strictly increasing,
+/// each upgrade continues the previous chain, and the run's current pin is
+/// exactly the newest target. Creation-time pins are not receipted.
+void validateProgramUpgrades(
+  List<ProgramRevision> programs,
+  List<ProgramRun> runs,
+  List<ProgramUpgradeReceipt> upgrades,
+) {
+  final programMap = <String, ProgramRevision>{
+    for (final p in programs) '${p.definition.id}/${p.number}': p,
+  };
+  final runMap = {for (final r in runs) r.id: r};
+  final identities = <String>{};
+  final byRun = <String, List<ProgramUpgradeReceipt>>{};
+  for (final u in upgrades) {
+    if (!identities.add('${u.runId}/${u.requestId}'))
+      invalid('Duplicate program upgrade request identity.');
+    final run = runMap[u.runId];
+    if (run == null ||
+        u.programId != run.program.definition.id ||
+        !programMap.containsKey('${u.programId}/${u.fromRevision}') ||
+        !programMap.containsKey('${u.programId}/${u.toRevision}') ||
+        u.occurredAt.isBefore(run.startedAt))
+      invalid('Program upgrade refers to a missing run or revision.');
+    byRun.putIfAbsent(u.runId, () => []).add(u);
+  }
+  for (final entry in byRun.entries) {
+    final rows = entry.value
+      ..sort((a, b) {
+        final time = a.occurredAt.compareTo(b.occurredAt);
+        return time == 0 ? a.requestId.compareTo(b.requestId) : time;
+      });
+    for (var i = 1; i < rows.length; i++) {
+      if (!rows[i].occurredAt.isAfter(rows[i - 1].occurredAt) ||
+          rows[i].fromRevision != rows[i - 1].toRevision) {
+        invalid('Program upgrade chain is inconsistent.');
+      }
+    }
+    if (rows.last.toRevision != runMap[entry.key]!.program.number)
+      invalid('Program run pin does not match its upgrade chain.');
   }
 }
 

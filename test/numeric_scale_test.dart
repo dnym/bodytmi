@@ -663,6 +663,7 @@ void numericScaleTests() {
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
       old.execute('DROP TABLE IF EXISTS shared_lever_applications');
       old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       old.userVersion = 17;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 17);
@@ -671,7 +672,7 @@ void numericScaleTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          55,
+          56,
         );
       } finally {
         await upgraded.close();
@@ -755,6 +756,7 @@ void numericScaleTests() {
         forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
         forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
         forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+        forged.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         forged.userVersion = 17;
         forged.close();
         rejects(
@@ -1134,6 +1136,7 @@ void fixedRangeTests() {
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
       old.execute('DROP TABLE IF EXISTS shared_lever_applications');
       old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       old.userVersion = 18;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 18);
@@ -1142,7 +1145,7 @@ void fixedRangeTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          55,
+          56,
         );
       } finally {
         await upgraded.close();
@@ -1229,6 +1232,7 @@ void fixedRangeTests() {
         forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
         forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
         forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+        forged.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         forged.userVersion = 18;
         forged.close();
         rejects(

@@ -96,6 +96,12 @@ const schemaV55 = {
   // Same tables; v55 advertises ordinal progression payloads.
 };
 
+const schemaV56 = {
+  ...schemaV55,
+  'program_upgrade_receipts':
+      'CREATE TABLE "program_upgrade_receipts" ("run_id" TEXT NOT NULL, "request_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("run_id", "request_id"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -162,6 +168,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   53 => schemaV53, // v53 adds durable shared lever link revisions.
   54 => schemaV54, // v54 adds durable shared lever chains and retirements.
   55 => schemaV55, // v55 adds ordinal/categorical progression levers.
+  56 => schemaV56, // v56 adds durable program run upgrade receipts.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

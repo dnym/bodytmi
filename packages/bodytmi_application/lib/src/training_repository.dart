@@ -66,6 +66,8 @@ abstract interface class TrainingRepository {
   Future<void> insertSessionProgram(SessionProgramBinding binding);
   Future<List<ProgramReceipt>> programReceipts();
   Future<void> insertProgramReceipt(ProgramReceipt receipt);
+  Future<List<ProgramUpgradeReceipt>> programUpgrades();
+  Future<void> insertProgramUpgrade(ProgramUpgradeReceipt receipt);
   Future<void> insertRevision(WorkoutRevision revision);
   Future<TrainingSession?> session(String id);
   Future<List<TrainingSession>> sessions();
@@ -121,6 +123,7 @@ final class StoredTrainingService {
       programRuns: await repository.programRuns(),
       sessionPrograms: await repository.sessionPrograms(),
       programReceipts: await repository.programReceipts(),
+      programUpgrades: await repository.programUpgrades(),
       graphs: await repository.derivedTargetGraphRevisions(),
     ),
   );

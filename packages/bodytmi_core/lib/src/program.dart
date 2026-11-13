@@ -254,6 +254,60 @@ final class ProgramRevision {
   };
 }
 
+/// Durable identity for one explicit re-pin of a run onto another published
+/// revision of the same program. Request identity makes retries return the
+/// identical receipt; upgrades never advance or reset a run cursor.
+final class ProgramUpgradeReceipt {
+  ProgramUpgradeReceipt({
+    required this.runId,
+    required this.programId,
+    required this.fromRevision,
+    required this.toRevision,
+    required this.occurredAt,
+    required this.requestId,
+  }) {
+    identifier({'id': runId}, 'id');
+    identifier({'id': programId}, 'id');
+    identifier({'id': requestId}, 'id');
+    if (fromRevision < 1 || toRevision < 1 || fromRevision == toRevision)
+      invalid('Program upgrade revisions must be distinct positive integers.');
+  }
+  factory ProgramUpgradeReceipt.fromJson(Object? input) {
+    final j = jsonObject(input, 'program upgrade receipt');
+    checkKeys(j, {
+      'schemaVersion',
+      'runId',
+      'programId',
+      'fromRevision',
+      'toRevision',
+      'occurredAt',
+      'requestId',
+    });
+    if (j['schemaVersion'] != 1)
+      invalid('Unsupported program upgrade receipt version.');
+    return ProgramUpgradeReceipt(
+      runId: identifier(j, 'runId'),
+      programId: identifier(j, 'programId'),
+      fromRevision: positiveProgramInt(j, 'fromRevision'),
+      toRevision: positiveProgramInt(j, 'toRevision'),
+      occurredAt: parseInstant(j['occurredAt'], 'occurredAt'),
+      requestId: identifier(j, 'requestId'),
+    );
+  }
+  final String runId, programId, requestId;
+  final int fromRevision, toRevision;
+  final DateTime occurredAt;
+  Map<String, Object?> toJson() => {
+    'schemaVersion': 1,
+    'runId': runId,
+    'programId': programId,
+    'fromRevision': fromRevision,
+    'toRevision': toRevision,
+    'occurredAt': occurredAt.toUtc().toIso8601String(),
+    'requestId': requestId,
+  };
+}
+
 final class ProgramRun {
   ProgramRun({
     required this.id,

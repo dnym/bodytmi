@@ -358,6 +358,7 @@ void derivedPlanBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.execute('DROP TABLE IF EXISTS shared_lever_applications');
       db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       db.userVersion = 34;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/derived-meta.sqlite'));
@@ -789,7 +790,7 @@ void derivedPlanBodyMassTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 55);
+      equal(NativeBackup.validateDatabase(snapshot), 56);
       final db = sqlite3.open(snapshot);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -797,6 +798,7 @@ void derivedPlanBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.execute('DROP TABLE IF EXISTS shared_lever_applications');
       db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       db.userVersion = 29;
       db.close();
       rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -994,6 +996,7 @@ void derivedPlanBodyMassTests() {
       forgedDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
       forgedDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
       forgedDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      forgedDb.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       forgedDb.userVersion = 29;
       forgedDb.close();
       rejects(() => NativeBackup.validateDatabase(forgedPath));
@@ -1007,6 +1010,7 @@ void derivedPlanBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.execute('DROP TABLE IF EXISTS shared_lever_applications');
       db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       db.userVersion = 29;
       db.close();
       equal(NativeBackup.validateDatabase(path), 29);

@@ -4896,6 +4896,280 @@ class LinkRetirementAnchorsCompanion
   }
 }
 
+class $ProgramUpgradeReceiptsTable extends ProgramUpgradeReceipts
+    with TableInfo<$ProgramUpgradeReceiptsTable, StoredProgramUpgradeReceipt> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProgramUpgradeReceiptsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _requestIdMeta = const VerificationMeta(
+    'requestId',
+  );
+  @override
+  late final GeneratedColumn<String> requestId = GeneratedColumn<String>(
+    'request_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [runId, requestId, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'program_upgrade_receipts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredProgramUpgradeReceipt> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_runIdMeta);
+    }
+    if (data.containsKey('request_id')) {
+      context.handle(
+        _requestIdMeta,
+        requestId.isAcceptableOrUnknown(data['request_id']!, _requestIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_requestIdMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {runId, requestId};
+  @override
+  StoredProgramUpgradeReceipt map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredProgramUpgradeReceipt(
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      )!,
+      requestId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}request_id'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $ProgramUpgradeReceiptsTable createAlias(String alias) {
+    return $ProgramUpgradeReceiptsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredProgramUpgradeReceipt extends DataClass
+    implements Insertable<StoredProgramUpgradeReceipt> {
+  final String runId;
+  final String requestId;
+  final String snapshot;
+  const StoredProgramUpgradeReceipt({
+    required this.runId,
+    required this.requestId,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['run_id'] = Variable<String>(runId);
+    map['request_id'] = Variable<String>(requestId);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  ProgramUpgradeReceiptsCompanion toCompanion(bool nullToAbsent) {
+    return ProgramUpgradeReceiptsCompanion(
+      runId: Value(runId),
+      requestId: Value(requestId),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredProgramUpgradeReceipt.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredProgramUpgradeReceipt(
+      runId: serializer.fromJson<String>(json['runId']),
+      requestId: serializer.fromJson<String>(json['requestId']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'runId': serializer.toJson<String>(runId),
+      'requestId': serializer.toJson<String>(requestId),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredProgramUpgradeReceipt copyWith({
+    String? runId,
+    String? requestId,
+    String? snapshot,
+  }) => StoredProgramUpgradeReceipt(
+    runId: runId ?? this.runId,
+    requestId: requestId ?? this.requestId,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredProgramUpgradeReceipt copyWithCompanion(
+    ProgramUpgradeReceiptsCompanion data,
+  ) {
+    return StoredProgramUpgradeReceipt(
+      runId: data.runId.present ? data.runId.value : this.runId,
+      requestId: data.requestId.present ? data.requestId.value : this.requestId,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredProgramUpgradeReceipt(')
+          ..write('runId: $runId, ')
+          ..write('requestId: $requestId, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(runId, requestId, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredProgramUpgradeReceipt &&
+          other.runId == this.runId &&
+          other.requestId == this.requestId &&
+          other.snapshot == this.snapshot);
+}
+
+class ProgramUpgradeReceiptsCompanion
+    extends UpdateCompanion<StoredProgramUpgradeReceipt> {
+  final Value<String> runId;
+  final Value<String> requestId;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const ProgramUpgradeReceiptsCompanion({
+    this.runId = const Value.absent(),
+    this.requestId = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProgramUpgradeReceiptsCompanion.insert({
+    required String runId,
+    required String requestId,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : runId = Value(runId),
+       requestId = Value(requestId),
+       snapshot = Value(snapshot);
+  static Insertable<StoredProgramUpgradeReceipt> custom({
+    Expression<String>? runId,
+    Expression<String>? requestId,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (runId != null) 'run_id': runId,
+      if (requestId != null) 'request_id': requestId,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProgramUpgradeReceiptsCompanion copyWith({
+    Value<String>? runId,
+    Value<String>? requestId,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return ProgramUpgradeReceiptsCompanion(
+      runId: runId ?? this.runId,
+      requestId: requestId ?? this.requestId,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (requestId.present) {
+      map['request_id'] = Variable<String>(requestId.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProgramUpgradeReceiptsCompanion(')
+          ..write('runId: $runId, ')
+          ..write('requestId: $requestId, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
@@ -4939,6 +5213,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
       $SharedLeverApplicationsTable(this);
   late final $LinkRetirementAnchorsTable linkRetirementAnchors =
       $LinkRetirementAnchorsTable(this);
+  late final $ProgramUpgradeReceiptsTable programUpgradeReceipts =
+      $ProgramUpgradeReceiptsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4963,6 +5239,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     leverLinkRevisions,
     sharedLeverApplications,
     linkRetirementAnchors,
+    programUpgradeReceipts,
   ];
 }
 
@@ -10194,6 +10471,199 @@ typedef $$LinkRetirementAnchorsTableProcessedTableManager =
       StoredLinkRetirementAnchor,
       PrefetchHooks Function()
     >;
+typedef $$ProgramUpgradeReceiptsTableCreateCompanionBuilder =
+    ProgramUpgradeReceiptsCompanion Function({
+      required String runId,
+      required String requestId,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$ProgramUpgradeReceiptsTableUpdateCompanionBuilder =
+    ProgramUpgradeReceiptsCompanion Function({
+      Value<String> runId,
+      Value<String> requestId,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$ProgramUpgradeReceiptsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $ProgramUpgradeReceiptsTable> {
+  $$ProgramUpgradeReceiptsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get requestId => $composableBuilder(
+    column: $table.requestId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ProgramUpgradeReceiptsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $ProgramUpgradeReceiptsTable> {
+  $$ProgramUpgradeReceiptsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get requestId => $composableBuilder(
+    column: $table.requestId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ProgramUpgradeReceiptsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $ProgramUpgradeReceiptsTable> {
+  $$ProgramUpgradeReceiptsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get runId =>
+      $composableBuilder(column: $table.runId, builder: (column) => column);
+
+  GeneratedColumn<String> get requestId =>
+      $composableBuilder(column: $table.requestId, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$ProgramUpgradeReceiptsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $ProgramUpgradeReceiptsTable,
+          StoredProgramUpgradeReceipt,
+          $$ProgramUpgradeReceiptsTableFilterComposer,
+          $$ProgramUpgradeReceiptsTableOrderingComposer,
+          $$ProgramUpgradeReceiptsTableAnnotationComposer,
+          $$ProgramUpgradeReceiptsTableCreateCompanionBuilder,
+          $$ProgramUpgradeReceiptsTableUpdateCompanionBuilder,
+          (
+            StoredProgramUpgradeReceipt,
+            BaseReferences<
+              _$TrainingDatabase,
+              $ProgramUpgradeReceiptsTable,
+              StoredProgramUpgradeReceipt
+            >,
+          ),
+          StoredProgramUpgradeReceipt,
+          PrefetchHooks Function()
+        > {
+  $$ProgramUpgradeReceiptsTableTableManager(
+    _$TrainingDatabase db,
+    $ProgramUpgradeReceiptsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProgramUpgradeReceiptsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ProgramUpgradeReceiptsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ProgramUpgradeReceiptsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> runId = const Value.absent(),
+                Value<String> requestId = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ProgramUpgradeReceiptsCompanion(
+                runId: runId,
+                requestId: requestId,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String runId,
+                required String requestId,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => ProgramUpgradeReceiptsCompanion.insert(
+                runId: runId,
+                requestId: requestId,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ProgramUpgradeReceiptsTable,
+                    StoredProgramUpgradeReceipt
+                  >(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $ProgramUpgradeReceiptsTable,
+                    StoredProgramUpgradeReceipt
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ProgramUpgradeReceiptsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $ProgramUpgradeReceiptsTable,
+      StoredProgramUpgradeReceipt,
+      $$ProgramUpgradeReceiptsTableFilterComposer,
+      $$ProgramUpgradeReceiptsTableOrderingComposer,
+      $$ProgramUpgradeReceiptsTableAnnotationComposer,
+      $$ProgramUpgradeReceiptsTableCreateCompanionBuilder,
+      $$ProgramUpgradeReceiptsTableUpdateCompanionBuilder,
+      (
+        StoredProgramUpgradeReceipt,
+        BaseReferences<
+          _$TrainingDatabase,
+          $ProgramUpgradeReceiptsTable,
+          StoredProgramUpgradeReceipt
+        >,
+      ),
+      StoredProgramUpgradeReceipt,
+      PrefetchHooks Function()
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -10243,4 +10713,9 @@ class $TrainingDatabaseManager {
       );
   $$LinkRetirementAnchorsTableTableManager get linkRetirementAnchors =>
       $$LinkRetirementAnchorsTableTableManager(_db, _db.linkRetirementAnchors);
+  $$ProgramUpgradeReceiptsTableTableManager get programUpgradeReceipts =>
+      $$ProgramUpgradeReceiptsTableTableManager(
+        _db,
+        _db.programUpgradeReceipts,
+      );
 }

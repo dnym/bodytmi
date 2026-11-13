@@ -54,7 +54,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 55) {
+            if (native.userVersion > 56) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -115,7 +115,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 55);
+    validateSchema(schema.map((row) => row.data), 56);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -697,6 +697,31 @@ final class TrainingStore implements TrainingRepository {
             ordinal: receipt.ordinal,
             operationKey: receipt.operationKey,
             sessionId: Value(receipt.sessionId),
+            snapshot: _snapshot(receipt.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<ProgramUpgradeReceipt>> programUpgrades() async {
+    final result = <ProgramUpgradeReceipt>[];
+    for (final row in await _db.select(_db.programUpgradeReceipts).get()) {
+      final r = ProgramUpgradeReceipt.fromJson(jsonDecode(row.snapshot));
+      if (r.runId != row.runId || r.requestId != row.requestId)
+        invalid('Stored program upgrade identity mismatch.');
+      result.add(r);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> insertProgramUpgrade(ProgramUpgradeReceipt receipt) async {
+    await _db
+        .into(_db.programUpgradeReceipts)
+        .insert(
+          ProgramUpgradeReceiptsCompanion.insert(
+            runId: receipt.runId,
+            requestId: receipt.requestId,
             snapshot: _snapshot(receipt.toJson()),
           ),
         );

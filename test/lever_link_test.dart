@@ -738,7 +738,7 @@ void leverLinkTests() {
         before = canonicalJson(archived.toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          55,
+          56,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
         await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
@@ -748,7 +748,7 @@ void leverLinkTests() {
       try {
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          55,
+          56,
         );
         final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
         try {
@@ -797,6 +797,7 @@ void leverLinkTests() {
         dropped.execute('DROP TABLE lever_link_revisions');
         dropped.execute('DROP TABLE IF EXISTS shared_lever_applications');
         dropped.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+        dropped.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         dropped.userVersion = 52;
         dropped.close();
         equal(_nativeError('${dir.path}/dropped.sqlite'), 'ok:52');
@@ -809,7 +810,7 @@ void leverLinkTests() {
             (await migrated.backup(
               '${dir.path}/upgraded',
             ))['databaseSchemaVersion'],
-            55,
+            56,
           );
         } finally {
           await migrated.close();

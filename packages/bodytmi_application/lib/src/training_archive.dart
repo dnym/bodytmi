@@ -27,6 +27,7 @@ final class TrainingArchive {
     List<ProgramRun> programRuns = const [],
     List<SessionProgramBinding> sessionPrograms = const [],
     List<ProgramReceipt> programReceipts = const [],
+    List<ProgramUpgradeReceipt> programUpgrades = const [],
     List<BodyMassRecord> bodyMass = const [],
     List<TimingActivity> timers = const [],
     List<WindowCheckpoint> windowCheckpoints = const [],
@@ -121,6 +122,14 @@ final class TrainingArchive {
            final d = a.runId.compareTo(b.runId);
            return d == 0 ? a.ordinal.compareTo(b.ordinal) : d;
          }),
+       ),
+       programUpgrades = List<ProgramUpgradeReceipt>.unmodifiable(
+         <ProgramUpgradeReceipt>[...programUpgrades]..sort((a, b) {
+           final d = a.runId.compareTo(b.runId);
+           if (d != 0) return d;
+           final t = a.occurredAt.compareTo(b.occurredAt);
+           return t == 0 ? a.requestId.compareTo(b.requestId) : t;
+         }),
        ) {
     _validate();
   }
@@ -136,6 +145,7 @@ final class TrainingArchive {
       'programRuns',
       'sessionPrograms',
       'programReceipts',
+      'programUpgrades',
       'bodyMass',
       'timers',
       'windowCheckpoints',
@@ -198,6 +208,10 @@ final class TrainingArchive {
       programReceipts: [
         for (final j in optional('programReceipts')) ProgramReceipt.fromJson(j),
       ],
+      programUpgrades: [
+        for (final j in optional('programUpgrades'))
+          ProgramUpgradeReceipt.fromJson(j),
+      ],
       progressions: [
         for (final item
             in (!json.containsKey('progressions')
@@ -242,6 +256,7 @@ final class TrainingArchive {
   final List<ProgramRun> programRuns;
   final List<SessionProgramBinding> sessionPrograms;
   final List<ProgramReceipt> programReceipts;
+  final List<ProgramUpgradeReceipt> programUpgrades;
 
   Map<String, Object?> toJson() => {
     'families': [for (final f in families) f.toJson()],
@@ -263,6 +278,7 @@ final class TrainingArchive {
     'programRuns': [for (final r in programRuns) r.toJson()],
     'sessionPrograms': [for (final b in sessionPrograms) b.toJson()],
     'programReceipts': [for (final r in programReceipts) r.toJson()],
+    'programUpgrades': [for (final u in programUpgrades) u.toJson()],
   };
 
   Map<String, Object?> get summary => {
@@ -285,6 +301,7 @@ final class TrainingArchive {
     'programRuns': programRuns.length,
     'sessionPrograms': sessionPrograms.length,
     'programReceipts': programReceipts.length,
+    'programUpgrades': programUpgrades.length,
   };
 
   void _validate() {
@@ -323,6 +340,7 @@ final class TrainingArchive {
       sessions: sessions,
       finalizations: finalizations,
     );
+    validateProgramUpgrades(programRevisions, programRuns, programUpgrades);
     validateLinkRetirements(
       linkRetirements,
       links,

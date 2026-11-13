@@ -129,6 +129,8 @@ const storedCommandNames = [
   'run schedule',
   'run start',
   'run skip',
+  'run upgrade',
+  'run upgrades',
   'run pause',
   'run resume',
   'mass record',
@@ -623,6 +625,15 @@ Future<Map<String, Object?>> executeStored(
       'derivedPlan',
     },
     'run skip' => {'runId', 'expectedVersion', 'requestId', 'skippedAt'},
+    'run upgrade' => {
+      'runId',
+      'expectedVersion',
+      'revision',
+      'requestId',
+      'at',
+      'confirm',
+    },
+    'run upgrades' => {'runId'},
     'run pause' || 'run resume' => {'runId', 'expectedVersion'},
     _ => invalid('Unknown stored command.'),
   };
@@ -1351,6 +1362,25 @@ Future<Map<String, Object?>> executeStored(
           'receipt': receipt.toJson(),
           'run': await runView(await programs.run(runId)),
         };
+      case 'run upgrade':
+        if (!flag('confirm')) invalid('Run upgrade requires confirm:true.');
+        final runId = identifier(request, 'runId');
+        final receipt = await programs.upgrade(
+          runId,
+          integer('expectedVersion'),
+          integer('revision'),
+          identifier(request, 'requestId'),
+          parseInstant(request['at'], 'at'),
+        );
+        data = {
+          'receipt': receipt.toJson(),
+          'run': await runView(await programs.run(runId)),
+        };
+      case 'run upgrades':
+        data = [
+          for (final u in await programs.upgrades(identifier(request, 'runId')))
+            u.toJson(),
+        ];
       case 'progression track':
         data = await StoredProgressionService(store).track(
           templateId: identifier(request, 'templateId'),

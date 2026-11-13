@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/55';
+const _format = 'bodytmi-logical-export/56';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -116,6 +116,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/52',
       'bodytmi-logical-export/53',
       'bodytmi-logical-export/54',
+      'bodytmi-logical-export/55',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -124,7 +125,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final ordinalData = input['format'] == _format;
+    final upgradeData = input['format'] == _format;
+    final ordinalData =
+        upgradeData || input['format'] == 'bodytmi-logical-export/55';
     final sharedData =
         ordinalData || input['format'] == 'bodytmi-logical-export/54';
     final linkData =
@@ -243,6 +246,12 @@ final class LogicalArchiveFiles {
     final hadLinks = inputData.containsKey('links');
     final hadSharedApplications = inputData.containsKey('sharedApplications');
     final hadLinkRetirements = inputData.containsKey('linkRetirements');
+    final hadProgramUpgrades = inputData.containsKey('programUpgrades');
+    if (!upgradeData &&
+        inputData['programUpgrades'] is List &&
+        (inputData['programUpgrades'] as List).isEmpty) {
+      inputData.remove('programUpgrades');
+    }
     if (!sharedData &&
         inputData['sharedApplications'] is List &&
         (inputData['sharedApplications'] as List).isEmpty) {
@@ -294,6 +303,7 @@ final class LogicalArchiveFiles {
       if (linkData) 'links',
       if (sharedData) 'sharedApplications',
       if (sharedData) 'linkRetirements',
+      if (upgradeData) 'programUpgrades',
       if (executionData) 'executions',
       if (familyData) 'families',
       if (graphData) 'graphs',
@@ -314,6 +324,8 @@ final class LogicalArchiveFiles {
       invalid('Logical v53 requires lever links.');
     if (sharedData && !inputData.containsKey('sharedApplications'))
       invalid('Logical v54 requires shared lever applications.');
+    if (upgradeData && !inputData.containsKey('programUpgrades'))
+      invalid('Logical v56 requires program upgrade receipts.');
     if (sharedData && !inputData.containsKey('linkRetirements'))
       invalid('Logical v54 requires lever link retirements.');
     if (checkpointData && !inputData.containsKey('windowCheckpoints'))
@@ -347,6 +359,8 @@ final class LogicalArchiveFiles {
     if (!ordinalData &&
         archive.progressions.any((d) => d.ruleType == 'ordinal'))
       invalid('Ordinal progression requires logical v55.');
+    if (!upgradeData && archive.programUpgrades.isNotEmpty)
+      invalid('Program upgrades require logical v56.');
     if (!sharedData && archive.sharedApplications.isNotEmpty)
       invalid('Shared lever applications require logical v54.');
     if (!sharedData && archive.linkRetirements.isNotEmpty)
@@ -574,6 +588,7 @@ final class LogicalArchiveFiles {
       data.remove('sharedApplications');
     }
     if (!sharedData && !hadLinkRetirements) data.remove('linkRetirements');
+    if (!upgradeData && !hadProgramUpgrades) data.remove('programUpgrades');
     if (legacy) data.remove('progressions');
     if (!massData) data.remove('bodyMass');
     if (!timingData) data.remove('timers');
@@ -600,11 +615,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV55.values) {
+          for (final ddl in schemaV56.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 55');
+          db.execute('PRAGMA user_version = 56');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
@@ -693,6 +708,11 @@ final class LogicalArchiveFiles {
                 r.sessionId,
                 canonicalJson(r.toJson()),
               ],
+            );
+          for (final u in archive.programUpgrades)
+            db.execute(
+              'INSERT INTO program_upgrade_receipts(run_id,request_id,snapshot) VALUES (?,?,?)',
+              [u.runId, u.requestId, canonicalJson(u.toJson())],
             );
           for (final r in archive.bodyMass) {
             db.execute(

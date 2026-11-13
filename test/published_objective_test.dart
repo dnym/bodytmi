@@ -839,6 +839,7 @@ void publishedObjectiveTests() {
       db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.execute('DROP TABLE IF EXISTS shared_lever_applications');
       db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       db.userVersion = 25;
       db.close();
       rejects(
@@ -883,6 +884,7 @@ void publishedObjectiveTests() {
         db.execute('DROP TABLE IF EXISTS lever_link_revisions');
         db.execute('DROP TABLE IF EXISTS shared_lever_applications');
         db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
+        db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         db.userVersion = 25;
         db.close();
         equal(
@@ -893,7 +895,7 @@ void publishedObjectiveTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          55,
+          56,
         );
       } finally {
         await store.close();
