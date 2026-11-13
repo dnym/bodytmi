@@ -159,6 +159,7 @@ final class NativeBackup {
           58,
           59,
           60,
+          61,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -312,6 +313,7 @@ final class NativeBackup {
             58,
             59,
             60,
+            61,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -437,6 +439,8 @@ final class NativeBackup {
             invalid('Equipment instance revision row identity mismatch.');
           if (db.userVersion < 60 && entry.instance.loading != null)
             invalid('Equipment loading declarations require schema v60.');
+          if (db.userVersion < 61 && entry.instance.convention != null)
+            invalid('Load entry conventions require schema v61.');
           instances.add(entry);
         }
         validateEquipmentInstanceRevisions(instances, equipment, gyms);
@@ -498,6 +502,9 @@ final class NativeBackup {
           if (db.userVersion < 41 &&
               revision.definition.hasExtendedEffortRoles) {
             invalid('Back-off and drop effort roles require schema v41.');
+          }
+          if (db.userVersion < 61 && revision.definition.hasLoadConventions) {
+            invalid('Load entry conventions require schema v61.');
           }
           if (db.userVersion < 40 && revision.definition.hasManualRest) {
             invalid('Manual rest requires schema v40.');

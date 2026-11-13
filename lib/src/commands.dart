@@ -14,6 +14,8 @@ const commandNames = [
   'scale validate',
   'scale resolve',
   'plate plan',
+  'convention validate',
+  'convention interpret',
   'template validate',
   'template publish',
   'activity expand',
@@ -705,6 +707,21 @@ final class Commands {
         final loading = LoadingSpec.fromJson(request['loading']);
         final target = Quantity.fromJson(request['target']);
         data = PlatePlan.evaluate(loading, target);
+      case 'convention validate':
+        keys({'convention'});
+        data = LoadConvention.fromJson(request['convention']).toJson();
+      case 'convention interpret':
+        keys({'convention', 'mass', 'repetitions', 'loading'});
+        data = LoadInterpretation.interpret(
+          LoadConvention.fromJson(request['convention']),
+          Quantity.fromJson(request['mass']),
+          repetitions: request['repetitions'] == null
+              ? null
+              : Quantity.fromJson(request['repetitions']),
+          loading: request['loading'] == null
+              ? null
+              : LoadingSpec.fromJson(request['loading']),
+        );
       case 'family validate':
         keys({'family'});
         data = ExerciseFamily.fromJson(request['family']).toJson();

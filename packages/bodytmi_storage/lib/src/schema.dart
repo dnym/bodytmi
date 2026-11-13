@@ -130,6 +130,12 @@ const schemaV60 = {
   // Same tables; v60 adds declared loading configurations on instances.
 };
 
+const schemaV61 = {
+  ...schemaV60,
+  // Same tables; v61 adds declared load entry conventions on instances and
+  // slot composition overrides.
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -201,6 +207,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   58 => schemaV58, // v58 adds exercise and implementation catalog revisions.
   59 => schemaV59, // v59 adds equipment, gym and instance inventory revisions.
   60 => schemaV60, // v60 adds declared loading configurations on instances.
+  61 => schemaV61, // v61 adds declared load entry conventions.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

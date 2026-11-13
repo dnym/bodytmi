@@ -1,4 +1,5 @@
 import 'errors.dart';
+import 'load_convention.dart';
 import 'numeric_scale.dart';
 import 'quantity.dart';
 
@@ -210,7 +211,10 @@ final class GymDefinition {
 
 /// One actual physical piece of equipment. A declared scale holds native
 /// markings with alternate same-dimension labels, not independent loads. A
-/// declared loading configuration is the only source of plate arithmetic.
+/// declared loading configuration is the only source of plate arithmetic, and
+/// an instance convention is the entry default shared with that declared
+/// capability; mass bases needing component masses cannot be declared on
+/// equipment without one.
 final class EquipmentInstance {
   EquipmentInstance._(
     this.id,
@@ -220,6 +224,7 @@ final class EquipmentInstance {
     this.notes,
     this.scale,
     this.loading,
+    this.convention,
   );
   factory EquipmentInstance.fromJson(Object? input) {
     final j = jsonObject(input, 'equipment instance');
@@ -231,6 +236,7 @@ final class EquipmentInstance {
       'notes',
       'scale',
       'loading',
+      'convention',
     });
     final name = j['name'];
     if (name != null &&
@@ -246,6 +252,15 @@ final class EquipmentInstance {
         'Instance notes must be a nonempty string of at most 4000 characters.',
       );
     }
+    final convention = j['convention'] == null
+        ? null
+        : LoadConvention.fromJson(j['convention']);
+    if (convention != null) {
+      requireLoadConventionCapability(
+        convention,
+        j['loading'] == null ? null : LoadingSpec.fromJson(j['loading']),
+      );
+    }
     return EquipmentInstance._(
       identifier(j, 'id'),
       identifier(j, 'equipmentId'),
@@ -254,12 +269,14 @@ final class EquipmentInstance {
       notes as String?,
       j['scale'] == null ? null : NumericScale.fromJson(j['scale']),
       j['loading'] == null ? null : LoadingSpec.fromJson(j['loading']),
+      convention,
     );
   }
   final String id, equipmentId;
   final String? gymId, name, notes;
   final NumericScale? scale;
   final LoadingSpec? loading;
+  final LoadConvention? convention;
   Map<String, Object?> toJson() => {
     'id': id,
     'equipmentId': equipmentId,
@@ -268,6 +285,7 @@ final class EquipmentInstance {
     if (notes != null) 'notes': notes,
     if (scale != null) 'scale': scale!.toJson(),
     if (loading != null) 'loading': loading!.toJson(),
+    if (convention != null) 'convention': convention!.toJson(),
   };
 }
 

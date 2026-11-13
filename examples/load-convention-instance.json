@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "expectedRevision": 0,
+  "instance": {
+    "id": "garage-barbell-olympic",
+    "equipmentId": "barbell-olympic",
+    "gym": "garage",
+    "name": "Garage Olympic bar",
+    "loading": {
+      "components": [
+        {
+          "id": "bar",
+          "kind": "bar",
+          "mass": { "value": "20", "unit": "kg" },
+          "include": true
+        }
+      ],
+      "channel": { "id": "barbell", "sides": 2, "symmetry": "required" },
+      "plates": [
+        { "mass": { "value": "25", "unit": "kg" }, "count": 4 },
+        { "mass": { "value": "10", "unit": "kg" }, "count": 4 },
+        { "mass": { "value": "5", "unit": "kg" }, "count": 2 },
+        { "mass": { "value": "2.5", "unit": "kg" }, "count": 2 },
+        { "mass": { "value": "1.25", "unit": "kg" }, "count": 2 }
+      ]
+    },
+    "convention": { "massBasis": "assembly-total", "notes": "Bar mass included." }
+  }
+}

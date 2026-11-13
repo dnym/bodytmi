@@ -160,4 +160,92 @@ final class EquipmentService {
       'plan': PlatePlan.evaluate(loading, target),
     };
   });
+
+  /// Read-only entry-convention resolution: an explicit request convention
+  /// wins over a slot composition override, which wins over the equipment
+  /// instance default. Capability is validated against the pinned instance
+  /// revision's declared loading configuration, and an optional interpretation
+  /// is exact and descriptive. Nothing is written; entered values are never
+  /// rewritten and no workload totals are computed.
+  Future<Map<String, Object?>> loadConvention({
+    required String instanceId,
+    int? revision,
+    String? templateId,
+    int? templateRevision,
+    String? slotId,
+    LoadConvention? explicit,
+    Quantity? mass,
+    Quantity? repetitions,
+  }) => repository.transaction(() async {
+    if ((templateId == null) != (slotId == null))
+      throw const BodyTmiException(
+        'validation',
+        'Slot resolution needs both templateId and slotId.',
+      );
+    final selected = await instanceRevision(instanceId, revision);
+    ExerciseSlot? slot;
+    int? resolvedTemplateRevision;
+    if (templateId != null) {
+      final templateRev = await repository.revision(
+        templateId,
+        templateRevision,
+      );
+      if (templateRev == null)
+        throw const BodyTmiException(
+          'not_found',
+          'Workout revision not found.',
+        );
+      final matches = templateRev.definition.slots.where(
+        (candidate) => candidate.id == slotId,
+      );
+      if (matches.isEmpty)
+        throw const BodyTmiException('not_found', 'Slot not found.');
+      slot = matches.single;
+      resolvedTemplateRevision = templateRev.number;
+    }
+    final String source;
+    final LoadConvention convention;
+    if (explicit != null) {
+      source = 'explicit';
+      convention = explicit;
+    } else if (slot?.convention != null) {
+      source = 'slot';
+      convention = slot!.convention!;
+    } else if (selected.instance.convention != null) {
+      source = 'instance';
+      convention = selected.instance.convention!;
+    } else {
+      throw const BodyTmiException(
+        'not_found',
+        'No load entry convention is declared for this slot or instance.',
+      );
+    }
+    requireLoadConventionCapability(convention, selected.instance.loading);
+    final loading = selected.instance.loading;
+    return {
+      'policy': 'bodytmi-load-convention/1',
+      'resolution': {
+        'source': source,
+        'instanceId': selected.instance.id,
+        'instanceRevision': selected.number,
+        if (templateId != null) 'templateId': templateId,
+        if (templateId != null) 'templateRevision': resolvedTemplateRevision,
+        if (slotId != null) 'slotId': slotId,
+      },
+      'convention': convention.toJson(),
+      'capability': {
+        'declaredLoading': loading != null,
+        if (loading != null) 'channelSides': loading.channel.sides,
+        if (loading != null) 'channelSymmetry': loading.channel.symmetry,
+      },
+      'interpretation': mass == null
+          ? null
+          : LoadInterpretation.interpret(
+              convention,
+              mass,
+              repetitions: repetitions,
+              loading: loading,
+            ),
+    };
+  });
 }

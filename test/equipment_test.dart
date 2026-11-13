@@ -289,7 +289,7 @@ void equipmentTests() {
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/60',
+        'bodytmi-logical-export/61',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -390,7 +390,7 @@ void equipmentTests() {
         );
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          60,
+          61,
         );
         equal((await migrated.equipmentInstanceRevisions()).length, 0);
       } finally {
@@ -404,7 +404,7 @@ void equipmentTests() {
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/60',
+          'bodytmi-logical-export/61',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {

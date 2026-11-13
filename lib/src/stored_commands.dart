@@ -90,6 +90,7 @@ const storedCommandNames = [
   'instance list',
   'instance inventory',
   'store plate-plan',
+  'store load-convention',
   'link create',
   'link show',
   'link list',
@@ -480,6 +481,16 @@ Future<Map<String, Object?>> executeStored(
     'instance list' => <String>{},
     'instance inventory' => {'gymId'},
     'store plate-plan' => {'instanceId', 'revision', 'target'},
+    'store load-convention' => {
+      'instanceId',
+      'instanceRevision',
+      'templateId',
+      'templateRevision',
+      'slotId',
+      'convention',
+      'mass',
+      'repetitions',
+    },
     'link create' => {'link', 'expectedRevision', 'createdAt', 'confirm'},
     'link show' => {'linkId', 'revision'},
     'link list' => <String>{},
@@ -1884,6 +1895,31 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'instanceId'),
           Quantity.fromJson(request['target']),
           request.containsKey('revision') ? integer('revision') : null,
+        );
+      case 'store load-convention':
+        data = await EquipmentService(store).loadConvention(
+          instanceId: identifier(request, 'instanceId'),
+          revision: request.containsKey('instanceRevision')
+              ? integer('instanceRevision', min: 1)
+              : null,
+          templateId: request.containsKey('templateId')
+              ? identifier(request, 'templateId')
+              : null,
+          templateRevision: request.containsKey('templateRevision')
+              ? integer('templateRevision', min: 1)
+              : null,
+          slotId: request.containsKey('slotId')
+              ? identifier(request, 'slotId')
+              : null,
+          explicit: request.containsKey('convention')
+              ? LoadConvention.fromJson(request['convention'])
+              : null,
+          mass: request.containsKey('mass')
+              ? Quantity.fromJson(request['mass'])
+              : null,
+          repetitions: request.containsKey('repetitions')
+              ? Quantity.fromJson(request['repetitions'])
+              : null,
         );
       case 'link create':
         data = (await LeverLinkService(store).create(

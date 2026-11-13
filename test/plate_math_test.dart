@@ -484,7 +484,7 @@ void plateMathTests() {
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/60');
+      equal(exported['format'], 'bodytmi-logical-export/61');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         check(

@@ -3,6 +3,7 @@ import 'derived_plan_input.dart';
 import 'body_mass_input.dart';
 import 'errors.dart';
 import 'effective_mass.dart';
+import 'load_convention.dart';
 import 'quantity.dart';
 import 'timing.dart';
 import 'set_observations.dart';
@@ -21,6 +22,7 @@ final class ExerciseSlot {
     this.bodyMass,
     this.effectiveMass,
     this.timing,
+    this.convention,
   );
 
   factory ExerciseSlot.fromJson(Object? input) {
@@ -36,6 +38,7 @@ final class ExerciseSlot {
       'bodyMass',
       'effectiveMass',
       'timing',
+      'convention',
     });
     final targets = metricsFromJson(json['targets']);
     final prefill = json['prefill'] ?? <Object?>[];
@@ -67,6 +70,9 @@ final class ExerciseSlot {
       bodyMass,
       effectiveMass,
       timing,
+      json['convention'] == null
+          ? null
+          : LoadConvention.fromJson(json['convention']),
     );
   }
 
@@ -80,13 +86,15 @@ final class ExerciseSlot {
   final BodyMassSelection? bodyMass;
   final EffectiveMassModel? effectiveMass;
   final EffortTimingDefaults? timing;
+  final LoadConvention? convention;
 
   bool compatibleWith(ExerciseSlot other) =>
       id == other.id &&
       exerciseId == other.exerciseId &&
       implementation == other.implementation &&
       equipmentId == other.equipmentId &&
-      setupNote == other.setupNote;
+      setupNote == other.setupNote &&
+      convention == other.convention;
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -99,6 +107,7 @@ final class ExerciseSlot {
     if (bodyMass != null) 'bodyMass': bodyMass!.toJson(),
     if (effectiveMass != null) 'effectiveMass': effectiveMass!.toJson(),
     if (timing != null) 'timing': timing!.toJson(),
+    if (convention != null) 'convention': convention!.toJson(),
   };
 }
 
@@ -172,6 +181,8 @@ final class WorkoutDefinition {
   ExerciseSlot slot(String id) => slots.firstWhere((slot) => slot.id == id);
   bool get hasEffortTargets =>
       plan.nodes.whereType<Effort>().any((e) => e.targets.isNotEmpty);
+
+  bool get hasLoadConventions => slots.any((s) => s.convention != null);
 
   bool get hasManualRest => plan.nodes.whereType<Rest>().any((r) => r.isManual);
 

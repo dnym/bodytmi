@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "convention": {
+    "massBasis": "per-implement",
+    "implements": 2,
+    "sides": "left",
+    "notes": "One-arm row; each dumbbell weighed separately."
+  },
+  "mass": { "value": "22.5", "unit": "kg" },
+  "repetitions": { "value": "8", "unit": "rep" }
+}
