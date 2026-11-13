@@ -20,8 +20,8 @@ final class RoleProgressionPreview {
     }
     if (failedSessions < 0 ||
         cursor < 0 ||
-        !{'double', 'threshold'}.contains(ruleType) ||
-        (ruleType == 'double' && cursor != 0)) {
+        !{'double', 'threshold', 'ordinal'}.contains(ruleType) ||
+        (ruleType != 'threshold' && cursor != 0)) {
       invalid('Invalid progression preview state or rule type.');
     }
     final sets = session.sets
@@ -36,6 +36,12 @@ final class RoleProgressionPreview {
         sets,
         failedSessions,
         cursor,
+      );
+    } else if (ruleType == 'ordinal') {
+      proposal = ProgressionEvaluation.ordinal(
+        OrdinalRule.fromJson(rule),
+        sets,
+        failedSessions,
       );
     } else {
       proposal = ProgressionEvaluation.double(

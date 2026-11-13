@@ -14,8 +14,9 @@ final class ProgressionEvaluation {
     this.coordination,
     this.scaleResolutions,
     this.effortAssessment,
-    this.incrementBandAssessment,
-  );
+    this.incrementBandAssessment, [
+    this._ordinal,
+  ]);
   factory ProgressionEvaluation.double(DoubleProgressionProposal p) =>
       ProgressionEvaluation._(
         p.outcome,
@@ -114,10 +115,77 @@ final class ProgressionEvaluation {
       first.incrementBandAssessment,
     );
   }
+
+  /// Ordinal levers move the whole working vector between authored levels.
+  /// Changed controlled actuals still require review before application.
+  factory ProgressionEvaluation.ordinal(
+    OrdinalRule rule,
+    List<TrainingSet> sets,
+    int failures,
+  ) {
+    for (final set in sets) {
+      final target = set.suggested[rule.metric];
+      if ((target == null &&
+              !((set.maxEffortMetrics.contains(rule.metric) &&
+                      rule.failureLimit.dimension == Dimension.count) ||
+                  set.criteria[rule.metric]?.unit.dimension ==
+                      rule.failureLimit.dimension)) ||
+          (target != null && target.dimension != rule.failureLimit.dimension))
+        invalid(
+          'Stored ordinal progression needs a configured performance metric.',
+        );
+    }
+    final results = [
+      for (final s in sets) s.eligibleForPerformance ? s.actuals : null,
+    ];
+    final missing = results.any((r) => r == null || r[rule.metric] == null);
+    final proposal = rule.evaluate(
+      currentSets: [for (final s in sets) s.suggested],
+      results: [
+        for (final s in sets)
+          s.status == SetStatus.completed ? s.actuals : null,
+      ],
+      observations: [for (final s in sets) s.observations],
+      failedSessions: failures,
+    );
+    final changed =
+        !missing &&
+        sets.any(
+          (s) => rule.controlledMetrics
+              .where((m) => m != rule.metric)
+              .any(
+                (m) =>
+                    s.actuals[m] == null ||
+                    s.actuals[m]!.compareTo(s.suggested[m]!) != 0,
+              ),
+        );
+    final outcome = changed ? 'review' : proposal.outcome;
+    final reason = changed
+        ? 'Actual controlled values differ from prescription; reconcile before progression.'
+        : proposal.reason;
+    final nextSets = changed
+        ? [for (final s in sets) s.suggested]
+        : proposal.nextSets;
+    return ProgressionEvaluation._(
+      outcome,
+      reason,
+      List.unmodifiable(nextSets),
+      changed ? failures : proposal.failedSessions,
+      0,
+      null,
+      proposal.assessment,
+      null,
+      const [],
+      proposal.effortAssessment,
+      null,
+      proposal,
+    );
+  }
   final String outcome, reason;
   final List<Metrics> nextSets;
   final int failedSessions, cursor;
   final DoubleProgressionProposal? _double;
+  final OrdinalProposal? _ordinal;
   final ThresholdAssessment? assessment;
   final EffortAssessment? effortAssessment;
   final IncrementBandAssessment? incrementBandAssessment;
@@ -125,6 +193,7 @@ final class ProgressionEvaluation {
   final List<List<ScaleResolution>> scaleResolutions;
   Map<String, Object?> toJson() =>
       _double?.toJson() ??
+      _ordinal?.toJson() ??
       {
         'outcome': outcome,
         'reason': reason,

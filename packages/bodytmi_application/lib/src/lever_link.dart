@@ -310,6 +310,8 @@ void requireSharedWriterContract(
   }
   if (anchors.any((a) => a.ruleType != first.ruleType))
     invalid('Linked progression tracks use different rule types.');
+  if (first.ruleType == 'ordinal')
+    invalid('Ordinal progression levers cannot back shared lever links.');
   if (first.ruleType == 'threshold') {
     final base = ThresholdRule.fromJson(first.rule);
     for (final anchor in anchors.skip(1)) {

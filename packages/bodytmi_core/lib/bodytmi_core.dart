@@ -8,6 +8,7 @@ export 'src/window_repeat.dart';
 export 'src/workout.dart';
 export 'src/family.dart';
 export 'src/progression.dart';
+export 'src/ordinal_progression.dart';
 
 export 'src/instant.dart';
 export 'src/body_mass.dart';

@@ -502,7 +502,7 @@ void aggregationTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          54,
+          55,
         );
       } finally {
         await upgraded.close();

@@ -35,6 +35,7 @@ import 'stored_progression_test.dart';
 import 'reconciliation_test.dart';
 import 'lever_link_test.dart';
 import 'link_consumption_test.dart';
+import 'ordinal_progression_test.dart';
 import 'logical_archive_test.dart';
 import 'backup_test.dart';
 import 'storage_test.dart';
@@ -85,6 +86,7 @@ Future<void> main() async {
   reconciliationTests();
   leverLinkTests();
   linkConsumptionTests();
+  ordinalProgressionTests();
   logicalArchiveTests();
   backupTests();
   storageTests();

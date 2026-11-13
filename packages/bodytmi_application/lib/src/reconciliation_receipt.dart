@@ -42,8 +42,8 @@ final class ReconciliationReceipt implements ProgressionAnchor {
     if (sourceSessionId != null) identifier({'id': sourceSessionId}, 'id');
     identifier({'id': slotId}, 'id');
     if (!effortRoles.contains(role) ||
-        !{'double', 'threshold'}.contains(ruleType) ||
-        (ruleType == 'double' && (previousCursor != 0 || resetCursor)) ||
+        !{'double', 'threshold', 'ordinal'}.contains(ruleType) ||
+        (ruleType != 'threshold' && (previousCursor != 0 || resetCursor)) ||
         previousSequence < 1 ||
         previousFailures < 0 ||
         previousCursor < 0 ||
@@ -58,8 +58,10 @@ final class ReconciliationReceipt implements ProgressionAnchor {
       invalid('Reconciliation needs a known slot with sets in the role.');
     if (ruleType == 'double') {
       DoubleProgressionRule.fromJson(this.rule);
-    } else {
+    } else if (ruleType == 'threshold') {
       ThresholdRule.fromJson(this.rule);
+    } else {
+      OrdinalRule.fromJson(this.rule);
     }
     final baseline = baselineSets(revision, slotId, role);
     if (baseline.length != this.sets.length)
@@ -209,11 +211,13 @@ final class ReconciliationReceipt implements ProgressionAnchor {
           DoubleProgressionRule.fromJson(rule).objective,
           DoubleProgressionRule.fromJson(rule).lever,
         }
-      : {
+      : ruleType == 'threshold'
+      ? {
           ...ThresholdRule.fromJson(rule).increments.keys,
           ...ThresholdRule.fromJson(rule).resets.keys,
           ...ThresholdRule.fromJson(rule).deloadMetrics,
-        };
+        }
+      : OrdinalRule.fromJson(rule).controlledMetrics;
   @override
   late final ExerciseSlot slot = revision.definition.slot(slotId);
   @override
@@ -264,8 +268,8 @@ final class ReconciliationReceipt implements ProgressionAnchor {
         },
     ],
     'rule': rule,
+    if (ruleType != 'double') 'ruleType': ruleType,
     if (ruleType == 'threshold') ...{
-      'ruleType': ruleType,
       'previousCursor': previousCursor,
       'cursor': cursor,
     },

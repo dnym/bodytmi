@@ -116,6 +116,8 @@ final class StoredProgressionService {
       DoubleProgressionRule.fromJson(rule);
     } else if (ruleType == 'threshold') {
       ThresholdRule.fromJson(rule);
+    } else if (ruleType == 'ordinal') {
+      OrdinalRule.fromJson(rule);
     } else {
       invalid('Unknown stored progression rule type.');
     }
@@ -221,6 +223,8 @@ final class StoredProgressionService {
         DoubleProgressionRule.fromJson(rule);
       } else if (ruleType == 'threshold') {
         ThresholdRule.fromJson(rule);
+      } else if (ruleType == 'ordinal') {
+        OrdinalRule.fromJson(rule);
       } else {
         invalid('Unknown stored progression rule type.');
       }
@@ -427,6 +431,8 @@ final class StoredProgressionService {
       DoubleProgressionRule.fromJson(rule);
     } else if (ruleType == 'threshold') {
       ThresholdRule.fromJson(rule);
+    } else if (ruleType == 'ordinal') {
+      OrdinalRule.fromJson(rule);
     } else {
       invalid('Unknown stored progression rule type.');
     }
@@ -756,6 +762,8 @@ final class StoredProgressionService {
         DoubleProgressionRule.fromJson(rule);
       } else if (ruleType == 'threshold') {
         ThresholdRule.fromJson(rule);
+      } else if (ruleType == 'ordinal') {
+        OrdinalRule.fromJson(rule);
       } else {
         invalid('Unknown stored progression rule type.');
       }

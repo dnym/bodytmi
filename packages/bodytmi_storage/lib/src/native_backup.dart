@@ -153,6 +153,7 @@ final class NativeBackup {
           52,
           53,
           54,
+          55,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -300,6 +301,7 @@ final class NativeBackup {
             52,
             53,
             54,
+            55,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -566,6 +568,8 @@ final class NativeBackup {
           final d = ProgressionDecision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
+          if (db.userVersion < 55 && d.ruleType == 'ordinal')
+            invalid('Ordinal progression requires schema v55.');
           if (db.userVersion < 44 &&
               d.session.sets.any((s) => s.timing?.termination == 'manual'))
             invalid('Frozen manual timing termination requires schema v44.');

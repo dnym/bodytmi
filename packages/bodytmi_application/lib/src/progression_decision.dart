@@ -29,10 +29,10 @@ final class ProgressionDecision implements ProgressionAnchor {
     identifier({'id': slotId}, 'id');
     if (runId != null) identifier({'id': runId}, 'id');
     if (version < 1 ||
-        !{'double', 'threshold'}.contains(ruleType) ||
+        !{'double', 'threshold', 'ordinal'}.contains(ruleType) ||
         !{'work', 'warmup', 'backoff', 'drop'}.contains(role) ||
         previousCursor < 0 ||
-        (ruleType == 'double' && previousCursor != 0) ||
+        (ruleType != 'threshold' && previousCursor != 0) ||
         previousSequence < 0 ||
         previousFailures < 0 ||
         ((previousApplication == null) != (previousSequence == 0)))
@@ -130,11 +130,13 @@ final class ProgressionDecision implements ProgressionAnchor {
           DoubleProgressionRule.fromJson(rule).objective,
           DoubleProgressionRule.fromJson(rule).lever,
         }
-      : {
+      : ruleType == 'threshold'
+      ? {
           ...ThresholdRule.fromJson(rule).increments.keys,
           ...ThresholdRule.fromJson(rule).resets.keys,
           ...ThresholdRule.fromJson(rule).deloadMetrics,
-        };
+        }
+      : OrdinalRule.fromJson(rule).controlledMetrics;
   String get storageSlotKey => role == 'work' ? slotId : '$slotId/$role';
   String get id => '${session.id}/$storageSlotKey';
   int get sequence => previousSequence + (resolvedAt == null ? 0 : 1);
@@ -159,22 +161,28 @@ final class ProgressionDecision implements ProgressionAnchor {
   late final List<TrainingSet> sets = List.unmodifiable(
     session.sets.where((s) => s.slotId == slotId && s.role == role),
   );
-  late final ProgressionEvaluation proposal = ruleType == 'threshold'
-      ? ProgressionEvaluation.threshold(
-          ThresholdRule.fromJson(rule),
-          sets,
-          previousFailures,
-          previousCursor,
-        )
-      : ProgressionEvaluation.double(
-          DoubleProgressionRule.fromJson(rule).evaluate(
-            currentSets: [for (final s in sets) s.suggested],
-            results: [
-              for (final s in sets) s.eligibleForPerformance ? s.actuals : null,
-            ],
-            failedSessions: previousFailures,
-          ),
-        );
+  late final ProgressionEvaluation proposal = switch (ruleType) {
+    'threshold' => ProgressionEvaluation.threshold(
+      ThresholdRule.fromJson(rule),
+      sets,
+      previousFailures,
+      previousCursor,
+    ),
+    'ordinal' => ProgressionEvaluation.ordinal(
+      OrdinalRule.fromJson(rule),
+      sets,
+      previousFailures,
+    ),
+    _ => ProgressionEvaluation.double(
+      DoubleProgressionRule.fromJson(rule).evaluate(
+        currentSets: [for (final s in sets) s.suggested],
+        results: [
+          for (final s in sets) s.eligibleForPerformance ? s.actuals : null,
+        ],
+        failedSessions: previousFailures,
+      ),
+    ),
+  };
   bool sameContext(ProgressionDecision other) =>
       runId == other.runId &&
       role == other.role &&
@@ -226,10 +234,8 @@ final class ProgressionDecision implements ProgressionAnchor {
     if (declinedAt != null) 'declinedAt': declinedAt!.toUtc().toIso8601String(),
     'proposal': proposal.toJson(),
     if (runId != null) 'runId': runId,
-    if (ruleType == 'threshold') ...{
-      'ruleType': ruleType,
-      'previousCursor': previousCursor,
-    },
+    if (ruleType != 'double') 'ruleType': ruleType,
+    if (ruleType == 'threshold') 'previousCursor': previousCursor,
   };
 }
 

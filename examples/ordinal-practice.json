@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "ordinal-practice",
+    "name": "Ordinal level practice",
+    "slots": [
+      {
+        "id": "row",
+        "exercise": "custom",
+        "implementation": "custom",
+        "targets": {
+          "mass": {"value": "20", "unit": "kg"},
+          "reps": {"value": "8", "unit": "rep"}
+        }
+      }
+    ],
+    "plan": {
+      "id": "practice",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "warmup",
+          "type": "effort",
+          "slot": "row",
+          "role": "warmup"
+        },
+        {
+          "id": "work",
+          "type": "repeat",
+          "count": 2,
+          "child": {
+            "id": "set",
+            "type": "effort",
+            "slot": "row"
+          }
+        }
+      ]
+    }
+  },
+  "rule": {
+    "metric": "reps",
+    "performance": {
+      "direction": "higher",
+      "failureLimit": {"value": "4", "unit": "rep"},
+      "advancementLimit": {"value": "8", "unit": "rep"}
+    },
+    "levels": [
+      {
+        "id": "band-a",
+        "targets": {
+          "mass": {"value": "20", "unit": "kg"},
+          "reps": {"value": "8", "unit": "rep"}
+        }
+      },
+      {
+        "id": "band-b",
+        "targets": {
+          "mass": {"value": "22.5", "unit": "kg"},
+          "reps": {"value": "8", "unit": "rep"}
+        }
+      },
+      {
+        "id": "band-c",
+        "targets": {
+          "mass": {"value": "25", "unit": "kg"},
+          "reps": {"value": "8", "unit": "rep"}
+        }
+      }
+    ],
+    "deloadAfter": 2,
+    "deloadLevel": "band-a"
+  }
+}

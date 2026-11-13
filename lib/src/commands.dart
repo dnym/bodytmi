@@ -51,6 +51,7 @@ const commandNames = [
   'session finish',
   'progression evaluate',
   'progression double',
+  'progression ordinal',
   'measurement trend',
   'measurement resolve',
 ];
@@ -822,6 +823,34 @@ final class Commands {
                 for (final result in jsonList(request, 'results'))
                   result == null ? null : metricsFromJson(result),
               ],
+              failedSessions: failures,
+            )
+            .toJson();
+      case 'progression ordinal':
+        keys({'rule', 'currentSets', 'results', 'state', 'observations'});
+        final state = jsonObject(
+          request['state'] ?? <String, Object?>{},
+          'state',
+        );
+        checkKeys(state, {'failedSessions'});
+        final failures = state['failedSessions'] ?? 0;
+        if (failures is! int) invalid('failedSessions must be an integer.');
+        data = OrdinalRule.fromJson(request['rule'])
+            .evaluate(
+              currentSets: [
+                for (final set in jsonList(request, 'currentSets'))
+                  metricsFromJson(set),
+              ],
+              results: [
+                for (final result in jsonList(request, 'results'))
+                  result == null ? null : metricsFromJson(result),
+              ],
+              observations: request.containsKey('observations')
+                  ? [
+                      for (final o in jsonList(request, 'observations'))
+                        o == null ? null : SetObservations.fromJson(o),
+                    ]
+                  : null,
               failedSessions: failures,
             )
             .toJson();

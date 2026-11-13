@@ -355,7 +355,7 @@ void derivedWorkoutPreviewTests() {
         }
         final reopened = sqlite3.open(path);
         try {
-          equal(reopened.userVersion, 54);
+          equal(reopened.userVersion, 55);
         } finally {
           reopened.close();
         }
@@ -427,7 +427,7 @@ void derivedWorkoutPreviewTests() {
         );
         final copy = '${temp.path}/snapshot.sqlite';
         await store.snapshot(copy);
-        equal(NativeBackup.validateDatabase(copy), 54);
+        equal(NativeBackup.validateDatabase(copy), 55);
         final db = sqlite3.open(copy);
         db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         db.execute('DROP TABLE IF EXISTS window_checkpoints');
