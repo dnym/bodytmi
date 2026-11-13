@@ -39,6 +39,8 @@ final class TrainingArchive {
     List<LeverLinkRevision> links = const [],
     List<SharedLeverApplication> sharedApplications = const [],
     List<LinkRetirementAnchor> linkRetirements = const [],
+    List<ExerciseRevision> exercises = const [],
+    List<ImplementationRevision> implementations = const [],
   }) : sharedApplications = List<SharedLeverApplication>.unmodifiable(
          <SharedLeverApplication>[...sharedApplications]..sort((a, b) {
            final id = a.linkId.compareTo(b.linkId);
@@ -70,6 +72,18 @@ final class TrainingArchive {
        families = List<FamilyRevision>.unmodifiable(
          <FamilyRevision>[...families]..sort((a, b) {
            final id = a.family.id.compareTo(b.family.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       exercises = List<ExerciseRevision>.unmodifiable(
+         <ExerciseRevision>[...exercises]..sort((a, b) {
+           final id = a.exercise.id.compareTo(b.exercise.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       implementations = List<ImplementationRevision>.unmodifiable(
+         <ImplementationRevision>[...implementations]..sort((a, b) {
+           final id = a.implementation.id.compareTo(b.implementation.id);
            return id == 0 ? a.number.compareTo(b.number) : id;
          }),
        ),
@@ -157,12 +171,21 @@ final class TrainingArchive {
       'executions',
       'families',
       'graphs',
+      'exercises',
+      'implementations',
     });
     List<Object?> optional(String key) =>
         json.containsKey(key) ? jsonList(json, key) : const [];
     return TrainingArchive(
       families: [
         for (final f in optional('families')) FamilyRevision.fromJson(f),
+      ],
+      exercises: [
+        for (final e in optional('exercises')) ExerciseRevision.fromJson(e),
+      ],
+      implementations: [
+        for (final i in optional('implementations'))
+          ImplementationRevision.fromJson(i),
       ],
       graphs: [
         for (final g in optional('graphs'))
@@ -239,6 +262,8 @@ final class TrainingArchive {
 
   final List<WorkoutExecution> executions;
   final List<FamilyRevision> families;
+  final List<ExerciseRevision> exercises;
+  final List<ImplementationRevision> implementations;
   final List<DerivedTargetGraphRevision> graphs;
   final List<TimingActivity> timers;
   final List<WindowCheckpoint> windowCheckpoints;
@@ -260,6 +285,8 @@ final class TrainingArchive {
 
   Map<String, Object?> toJson() => {
     'families': [for (final f in families) f.toJson()],
+    'exercises': [for (final e in exercises) e.toJson()],
+    'implementations': [for (final i in implementations) i.toJson()],
     'graphs': [for (final g in graphs) g.toJson()],
     'executions': [for (final e in executions) e.toJson()],
     'timers': [for (final t in timers) t.toJson()],
@@ -283,6 +310,8 @@ final class TrainingArchive {
 
   Map<String, Object?> get summary => {
     'families': families.length,
+    'exercises': exercises.length,
+    'implementations': implementations.length,
     'graphs': graphs.length,
     'executions': executions.length,
     'timers': timers.length,
@@ -315,6 +344,8 @@ final class TrainingArchive {
     );
     validateRepeatSessionBindings(repeatCheckpoints, sessions);
     validateFamilyRevisions(families);
+    validateExerciseRevisions(exercises);
+    validateImplementationRevisions(implementations, exercises);
     validateDerivedTargetGraphRevisions(graphs);
     validateProgramPlanReferences(programRevisions, graphs);
     validateTimingData(timers, sessions);

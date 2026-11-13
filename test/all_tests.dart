@@ -22,6 +22,7 @@ import 'aggregation_test.dart';
 import 'stored_threshold_test.dart';
 import 'timing_defaults_test.dart';
 import 'family_test.dart';
+import 'catalog_test.dart';
 import 'analytics_test.dart';
 import 'decline_test.dart';
 import 'tempo_test.dart';
@@ -75,6 +76,7 @@ Future<void> main() async {
   storedThresholdTests();
   timingDefaultsTests();
   familyTests();
+  catalogTests();
   analyticsTests();
   declineTests();
   tempoTests();

@@ -107,6 +107,14 @@ const schemaV57 = {
   // Same tables; v57 advertises program prescription override payloads.
 };
 
+const schemaV58 = {
+  ...schemaV57,
+  'exercise_revisions':
+      'CREATE TABLE "exercise_revisions" ("exercise_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("exercise_id", "number"))',
+  'implementation_revisions':
+      'CREATE TABLE "implementation_revisions" ("implementation_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("implementation_id", "number"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -175,6 +183,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   55 => schemaV55, // v55 adds ordinal/categorical progression levers.
   56 => schemaV56, // v56 adds durable program run upgrade receipts.
   57 => schemaV57, // v57 adds program prescription overrides.
+  58 => schemaV58, // v58 adds exercise and implementation catalog revisions.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

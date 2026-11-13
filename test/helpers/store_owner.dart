@@ -210,6 +210,25 @@ Future<void> main(List<String> args) async {
         stdout.writeln('ready');
         await stdin.drain<void>();
       }
+    } else if (args.length == 2 && args[1].startsWith('exercise-')) {
+      Future<void> publish() async {
+        await CatalogService(store).publishExercise(
+          ExerciseDefinition.fromJson({'id': 'row', 'name': 'Row'}),
+          0,
+        );
+      }
+
+      if (args[1].endsWith('rollback')) {
+        await store.transaction(() async {
+          await publish();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await publish();
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
     } else if (args.length == 2 &&
         (args[1].startsWith('execution-step-') ||
             args[1].startsWith('execution-group-'))) {

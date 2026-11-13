@@ -952,7 +952,7 @@ void reconciliationTests() {
         archived = await store.archive();
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          57,
+          58,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
         await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
@@ -962,7 +962,7 @@ void reconciliationTests() {
       final before = canonicalJson(archived.toJson());
       equal(
         NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-        57,
+        58,
       );
       final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
       try {
@@ -1021,6 +1021,8 @@ void reconciliationTests() {
       dropped.execute('DROP TABLE IF EXISTS shared_lever_applications');
       dropped.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       dropped.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+      dropped.execute('DROP TABLE IF EXISTS exercise_revisions');
+      dropped.execute('DROP TABLE IF EXISTS implementation_revisions');
       dropped.userVersion = 51;
       dropped.close();
       check(

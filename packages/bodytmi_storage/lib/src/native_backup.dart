@@ -156,6 +156,7 @@ final class NativeBackup {
           55,
           56,
           57,
+          58,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -306,6 +307,7 @@ final class NativeBackup {
             55,
             56,
             57,
+            58,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -338,6 +340,8 @@ final class NativeBackup {
         if (db.userVersion >= 56) 'program_upgrade_receipts',
         if (db.userVersion >= 8) 'workout_executions',
         if (db.userVersion >= 12) 'family_revisions',
+        if (db.userVersion >= 58) 'exercise_revisions',
+        if (db.userVersion >= 58) 'implementation_revisions',
         if (db.userVersion >= 27) 'derived_target_graphs',
         if (db.userVersion >= 3) ...[
           'program_revisions',
@@ -365,6 +369,30 @@ final class NativeBackup {
           families.add(family);
         }
         validateFamilyRevisions(families);
+      }
+      if (db.userVersion >= 58) {
+        final exercises = <ExerciseRevision>[];
+        for (final row in db.select('SELECT * FROM exercise_revisions')) {
+          final exercise = ExerciseRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (exercise.exercise.id != row['exercise_id'] ||
+              exercise.number != row['number'])
+            invalid('Exercise revision row identity mismatch.');
+          exercises.add(exercise);
+        }
+        validateExerciseRevisions(exercises);
+        final implementations = <ImplementationRevision>[];
+        for (final row in db.select('SELECT * FROM implementation_revisions')) {
+          final implementation = ImplementationRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (implementation.implementation.id != row['implementation_id'] ||
+              implementation.number != row['number'])
+            invalid('Implementation revision row identity mismatch.');
+          implementations.add(implementation);
+        }
+        validateImplementationRevisions(implementations, exercises);
       }
       if (db.userVersion >= 27) {
         final graphs = <DerivedTargetGraphRevision>[];

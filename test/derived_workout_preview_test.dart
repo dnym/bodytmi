@@ -314,6 +314,8 @@ void derivedWorkoutPreviewTests() {
         db.execute('DROP TABLE IF EXISTS shared_lever_applications');
         db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        db.execute('DROP TABLE IF EXISTS exercise_revisions');
+        db.execute('DROP TABLE IF EXISTS implementation_revisions');
         db.userVersion = 27;
         db.close();
         equal(NativeBackup.validateDatabase(path), 27);
@@ -356,7 +358,7 @@ void derivedWorkoutPreviewTests() {
         }
         final reopened = sqlite3.open(path);
         try {
-          equal(reopened.userVersion, 57);
+          equal(reopened.userVersion, 58);
         } finally {
           reopened.close();
         }
@@ -428,7 +430,7 @@ void derivedWorkoutPreviewTests() {
         );
         final copy = '${temp.path}/snapshot.sqlite';
         await store.snapshot(copy);
-        equal(NativeBackup.validateDatabase(copy), 57);
+        equal(NativeBackup.validateDatabase(copy), 58);
         final db = sqlite3.open(copy);
         db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         db.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -437,6 +439,8 @@ void derivedWorkoutPreviewTests() {
         db.execute('DROP TABLE IF EXISTS shared_lever_applications');
         db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        db.execute('DROP TABLE IF EXISTS exercise_revisions');
+        db.execute('DROP TABLE IF EXISTS implementation_revisions');
         db.userVersion = 27;
         db.close();
         rejects(() => NativeBackup.validateDatabase(copy));

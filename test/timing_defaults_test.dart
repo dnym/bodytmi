@@ -203,6 +203,8 @@ void timingDefaultsTests() {
       db.execute('DROP TABLE IF EXISTS shared_lever_applications');
       db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+      db.execute('DROP TABLE IF EXISTS exercise_revisions');
+      db.execute('DROP TABLE IF EXISTS implementation_revisions');
       db.execute('PRAGMA user_version = 44');
       db.close();
       store = await TrainingStore.open(path);
@@ -212,7 +214,7 @@ void timingDefaultsTests() {
       );
       equal(
         (await store.backup('${dir.path}/migrated'))['databaseSchemaVersion'],
-        57,
+        58,
       );
     } finally {
       await store.close();
@@ -327,6 +329,8 @@ void timingDefaultsTests() {
         native.execute('DROP TABLE IF EXISTS shared_lever_applications');
         native.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         native.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        native.execute('DROP TABLE IF EXISTS exercise_revisions');
+        native.execute('DROP TABLE IF EXISTS implementation_revisions');
         native.execute('PRAGMA user_version = 44');
         native.close();
         rejects(
@@ -615,6 +619,8 @@ void timingDefaultsTests() {
       old.execute('DROP TABLE IF EXISTS shared_lever_applications');
       old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+      old.execute('DROP TABLE IF EXISTS exercise_revisions');
+      old.execute('DROP TABLE IF EXISTS implementation_revisions');
       old.userVersion = 12;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 12);
@@ -670,14 +676,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          57,
+          58,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/57',
+          'bodytmi-logical-export/58',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -723,6 +729,8 @@ void timingDefaultsTests() {
       forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
       forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       forged.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+      forged.execute('DROP TABLE IF EXISTS exercise_revisions');
+      forged.execute('DROP TABLE IF EXISTS implementation_revisions');
       forged.userVersion = 12;
       forged.close();
       rejects(

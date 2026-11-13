@@ -73,6 +73,12 @@ const storedCommandNames = [
   'family publish',
   'family show',
   'family list',
+  'exercise publish',
+  'exercise show',
+  'exercise list',
+  'implementation publish',
+  'implementation show',
+  'implementation list',
   'link create',
   'link show',
   'link list',
@@ -446,6 +452,12 @@ Future<Map<String, Object?>> executeStored(
     'family publish' => {'family', 'expectedRevision'},
     'family show' => {'familyId', 'revision'},
     'family list' => <String>{},
+    'exercise publish' => {'exercise', 'expectedRevision'},
+    'exercise show' => {'exerciseId', 'revision'},
+    'exercise list' => <String>{},
+    'implementation publish' => {'implementation', 'expectedRevision'},
+    'implementation show' => {'implementationId', 'revision'},
+    'implementation list' => <String>{},
     'link create' => {'link', 'expectedRevision', 'createdAt', 'confirm'},
     'link show' => {'linkId', 'revision'},
     'link list' => <String>{},
@@ -1749,6 +1761,40 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final f in all) f.toJson()];
+      case 'exercise publish':
+        data = (await CatalogService(store).publishExercise(
+          ExerciseDefinition.fromJson(request['exercise']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'exercise show':
+        data = (await CatalogService(store).exerciseRevision(
+          identifier(request, 'exerciseId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'exercise list':
+        final all = await store.exerciseRevisions();
+        all.sort((a, b) {
+          final id = a.exercise.id.compareTo(b.exercise.id);
+          return id == 0 ? a.number.compareTo(b.number) : id;
+        });
+        data = [for (final e in all) e.toJson()];
+      case 'implementation publish':
+        data = (await CatalogService(store).publishImplementation(
+          ExerciseImplementation.fromJson(request['implementation']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'implementation show':
+        data = (await CatalogService(store).implementationRevision(
+          identifier(request, 'implementationId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'implementation list':
+        final all = await store.implementationRevisions();
+        all.sort((a, b) {
+          final id = a.implementation.id.compareTo(b.implementation.id);
+          return id == 0 ? a.number.compareTo(b.number) : id;
+        });
+        data = [for (final i in all) i.toJson()];
       case 'link create':
         data = (await LeverLinkService(store).create(
           input: jsonObject(request['link'], 'link'),

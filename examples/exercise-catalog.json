@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "exercise": {
+    "id": "row",
+    "name": "Row",
+    "notes": "Three authored implementations share this exercise identity."
+  }
+}

@@ -982,6 +982,8 @@ void programTests() {
         oldDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
         oldDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         oldDb.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        oldDb.execute('DROP TABLE IF EXISTS exercise_revisions');
+        oldDb.execute('DROP TABLE IF EXISTS implementation_revisions');
         oldDb.userVersion = 35;
         oldDb.close();
         equal(NativeBackup.validateDatabase(previousProfile), 35);
@@ -1047,7 +1049,7 @@ void programTests() {
         );
         final snapshot = '${dir.path}/manual.sqlite';
         await store.snapshot(snapshot);
-        equal(NativeBackup.validateDatabase(snapshot), 57);
+        equal(NativeBackup.validateDatabase(snapshot), 58);
         final oldLabel = sqlite3.open(snapshot);
         oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -1056,6 +1058,8 @@ void programTests() {
         oldLabel.execute('DROP TABLE IF EXISTS shared_lever_applications');
         oldLabel.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         oldLabel.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        oldLabel.execute('DROP TABLE IF EXISTS exercise_revisions');
+        oldLabel.execute('DROP TABLE IF EXISTS implementation_revisions');
         oldLabel.userVersion = 35;
         oldLabel.close();
         rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -1497,14 +1501,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          57,
+          58,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/57',
+          'bodytmi-logical-export/58',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
@@ -1984,6 +1988,8 @@ void programTests() {
           db.execute('DROP TABLE IF EXISTS shared_lever_applications');
           db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
           db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+          db.execute('DROP TABLE IF EXISTS exercise_revisions');
+          db.execute('DROP TABLE IF EXISTS implementation_revisions');
           db.execute('PRAGMA user_version = 2');
           db.execute('INSERT INTO revisions VALUES (?,?,?)', [
             rev.definition.id,

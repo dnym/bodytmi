@@ -394,16 +394,16 @@ void programOverrideTests() {
         // Portability: native and logical v57 round-trip, old labels rejected.
         final before = canonicalJson((await store.archive()).toJson());
         final manifest = await store.backup('${dir.path}/native');
-        equal(manifest['databaseSchemaVersion'], 57);
+        equal(manifest['databaseSchemaVersion'], 58);
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          57,
+          58,
         );
         final logical = await LogicalArchiveFiles.export(
           await store.archive(),
           '${dir.path}/logical.json',
         );
-        equal(logical['format'], 'bodytmi-logical-export/57');
+        equal(logical['format'], 'bodytmi-logical-export/58');
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
         );
@@ -439,6 +439,8 @@ void programOverrideTests() {
           File('${dir.path}/native/database.sqlite').readAsBytesSync(),
         );
         final nativeDb = sqlite3.open('${dir.path}/labeled.sqlite');
+        nativeDb.execute('DROP TABLE IF EXISTS exercise_revisions');
+        nativeDb.execute('DROP TABLE IF EXISTS implementation_revisions');
         nativeDb.userVersion = 56;
         nativeDb.close();
         final nativeLabel = await failure(

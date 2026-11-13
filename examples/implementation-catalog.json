@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "implementation": {
+    "id": "cable-row",
+    "exerciseId": "row",
+    "name": "Seated cable row"
+  }
+}

@@ -176,6 +176,8 @@ void tempoTests() {
         old.execute('DROP TABLE IF EXISTS shared_lever_applications');
         old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        old.execute('DROP TABLE IF EXISTS exercise_revisions');
+        old.execute('DROP TABLE IF EXISTS implementation_revisions');
         old.userVersion = 43;
         old.close();
         rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -254,6 +256,8 @@ void tempoTests() {
         legacy.execute('DROP TABLE IF EXISTS shared_lever_applications');
         legacy.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         legacy.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        legacy.execute('DROP TABLE IF EXISTS exercise_revisions');
+        legacy.execute('DROP TABLE IF EXISTS implementation_revisions');
         legacy.userVersion = 43;
         legacy.close();
         equal(NativeBackup.validateDatabase('${dir.path}/legacy.sqlite'), 43);
@@ -526,6 +530,8 @@ void tempoTests() {
         old.execute('DROP TABLE IF EXISTS shared_lever_applications');
         old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        old.execute('DROP TABLE IF EXISTS exercise_revisions');
+        old.execute('DROP TABLE IF EXISTS implementation_revisions');
         old.userVersion = 43;
         old.close();
         rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -728,6 +734,8 @@ void tempoTests() {
         legacyDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
         legacyDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         legacyDb.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        legacyDb.execute('DROP TABLE IF EXISTS exercise_revisions');
+        legacyDb.execute('DROP TABLE IF EXISTS implementation_revisions');
         legacyDb.userVersion = 42;
         legacyDb.close();
         equal(NativeBackup.validateDatabase('${dir.path}/legacy.sqlite'), 42);
@@ -976,6 +984,8 @@ void tempoTests() {
         oldDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
         oldDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         oldDb.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+        oldDb.execute('DROP TABLE IF EXISTS exercise_revisions');
+        oldDb.execute('DROP TABLE IF EXISTS implementation_revisions');
         oldDb.userVersion = 42;
         oldDb.close();
         rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -1066,6 +1076,8 @@ void tempoTests() {
       old.execute('DROP TABLE IF EXISTS shared_lever_applications');
       old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+      old.execute('DROP TABLE IF EXISTS exercise_revisions');
+      old.execute('DROP TABLE IF EXISTS implementation_revisions');
       old.userVersion = 9;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 9);
@@ -1076,7 +1088,7 @@ void tempoTests() {
         equal((await TimingService(migrated).show('clock')).plan.tempo, null);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          57,
+          58,
         );
       } finally {
         await migrated.close();
@@ -1379,13 +1391,13 @@ void tempoTests() {
       t = await timing.resume(t.id, t.version, 'epoch', instant(1));
       await timing.advance(t.id, t.version, 'epoch', 4500, instant(1));
       final expected = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 57);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 58);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/57',
+        'bodytmi-logical-export/58',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -1439,6 +1451,8 @@ void tempoTests() {
       old.execute('DROP TABLE IF EXISTS shared_lever_applications');
       old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+      old.execute('DROP TABLE IF EXISTS exercise_revisions');
+      old.execute('DROP TABLE IF EXISTS implementation_revisions');
       old.userVersion = 9;
       old.close();
       rejects(

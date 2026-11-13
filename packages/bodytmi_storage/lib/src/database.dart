@@ -21,6 +21,24 @@ class FamilyRevisions extends Table {
   Set<Column> get primaryKey => {familyId, number};
 }
 
+@DataClassName('StoredExerciseRevision')
+class ExerciseRevisions extends Table {
+  TextColumn get exerciseId => text()();
+  IntColumn get number => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {exerciseId, number};
+}
+
+@DataClassName('StoredImplementationRevision')
+class ImplementationRevisions extends Table {
+  TextColumn get implementationId => text()();
+  IntColumn get number => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {implementationId, number};
+}
+
 class Sessions extends Table {
   TextColumn get id => text()();
   TextColumn get snapshot => text()();
@@ -185,6 +203,8 @@ class ProgramUpgradeReceipts extends Table {
   tables: [
     Revisions,
     FamilyRevisions,
+    ExerciseRevisions,
+    ImplementationRevisions,
     Sessions,
     Finalizations,
     ProgressionDecisions,
@@ -208,13 +228,13 @@ class ProgramUpgradeReceipts extends Table {
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 57;
+  int get schemaVersion => 58;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
-      await customStatement('PRAGMA user_version = 57');
+      await customStatement('PRAGMA user_version = 58');
       await validateMigration();
     }),
     onUpgrade: (m, from, to) async {
@@ -275,8 +295,9 @@ class TrainingDatabase extends _$TrainingDatabase {
             54,
             55,
             56,
+            57,
           }.contains(from) ||
-          to != 57)
+          to != 58)
         throw StateError('Unsupported database migration $from -> $to.');
       await transaction(() async {
         final schema = await customSelect(
@@ -304,9 +325,13 @@ class TrainingDatabase extends _$TrainingDatabase {
           await m.createTable(sharedLeverApplications);
           await m.createTable(linkRetirementAnchors);
         }
+        if (from < 58) {
+          await m.createTable(exerciseRevisions);
+          await m.createTable(implementationRevisions);
+        }
         // Drift also writes this after the callback. Writing it within our
         // transaction prevents a crash leaving new DDL with the old version.
-        await customStatement('PRAGMA user_version = 57');
+        await customStatement('PRAGMA user_version = 58');
         await validateMigration();
       });
     },
@@ -323,7 +348,7 @@ class TrainingDatabase extends _$TrainingDatabase {
     final schema = await customSelect(
       'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
     ).get();
-    validateSchema(schema.map((row) => row.data), 57);
+    validateSchema(schema.map((row) => row.data), 58);
     if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
       throw const BodyTmiException(
         'storage',

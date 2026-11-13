@@ -769,6 +769,8 @@ void incrementBandsTests() {
       old.execute('DROP TABLE IF EXISTS shared_lever_applications');
       old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+      old.execute('DROP TABLE IF EXISTS exercise_revisions');
+      old.execute('DROP TABLE IF EXISTS implementation_revisions');
       old.userVersion = 22;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 22);
@@ -777,7 +779,7 @@ void incrementBandsTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), before);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          57,
+          58,
         );
       } finally {
         await migrated.close();
@@ -842,6 +844,8 @@ void incrementBandsTests() {
       wrong.execute('DROP TABLE IF EXISTS shared_lever_applications');
       wrong.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       wrong.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
+      wrong.execute('DROP TABLE IF EXISTS exercise_revisions');
+      wrong.execute('DROP TABLE IF EXISTS implementation_revisions');
       wrong.userVersion = 22;
       wrong.close();
       rejects(() => NativeBackup.validateDatabase('$dir/new/database.sqlite'));

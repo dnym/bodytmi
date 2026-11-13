@@ -54,7 +54,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 57) {
+            if (native.userVersion > 58) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -115,7 +115,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 56);
+    validateSchema(schema.map((row) => row.data), 58);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -131,6 +131,8 @@ final class TrainingStore implements TrainingRepository {
             + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM progression_reconciliations), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM workout_executions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM family_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM exercise_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM implementation_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM derived_target_graphs), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
@@ -181,6 +183,76 @@ final class TrainingStore implements TrainingRepository {
         .insert(
           FamilyRevisionsCompanion.insert(
             familyId: revision.family.id,
+            number: revision.number,
+            snapshot: _snapshot(revision.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<ExerciseRevision>> exerciseRevisions() async {
+    final result = <ExerciseRevision>[];
+    for (final row in await _db.select(_db.exerciseRevisions).get()) {
+      final revision = ExerciseRevision.fromJson(jsonDecode(row.snapshot));
+      if (revision.exercise.id != row.exerciseId ||
+          revision.number != row.number)
+        invalid('Stored exercise revision identity is inconsistent.');
+      result.add(revision);
+    }
+    validateExerciseRevisions(result);
+    return result;
+  }
+
+  @override
+  Future<void> insertExerciseRevision(ExerciseRevision revision) async {
+    await _db
+        .into(_db.exerciseRevisions)
+        .insert(
+          ExerciseRevisionsCompanion.insert(
+            exerciseId: revision.exercise.id,
+            number: revision.number,
+            snapshot: _snapshot(revision.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<ImplementationRevision>> implementationRevisions() async {
+    final exercises = await exerciseRevisions();
+    final result = <ImplementationRevision>[];
+    for (final row in await _db.select(_db.implementationRevisions).get()) {
+      final revision = ImplementationRevision.fromJson(
+        jsonDecode(row.snapshot),
+      );
+      if (revision.implementation.id != row.implementationId ||
+          revision.number != row.number)
+        invalid('Stored implementation revision identity is inconsistent.');
+      result.add(revision);
+    }
+    validateImplementationRevisions(result, exercises);
+    return result;
+  }
+
+  @override
+  Future<void> insertImplementationRevision(
+    ImplementationRevision revision,
+  ) async {
+    final exerciseId = revision.implementation.exerciseId;
+    final exists =
+        await (_db.select(_db.exerciseRevisions)
+              ..where((t) => t.exerciseId.equals(exerciseId))
+              ..limit(1))
+            .get();
+    if (exists.isEmpty)
+      throw const BodyTmiException(
+        'not_found',
+        'Implementation references an exercise that is not published.',
+      );
+    await _db
+        .into(_db.implementationRevisions)
+        .insert(
+          ImplementationRevisionsCompanion.insert(
+            implementationId: revision.implementation.id,
             number: revision.number,
             snapshot: _snapshot(revision.toJson()),
           ),

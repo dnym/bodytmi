@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/57';
+const _format = 'bodytmi-logical-export/58';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -118,6 +118,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/54',
       'bodytmi-logical-export/55',
       'bodytmi-logical-export/56',
+      'bodytmi-logical-export/57',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -126,7 +127,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final overrideData = input['format'] == _format;
+    final catalogData = input['format'] == _format;
+    final overrideData =
+        catalogData || input['format'] == 'bodytmi-logical-export/57';
     final upgradeData =
         overrideData || input['format'] == 'bodytmi-logical-export/56';
     final ordinalData =
@@ -250,6 +253,18 @@ final class LogicalArchiveFiles {
     final hadSharedApplications = inputData.containsKey('sharedApplications');
     final hadLinkRetirements = inputData.containsKey('linkRetirements');
     final hadProgramUpgrades = inputData.containsKey('programUpgrades');
+    final hadExercises = inputData.containsKey('exercises');
+    final hadImplementations = inputData.containsKey('implementations');
+    if (!catalogData &&
+        inputData['exercises'] is List &&
+        (inputData['exercises'] as List).isEmpty) {
+      inputData.remove('exercises');
+    }
+    if (!catalogData &&
+        inputData['implementations'] is List &&
+        (inputData['implementations'] as List).isEmpty) {
+      inputData.remove('implementations');
+    }
     if (!upgradeData &&
         inputData['programUpgrades'] is List &&
         (inputData['programUpgrades'] as List).isEmpty) {
@@ -310,6 +325,8 @@ final class LogicalArchiveFiles {
       if (executionData) 'executions',
       if (familyData) 'families',
       if (graphData) 'graphs',
+      if (catalogData) 'exercises',
+      if (catalogData) 'implementations',
     });
     if (!legacy && !inputData.containsKey('progressions'))
       invalid('Logical format requires progression records.');
@@ -339,6 +356,10 @@ final class LogicalArchiveFiles {
       invalid('Logical v12 requires family revisions.');
     if (graphData && !inputData.containsKey('graphs'))
       invalid('Logical v27 requires derived target graph revisions.');
+    if (catalogData && !inputData.containsKey('exercises'))
+      invalid('Logical v58 requires exercise revisions.');
+    if (catalogData && !inputData.containsKey('implementations'))
+      invalid('Logical v58 requires implementation revisions.');
     if (!derivedBodyMassData) {
       for (final item in jsonList(inputData, 'sessions')) {
         final session = jsonObject(item, 'session');
@@ -611,6 +632,8 @@ final class LogicalArchiveFiles {
     if (!executionData) data.remove('executions');
     if (!familyData) data.remove('families');
     if (!graphData && !hadGraphs) data.remove('graphs');
+    if (!catalogData && !hadExercises) data.remove('exercises');
+    if (!catalogData && !hadImplementations) data.remove('implementations');
     if (!programData) for (final key in programKeys) data.remove(key);
     if (_checksum({
           'format': input['format'],
@@ -629,15 +652,35 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV57.values) {
+          for (final ddl in schemaV58.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 57');
+          db.execute('PRAGMA user_version = 58');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
               [family.family.id, family.number, canonicalJson(family.toJson())],
+            );
+          }
+          for (final exercise in archive.exercises) {
+            db.execute(
+              'INSERT INTO exercise_revisions(exercise_id,number,snapshot) VALUES (?,?,?)',
+              [
+                exercise.exercise.id,
+                exercise.number,
+                canonicalJson(exercise.toJson()),
+              ],
+            );
+          }
+          for (final implementation in archive.implementations) {
+            db.execute(
+              'INSERT INTO implementation_revisions(implementation_id,number,snapshot) VALUES (?,?,?)',
+              [
+                implementation.implementation.id,
+                implementation.number,
+                canonicalJson(implementation.toJson()),
+              ],
             );
           }
           for (final graph in archive.graphs) {
