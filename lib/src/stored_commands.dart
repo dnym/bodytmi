@@ -106,6 +106,7 @@ const storedCommandNames = [
   'archive restore',
   'progression propose',
   'progression track',
+  'progression reconcile-status',
   'progression show',
   'progression accept',
   'progression decline',
@@ -521,6 +522,17 @@ Future<Map<String, Object?>> executeStored(
       'role',
       'runId',
       'asOf',
+    },
+    'progression reconcile-status' => {
+      'templateId',
+      'revision',
+      'slotId',
+      'role',
+      'runId',
+      'asOf',
+      'sessionId',
+      'rule',
+      'ruleType',
     },
     'progression show' => {'sessionId', 'slotId', 'role'},
     'progression accept' => {
@@ -1307,6 +1319,28 @@ Future<Map<String, Object?>> executeStored(
           role: request.containsKey('role')
               ? requiredString(request, 'role')
               : 'work',
+        );
+      case 'progression reconcile-status':
+        data = await StoredProgressionService(store).reconcileStatus(
+          templateId: identifier(request, 'templateId'),
+          revision: integer('revision'),
+          slotId: identifier(request, 'slotId'),
+          asOf: parseInstant(request['asOf'], 'asOf'),
+          role: request.containsKey('role')
+              ? requiredString(request, 'role')
+              : 'work',
+          runId: request.containsKey('runId')
+              ? identifier(request, 'runId')
+              : null,
+          sessionId: request.containsKey('sessionId')
+              ? identifier(request, 'sessionId')
+              : null,
+          rule: request.containsKey('rule')
+              ? jsonObject(request['rule'], 'rule')
+              : null,
+          ruleType: request.containsKey('ruleType')
+              ? requiredString(request, 'ruleType')
+              : 'double',
         );
       case 'progression propose':
       case 'progression show':

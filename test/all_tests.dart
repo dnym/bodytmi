@@ -32,6 +32,7 @@ import 'session_body_mass_test.dart';
 import 'stored_body_mass_test.dart';
 import 'program_test.dart';
 import 'stored_progression_test.dart';
+import 'reconciliation_test.dart';
 import 'logical_archive_test.dart';
 import 'backup_test.dart';
 import 'storage_test.dart';
@@ -79,6 +80,7 @@ Future<void> main() async {
   storedBodyMassTests();
   programTests();
   storedProgressionTests();
+  reconciliationTests();
   logicalArchiveTests();
   backupTests();
   storageTests();

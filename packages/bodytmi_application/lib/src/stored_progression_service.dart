@@ -1,5 +1,6 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'progression_decision.dart';
+import 'progression_reconciliation.dart';
 import 'role_progression_preview.dart';
 import 'canonical_json.dart';
 import 'training_repository.dart';
@@ -52,20 +53,15 @@ final class StoredProgressionService {
     );
     if (before != null &&
         (before.ruleType != ruleType ||
-            canonicalJson(before.rule) != canonicalJson(rule))) {
-      _conflict('Changing an active rule requires explicit reconciliation.');
-    }
-    if (before != null &&
-        !matchesSessionProgressionBaseline(
-          session,
-          slotId,
-          role,
-          before.controlledMetrics,
-          before,
-        )) {
-      _conflict(
-        'Session prescription differs from the latest applied progression; reconcile first.',
-      );
+            canonicalJson(before.rule) != canonicalJson(rule) ||
+            !matchesSessionProgressionBaseline(
+              session,
+              slotId,
+              role,
+              before.controlledMetrics,
+              before,
+            ))) {
+      _reconcileRequired(session, slotId, role, before, ruleType, rule);
     }
     final preview = const RoleProgressionPreview().evaluate(
       session: session,
@@ -89,6 +85,99 @@ final class StoredProgressionService {
         'previousInputsChanged': before == null ? false : await stale(before),
         'pendingVersion': existing?.version,
         'pendingStale': existing == null ? null : await stale(existing),
+      },
+    };
+  });
+
+  /// Explains every explicit difference between a candidate prescription,
+  /// existing session and rule and the latest resolved track. This writes
+  /// nothing and reconciles nothing; it only names the reconciliation kinds
+  /// that `store start` and `progression propose` would require.
+  Future<Map<String, Object?>> reconcileStatus({
+    required String templateId,
+    required int revision,
+    required String slotId,
+    required DateTime asOf,
+    String role = 'work',
+    String? runId,
+    String? sessionId,
+    Map<String, Object?>? rule,
+    String ruleType = 'double',
+  }) => repository.transaction(() async {
+    identifier({'id': templateId}, 'id');
+    identifier({'id': slotId}, 'id');
+    if (revision < 1 || !effortRoles.contains(role))
+      invalid('Invalid progression reconciliation revision or role.');
+    if (runId != null) {
+      identifier({'id': runId}, 'id');
+      if (!(await repository.programRuns()).any((run) => run.id == runId)) {
+        throw const BodyTmiException('not_found', 'Program run not found.');
+      }
+    }
+    if (rule != null) {
+      if (ruleType == 'double') {
+        DoubleProgressionRule.fromJson(rule);
+      } else if (ruleType == 'threshold') {
+        ThresholdRule.fromJson(rule);
+      } else {
+        invalid('Unknown stored progression rule type.');
+      }
+    }
+    final prescription = await StoredTrainingService(
+      repository,
+    ).revision(templateId, revision);
+    final slots = prescription.definition.slots.where((s) => s.id == slotId);
+    if (slots.isEmpty) invalid('Unknown progression slot.');
+    TrainingSession? session;
+    String? sessionRunId;
+    if (sessionId != null) {
+      session = await StoredTrainingService(repository).session(sessionId);
+      sessionRunId = (await repository.sessionPrograms())
+          .where((b) => b.sessionId == sessionId)
+          .firstOrNull
+          ?.runId;
+      if (runId != null && runId != sessionRunId)
+        invalid('Candidate session belongs to another program run.');
+    }
+    final decisions = (await repository.progressionDecisions()).where(
+      (d) =>
+          d.resolvedAt != null &&
+          !d.resolvedAt!.isAfter(asOf) &&
+          d.session.startedAt.isBefore(asOf),
+    );
+    final latest = latestApplication(
+      decisions,
+      templateId,
+      slots.single,
+      runId: runId,
+      role: role,
+    );
+    final assessment = assessProgressionReconciliation(
+      prescription: prescription,
+      templateId: templateId,
+      revision: revision,
+      slotId: slotId,
+      role: role,
+      track: latest,
+      session: session,
+      runId: runId,
+      asOf: asOf,
+      ruleType: ruleType,
+      rule: rule,
+    );
+    final kinds = {for (final blocker in assessment.blockers) blocker.kind};
+    return {
+      ...assessment.toJson(),
+      'inputsChanged': latest == null ? false : await stale(latest),
+      'blockedCommands': {
+        'store start': [
+          for (final kind in _startReconciliationKinds)
+            if (kinds.contains(kind)) kind,
+        ],
+        'progression propose': [
+          for (final kind in _proposeReconciliationKinds)
+            if (kinds.contains(kind)) kind,
+        ],
       },
     };
   });
@@ -214,8 +303,15 @@ final class StoredProgressionService {
     );
     if (before != null &&
         (before.ruleType != ruleType ||
-            canonicalJson(before.rule) != canonicalJson(rule)))
-      _conflict('Changing an active rule requires explicit reconciliation.');
+            canonicalJson(before.rule) != canonicalJson(rule) ||
+            !matchesSessionProgressionBaseline(
+              session,
+              slotId,
+              role,
+              before.controlledMetrics,
+              before,
+            )))
+      _reconcileRequired(session, slotId, role, before, ruleType, rule);
     final next = ProgressionDecision(
       session: session,
       slotId: slotId,
@@ -229,10 +325,6 @@ final class StoredProgressionService {
       previousCursor: before?.cursor ?? 0,
       role: role,
     );
-    if (before != null && !matchesProgressionBaseline(next, before))
-      _conflict(
-        'Session prescription differs from the latest applied progression; reconcile first.',
-      );
     final comparable = next.toJson()
       ..['version'] = existing?.version ?? next.version;
     if (existing != null &&
@@ -339,6 +431,57 @@ final class StoredProgressionService {
     await repository.saveProgressionDecision(declined);
     return declined;
   });
+
+  /// Enforcement stays with the predicates above; this only explains them with
+  /// the same comparison that `progression reconcile-status` reports.
+  Never _reconcileRequired(
+    TrainingSession session,
+    String slotId,
+    String role,
+    ProgressionDecision before,
+    String ruleType,
+    Map<String, Object?> rule,
+  ) {
+    final assessment = assessProgressionReconciliation(
+      prescription: session.revision,
+      templateId: session.revision.definition.id,
+      revision: session.revision.number,
+      slotId: slotId,
+      role: role,
+      track: before,
+      session: session,
+      runId: before.runId,
+      ruleType: ruleType,
+      rule: rule,
+    );
+    if (!assessment.required)
+      _conflict(
+        'Session prescription or rule differs from the latest applied '
+        'progression; explicit reconciliation is required.',
+      );
+    throw reconciliationConflict(
+      assessment,
+      context: 'Progression ${session.id}',
+    );
+  }
 }
+
+/// Kinds that stop a later `store start` from consuming the stored track.
+const _startReconciliationKinds = [
+  'workingSetCount',
+  'slotTarget',
+  'metricDimension',
+  'effortTarget',
+  'objectiveCriteria',
+];
+
+/// Kinds that stop `progression propose` from continuing the stored lineage.
+const _proposeReconciliationKinds = [
+  'workingSetCount',
+  'effortTarget',
+  'objectiveCriteria',
+  'sessionTarget',
+  'rule',
+];
 
 Never _conflict(String message) => throw BodyTmiException('conflict', message);

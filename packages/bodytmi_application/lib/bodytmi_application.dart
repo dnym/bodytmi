@@ -13,6 +13,7 @@ export 'src/progression_decision.dart';
 export 'src/progression_evaluation.dart';
 export 'src/role_progression_preview.dart';
 export 'src/stored_progression_service.dart';
+export 'src/progression_reconciliation.dart';
 export 'src/canonical_json.dart';
 export 'src/program_service.dart';
 export 'src/stored_body_mass_service.dart';

@@ -2,6 +2,7 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'training_service.dart';
 import 'training_archive.dart';
 import 'progression_decision.dart';
+import 'progression_reconciliation.dart';
 import 'program_service.dart';
 import 'canonical_json.dart';
 import 'stored_body_mass_service.dart';
@@ -208,7 +209,14 @@ final class StoredTrainingService {
       final count = workingCounts[(set.slotId, set.role)];
       if (vector.length != count ||
           previousAuthored[(set.slotId, set.role)]!.length != count)
-        _conflict();
+        _startReconciliationRequired(
+          prescription,
+          set.slotId,
+          set.role,
+          applied,
+          startedAt,
+          runId,
+        );
       final oldObjectives = applied.sets[set.ordinal].maxEffortMetrics;
       if (oldObjectives.length != set.maxEffortMetrics.length ||
           !oldObjectives.containsAll(set.maxEffortMetrics) ||
@@ -220,23 +228,51 @@ final class StoredTrainingService {
                 for (final e in set.criteria.entries)
                   e.key: e.value.semanticJson(),
               }))
-        _conflict();
+        _startReconciliationRequired(
+          prescription,
+          set.slotId,
+          set.role,
+          applied,
+          startedAt,
+          runId,
+        );
       final slot = prescription.definition.slot(set.slotId);
       for (final metric in applied.controlledMetrics) {
         if (set.suggested[metric]?.dimension !=
             vector[set.ordinal][metric]!.dimension)
-          _conflict();
+          _startReconciliationRequired(
+            prescription,
+            set.slotId,
+            set.role,
+            applied,
+            startedAt,
+            runId,
+          );
         final target = slot.targets[metric],
             priorTarget = applied.slot.targets[metric];
         if (target == null ||
             priorTarget == null ||
             target.compareTo(priorTarget) != 0)
-          _conflict();
+          _startReconciliationRequired(
+            prescription,
+            set.slotId,
+            set.role,
+            applied,
+            startedAt,
+            runId,
+          );
         if (authored[(set.slotId, set.role)]![set.ordinal][metric]!.compareTo(
               previousAuthored[(set.slotId, set.role)]![set.ordinal][metric]!,
             ) !=
             0)
-          _conflict();
+          _startReconciliationRequired(
+            prescription,
+            set.slotId,
+            set.role,
+            applied,
+            startedAt,
+            runId,
+          );
       }
       final suggested = {
         ...set.suggested,
@@ -850,5 +886,31 @@ Never _conflict() => throw const BodyTmiException(
   'conflict',
   'Stored content changed or identity already exists. Refresh before retrying.',
 );
+
+/// Names the explicit reconciliation kinds that stop a new session from
+/// consuming an accepted progression track. The guarded predicates above stay
+/// authoritative; this only explains a difference that already blocked the start.
+Never _startReconciliationRequired(
+  WorkoutRevision prescription,
+  String slotId,
+  String role,
+  ProgressionDecision applied,
+  DateTime asOf,
+  String? runId,
+) {
+  final assessment = assessProgressionReconciliation(
+    prescription: prescription,
+    templateId: prescription.definition.id,
+    revision: prescription.number,
+    slotId: slotId,
+    role: role,
+    track: applied,
+    runId: runId,
+    asOf: asOf,
+  );
+  if (!assessment.required) _conflict();
+  throw reconciliationConflict(assessment, context: 'Store start');
+}
+
 Never _missing(String kind) =>
     throw BodyTmiException('not_found', '$kind not found.');
