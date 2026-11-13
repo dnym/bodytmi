@@ -246,7 +246,7 @@ Future<Map<String, Object?>> executeStored(
       'acceptSuggested',
     },
     'timer run' => {'id', 'expectedVersion', 'runForMilliseconds', 'stream'},
-    'store publish' => {'definition', 'expectedRevision'},
+    'store publish' => {'definition', 'expectedRevision', 'requireCatalog'},
     'store revision' => {'templateId', 'revision'},
     'store start' => {
       'id',
@@ -449,7 +449,7 @@ Future<Map<String, Object?>> executeStored(
       'familyId',
       'familyRevision',
     },
-    'family publish' => {'family', 'expectedRevision'},
+    'family publish' => {'family', 'expectedRevision', 'requireCatalog'},
     'family show' => {'familyId', 'revision'},
     'family list' => <String>{},
     'exercise publish' => {'exercise', 'expectedRevision'},
@@ -1554,6 +1554,7 @@ Future<Map<String, Object?>> executeStored(
         data = (await service.publish(
           WorkoutDefinition.fromJson(request['definition']),
           integer('expectedRevision', min: 0),
+          requireCatalog: flag('requireCatalog'),
         )).toJson();
       case 'store revision':
         data = (await service.revision(
@@ -1748,6 +1749,7 @@ Future<Map<String, Object?>> executeStored(
         data = (await FamilyService(store).publish(
           ExerciseFamily.fromJson(request['family']),
           integer('expectedRevision', min: 0),
+          requireCatalog: flag('requireCatalog'),
         )).toJson();
       case 'family show':
         data = (await FamilyService(store).revision(

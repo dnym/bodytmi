@@ -136,10 +136,33 @@ final class StoredTrainingService {
 
   Future<WorkoutRevision> publish(
     WorkoutDefinition definition,
-    int expectedRevision,
-  ) => repository.transaction(() async {
+    int expectedRevision, {
+    bool requireCatalog = false,
+  }) => repository.transaction(() async {
     final previous = await repository.revision(definition.id);
     if ((previous?.number ?? 0) != expectedRevision) _conflict();
+    final implementations = await repository.implementationRevisions();
+    final owners = implementationOwners(implementations);
+    validateCatalogSlotAdoption(definition.slots, owners);
+    if (requireCatalog) {
+      final exercises = {
+        for (final revision in await repository.exerciseRevisions())
+          revision.exercise.id,
+      };
+      for (final slot in definition.slots) {
+        if (!exercises.contains(slot.exerciseId))
+          throw BodyTmiException(
+            'not_found',
+            'Slot exercise ${slot.exerciseId} is not published in the catalog.',
+          );
+        if (owners[slot.implementation] != slot.exerciseId)
+          throw BodyTmiException(
+            'not_found',
+            'Slot implementation ${slot.implementation} is not a published '
+                'implementation of exercise ${slot.exerciseId}.',
+          );
+      }
+    }
     final next = WorkoutRevision.publish(definition, previous: previous);
     await repository.insertRevision(next);
     return next;

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "requireCatalog": true,
+  "expectedRevision": 0,
+  "definition": {
+    "id": "catalog-adopt-practice",
+    "name": "Published catalog adoption",
+    "slots": [
+      {"id": "cable", "exercise": "row", "implementation": "cable-row", "equipment": "practice-cable",
+       "targets": {"mass": {"value": "25", "unit": "kg"}, "reps": {"value": "10", "unit": "rep"}}},
+      {"id": "dumbbell", "exercise": "row", "implementation": "dumbbell", "equipment": "practice-dumbbell",
+       "targets": {"mass": {"value": "20", "unit": "kg"}, "reps": {"value": "12", "unit": "rep"}}}
+    ],
+    "plan": {"id": "practice", "type": "sequence", "children": [
+      {"id": "cable-set", "type": "effort", "slot": "cable"},
+      {"id": "dumbbell-set", "type": "effort", "slot": "dumbbell"}
+    ]}
+  }
+}

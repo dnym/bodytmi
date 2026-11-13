@@ -370,6 +370,7 @@ final class NativeBackup {
         }
         validateFamilyRevisions(families);
       }
+      final catalogOwners = <String, String>{};
       if (db.userVersion >= 58) {
         final exercises = <ExerciseRevision>[];
         for (final row in db.select('SELECT * FROM exercise_revisions')) {
@@ -393,6 +394,7 @@ final class NativeBackup {
           implementations.add(implementation);
         }
         validateImplementationRevisions(implementations, exercises);
+        catalogOwners.addAll(implementationOwners(implementations));
       }
       if (db.userVersion >= 27) {
         final graphs = <DerivedTargetGraphRevision>[];
@@ -482,6 +484,7 @@ final class NativeBackup {
               revision.number != ++number) {
             invalid('Backup revision identity or sequence is inconsistent.');
           }
+          validateCatalogSlotAdoption(revision.definition.slots, catalogOwners);
         }
       } finally {
         revisions.close();
@@ -556,6 +559,10 @@ final class NativeBackup {
                   canonicalJson(session.revision.toJson())) {
             invalid('Backup session prescription or identity is inconsistent.');
           }
+          validateCatalogSlotAdoption(
+            session.revision.definition.slots,
+            catalogOwners,
+          );
           if (session.status == SessionStatus.finalized &&
               db.select('SELECT 1 FROM finalizations WHERE session_id = ?', [
                 session.id,

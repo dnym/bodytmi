@@ -1,4 +1,5 @@
 import 'errors.dart';
+import 'workout.dart';
 
 /// One independent catalog exercise. Catalog entries carry no prescription,
 /// progression or timing semantics, and nothing in the application keys
@@ -181,4 +182,30 @@ void validateImplementationRevisions(
   for (final versions in numbers.values)
     if (versions.any((n) => n > versions.length))
       invalid('Implementation revisions must start at one with no gaps.');
+}
+
+/// Owners of every published implementation identity, one exercise each.
+Map<String, String> implementationOwners(
+  List<ImplementationRevision> revisions,
+) => {
+  for (final revision in revisions)
+    revision.implementation.id: revision.implementation.exerciseId,
+};
+
+/// When a slot's implementation identifier matches a published implementation,
+/// that implementation must belong to the slot's exercise. Catalog adoption is
+/// checked within one record set; unmatched identifiers stay legacy authoring
+/// shorthand and no behaviour is ever inferred from an exercise name.
+void validateCatalogSlotAdoption(
+  Iterable<ExerciseSlot> slots,
+  Map<String, String> owners,
+) {
+  for (final slot in slots) {
+    final owner = owners[slot.implementation];
+    if (owner != null && owner != slot.exerciseId)
+      invalid(
+        'Slot implementation ${slot.implementation} belongs to exercise '
+        '$owner, not ${slot.exerciseId}.',
+      );
+  }
 }

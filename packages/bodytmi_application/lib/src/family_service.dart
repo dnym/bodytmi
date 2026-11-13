@@ -20,17 +20,32 @@ final class FamilyService {
         ));
   }
 
-  Future<FamilyRevision> publish(ExerciseFamily family, int expectedRevision) =>
-      repository.transaction(() async {
-        final all = await repository.familyRevisions();
-        validateFamilyRevisions(all);
-        final matches = all.where((r) => r.family.id == family.id).toList()
-          ..sort((a, b) => b.number.compareTo(a.number));
-        final before = matches.firstOrNull;
-        if ((before?.number ?? 0) != expectedRevision)
-          throw const BodyTmiException('conflict', 'Family revision changed.');
-        final next = FamilyRevision.publish(family, previous: before);
-        await repository.insertFamilyRevision(next);
-        return next;
-      });
+  Future<FamilyRevision> publish(
+    ExerciseFamily family,
+    int expectedRevision, {
+    bool requireCatalog = false,
+  }) => repository.transaction(() async {
+    final all = await repository.familyRevisions();
+    validateFamilyRevisions(all);
+    if (requireCatalog) {
+      final exercises = {
+        for (final revision in await repository.exerciseRevisions())
+          revision.exercise.id,
+      };
+      for (final member in family.exercises)
+        if (!exercises.contains(member))
+          throw BodyTmiException(
+            'not_found',
+            'Family member $member is not a published catalog exercise.',
+          );
+    }
+    final matches = all.where((r) => r.family.id == family.id).toList()
+      ..sort((a, b) => b.number.compareTo(a.number));
+    final before = matches.firstOrNull;
+    if ((before?.number ?? 0) != expectedRevision)
+      throw const BodyTmiException('conflict', 'Family revision changed.');
+    final next = FamilyRevision.publish(family, previous: before);
+    await repository.insertFamilyRevision(next);
+    return next;
+  });
 }

@@ -346,6 +346,9 @@ final class TrainingArchive {
     validateFamilyRevisions(families);
     validateExerciseRevisions(exercises);
     validateImplementationRevisions(implementations, exercises);
+    final catalogOwners = implementationOwners(implementations);
+    for (final revision in revisions)
+      validateCatalogSlotAdoption(revision.definition.slots, catalogOwners);
     validateDerivedTargetGraphRevisions(graphs);
     validateProgramPlanReferences(programRevisions, graphs);
     validateTimingData(timers, sessions);
