@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "expectedRevision": 1,
+  "instance": {
+    "id": "garage-cable-stack",
+    "equipmentId": "selectorized-machine",
+    "gym": "garage",
+    "name": "Garage cable stack",
+    "notes": "Stack markings are native; pound labels are display only.",
+    "scale": {
+      "id": "garage-cable-stack-selector",
+      "unit": "kg",
+      "ticks": [
+        {
+          "id": "s-10",
+          "value": "10",
+          "labels": {"lb": "22"}
+        },
+        {
+          "id": "s-15",
+          "value": "15",
+          "labels": {"lb": "33"}
+        },
+        {
+          "id": "s-20",
+          "value": "20",
+          "labels": {"lb": "44"}
+        }
+      ]
+    }
+  }
+}

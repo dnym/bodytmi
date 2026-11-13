@@ -54,7 +54,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 58) {
+            if (native.userVersion > 59) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -115,7 +115,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 58);
+    validateSchema(schema.map((row) => row.data), 59);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -133,6 +133,9 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM family_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM exercise_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM implementation_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM equipment_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM gym_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM equipment_instance_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM derived_target_graphs), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
@@ -253,6 +256,116 @@ final class TrainingStore implements TrainingRepository {
         .insert(
           ImplementationRevisionsCompanion.insert(
             implementationId: revision.implementation.id,
+            number: revision.number,
+            snapshot: _snapshot(revision.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<EquipmentRevision>> equipmentRevisions() async {
+    final result = <EquipmentRevision>[];
+    for (final row in await _db.select(_db.equipmentRevisions).get()) {
+      final revision = EquipmentRevision.fromJson(jsonDecode(row.snapshot));
+      if (revision.equipment.id != row.equipmentId ||
+          revision.number != row.number)
+        invalid('Stored equipment revision identity is inconsistent.');
+      result.add(revision);
+    }
+    validateEquipmentRevisions(result);
+    return result;
+  }
+
+  @override
+  Future<void> insertEquipmentRevision(EquipmentRevision revision) async {
+    await _db
+        .into(_db.equipmentRevisions)
+        .insert(
+          EquipmentRevisionsCompanion.insert(
+            equipmentId: revision.equipment.id,
+            number: revision.number,
+            snapshot: _snapshot(revision.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<GymRevision>> gymRevisions() async {
+    final result = <GymRevision>[];
+    for (final row in await _db.select(_db.gymRevisions).get()) {
+      final revision = GymRevision.fromJson(jsonDecode(row.snapshot));
+      if (revision.gym.id != row.gymId || revision.number != row.number)
+        invalid('Stored gym revision identity is inconsistent.');
+      result.add(revision);
+    }
+    validateGymRevisions(result);
+    return result;
+  }
+
+  @override
+  Future<void> insertGymRevision(GymRevision revision) async {
+    await _db
+        .into(_db.gymRevisions)
+        .insert(
+          GymRevisionsCompanion.insert(
+            gymId: revision.gym.id,
+            number: revision.number,
+            snapshot: _snapshot(revision.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<EquipmentInstanceRevision>> equipmentInstanceRevisions() async {
+    final equipment = await equipmentRevisions();
+    final gyms = await gymRevisions();
+    final result = <EquipmentInstanceRevision>[];
+    for (final row in await _db.select(_db.equipmentInstanceRevisions).get()) {
+      final revision = EquipmentInstanceRevision.fromJson(
+        jsonDecode(row.snapshot),
+      );
+      if (revision.instance.id != row.instanceId ||
+          revision.number != row.number)
+        invalid('Stored equipment instance revision identity is inconsistent.');
+      result.add(revision);
+    }
+    validateEquipmentInstanceRevisions(result, equipment, gyms);
+    return result;
+  }
+
+  @override
+  Future<void> insertEquipmentInstanceRevision(
+    EquipmentInstanceRevision revision,
+  ) async {
+    final equipmentId = revision.instance.equipmentId;
+    final equipment =
+        await (_db.select(_db.equipmentRevisions)
+              ..where((t) => t.equipmentId.equals(equipmentId))
+              ..limit(1))
+            .get();
+    if (equipment.isEmpty)
+      throw const BodyTmiException(
+        'not_found',
+        'Instance references equipment that is not published.',
+      );
+    final gymId = revision.instance.gymId;
+    if (gymId != null) {
+      final gyms =
+          await (_db.select(_db.gymRevisions)
+                ..where((t) => t.gymId.equals(gymId))
+                ..limit(1))
+              .get();
+      if (gyms.isEmpty)
+        throw const BodyTmiException(
+          'not_found',
+          'Instance references a gym that is not published.',
+        );
+    }
+    await _db
+        .into(_db.equipmentInstanceRevisions)
+        .insert(
+          EquipmentInstanceRevisionsCompanion.insert(
+            instanceId: revision.instance.id,
             number: revision.number,
             snapshot: _snapshot(revision.toJson()),
           ),

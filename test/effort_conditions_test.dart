@@ -630,6 +630,9 @@ void effortConditionsTests() {
       old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       old.execute('DROP TABLE IF EXISTS exercise_revisions');
       old.execute('DROP TABLE IF EXISTS implementation_revisions');
+      old.execute('DROP TABLE IF EXISTS equipment_revisions');
+      old.execute('DROP TABLE IF EXISTS gym_revisions');
+      old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       old.userVersion = 21;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 21);
@@ -638,7 +641,7 @@ void effortConditionsTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          58,
+          59,
         );
       } finally {
         await upgraded.close();
@@ -706,6 +709,9 @@ void effortConditionsTests() {
       wrong.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       wrong.execute('DROP TABLE IF EXISTS exercise_revisions');
       wrong.execute('DROP TABLE IF EXISTS implementation_revisions');
+      wrong.execute('DROP TABLE IF EXISTS equipment_revisions');
+      wrong.execute('DROP TABLE IF EXISTS gym_revisions');
+      wrong.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       wrong.userVersion = 21;
       wrong.close();
       rejects(

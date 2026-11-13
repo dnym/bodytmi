@@ -739,7 +739,7 @@ void linkConsumptionTests() {
         equal(archived.linkRetirements.length, 1);
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          58,
+          59,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
       } finally {
@@ -748,7 +748,7 @@ void linkConsumptionTests() {
       try {
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          58,
+          59,
         );
         final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
         try {
@@ -819,6 +819,9 @@ void linkConsumptionTests() {
         dropped.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         dropped.execute('DROP TABLE IF EXISTS exercise_revisions');
         dropped.execute('DROP TABLE IF EXISTS implementation_revisions');
+        dropped.execute('DROP TABLE IF EXISTS equipment_revisions');
+        dropped.execute('DROP TABLE IF EXISTS gym_revisions');
+        dropped.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
         dropped.userVersion = 53;
         dropped.close();
         check(
@@ -844,7 +847,7 @@ void linkConsumptionTests() {
             (await plainStore.backup(
               '${dir.path}/plain-native',
             ))['databaseSchemaVersion'],
-            58,
+            59,
           );
         } finally {
           await plainStore.close();
@@ -855,6 +858,9 @@ void linkConsumptionTests() {
         aged.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         aged.execute('DROP TABLE IF EXISTS exercise_revisions');
         aged.execute('DROP TABLE IF EXISTS implementation_revisions');
+        aged.execute('DROP TABLE IF EXISTS equipment_revisions');
+        aged.execute('DROP TABLE IF EXISTS gym_revisions');
+        aged.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
         aged.userVersion = 53;
         aged.close();
         equal(
@@ -880,7 +886,7 @@ void linkConsumptionTests() {
             (await migrated.backup(
               '${dir.path}/upgraded',
             ))['databaseSchemaVersion'],
-            58,
+            59,
           );
           final state = await LeverLinkService(migrated).state('idle-link');
           equal((state['chain']! as List).length, 0);

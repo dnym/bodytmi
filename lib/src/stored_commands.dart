@@ -79,6 +79,16 @@ const storedCommandNames = [
   'implementation publish',
   'implementation show',
   'implementation list',
+  'equipment publish',
+  'equipment show',
+  'equipment list',
+  'gym publish',
+  'gym show',
+  'gym list',
+  'instance publish',
+  'instance show',
+  'instance list',
+  'instance inventory',
   'link create',
   'link show',
   'link list',
@@ -458,6 +468,16 @@ Future<Map<String, Object?>> executeStored(
     'implementation publish' => {'implementation', 'expectedRevision'},
     'implementation show' => {'implementationId', 'revision'},
     'implementation list' => <String>{},
+    'equipment publish' => {'equipment', 'expectedRevision'},
+    'equipment show' => {'equipmentId', 'revision'},
+    'equipment list' => <String>{},
+    'gym publish' => {'gym', 'expectedRevision'},
+    'gym show' => {'gymId', 'revision'},
+    'gym list' => <String>{},
+    'instance publish' => {'instance', 'expectedRevision'},
+    'instance show' => {'instanceId', 'revision'},
+    'instance list' => <String>{},
+    'instance inventory' => {'gymId'},
     'link create' => {'link', 'expectedRevision', 'createdAt', 'confirm'},
     'link show' => {'linkId', 'revision'},
     'link list' => <String>{},
@@ -1797,6 +1817,66 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final i in all) i.toJson()];
+      case 'equipment publish':
+        data = (await EquipmentService(store).publishEquipment(
+          EquipmentDefinition.fromJson(request['equipment']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'equipment show':
+        data = (await EquipmentService(store).equipmentRevision(
+          identifier(request, 'equipmentId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'equipment list':
+        final all = await store.equipmentRevisions();
+        all.sort((a, b) {
+          final id = a.equipment.id.compareTo(b.equipment.id);
+          return id == 0 ? a.number.compareTo(b.number) : id;
+        });
+        data = [for (final e in all) e.toJson()];
+      case 'gym publish':
+        data = (await EquipmentService(store).publishGym(
+          GymDefinition.fromJson(request['gym']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'gym show':
+        data = (await EquipmentService(store).gymRevision(
+          identifier(request, 'gymId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'gym list':
+        final all = await store.gymRevisions();
+        all.sort((a, b) {
+          final id = a.gym.id.compareTo(b.gym.id);
+          return id == 0 ? a.number.compareTo(b.number) : id;
+        });
+        data = [for (final g in all) g.toJson()];
+      case 'instance publish':
+        data = (await EquipmentService(store).publishInstance(
+          EquipmentInstance.fromJson(request['instance']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'instance show':
+        data = (await EquipmentService(store).instanceRevision(
+          identifier(request, 'instanceId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'instance list':
+        final all = await store.equipmentInstanceRevisions();
+        all.sort((a, b) {
+          final id = a.instance.id.compareTo(b.instance.id);
+          return id == 0 ? a.number.compareTo(b.number) : id;
+        });
+        data = [for (final i in all) i.toJson()];
+      case 'instance inventory':
+        data = [
+          for (final revision in await EquipmentService(store).inventory(
+            gymId: request.containsKey('gymId')
+                ? identifier(request, 'gymId')
+                : null,
+          ))
+            revision.toJson(),
+        ];
       case 'link create':
         data = (await LeverLinkService(store).create(
           input: jsonObject(request['link'], 'link'),

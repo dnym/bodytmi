@@ -210,6 +210,37 @@ Future<void> main(List<String> args) async {
         stdout.writeln('ready');
         await stdin.drain<void>();
       }
+    } else if (args.length == 2 && args[1].startsWith('equipment-')) {
+      Future<void> publish() async {
+        await EquipmentService(store).publishEquipment(
+          EquipmentDefinition.fromJson({'id': 'rack', 'name': 'Rack'}),
+          0,
+        );
+        await EquipmentService(store).publishGym(
+          GymDefinition.fromJson({'id': 'garage', 'name': 'Garage'}),
+          0,
+        );
+        await EquipmentService(store).publishInstance(
+          EquipmentInstance.fromJson({
+            'id': 'rack-1',
+            'equipmentId': 'rack',
+            'gym': 'garage',
+          }),
+          0,
+        );
+      }
+
+      if (args[1].endsWith('rollback')) {
+        await store.transaction(() async {
+          await publish();
+          stdout.writeln('ready');
+          await stdin.drain<void>();
+        });
+      } else {
+        await publish();
+        stdout.writeln('ready');
+        await stdin.drain<void>();
+      }
     } else if (args.length == 2 && args[1].startsWith('exercise-')) {
       Future<void> publish() async {
         await CatalogService(store).publishExercise(

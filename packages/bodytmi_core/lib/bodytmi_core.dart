@@ -7,6 +7,7 @@ export 'src/activity.dart';
 export 'src/window_repeat.dart';
 export 'src/workout.dart';
 export 'src/catalog.dart';
+export 'src/equipment.dart';
 export 'src/family.dart';
 export 'src/progression.dart';
 export 'src/ordinal_progression.dart';

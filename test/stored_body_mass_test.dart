@@ -111,6 +111,9 @@ void storedBodyMassTests() {
       old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       old.execute('DROP TABLE IF EXISTS exercise_revisions');
       old.execute('DROP TABLE IF EXISTS implementation_revisions');
+      old.execute('DROP TABLE IF EXISTS equipment_revisions');
+      old.execute('DROP TABLE IF EXISTS gym_revisions');
+      old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       old.userVersion = 34;
       old.close();
       final upgraded = await TrainingStore.open('$dir/legacy.sqlite');
@@ -147,7 +150,7 @@ void storedBodyMassTests() {
       await File('$dir/old-meta.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-meta.json'));
       await store.snapshot('$dir/meta.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/meta.sqlite'), 58);
+      equal(NativeBackup.validateDatabase('$dir/meta.sqlite'), 59);
       final db = sqlite3.open('$dir/meta.sqlite');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -158,6 +161,9 @@ void storedBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       db.execute('DROP TABLE IF EXISTS exercise_revisions');
       db.execute('DROP TABLE IF EXISTS implementation_revisions');
+      db.execute('DROP TABLE IF EXISTS equipment_revisions');
+      db.execute('DROP TABLE IF EXISTS gym_revisions');
+      db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       db.userVersion = 34;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/meta.sqlite'));
@@ -383,13 +389,13 @@ void storedBodyMassTests() {
       final resolved = canonicalJson(
         (await service.resolve(_query())).toJson(),
       );
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 58);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 59);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/export.json',
         ))['format'],
-        'bodytmi-logical-export/58',
+        'bodytmi-logical-export/59',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/export.json');
       try {
@@ -506,6 +512,9 @@ void storedBodyMassTests() {
         raw.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         raw.execute('DROP TABLE IF EXISTS exercise_revisions');
         raw.execute('DROP TABLE IF EXISTS implementation_revisions');
+        raw.execute('DROP TABLE IF EXISTS equipment_revisions');
+        raw.execute('DROP TABLE IF EXISTS gym_revisions');
+        raw.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
         raw.execute('PRAGMA user_version = 3');
         validateSchema(
           raw.select(
@@ -536,7 +545,7 @@ void storedBodyMassTests() {
       }
       final upgraded = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(upgraded.userVersion, 58);
+        equal(upgraded.userVersion, 59);
       } finally {
         upgraded.close();
       }

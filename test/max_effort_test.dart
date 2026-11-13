@@ -643,6 +643,9 @@ void maxEffortTests() {
       db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
       db.execute('DROP TABLE IF EXISTS exercise_revisions');
       db.execute('DROP TABLE IF EXISTS implementation_revisions');
+      db.execute('DROP TABLE IF EXISTS equipment_revisions');
+      db.execute('DROP TABLE IF EXISTS gym_revisions');
+      db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       db.userVersion = 24;
       db.close();
       rejects(
@@ -691,6 +694,9 @@ void maxEffortTests() {
         old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
         old.execute('DROP TABLE IF EXISTS exercise_revisions');
         old.execute('DROP TABLE IF EXISTS implementation_revisions');
+        old.execute('DROP TABLE IF EXISTS equipment_revisions');
+        old.execute('DROP TABLE IF EXISTS gym_revisions');
+        old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
         old.userVersion = 24;
         old.close();
         equal(
@@ -701,7 +707,7 @@ void maxEffortTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          58,
+          59,
         );
       } finally {
         await store.close();

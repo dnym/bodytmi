@@ -157,6 +157,7 @@ final class NativeBackup {
           56,
           57,
           58,
+          59,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -308,6 +309,7 @@ final class NativeBackup {
             56,
             57,
             58,
+            59,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -342,6 +344,9 @@ final class NativeBackup {
         if (db.userVersion >= 12) 'family_revisions',
         if (db.userVersion >= 58) 'exercise_revisions',
         if (db.userVersion >= 58) 'implementation_revisions',
+        if (db.userVersion >= 59) 'equipment_revisions',
+        if (db.userVersion >= 59) 'gym_revisions',
+        if (db.userVersion >= 59) 'equipment_instance_revisions',
         if (db.userVersion >= 27) 'derived_target_graphs',
         if (db.userVersion >= 3) ...[
           'program_revisions',
@@ -395,6 +400,42 @@ final class NativeBackup {
         }
         validateImplementationRevisions(implementations, exercises);
         catalogOwners.addAll(implementationOwners(implementations));
+      }
+      if (db.userVersion >= 59) {
+        final equipment = <EquipmentRevision>[];
+        for (final row in db.select('SELECT * FROM equipment_revisions')) {
+          final entry = EquipmentRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (entry.equipment.id != row['equipment_id'] ||
+              entry.number != row['number'])
+            invalid('Equipment revision row identity mismatch.');
+          equipment.add(entry);
+        }
+        validateEquipmentRevisions(equipment);
+        final gyms = <GymRevision>[];
+        for (final row in db.select('SELECT * FROM gym_revisions')) {
+          final entry = GymRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (entry.gym.id != row['gym_id'] || entry.number != row['number'])
+            invalid('Gym revision row identity mismatch.');
+          gyms.add(entry);
+        }
+        validateGymRevisions(gyms);
+        final instances = <EquipmentInstanceRevision>[];
+        for (final row in db.select(
+          'SELECT * FROM equipment_instance_revisions',
+        )) {
+          final entry = EquipmentInstanceRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (entry.instance.id != row['instance_id'] ||
+              entry.number != row['number'])
+            invalid('Equipment instance revision row identity mismatch.');
+          instances.add(entry);
+        }
+        validateEquipmentInstanceRevisions(instances, equipment, gyms);
       }
       if (db.userVersion >= 27) {
         final graphs = <DerivedTargetGraphRevision>[];

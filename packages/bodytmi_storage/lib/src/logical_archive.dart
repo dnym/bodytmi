@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/58';
+const _format = 'bodytmi-logical-export/59';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -119,6 +119,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/55',
       'bodytmi-logical-export/56',
       'bodytmi-logical-export/57',
+      'bodytmi-logical-export/58',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -127,7 +128,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final catalogData = input['format'] == _format;
+    final inventoryData = input['format'] == _format;
+    final catalogData =
+        inventoryData || input['format'] == 'bodytmi-logical-export/58';
     final overrideData =
         catalogData || input['format'] == 'bodytmi-logical-export/57';
     final upgradeData =
@@ -255,6 +258,24 @@ final class LogicalArchiveFiles {
     final hadProgramUpgrades = inputData.containsKey('programUpgrades');
     final hadExercises = inputData.containsKey('exercises');
     final hadImplementations = inputData.containsKey('implementations');
+    final hadEquipment = inputData.containsKey('equipment');
+    final hadGyms = inputData.containsKey('gyms');
+    final hadInstances = inputData.containsKey('instances');
+    if (!inventoryData &&
+        inputData['equipment'] is List &&
+        (inputData['equipment'] as List).isEmpty) {
+      inputData.remove('equipment');
+    }
+    if (!inventoryData &&
+        inputData['gyms'] is List &&
+        (inputData['gyms'] as List).isEmpty) {
+      inputData.remove('gyms');
+    }
+    if (!inventoryData &&
+        inputData['instances'] is List &&
+        (inputData['instances'] as List).isEmpty) {
+      inputData.remove('instances');
+    }
     if (!catalogData &&
         inputData['exercises'] is List &&
         (inputData['exercises'] as List).isEmpty) {
@@ -327,6 +348,9 @@ final class LogicalArchiveFiles {
       if (graphData) 'graphs',
       if (catalogData) 'exercises',
       if (catalogData) 'implementations',
+      if (inventoryData) 'equipment',
+      if (inventoryData) 'gyms',
+      if (inventoryData) 'instances',
     });
     if (!legacy && !inputData.containsKey('progressions'))
       invalid('Logical format requires progression records.');
@@ -360,6 +384,12 @@ final class LogicalArchiveFiles {
       invalid('Logical v58 requires exercise revisions.');
     if (catalogData && !inputData.containsKey('implementations'))
       invalid('Logical v58 requires implementation revisions.');
+    if (inventoryData && !inputData.containsKey('equipment'))
+      invalid('Logical v59 requires equipment revisions.');
+    if (inventoryData && !inputData.containsKey('gyms'))
+      invalid('Logical v59 requires gym revisions.');
+    if (inventoryData && !inputData.containsKey('instances'))
+      invalid('Logical v59 requires equipment instance revisions.');
     if (!derivedBodyMassData) {
       for (final item in jsonList(inputData, 'sessions')) {
         final session = jsonObject(item, 'session');
@@ -634,6 +664,9 @@ final class LogicalArchiveFiles {
     if (!graphData && !hadGraphs) data.remove('graphs');
     if (!catalogData && !hadExercises) data.remove('exercises');
     if (!catalogData && !hadImplementations) data.remove('implementations');
+    if (!inventoryData && !hadEquipment) data.remove('equipment');
+    if (!inventoryData && !hadGyms) data.remove('gyms');
+    if (!inventoryData && !hadInstances) data.remove('instances');
     if (!programData) for (final key in programKeys) data.remove(key);
     if (_checksum({
           'format': input['format'],
@@ -652,11 +685,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV58.values) {
+          for (final ddl in schemaV59.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 58');
+          db.execute('PRAGMA user_version = 59');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
@@ -680,6 +713,32 @@ final class LogicalArchiveFiles {
                 implementation.implementation.id,
                 implementation.number,
                 canonicalJson(implementation.toJson()),
+              ],
+            );
+          }
+          for (final equipment in archive.equipment) {
+            db.execute(
+              'INSERT INTO equipment_revisions(equipment_id,number,snapshot) VALUES (?,?,?)',
+              [
+                equipment.equipment.id,
+                equipment.number,
+                canonicalJson(equipment.toJson()),
+              ],
+            );
+          }
+          for (final gym in archive.gyms) {
+            db.execute(
+              'INSERT INTO gym_revisions(gym_id,number,snapshot) VALUES (?,?,?)',
+              [gym.gym.id, gym.number, canonicalJson(gym.toJson())],
+            );
+          }
+          for (final instance in archive.instances) {
+            db.execute(
+              'INSERT INTO equipment_instance_revisions(instance_id,number,snapshot) VALUES (?,?,?)',
+              [
+                instance.instance.id,
+                instance.number,
+                canonicalJson(instance.toJson()),
               ],
             );
           }

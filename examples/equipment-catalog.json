@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "expectedRevision": 0,
+  "equipment": {
+    "id": "selectorized-machine",
+    "name": "Selectorized machine",
+    "notes": "Kind only: no bar mass, plate loading or channels are implied."
+  }
+}

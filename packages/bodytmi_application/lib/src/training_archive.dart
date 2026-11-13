@@ -41,6 +41,9 @@ final class TrainingArchive {
     List<LinkRetirementAnchor> linkRetirements = const [],
     List<ExerciseRevision> exercises = const [],
     List<ImplementationRevision> implementations = const [],
+    List<EquipmentRevision> equipment = const [],
+    List<GymRevision> gyms = const [],
+    List<EquipmentInstanceRevision> instances = const [],
   }) : sharedApplications = List<SharedLeverApplication>.unmodifiable(
          <SharedLeverApplication>[...sharedApplications]..sort((a, b) {
            final id = a.linkId.compareTo(b.linkId);
@@ -84,6 +87,24 @@ final class TrainingArchive {
        implementations = List<ImplementationRevision>.unmodifiable(
          <ImplementationRevision>[...implementations]..sort((a, b) {
            final id = a.implementation.id.compareTo(b.implementation.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       equipment = List<EquipmentRevision>.unmodifiable(
+         <EquipmentRevision>[...equipment]..sort((a, b) {
+           final id = a.equipment.id.compareTo(b.equipment.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       gyms = List<GymRevision>.unmodifiable(
+         <GymRevision>[...gyms]..sort((a, b) {
+           final id = a.gym.id.compareTo(b.gym.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       instances = List<EquipmentInstanceRevision>.unmodifiable(
+         <EquipmentInstanceRevision>[...instances]..sort((a, b) {
+           final id = a.instance.id.compareTo(b.instance.id);
            return id == 0 ? a.number.compareTo(b.number) : id;
          }),
        ),
@@ -173,6 +194,9 @@ final class TrainingArchive {
       'graphs',
       'exercises',
       'implementations',
+      'equipment',
+      'gyms',
+      'instances',
     });
     List<Object?> optional(String key) =>
         json.containsKey(key) ? jsonList(json, key) : const [];
@@ -186,6 +210,14 @@ final class TrainingArchive {
       implementations: [
         for (final i in optional('implementations'))
           ImplementationRevision.fromJson(i),
+      ],
+      equipment: [
+        for (final e in optional('equipment')) EquipmentRevision.fromJson(e),
+      ],
+      gyms: [for (final g in optional('gyms')) GymRevision.fromJson(g)],
+      instances: [
+        for (final i in optional('instances'))
+          EquipmentInstanceRevision.fromJson(i),
       ],
       graphs: [
         for (final g in optional('graphs'))
@@ -264,6 +296,9 @@ final class TrainingArchive {
   final List<FamilyRevision> families;
   final List<ExerciseRevision> exercises;
   final List<ImplementationRevision> implementations;
+  final List<EquipmentRevision> equipment;
+  final List<GymRevision> gyms;
+  final List<EquipmentInstanceRevision> instances;
   final List<DerivedTargetGraphRevision> graphs;
   final List<TimingActivity> timers;
   final List<WindowCheckpoint> windowCheckpoints;
@@ -287,6 +322,9 @@ final class TrainingArchive {
     'families': [for (final f in families) f.toJson()],
     'exercises': [for (final e in exercises) e.toJson()],
     'implementations': [for (final i in implementations) i.toJson()],
+    'equipment': [for (final e in equipment) e.toJson()],
+    'gyms': [for (final g in gyms) g.toJson()],
+    'instances': [for (final i in instances) i.toJson()],
     'graphs': [for (final g in graphs) g.toJson()],
     'executions': [for (final e in executions) e.toJson()],
     'timers': [for (final t in timers) t.toJson()],
@@ -312,6 +350,9 @@ final class TrainingArchive {
     'families': families.length,
     'exercises': exercises.length,
     'implementations': implementations.length,
+    'equipment': equipment.length,
+    'gyms': gyms.length,
+    'instances': instances.length,
     'graphs': graphs.length,
     'executions': executions.length,
     'timers': timers.length,
@@ -349,6 +390,9 @@ final class TrainingArchive {
     final catalogOwners = implementationOwners(implementations);
     for (final revision in revisions)
       validateCatalogSlotAdoption(revision.definition.slots, catalogOwners);
+    validateEquipmentRevisions(equipment);
+    validateGymRevisions(gyms);
+    validateEquipmentInstanceRevisions(instances, equipment, gyms);
     validateDerivedTargetGraphRevisions(graphs);
     validateProgramPlanReferences(programRevisions, graphs);
     validateTimingData(timers, sessions);

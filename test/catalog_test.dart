@@ -242,6 +242,9 @@ void catalogTests() {
       final old = sqlite3.open('$dir/old/database.sqlite');
       old.execute('DROP TABLE exercise_revisions');
       old.execute('DROP TABLE implementation_revisions');
+      old.execute('DROP TABLE equipment_revisions');
+      old.execute('DROP TABLE gym_revisions');
+      old.execute('DROP TABLE equipment_instance_revisions');
       old.userVersion = 57;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 57);
@@ -271,7 +274,7 @@ void catalogTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          58,
+          59,
         );
         equal((await migrated.exerciseRevisions()).length, 0);
       } finally {
@@ -305,7 +308,7 @@ void catalogTests() {
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/58',
+          'bodytmi-logical-export/59',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {
@@ -370,7 +373,7 @@ void catalogTests() {
         jsonDecode(await File('$dir/old.json').readAsString()),
         'logical',
       );
-      current['format'] = 'bodytmi-logical-export/58';
+      current['format'] = 'bodytmi-logical-export/59';
       jsonObject(current['data'], 'data').remove('exercises');
       current.remove('sha256');
       current['sha256'] = sha256
