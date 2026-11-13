@@ -526,7 +526,7 @@ void timingTests() {
         instant(1),
       );
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 52);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 53);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
@@ -609,6 +609,7 @@ void timingTests() {
         raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
+        raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
         raw.execute('PRAGMA user_version = 6');
       } finally {
         raw.close();

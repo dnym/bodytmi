@@ -4131,6 +4131,276 @@ class ProgressionReconciliationsCompanion
   }
 }
 
+class $LeverLinkRevisionsTable extends LeverLinkRevisions
+    with TableInfo<$LeverLinkRevisionsTable, StoredLeverLinkRevision> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LeverLinkRevisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _linkIdMeta = const VerificationMeta('linkId');
+  @override
+  late final GeneratedColumn<String> linkId = GeneratedColumn<String>(
+    'link_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [linkId, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'lever_link_revisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredLeverLinkRevision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('link_id')) {
+      context.handle(
+        _linkIdMeta,
+        linkId.isAcceptableOrUnknown(data['link_id']!, _linkIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_linkIdMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {linkId, number};
+  @override
+  StoredLeverLinkRevision map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredLeverLinkRevision(
+      linkId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}link_id'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $LeverLinkRevisionsTable createAlias(String alias) {
+    return $LeverLinkRevisionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredLeverLinkRevision extends DataClass
+    implements Insertable<StoredLeverLinkRevision> {
+  final String linkId;
+  final int number;
+  final String snapshot;
+  const StoredLeverLinkRevision({
+    required this.linkId,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['link_id'] = Variable<String>(linkId);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  LeverLinkRevisionsCompanion toCompanion(bool nullToAbsent) {
+    return LeverLinkRevisionsCompanion(
+      linkId: Value(linkId),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredLeverLinkRevision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredLeverLinkRevision(
+      linkId: serializer.fromJson<String>(json['linkId']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'linkId': serializer.toJson<String>(linkId),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredLeverLinkRevision copyWith({
+    String? linkId,
+    int? number,
+    String? snapshot,
+  }) => StoredLeverLinkRevision(
+    linkId: linkId ?? this.linkId,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredLeverLinkRevision copyWithCompanion(LeverLinkRevisionsCompanion data) {
+    return StoredLeverLinkRevision(
+      linkId: data.linkId.present ? data.linkId.value : this.linkId,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredLeverLinkRevision(')
+          ..write('linkId: $linkId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(linkId, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredLeverLinkRevision &&
+          other.linkId == this.linkId &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class LeverLinkRevisionsCompanion
+    extends UpdateCompanion<StoredLeverLinkRevision> {
+  final Value<String> linkId;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const LeverLinkRevisionsCompanion({
+    this.linkId = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LeverLinkRevisionsCompanion.insert({
+    required String linkId,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : linkId = Value(linkId),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredLeverLinkRevision> custom({
+    Expression<String>? linkId,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (linkId != null) 'link_id': linkId,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LeverLinkRevisionsCompanion copyWith({
+    Value<String>? linkId,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return LeverLinkRevisionsCompanion(
+      linkId: linkId ?? this.linkId,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (linkId.present) {
+      map['link_id'] = Variable<String>(linkId.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LeverLinkRevisionsCompanion(')
+          ..write('linkId: $linkId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
@@ -4168,6 +4438,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
       $RepeatCheckpointsTable(this);
   late final $ProgressionReconciliationsTable progressionReconciliations =
       $ProgressionReconciliationsTable(this);
+  late final $LeverLinkRevisionsTable leverLinkRevisions =
+      $LeverLinkRevisionsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4189,6 +4461,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     windowCheckpoints,
     repeatCheckpoints,
     progressionReconciliations,
+    leverLinkRevisions,
   ];
 }
 
@@ -8866,6 +9139,193 @@ typedef $$ProgressionReconciliationsTableProcessedTableManager =
       ProgressionReconciliation,
       PrefetchHooks Function()
     >;
+typedef $$LeverLinkRevisionsTableCreateCompanionBuilder =
+    LeverLinkRevisionsCompanion Function({
+      required String linkId,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$LeverLinkRevisionsTableUpdateCompanionBuilder =
+    LeverLinkRevisionsCompanion Function({
+      Value<String> linkId,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$LeverLinkRevisionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $LeverLinkRevisionsTable> {
+  $$LeverLinkRevisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get linkId => $composableBuilder(
+    column: $table.linkId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LeverLinkRevisionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $LeverLinkRevisionsTable> {
+  $$LeverLinkRevisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get linkId => $composableBuilder(
+    column: $table.linkId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LeverLinkRevisionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $LeverLinkRevisionsTable> {
+  $$LeverLinkRevisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get linkId =>
+      $composableBuilder(column: $table.linkId, builder: (column) => column);
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$LeverLinkRevisionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $LeverLinkRevisionsTable,
+          StoredLeverLinkRevision,
+          $$LeverLinkRevisionsTableFilterComposer,
+          $$LeverLinkRevisionsTableOrderingComposer,
+          $$LeverLinkRevisionsTableAnnotationComposer,
+          $$LeverLinkRevisionsTableCreateCompanionBuilder,
+          $$LeverLinkRevisionsTableUpdateCompanionBuilder,
+          (
+            StoredLeverLinkRevision,
+            BaseReferences<
+              _$TrainingDatabase,
+              $LeverLinkRevisionsTable,
+              StoredLeverLinkRevision
+            >,
+          ),
+          StoredLeverLinkRevision,
+          PrefetchHooks Function()
+        > {
+  $$LeverLinkRevisionsTableTableManager(
+    _$TrainingDatabase db,
+    $LeverLinkRevisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LeverLinkRevisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LeverLinkRevisionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LeverLinkRevisionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> linkId = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LeverLinkRevisionsCompanion(
+                linkId: linkId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String linkId,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => LeverLinkRevisionsCompanion.insert(
+                linkId: linkId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $LeverLinkRevisionsTable,
+                    StoredLeverLinkRevision
+                  >(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $LeverLinkRevisionsTable,
+                    StoredLeverLinkRevision
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LeverLinkRevisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $LeverLinkRevisionsTable,
+      StoredLeverLinkRevision,
+      $$LeverLinkRevisionsTableFilterComposer,
+      $$LeverLinkRevisionsTableOrderingComposer,
+      $$LeverLinkRevisionsTableAnnotationComposer,
+      $$LeverLinkRevisionsTableCreateCompanionBuilder,
+      $$LeverLinkRevisionsTableUpdateCompanionBuilder,
+      (
+        StoredLeverLinkRevision,
+        BaseReferences<
+          _$TrainingDatabase,
+          $LeverLinkRevisionsTable,
+          StoredLeverLinkRevision
+        >,
+      ),
+      StoredLeverLinkRevision,
+      PrefetchHooks Function()
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -8906,4 +9366,6 @@ class $TrainingDatabaseManager {
         _db,
         _db.progressionReconciliations,
       );
+  $$LeverLinkRevisionsTableTableManager get leverLinkRevisions =>
+      $$LeverLinkRevisionsTableTableManager(_db, _db.leverLinkRevisions);
 }

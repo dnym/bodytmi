@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/52';
+const _format = 'bodytmi-logical-export/53';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -113,6 +113,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/49',
       'bodytmi-logical-export/50',
       'bodytmi-logical-export/51',
+      'bodytmi-logical-export/52',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -121,7 +122,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final reconciliationData = input['format'] == _format;
+    final linkData = input['format'] == _format;
+    final reconciliationData =
+        linkData || input['format'] == 'bodytmi-logical-export/52';
     final repeatBindingData =
         reconciliationData || input['format'] == 'bodytmi-logical-export/51';
     final repeatRunningData =
@@ -231,6 +234,12 @@ final class LogicalArchiveFiles {
     final hadGraphs = inputData.containsKey('graphs');
     final hadRepeatCheckpoints = inputData.containsKey('repeatCheckpoints');
     final hadReconciliations = inputData.containsKey('reconciliations');
+    final hadLinks = inputData.containsKey('links');
+    if (!linkData &&
+        inputData['links'] is List &&
+        (inputData['links'] as List).isEmpty) {
+      inputData.remove('links');
+    }
     if (!reconciliationData &&
         inputData['reconciliations'] is List &&
         (inputData['reconciliations'] as List).isEmpty) {
@@ -264,6 +273,7 @@ final class LogicalArchiveFiles {
       if (checkpointData) 'windowCheckpoints',
       if (repeatData) 'repeatCheckpoints',
       if (reconciliationData) 'reconciliations',
+      if (linkData) 'links',
       if (executionData) 'executions',
       if (familyData) 'families',
       if (graphData) 'graphs',
@@ -280,6 +290,8 @@ final class LogicalArchiveFiles {
       invalid('Logical v48 requires repeat checkpoints.');
     if (reconciliationData && !inputData.containsKey('reconciliations'))
       invalid('Logical v52 requires progression reconciliations.');
+    if (linkData && !inputData.containsKey('links'))
+      invalid('Logical v53 requires lever links.');
     if (checkpointData && !inputData.containsKey('windowCheckpoints'))
       invalid('Logical v46 requires window checkpoint records.');
     if (executionData && !inputData.containsKey('executions'))
@@ -308,6 +320,8 @@ final class LogicalArchiveFiles {
       }
     }
     final archive = TrainingArchive.fromJson(inputData);
+    if (!linkData && archive.links.isNotEmpty)
+      invalid('Lever links require logical v53.');
     if (!reconciliationData && archive.reconciliations.isNotEmpty)
       invalid('Progression reconciliations require logical v52.');
     if (!repeatBindingData &&
@@ -524,6 +538,7 @@ final class LogicalArchiveFiles {
     if (!reconciliationData && !hadReconciliations) {
       data.remove('reconciliations');
     }
+    if (!linkData && !hadLinks) data.remove('links');
     if (legacy) data.remove('progressions');
     if (!massData) data.remove('bodyMass');
     if (!timingData) data.remove('timers');
@@ -550,11 +565,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV52.values) {
+          for (final ddl in schemaV53.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 52');
+          db.execute('PRAGMA user_version = 53');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
@@ -602,6 +617,11 @@ final class LogicalArchiveFiles {
             db.execute(
               'INSERT INTO progression_reconciliations(id,snapshot) VALUES (?,?)',
               [receipt.id, canonicalJson(receipt.toJson())],
+            );
+          for (final link in archive.links)
+            db.execute(
+              'INSERT INTO lever_link_revisions(link_id,number,snapshot) VALUES (?,?,?)',
+              [link.link.id, link.number, canonicalJson(link.toJson())],
             );
           for (final p in archive.programRevisions)
             db.execute(

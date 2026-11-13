@@ -93,6 +93,7 @@ Future<String> _relabelRejects(
   );
   final data = jsonObject(json['data'], 'data');
   if (!keep) data.remove('reconciliations');
+  if (label < 53) data.remove('links');
   json['format'] = 'bodytmi-logical-export/$label';
   json.remove('sha256');
   json['sha256'] = _digest(canonicalJson(json));
@@ -951,7 +952,7 @@ void reconciliationTests() {
         archived = await store.archive();
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          52,
+          53,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
         await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
@@ -961,7 +962,7 @@ void reconciliationTests() {
       final before = canonicalJson(archived.toJson());
       equal(
         NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-        52,
+        53,
       );
       final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
       try {
@@ -1016,6 +1017,7 @@ void reconciliationTests() {
       );
       final dropped = sqlite3.open('${dir.path}/dropped.sqlite');
       dropped.execute('DROP TABLE progression_reconciliations');
+      dropped.execute('DROP TABLE IF EXISTS lever_link_revisions');
       dropped.userVersion = 51;
       dropped.close();
       check(

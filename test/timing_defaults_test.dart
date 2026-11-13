@@ -199,6 +199,7 @@ void timingDefaultsTests() {
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.execute('PRAGMA user_version = 44');
       db.close();
       store = await TrainingStore.open(path);
@@ -208,7 +209,7 @@ void timingDefaultsTests() {
       );
       equal(
         (await store.backup('${dir.path}/migrated'))['databaseSchemaVersion'],
-        52,
+        53,
       );
     } finally {
       await store.close();
@@ -319,6 +320,7 @@ void timingDefaultsTests() {
         native.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         native.execute('DROP TABLE IF EXISTS window_checkpoints');
         native.execute('DROP TABLE IF EXISTS progression_reconciliations');
+        native.execute('DROP TABLE IF EXISTS lever_link_revisions');
         native.execute('PRAGMA user_version = 44');
         native.close();
         rejects(
@@ -603,6 +605,7 @@ void timingDefaultsTests() {
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
       old.userVersion = 12;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 12);
@@ -658,14 +661,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          52,
+          53,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/52',
+          'bodytmi-logical-export/53',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -707,6 +710,7 @@ void timingDefaultsTests() {
       forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       forged.execute('DROP TABLE IF EXISTS window_checkpoints');
       forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
       forged.userVersion = 12;
       forged.close();
       rejects(

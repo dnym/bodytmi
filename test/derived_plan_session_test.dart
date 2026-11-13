@@ -118,6 +118,7 @@ void derivedPlanSessionTests() {
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
       old.userVersion = 38;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/v38.sqlite'), 38);
@@ -232,11 +233,12 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/round.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/round.sqlite'), 52);
+      equal(NativeBackup.validateDatabase('$dir/round.sqlite'), 53);
       final oldLabel = sqlite3.open('$dir/round.sqlite');
       oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
       oldLabel.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      oldLabel.execute('DROP TABLE IF EXISTS lever_link_revisions');
       oldLabel.userVersion = 38;
       oldLabel.close();
       rejects(() => NativeBackup.validateDatabase('$dir/round.sqlite'));
@@ -251,6 +253,7 @@ void derivedPlanSessionTests() {
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
       old.userVersion = 37;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/v37.sqlite'), 37);
@@ -346,11 +349,12 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/binary.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/binary.sqlite'), 52);
+      equal(NativeBackup.validateDatabase('$dir/binary.sqlite'), 53);
       final oldLabel = sqlite3.open('$dir/binary.sqlite');
       oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
       oldLabel.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      oldLabel.execute('DROP TABLE IF EXISTS lever_link_revisions');
       oldLabel.userVersion = 37;
       oldLabel.close();
       rejects(() => NativeBackup.validateDatabase('$dir/binary.sqlite'));
@@ -582,7 +586,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 52);
+        equal(backup.manifest['databaseSchemaVersion'], 53);
       } finally {
         await backup.close();
       }
@@ -611,6 +615,7 @@ void derivedPlanSessionTests() {
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.userVersion = 28;
       db.close();
       rejects(() => NativeBackup.validateDatabase(sqlite));
@@ -1440,11 +1445,12 @@ void derivedPlanSessionTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 52);
+      equal(NativeBackup.validateDatabase(snapshot), 53);
       final db = sqlite3.open(snapshot);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.userVersion = 30;
       db.close();
       rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -1819,11 +1825,12 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 52);
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 53);
       final db = sqlite3.open('$dir/snapshot.sqlite');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.userVersion = 32;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/snapshot.sqlite'));
@@ -1844,6 +1851,7 @@ void derivedPlanSessionTests() {
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.userVersion = 32;
       db.close();
       final reopened = await TrainingStore.open('$dir/old.sqlite');
@@ -1919,6 +1927,7 @@ void derivedPlanSessionTests() {
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.userVersion = 28;
       db.close();
       equal(NativeBackup.validateDatabase(path), 28);
@@ -1930,7 +1939,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 52);
+        equal(reopened.userVersion, 53);
       } finally {
         reopened.close();
       }

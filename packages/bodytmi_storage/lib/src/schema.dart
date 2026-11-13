@@ -77,6 +77,12 @@ const schemaV52 = {
       'CREATE TABLE "progression_reconciliations" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
 };
 
+const schemaV53 = {
+  ...schemaV52,
+  'lever_link_revisions':
+      'CREATE TABLE "lever_link_revisions" ("link_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("link_id", "number"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -140,6 +146,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   50 => schemaV48, // v50 adds running repeat clocks.
   51 => schemaV48, // v51 associates repeats with sessions.
   52 => schemaV52, // v52 adds durable progression reconciliation receipts.
+  53 => schemaV53, // v53 adds durable shared lever link revisions.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

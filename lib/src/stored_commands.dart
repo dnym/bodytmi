@@ -73,6 +73,9 @@ const storedCommandNames = [
   'family publish',
   'family show',
   'family list',
+  'link create',
+  'link show',
+  'link list',
   'graph publish',
   'graph show',
   'graph list',
@@ -437,6 +440,9 @@ Future<Map<String, Object?>> executeStored(
     'family publish' => {'family', 'expectedRevision'},
     'family show' => {'familyId', 'revision'},
     'family list' => <String>{},
+    'link create' => {'link', 'expectedRevision', 'createdAt', 'confirm'},
+    'link show' => {'linkId', 'revision'},
+    'link list' => <String>{},
     'graph publish' => {'graph', 'expectedRevision'},
     'graph show' => {'graphId', 'revision'},
     'graph list' => <String>{},
@@ -1688,6 +1694,22 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final f in all) f.toJson()];
+      case 'link create':
+        data = (await LeverLinkService(store).create(
+          input: jsonObject(request['link'], 'link'),
+          createdAt: parseInstant(request['createdAt'], 'createdAt'),
+          expectedRevision: integer('expectedRevision', min: 0),
+          confirm: request['confirm'] == true,
+        )).toJson();
+      case 'link show':
+        data = (await LeverLinkService(store).revision(
+          identifier(request, 'linkId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'link list':
+        data = [
+          for (final l in await LeverLinkService(store).list()) l.toJson(),
+        ];
       case 'graph publish':
         data = (await DerivedTargetGraphService(store).publish(
           DerivedTargetGraph.fromJson(request['graph']),

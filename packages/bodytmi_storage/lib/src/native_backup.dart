@@ -151,6 +151,7 @@ final class NativeBackup {
           50,
           51,
           52,
+          53,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -296,6 +297,7 @@ final class NativeBackup {
             50,
             51,
             52,
+            53,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -322,6 +324,7 @@ final class NativeBackup {
         if (db.userVersion >= 46) 'window_checkpoints',
         if (db.userVersion >= 48) 'repeat_checkpoints',
         if (db.userVersion >= 52) 'progression_reconciliations',
+        if (db.userVersion >= 53) 'lever_link_revisions',
         if (db.userVersion >= 8) 'workout_executions',
         if (db.userVersion >= 12) 'family_revisions',
         if (db.userVersion >= 27) 'derived_target_graphs',
@@ -705,6 +708,21 @@ final class NativeBackup {
               allRevisions,
               allSessions,
             );
+        }
+        if (db.userVersion >= 53) {
+          final links = <LeverLinkRevision>[];
+          for (final row in db.select(
+            'SELECT link_id,number,snapshot FROM lever_link_revisions',
+          )) {
+            final link = LeverLinkRevision.fromJson(
+              jsonDecode(row['snapshot'] as String),
+            );
+            if (link.link.id != row['link_id'] || link.number != row['number'])
+              invalid('Lever link revision row identity mismatch.');
+            links.add(link);
+          }
+          validateLeverLinkRevisions(links);
+          validateLeverLinks(links, decisions, reconciliations);
         }
       }
       if (db.userVersion >= 4) {

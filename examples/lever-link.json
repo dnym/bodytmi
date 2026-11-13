@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "expectedRevision": 0,
+  "createdAt": "2026-10-05T09:00:00Z",
+  "confirm": true,
+  "link": {
+    "id": "bench-shared-load",
+    "name": "Shared bench controlled load",
+    "metrics": ["mass"],
+    "cadence": "each-exposure",
+    "baseline": "alpha/bench-heavy",
+    "members": ["alpha/bench-heavy", "beta/bench-heavy"]
+  }
+}

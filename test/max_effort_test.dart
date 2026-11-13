@@ -637,6 +637,7 @@ void maxEffortTests() {
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
+      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
       db.userVersion = 24;
       db.close();
       rejects(
@@ -679,6 +680,7 @@ void maxEffortTests() {
         old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         old.execute('DROP TABLE IF EXISTS window_checkpoints');
         old.execute('DROP TABLE IF EXISTS progression_reconciliations');
+        old.execute('DROP TABLE IF EXISTS lever_link_revisions');
         old.userVersion = 24;
         old.close();
         equal(
@@ -689,7 +691,7 @@ void maxEffortTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          52,
+          53,
         );
       } finally {
         await store.close();

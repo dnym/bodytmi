@@ -978,6 +978,7 @@ void programTests() {
         oldDb.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         oldDb.execute('DROP TABLE IF EXISTS window_checkpoints');
         oldDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
+        oldDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
         oldDb.userVersion = 35;
         oldDb.close();
         equal(NativeBackup.validateDatabase(previousProfile), 35);
@@ -1043,11 +1044,12 @@ void programTests() {
         );
         final snapshot = '${dir.path}/manual.sqlite';
         await store.snapshot(snapshot);
-        equal(NativeBackup.validateDatabase(snapshot), 52);
+        equal(NativeBackup.validateDatabase(snapshot), 53);
         final oldLabel = sqlite3.open(snapshot);
         oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
         oldLabel.execute('DROP TABLE IF EXISTS progression_reconciliations');
+        oldLabel.execute('DROP TABLE IF EXISTS lever_link_revisions');
         oldLabel.userVersion = 35;
         oldLabel.close();
         rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -1489,14 +1491,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          52,
+          53,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/52',
+          'bodytmi-logical-export/53',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
@@ -1972,6 +1974,7 @@ void programTests() {
           db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
           db.execute('DROP TABLE IF EXISTS window_checkpoints');
           db.execute('DROP TABLE IF EXISTS progression_reconciliations');
+          db.execute('DROP TABLE IF EXISTS lever_link_revisions');
           db.execute('PRAGMA user_version = 2');
           db.execute('INSERT INTO revisions VALUES (?,?,?)', [
             rev.definition.id,

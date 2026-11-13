@@ -4,6 +4,7 @@ import 'session_codec.dart';
 import 'canonical_json.dart';
 import 'progression_decision.dart';
 import 'reconciliation_receipt.dart';
+import 'lever_link.dart';
 import 'program_service.dart';
 import 'stored_body_mass_service.dart';
 import 'timing_service.dart';
@@ -31,7 +32,14 @@ final class TrainingArchive {
     List<FamilyRevision> families = const [],
     List<DerivedTargetGraphRevision> graphs = const [],
     List<ReconciliationReceipt> reconciliations = const [],
-  }) : reconciliations = List<ReconciliationReceipt>.unmodifiable(
+    List<LeverLinkRevision> links = const [],
+  }) : links = List<LeverLinkRevision>.unmodifiable(
+         <LeverLinkRevision>[...links]..sort((a, b) {
+           final id = a.link.id.compareTo(b.link.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       reconciliations = List<ReconciliationReceipt>.unmodifiable(
          <ReconciliationReceipt>[...reconciliations]
            ..sort((a, b) => a.id.compareTo(b.id)),
        ),
@@ -118,6 +126,7 @@ final class TrainingArchive {
       'windowCheckpoints',
       'repeatCheckpoints',
       'reconciliations',
+      'links',
       'executions',
       'families',
       'graphs',
@@ -183,6 +192,9 @@ final class TrainingArchive {
         for (final item in optional('reconciliations'))
           ReconciliationReceipt.fromJson(item),
       ],
+      links: [
+        for (final item in optional('links')) LeverLinkRevision.fromJson(item),
+      ],
     );
   }
 
@@ -198,6 +210,7 @@ final class TrainingArchive {
   final List<String> finalizations;
   final List<ProgressionDecision> progressions;
   final List<ReconciliationReceipt> reconciliations;
+  final List<LeverLinkRevision> links;
   final List<ProgramRevision> programRevisions;
   final List<ProgramRun> programRuns;
   final List<SessionProgramBinding> sessionPrograms;
@@ -216,6 +229,7 @@ final class TrainingArchive {
     'finalizations': finalizations,
     'progressions': [for (final d in progressions) d.toJson()],
     'reconciliations': [for (final r in reconciliations) r.toJson()],
+    'links': [for (final l in links) l.toJson()],
     'programRevisions': [for (final p in programRevisions) p.toJson()],
     'programRuns': [for (final r in programRuns) r.toJson()],
     'sessionPrograms': [for (final b in sessionPrograms) b.toJson()],
@@ -235,6 +249,7 @@ final class TrainingArchive {
     'finalizations': finalizations.length,
     'progressions': progressions.length,
     'reconciliations': reconciliations.length,
+    'links': links.length,
     'programRevisions': programRevisions.length,
     'programRuns': programRuns.length,
     'sessionPrograms': sessionPrograms.length,
@@ -283,6 +298,8 @@ final class TrainingArchive {
       revisions,
       sessions,
     );
+    validateLeverLinkRevisions(links);
+    validateLeverLinks(links, progressions, reconciliations);
     validateProgressionDecisions(progressions, sessions, {
       for (final b in sessionPrograms) b.sessionId: b.runId,
     }, reconciliations);

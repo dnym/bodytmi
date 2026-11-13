@@ -5,6 +5,7 @@ import 'progression_decision.dart';
 import 'progression_anchor.dart';
 import 'progression_reconciliation.dart';
 import 'reconciliation_receipt.dart';
+import 'lever_link.dart';
 import 'program_service.dart';
 import 'canonical_json.dart';
 import 'stored_body_mass_service.dart';
@@ -32,6 +33,8 @@ abstract interface class TrainingRepository {
   Future<void> saveProgressionDecision(ProgressionDecision decision);
   Future<List<ReconciliationReceipt>> progressionReconciliations();
   Future<void> saveProgressionReconciliation(ReconciliationReceipt receipt);
+  Future<List<LeverLinkRevision>> leverLinkRevisions();
+  Future<void> insertLeverLinkRevision(LeverLinkRevision revision);
   Future<List<ProgramRevision>> programRevisions();
   Future<void> insertProgramRevision(ProgramRevision revision);
   Future<WorkoutExecution?> execution(String id);
@@ -81,6 +84,7 @@ final class StoredTrainingService {
       windowCheckpoints: await repository.windowCheckpoints(),
       repeatCheckpoints: await repository.repeatCheckpoints(),
       reconciliations: await repository.progressionReconciliations(),
+      links: await repository.leverLinkRevisions(),
       executions: await repository.executions(),
       programRuns: await repository.programRuns(),
       sessionPrograms: await repository.sessionPrograms(),
