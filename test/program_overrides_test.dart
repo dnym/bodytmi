@@ -394,16 +394,16 @@ void programOverrideTests() {
         // Portability: native and logical v57 round-trip, old labels rejected.
         final before = canonicalJson((await store.archive()).toJson());
         final manifest = await store.backup('${dir.path}/native');
-        equal(manifest['databaseSchemaVersion'], 59);
+        equal(manifest['databaseSchemaVersion'], 60);
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          59,
+          60,
         );
         final logical = await LogicalArchiveFiles.export(
           await store.archive(),
           '${dir.path}/logical.json',
         );
-        equal(logical['format'], 'bodytmi-logical-export/59');
+        equal(logical['format'], 'bodytmi-logical-export/60');
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
         );

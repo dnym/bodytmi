@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "loading": {
+    "components": [
+      {
+        "id": "bar",
+        "kind": "bar",
+        "mass": { "value": "20", "unit": "kg" },
+        "include": true
+      },
+      {
+        "id": "collars",
+        "kind": "collar",
+        "mass": { "value": "1", "unit": "kg" },
+        "include": false
+      }
+    ],
+    "channel": { "id": "barbell", "sides": 2, "symmetry": "required" },
+    "plates": [
+      { "mass": { "value": "25", "unit": "kg" }, "count": 4 },
+      { "mass": { "value": "10", "unit": "kg" }, "count": 4 },
+      { "mass": { "value": "5", "unit": "kg" }, "count": 2 },
+      { "mass": { "value": "2.5", "unit": "kg" }, "count": 2 },
+      { "mass": { "value": "1.25", "unit": "kg" }, "count": 2 }
+    ]
+  },
+  "target": { "value": "102.5", "unit": "kg" }
+}

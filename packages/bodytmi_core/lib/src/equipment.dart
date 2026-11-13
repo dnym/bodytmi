@@ -1,5 +1,141 @@
 import 'errors.dart';
 import 'numeric_scale.dart';
+import 'quantity.dart';
+
+/// One tare component of a declared plate-loading configuration, such as a
+/// bar, collar, handle or fixed machine horn mass. A component is included in
+/// the calculated load only when it explicitly says so; no default bar mass or
+/// symmetric loading is ever assumed for undeclared equipment.
+final class LoadingComponent {
+  LoadingComponent._(this.id, this.kind, this.mass, this.included);
+  factory LoadingComponent.fromJson(Object? input) {
+    final j = jsonObject(input, 'loading component');
+    checkKeys(j, {'id', 'kind', 'mass', 'include'});
+    final kind = j['kind'];
+    if (kind is! String || !{'bar', 'collar', 'handle', 'tare'}.contains(kind))
+      invalid('Loading components need a bar, collar, handle or tare kind.');
+    final mass = Quantity.fromJson(j['mass']);
+    if (mass.dimension != Dimension.mass)
+      invalid('Loading components must have mass dimension.');
+    final include = j.containsKey('include') ? j['include'] : true;
+    if (include is! bool)
+      invalid('Component inclusion must be an explicit true or false.');
+    return LoadingComponent._(identifier(j, 'id'), kind, mass, include);
+  }
+  final String id, kind;
+  final Quantity mass;
+  final bool included;
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'kind': kind,
+    'mass': mass.toJson(),
+    'include': included,
+  };
+}
+
+/// The single plate-loading channel a plan arranges. Symmetry is a configured
+/// constraint: `required` means every side carries identical plates, while
+/// `independent` allows asymmetric channels such as separate machine horns.
+final class LoadingChannel {
+  LoadingChannel._(this.id, this.sides, this.symmetry);
+  factory LoadingChannel.fromJson(Object? input) {
+    final j = jsonObject(input, 'loading channel');
+    checkKeys(j, {'id', 'sides', 'symmetry'});
+    final sides = j['sides'];
+    if (sides is! int || sides < 1 || sides > 2)
+      invalid('A loading channel declares one or two sides.');
+    final symmetry = j['symmetry'];
+    if (symmetry is! String || !{'required', 'independent'}.contains(symmetry))
+      invalid('A loading channel declares required or independent symmetry.');
+    if (sides == 1 && symmetry == 'independent')
+      invalid('A one-sided channel cannot declare independent symmetry.');
+    return LoadingChannel._(identifier(j, 'id'), sides, symmetry);
+  }
+  final String id, symmetry;
+  final int sides;
+  bool get symmetric => symmetry == 'required';
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'sides': sides,
+    'symmetry': symmetry,
+  };
+}
+
+/// One physical plate denomination in the declared inventory.
+final class PlateStock {
+  PlateStock._(this.mass, this.count);
+  factory PlateStock.fromJson(Object? input) {
+    final j = jsonObject(input, 'plate stock');
+    checkKeys(j, {'mass', 'count'});
+    final mass = Quantity.fromJson(j['mass']);
+    if (mass.dimension != Dimension.mass)
+      invalid('Plate stock must have mass dimension.');
+    if (mass.value.compareTo(Decimal.zero) <= 0)
+      invalid('Plate masses must be positive.');
+    final count = j['count'];
+    if (count is! int || count < 1 || count > 10000)
+      invalid('Plate stock declares 1 to 10000 plates per denomination.');
+    return PlateStock._(mass, count);
+  }
+  final Quantity mass;
+  final int count;
+  Map<String, Object?> toJson() => {'mass': mass.toJson(), 'count': count};
+}
+
+/// A declared plate-loading configuration: tare components, exactly one
+/// arrangement channel, and the actual plate inventory at this instance. A
+/// machine without this configuration has no plate arithmetic, and nothing
+/// here infers a bar, collars, a ratio or a second loading point.
+final class LoadingSpec {
+  LoadingSpec._(this.components, this.channel, this.plates);
+  factory LoadingSpec.fromJson(Object? input) {
+    final j = jsonObject(input, 'loading configuration');
+    checkKeys(j, {'components', 'channel', 'plates'});
+    final componentInput = j['components'];
+    if (componentInput is! List ||
+        componentInput.isEmpty ||
+        componentInput.length > 32)
+      invalid('Loading declares 1 to 32 tare components.');
+    final components = [
+      for (final entry in componentInput) LoadingComponent.fromJson(entry),
+    ];
+    final componentIds = <String>{for (final c in components) c.id};
+    if (componentIds.length != components.length)
+      invalid('Loading component identities must be unique.');
+    final channel = LoadingChannel.fromJson(j['channel']);
+    final plateInput = j['plates'];
+    if (plateInput is! List || plateInput.isEmpty || plateInput.length > 64)
+      invalid('Loading declares 1 to 64 plate denominations.');
+    final plates = [for (final entry in plateInput) PlateStock.fromJson(entry)];
+    final masses = <String>{
+      for (final plate in plates) plate.mass.value.toString(),
+    };
+    if (masses.length != plates.length)
+      invalid('Plate denominations must be distinct.');
+    return LoadingSpec._(
+      List.unmodifiable(components),
+      channel,
+      List.unmodifiable(plates),
+    );
+  }
+  final List<LoadingComponent> components;
+  final LoadingChannel channel;
+  final List<PlateStock> plates;
+
+  /// Exact canonical mass carried by the components that are included.
+  Decimal get tareMass {
+    var total = Decimal.zero;
+    for (final component in components)
+      if (component.included) total = total + component.mass.value;
+    return total;
+  }
+
+  Map<String, Object?> toJson() => {
+    'components': [for (final c in components) c.toJson()],
+    'channel': channel.toJson(),
+    'plates': [for (final plate in plates) plate.toJson()],
+  };
+}
 
 /// One catalog equipment kind. Entries are descriptive only: they prescribe
 /// nothing, and a published identity never implies bar mass, plate loading,
@@ -73,7 +209,8 @@ final class GymDefinition {
 }
 
 /// One actual physical piece of equipment. A declared scale holds native
-/// markings with alternate same-dimension labels, not independent loads.
+/// markings with alternate same-dimension labels, not independent loads. A
+/// declared loading configuration is the only source of plate arithmetic.
 final class EquipmentInstance {
   EquipmentInstance._(
     this.id,
@@ -82,10 +219,19 @@ final class EquipmentInstance {
     this.name,
     this.notes,
     this.scale,
+    this.loading,
   );
   factory EquipmentInstance.fromJson(Object? input) {
     final j = jsonObject(input, 'equipment instance');
-    checkKeys(j, {'id', 'equipmentId', 'gym', 'name', 'notes', 'scale'});
+    checkKeys(j, {
+      'id',
+      'equipmentId',
+      'gym',
+      'name',
+      'notes',
+      'scale',
+      'loading',
+    });
     final name = j['name'];
     if (name != null &&
         (name is! String || name.trim().isEmpty || name.length > 200)) {
@@ -107,11 +253,13 @@ final class EquipmentInstance {
       name as String?,
       notes as String?,
       j['scale'] == null ? null : NumericScale.fromJson(j['scale']),
+      j['loading'] == null ? null : LoadingSpec.fromJson(j['loading']),
     );
   }
   final String id, equipmentId;
   final String? gymId, name, notes;
   final NumericScale? scale;
+  final LoadingSpec? loading;
   Map<String, Object?> toJson() => {
     'id': id,
     'equipmentId': equipmentId,
@@ -119,6 +267,7 @@ final class EquipmentInstance {
     if (name != null) 'name': name,
     if (notes != null) 'notes': notes,
     if (scale != null) 'scale': scale!.toJson(),
+    if (loading != null) 'loading': loading!.toJson(),
   };
 }
 

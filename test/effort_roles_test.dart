@@ -689,7 +689,7 @@ void effortRolesTests() {
       final migrated = await TrainingStore.open('${dir.path}/v41.sqlite');
       await migrated.close();
       final migratedDb = sqlite3.open('${dir.path}/v41.sqlite');
-      equal(migratedDb.userVersion, 59);
+      equal(migratedDb.userVersion, 60);
       migratedDb.close();
       await training.publish(_definition(), 0);
       var session = await training.start(
@@ -1342,7 +1342,7 @@ void effortRolesTests() {
           throwsA(isA<BodyTmiException>()),
         );
         await store.snapshot('${dir.path}/roles.sqlite');
-        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 59);
+        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 60);
         final relabeled = sqlite3.open('${dir.path}/roles.sqlite');
         relabeled.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         relabeled.execute('DROP TABLE IF EXISTS window_checkpoints');

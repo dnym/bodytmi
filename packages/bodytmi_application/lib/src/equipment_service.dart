@@ -137,4 +137,27 @@ final class EquipmentService {
             if (gymId == null || revision.instance.gymId == gymId) revision,
         ]..sort((a, b) => a.instance.id.compareTo(b.instance.id));
       });
+
+  /// Read-only feasible plate helper against one actual instance's declared
+  /// loading configuration (latest revision by default). Instances without a
+  /// declared configuration have no plate arithmetic: no bar mass, collar or
+  /// symmetric-side convention is ever assumed for them.
+  Future<Map<String, Object?>> platePlan(
+    String instanceId,
+    Quantity target, [
+    int? revision,
+  ]) => repository.transaction(() async {
+    final selected = await instanceRevision(instanceId, revision);
+    final loading = selected.instance.loading;
+    if (loading == null)
+      throw const BodyTmiException(
+        'not_found',
+        'Equipment instance declares no loading configuration.',
+      );
+    return {
+      'instanceId': selected.instance.id,
+      'instanceRevision': selected.number,
+      'plan': PlatePlan.evaluate(loading, target),
+    };
+  });
 }

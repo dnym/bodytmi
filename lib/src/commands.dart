@@ -13,6 +13,7 @@ const commandNames = [
   'session assess-objectives',
   'scale validate',
   'scale resolve',
+  'plate plan',
   'template validate',
   'template publish',
   'activity expand',
@@ -699,6 +700,11 @@ final class Commands {
               )
               .toJson(),
         };
+      case 'plate plan':
+        keys({'loading', 'target'});
+        final loading = LoadingSpec.fromJson(request['loading']);
+        final target = Quantity.fromJson(request['target']);
+        data = PlatePlan.evaluate(loading, target);
       case 'family validate':
         keys({'family'});
         data = ExerciseFamily.fromJson(request['family']).toJson();

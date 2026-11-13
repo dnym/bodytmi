@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "instanceId": "garage-barbell-olympic",
+  "target": { "value": "102.5", "unit": "kg" }
+}

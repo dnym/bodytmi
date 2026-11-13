@@ -554,7 +554,7 @@ void numericDirectionTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          59,
+          60,
         );
       } finally {
         await upgraded.close();

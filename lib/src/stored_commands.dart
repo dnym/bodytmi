@@ -89,6 +89,7 @@ const storedCommandNames = [
   'instance show',
   'instance list',
   'instance inventory',
+  'store plate-plan',
   'link create',
   'link show',
   'link list',
@@ -478,6 +479,7 @@ Future<Map<String, Object?>> executeStored(
     'instance show' => {'instanceId', 'revision'},
     'instance list' => <String>{},
     'instance inventory' => {'gymId'},
+    'store plate-plan' => {'instanceId', 'revision', 'target'},
     'link create' => {'link', 'expectedRevision', 'createdAt', 'confirm'},
     'link show' => {'linkId', 'revision'},
     'link list' => <String>{},
@@ -1877,6 +1879,12 @@ Future<Map<String, Object?>> executeStored(
           ))
             revision.toJson(),
         ];
+      case 'store plate-plan':
+        data = await EquipmentService(store).platePlan(
+          identifier(request, 'instanceId'),
+          Quantity.fromJson(request['target']),
+          request.containsKey('revision') ? integer('revision') : null,
+        );
       case 'link create':
         data = (await LeverLinkService(store).create(
           input: jsonObject(request['link'], 'link'),
