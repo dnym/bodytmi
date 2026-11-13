@@ -743,9 +743,18 @@ Future<Map<String, Object?>> executeStored(
     final programs = ProgramService(store);
     Future<Map<String, Object?>> runView(ProgramRun run) async {
       final bindings = await store.sessionPrograms();
+      final current = run.current;
+      final scoped =
+          current == null || !run.program.definition.hasPrescriptionOverrides
+          ? const <ScopedProgramOverride>[]
+          : run.program.definition.effectiveOverrides(current.path);
       return {
         ...run.toJson(),
-        'current': run.current?.toJson(),
+        'current': current?.toJson(),
+        if (scoped.isNotEmpty)
+          'effectiveOverrides': [
+            for (final override in scoped) override.toJson(),
+          ],
         'currentSessionId': bindings
             .where((b) => b.runId == run.id && b.ordinal == run.cursor)
             .firstOrNull

@@ -161,6 +161,7 @@ final class TrainingService {
       bodyMassInputs: refreshed,
       initialBodyMassOverrides: session.initialBodyMassOverrides,
       derivedPlanInput: session.derivedPlanInput,
+      prescriptionOverrides: session.prescriptionOverrides,
     );
   }
 
@@ -224,6 +225,7 @@ final class TrainingService {
       bodyMassInputs: inputs,
       initialBodyMassOverrides: original,
       derivedPlanInput: session.derivedPlanInput,
+      prescriptionOverrides: session.prescriptionOverrides,
     );
   }
 
@@ -460,6 +462,7 @@ final class TrainingService {
       bodyMassInputs: session.bodyMassInputs,
       initialBodyMassOverrides: session.initialBodyMassOverrides,
       derivedPlanInput: session.derivedPlanInput,
+      prescriptionOverrides: session.prescriptionOverrides,
     );
   }
 
@@ -531,6 +534,7 @@ final class TrainingService {
       bodyMassInputs: session.bodyMassInputs,
       initialBodyMassOverrides: session.initialBodyMassOverrides,
       derivedPlanInput: session.derivedPlanInput,
+      prescriptionOverrides: session.prescriptionOverrides,
       status: session.status,
       finishedAt: session.finishedAt,
       contentVersion: session.contentVersion + 1,

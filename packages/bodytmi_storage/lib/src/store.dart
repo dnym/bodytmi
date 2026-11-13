@@ -54,7 +54,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 56) {
+            if (native.userVersion > 57) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',

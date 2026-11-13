@@ -1,6 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
 import 'training_repository.dart';
+import 'training_service.dart';
 import 'derived_target_graph_service.dart';
 
 final class ProgramService {
@@ -52,6 +53,42 @@ final class ProgramService {
             matches.single.revision != node.revision) {
           invalid(
             'Program day derived plan does not match its workout revision.',
+          );
+        }
+      }
+    }
+    if (definition.hasPrescriptionOverrides &&
+        definition.plan.nodes.any(
+          (node) => node is ProgramDay && node.derivedPlan != null,
+        )) {
+      invalid(
+        'Programs cannot combine day derived plans with prescription overrides.',
+      );
+    }
+    for (final node in definition.plan.nodes) {
+      for (final override in node.overrides) {
+        var applies = false;
+        for (final occurrence in node.occurrences()) {
+          final revision = await StoredTrainingService(
+            repository,
+          ).revision(occurrence.day.templateId, occurrence.day.revision);
+          if (!revision.definition.slots.any((s) => s.id == override.slotId)) {
+            continue;
+          }
+          for (final role in const ['work', 'warmup', 'backoff', 'drop']) {
+            if (revision.definition
+                .roleTargets(override.slotId, role)
+                .any((targets) => targets.containsKey(override.metric))) {
+              applies = true;
+              break;
+            }
+          }
+          if (applies) break;
+        }
+        if (!applies) {
+          invalid(
+            'Prescription overrides require an authored target for their '
+            'slot metric under the declaring program node.',
           );
         }
       }
@@ -122,11 +159,18 @@ final class ProgramService {
           () {
             final ordinal = current.cursor + offset;
             final occurrence = cycle[ordinal % cycle.length];
+            final scoped = current.program.definition.hasPrescriptionOverrides
+                ? current.program.definition.effectiveOverrides(occurrence.path)
+                : const <ScopedProgramOverride>[];
             return {
               'ordinal': ordinal,
               'cycle': ordinal ~/ cycle.length,
               'index': ordinal % cycle.length,
               ...occurrence.toJson(),
+              if (scoped.isNotEmpty)
+                'effectiveOverrides': [
+                  for (final override in scoped) override.toJson(),
+                ],
               if (includeScopes)
                 'scopes': [
                   for (final scope in scopesByIndex[ordinal % cycle.length]!)
@@ -318,6 +362,11 @@ final class ProgramService {
           canonicalJson(session.derivedPlanInput?.reference.toJson()) !=
               canonicalJson(effectivePlan?.toJson()))
         programConflict('Session identity belongs to another occurrence.');
+      requireFrozenPrescriptionOverrides(
+        session,
+        current.program.definition,
+        existing.path,
+      );
       return session;
     }
     if (current.status != 'active' || current.contentVersion != expectedVersion)
@@ -489,6 +538,51 @@ void validateProgramData({
             canonicalJson(day.day.derivedPlan!.toJson()) !=
                 canonicalJson(session.derivedPlanInput?.reference.toJson())))
       invalid('Program session prescription or path mismatch.');
+  }
+  for (final s in sessions) {
+    if (s.prescriptionOverrides.isEmpty) continue;
+    final binding = bySession[s.id];
+    if (binding == null)
+      invalid('Prescription override sessions require a program binding.');
+    final run = runMap[binding.runId]!;
+    final candidates = [
+      run.program,
+      for (final p in programs)
+        if (p.definition.id == run.program.definition.id &&
+            p.number != run.program.number)
+          p,
+    ];
+    final pinned =
+        workoutMap['${s.revision.definition.id}/${s.revision.number}'];
+    if (pinned == null)
+      invalid('Program session prescription overrides lack their revision.');
+    final pure = const TrainingService().start(
+      sessionId: s.id,
+      revision: pinned,
+      startedAt: s.startedAt,
+    );
+    var matched = false;
+    for (final candidate in candidates) {
+      try {
+        final expected = applyPrescriptionOverrides(
+          pinned.definition,
+          pure.sets,
+          candidate.definition.effectiveOverrides(binding.path),
+        ).records;
+        if (canonicalJson([for (final r in expected) r.toJson()]) ==
+            canonicalJson([
+              for (final r in s.prescriptionOverrides) r.toJson(),
+            ]))
+          matched = true;
+      } on BodyTmiException {
+        continue;
+      }
+      if (matched) break;
+    }
+    if (!matched)
+      invalid(
+        'Program session prescription overrides do not match a published plan.',
+      );
   }
   for (final s in sessions) {
     final owner = bySession[s.id]?.runId;

@@ -155,6 +155,7 @@ final class NativeBackup {
           54,
           55,
           56,
+          57,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -304,6 +305,7 @@ final class NativeBackup {
             54,
             55,
             56,
+            57,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -504,6 +506,9 @@ final class NativeBackup {
           if (db.userVersion < 29 && session.derivedPlanInput != null) {
             invalid('Derived session inputs require schema v29.');
           }
+          if (db.userVersion < 57 && session.prescriptionOverrides.isNotEmpty) {
+            invalid('Program prescription overrides require schema v57.');
+          }
           if (db.userVersion < 21 &&
               session.sets.any((s) => s.observations != null))
             invalid('Set observations require schema v21.');
@@ -573,6 +578,10 @@ final class NativeBackup {
           );
           if (db.userVersion < 55 && d.ruleType == 'ordinal')
             invalid('Ordinal progression requires schema v55.');
+          if (db.userVersion < 57 &&
+              d.session.prescriptionOverrides.isNotEmpty) {
+            invalid('Frozen prescription overrides require schema v57.');
+          }
           if (db.userVersion < 44 &&
               d.session.sets.any((s) => s.timing?.termination == 'manual'))
             invalid('Frozen manual timing termination requires schema v44.');
@@ -650,6 +659,9 @@ final class NativeBackup {
                   (day) => day.derivedPlan != null,
                 )) {
               invalid('Program day derived plans require schema v33.');
+            }
+            if (db.userVersion < 57 && p.definition.hasPrescriptionOverrides) {
+              invalid('Program prescription overrides require schema v57.');
             }
             programs.add(p);
           }

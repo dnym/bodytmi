@@ -7,6 +7,7 @@ import 'quantity.dart';
 import 'timing.dart';
 import 'set_observations.dart';
 import 'objective.dart';
+import 'prescription_overrides.dart';
 
 final class ExerciseSlot {
   ExerciseSlot._(
@@ -484,7 +485,9 @@ final class TrainingSession {
     Map<String, BodyMassInputSnapshot> bodyMassInputs = const {},
     Map<String, BodyMassOverride>? initialBodyMassOverrides,
     this.derivedPlanInput,
+    List<PrescriptionOverrideRecord> prescriptionOverrides = const [],
   }) : sets = List.unmodifiable(sets),
+       prescriptionOverrides = List.unmodifiable(prescriptionOverrides),
        bodyMassInputs = Map.unmodifiable(bodyMassInputs),
        initialBodyMassOverrides = initialBodyMassOverrides == null
            ? null
@@ -520,6 +523,10 @@ final class TrainingSession {
   /// Original start request overrides, retained after explicit rebinding.
   final Map<String, BodyMassOverride>? initialBodyMassOverrides;
   final DerivedPlanInput? derivedPlanInput;
+
+  /// Frozen program prescription overrides applied at session start, with
+  /// authored prior targets and applied results per rewritten set.
+  final List<PrescriptionOverrideRecord> prescriptionOverrides;
   final SessionStatus status;
   final int contentVersion;
 
@@ -537,6 +544,7 @@ final class TrainingSession {
       bodyMassInputs: bodyMassInputs,
       initialBodyMassOverrides: initialBodyMassOverrides,
       derivedPlanInput: derivedPlanInput,
+      prescriptionOverrides: prescriptionOverrides,
     );
   }
 
@@ -554,6 +562,7 @@ final class TrainingSession {
       bodyMassInputs: bodyMassInputs,
       initialBodyMassOverrides: initialBodyMassOverrides,
       derivedPlanInput: derivedPlanInput,
+      prescriptionOverrides: prescriptionOverrides,
       status: SessionStatus.finalized,
       finishedAt: at,
       contentVersion: contentVersion + 1,
@@ -587,5 +596,9 @@ final class TrainingSession {
       'bodyMassInputs': {
         for (final e in bodyMassInputs.entries) e.key: e.value.toJson(),
       },
+    if (prescriptionOverrides.isNotEmpty)
+      'prescriptionOverrides': [
+        for (final record in prescriptionOverrides) record.toJson(),
+      ],
   };
 }

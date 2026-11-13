@@ -777,7 +777,7 @@ void incrementBandsTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), before);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          56,
+          57,
         );
       } finally {
         await migrated.close();

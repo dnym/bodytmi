@@ -894,6 +894,7 @@ final class WindowCheckpointService {
       bodyMassInputs: session.bodyMassInputs,
       initialBodyMassOverrides: session.initialBodyMassOverrides,
       derivedPlanInput: session.derivedPlanInput,
+      prescriptionOverrides: session.prescriptionOverrides,
     );
     final next = const SessionWindowClock().apply(
       updated,

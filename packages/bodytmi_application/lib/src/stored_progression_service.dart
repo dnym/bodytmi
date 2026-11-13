@@ -498,6 +498,28 @@ final class StoredProgressionService {
               before,
             )))
       _reconcileRequired(session, slotId, role, before, ruleType, rule);
+    final ruleMetrics = <String>{
+      if (ruleType == 'double') ...[
+        DoubleProgressionRule.fromJson(rule).objective,
+        DoubleProgressionRule.fromJson(rule).lever,
+      ],
+      if (ruleType == 'threshold') ...[
+        ...ThresholdRule.fromJson(rule).increments.keys,
+        ...ThresholdRule.fromJson(rule).resets.keys,
+        ...ThresholdRule.fromJson(rule).deloadMetrics,
+      ],
+      if (ruleType == 'ordinal')
+        ...OrdinalRule.fromJson(rule).controlledMetrics,
+    };
+    for (final record in session.prescriptionOverrides) {
+      if (record.slotId == slotId && ruleMetrics.contains(record.metric)) {
+        _conflict(
+          'This session applied a program prescription override to a '
+          'progression-controlled metric; reconcile or retire the track '
+          'before resolving this exposure.',
+        );
+      }
+    }
     final next = ProgressionDecision(
       session: session,
       slotId: slotId,

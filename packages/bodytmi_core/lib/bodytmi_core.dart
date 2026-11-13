@@ -35,3 +35,4 @@ export 'src/derived_target_graph.dart';
 export 'src/derived_target_snapshot.dart';
 export 'src/derived_workout_plan.dart';
 export 'src/derived_plan_input.dart';
+export 'src/prescription_overrides.dart';

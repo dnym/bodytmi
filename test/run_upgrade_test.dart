@@ -477,7 +477,7 @@ void runUpgradeTests() {
         'upgrade-1',
         _at(2),
       );
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 56);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 57);
       final archive = await store.archive();
       final before = canonicalJson(archive.toJson());
       await LogicalArchiveFiles.export(archive, '$dir/logical.json');

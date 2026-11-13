@@ -1,11 +1,32 @@
 import 'errors.dart';
 import 'instant.dart';
 import 'derived_plan_input.dart';
+import 'prescription_overrides.dart';
 
 sealed class ProgramNode {
-  const ProgramNode(this.id, this.label);
+  const ProgramNode(this.id, this.label, {this.overrides = const []});
   final String id;
   final String? label;
+  final List<ProgramOverride> overrides;
+
+  /// Parse one node's own scoped overrides; the nearest declaring ancestor
+  /// wins per slot metric at run start. Duplicates within one node are
+  /// invalid, but overrides may coexist with a pinned day derived plan only
+  /// under the application-level combination rules.
+  static List<ProgramOverride> _nodeOverrides(Map<String, Object?> json) {
+    if (!json.containsKey('overrides')) return const [];
+    final items = jsonList(json, 'overrides');
+    if (items.isEmpty) invalid('Program node overrides cannot be empty.');
+    final list = [for (final item in items) ProgramOverride.fromJson(item)];
+    final seen = <String>{};
+    for (final override in list) {
+      if (!seen.add(override.scopeKey)) {
+        invalid('One program node cannot repeat a prescription override.');
+      }
+    }
+    return List.unmodifiable(list);
+  }
+
   static ProgramNode fromJson(Object? input, [int depth = 0]) {
     if (depth > 64) invalid('Program nesting exceeds 64 levels.');
     final j = jsonObject(input, 'program node');
@@ -22,6 +43,7 @@ sealed class ProgramNode {
           'templateId',
           'revision',
           'derivedPlan',
+          'overrides',
         });
         return ProgramDay(
           id,
@@ -31,16 +53,17 @@ sealed class ProgramNode {
           derivedPlan: j['derivedPlan'] == null
               ? null
               : DerivedPlanRef.fromJson(j['derivedPlan']),
+          overrides: _nodeOverrides(j),
         );
       case 'group':
-        checkKeys(j, {'id', 'type', 'label', 'children'});
+        checkKeys(j, {'id', 'type', 'label', 'children', 'overrides'});
         final children = jsonList(j, 'children');
         if (children.isEmpty) invalid('Program group cannot be empty.');
         return ProgramGroup(id, label as String?, [
           for (final c in children) fromJson(c, depth + 1),
-        ]);
+        ], overrides: _nodeOverrides(j));
       case 'repeat':
-        checkKeys(j, {'id', 'type', 'label', 'count', 'child'});
+        checkKeys(j, {'id', 'type', 'label', 'count', 'child', 'overrides'});
         final count = positiveProgramInt(j, 'count');
         if (count > 10000) invalid('Program repeat exceeds 10000.');
         return ProgramRepeat(
@@ -48,6 +71,7 @@ sealed class ProgramNode {
           label as String?,
           count,
           fromJson(j['child'], depth + 1),
+          overrides: _nodeOverrides(j),
         );
       default:
         invalid('Unknown program node type.');
@@ -117,6 +141,7 @@ final class ProgramDay extends ProgramNode {
     this.templateId,
     this.revision, {
     this.derivedPlan,
+    super.overrides,
   });
   final String templateId;
   final int revision;
@@ -128,12 +153,18 @@ final class ProgramDay extends ProgramNode {
     'templateId': templateId,
     'revision': revision,
     if (derivedPlan != null) 'derivedPlan': derivedPlan!.toJson(),
+    if (overrides.isNotEmpty)
+      'overrides': [for (final o in overrides) o.toJson()],
   };
 }
 
 final class ProgramGroup extends ProgramNode {
-  ProgramGroup(super.id, super.label, List<ProgramNode> items)
-    : items = List.unmodifiable(items);
+  ProgramGroup(
+    super.id,
+    super.label,
+    List<ProgramNode> items, {
+    super.overrides,
+  }) : items = List.unmodifiable(items);
   final List<ProgramNode> items;
   @override
   Iterable<ProgramNode> get children => items;
@@ -142,11 +173,19 @@ final class ProgramGroup extends ProgramNode {
     ...header,
     'type': 'group',
     'children': [for (final c in items) c.toJson()],
+    if (overrides.isNotEmpty)
+      'overrides': [for (final o in overrides) o.toJson()],
   };
 }
 
 final class ProgramRepeat extends ProgramNode {
-  const ProgramRepeat(super.id, super.label, this.count, this.child);
+  const ProgramRepeat(
+    super.id,
+    super.label,
+    this.count,
+    this.child, {
+    super.overrides,
+  });
   final int count;
   final ProgramNode child;
   @override
@@ -157,6 +196,8 @@ final class ProgramRepeat extends ProgramNode {
     'type': 'repeat',
     'count': count,
     'child': child.toJson(),
+    if (overrides.isNotEmpty)
+      'overrides': [for (final o in overrides) o.toJson()],
   };
 }
 
@@ -216,6 +257,74 @@ final class ProgramDefinition {
   final String id, name;
   final ProgramNode plan;
   late final int dayCount = plan.occurrences().length;
+
+  bool get hasPrescriptionOverrides =>
+      plan.nodes.any((node) => node.overrides.isNotEmpty);
+
+  /// Effective overrides for one authored occurrence or node path. Overrides
+  /// from every ancestor node apply, and the deepest declaration wins per
+  /// slot metric. The result is deterministically sorted by slot and metric.
+  List<ScopedProgramOverride> effectiveOverrides(String path) {
+    final matched = <ScopedProgramOverride>[];
+    var found = false;
+    void walk(
+      ProgramNode node,
+      String prefix,
+      List<ScopedProgramOverride> ancestors,
+    ) {
+      final here = prefix.isEmpty ? node.id : '$prefix/${node.id}';
+      final next = [
+        ...ancestors,
+        for (final override in node.overrides)
+          ScopedProgramOverride(here, override),
+      ];
+      switch (node) {
+        case ProgramDay():
+          if (here == path) {
+            found = true;
+            matched.addAll(next);
+          }
+        case ProgramGroup(:final items):
+          if (here == path) {
+            found = true;
+            matched.addAll(next);
+            return;
+          }
+          for (final child in items) {
+            walk(child, here, next);
+          }
+        case ProgramRepeat(:final count, :final child):
+          if (here == path) {
+            found = true;
+            matched.addAll(next);
+            return;
+          }
+          for (var i = 0; i < count; i++) {
+            final roundPath = '$here[$i]';
+            if (roundPath == path) {
+              found = true;
+              matched.addAll(next);
+              return;
+            }
+            walk(child, roundPath, next);
+          }
+      }
+    }
+
+    walk(plan, '', const []);
+    if (!found) invalid('Unknown program scope path: $path.');
+    final merged = <String, ScopedProgramOverride>{
+      for (final scoped in matched) scoped.override.scopeKey: scoped,
+    };
+    return (merged.values.toList()..sort((a, b) {
+          final slot = a.override.slotId.compareTo(b.override.slotId);
+          return slot == 0
+              ? a.override.metric.compareTo(b.override.metric)
+              : slot;
+        }))
+        .cast();
+  }
+
   ProgramDayOccurrence dayAt(int ordinal) =>
       plan.occurrences().elementAt(ordinal % dayCount);
   Map<String, Object?> toJson() => {

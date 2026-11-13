@@ -168,8 +168,17 @@ final class StoredTrainingService {
           canonicalJson(existing.derivedPlanInput?.reference.toJson()) !=
               canonicalJson(derivedPlan?.toJson()))
         _conflict();
+      if (runId != null) {
+        final binding = bindings.firstWhere((b) => b.sessionId == id);
+        requireFrozenPrescriptionOverrides(
+          existing,
+          (await ProgramService(repository).run(runId)).program.definition,
+          binding.path,
+        );
+      }
       return existing;
     }
+    String? dayPath;
     if (programRun != null) {
       final current = await ProgramService(repository).run(programRun.id);
       final day = current.current;
@@ -186,6 +195,7 @@ final class StoredTrainingService {
               .where((r) => r.runId == runId)
               .any((r) => r.occurredAt.isAfter(startedAt)))
         invalid('Session precedes program occurrence history.');
+      dayPath = day.path;
     }
     var next = const TrainingService().start(
       sessionId: id,
@@ -232,8 +242,36 @@ final class StoredTrainingService {
             sessionStartedAt: startedAt,
           ),
     };
+    final scopedOverrides = programRun == null || dayPath == null
+        ? const <ScopedProgramOverride>[]
+        : programRun.program.definition.effectiveOverrides(dayPath);
+    if (scopedOverrides.isNotEmpty) {
+      if (derivedPlan != null) {
+        invalid(
+          'Sessions cannot combine derived plans and prescription overrides.',
+        );
+      }
+      for (final scoped in scopedOverrides) {
+        for (final role in ['work', 'warmup', 'backoff', 'drop']) {
+          if (bySlot[(scoped.override.slotId, role)]?.controlledMetrics
+                  .contains(scoped.override.metric) ??
+              false) {
+            throw BodyTmiException(
+              'conflict',
+              'Program prescription overrides cannot target a '
+                  'progression-controlled metric; reconcile the track first.',
+            );
+          }
+        }
+      }
+    }
+    final overridden = applyPrescriptionOverrides(
+      prescription.definition,
+      next.sets,
+      scopedOverrides,
+    );
     final workingCounts = <(String, String), int>{};
-    for (final set in next.sets) {
+    for (final set in overridden.sets) {
       workingCounts.update(
         (set.slotId, set.role),
         (n) => n + 1,
@@ -256,7 +294,7 @@ final class StoredTrainingService {
             entry.key.$2,
           ),
     };
-    for (final set in next.sets) {
+    for (final set in overridden.sets) {
       final applied = bySlot[(set.slotId, set.role)];
       if (applied == null) {
         sets.add(set);
@@ -374,6 +412,7 @@ final class StoredTrainingService {
       bodyMassInputs: next.bodyMassInputs,
       initialBodyMassOverrides: next.initialBodyMassOverrides,
       derivedPlanInput: derivedInput,
+      prescriptionOverrides: overridden.records,
     );
     if (derivedInput != null) {
       validateDerivedPlanReferences(
@@ -616,6 +655,7 @@ final class StoredTrainingService {
       bodyMassInputs: current.bodyMassInputs,
       initialBodyMassOverrides: current.initialBodyMassOverrides,
       derivedPlanInput: result.$2,
+      prescriptionOverrides: current.prescriptionOverrides,
       status: current.status,
       finishedAt: current.finishedAt,
       contentVersion: current.contentVersion + 1,
@@ -949,6 +989,31 @@ bool sameBodyMassOverrides(
   return session.bodyMassInputs.entries.every(
     (e) => e.value.sameOverride(overrides[e.key]),
   );
+}
+
+/// A bound-start retry must reproduce the effective prescription overrides
+/// that were frozen at the original start. Later program revisions, upgrades
+/// or authored edits cannot silently change an existing session's provenance.
+void requireFrozenPrescriptionOverrides(
+  TrainingSession session,
+  ProgramDefinition definition,
+  String path,
+) {
+  final pure = const TrainingService().start(
+    sessionId: session.id,
+    revision: session.revision,
+    startedAt: session.startedAt,
+  );
+  final expected = applyPrescriptionOverrides(
+    session.revision.definition,
+    pure.sets,
+    definition.effectiveOverrides(path),
+  ).records;
+  if (canonicalJson([for (final record in expected) record.toJson()]) !=
+      canonicalJson([
+        for (final record in session.prescriptionOverrides) record.toJson(),
+      ]))
+    _conflict();
 }
 
 Never _conflict() => throw const BodyTmiException(

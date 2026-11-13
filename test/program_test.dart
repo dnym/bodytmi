@@ -1047,7 +1047,7 @@ void programTests() {
         );
         final snapshot = '${dir.path}/manual.sqlite';
         await store.snapshot(snapshot);
-        equal(NativeBackup.validateDatabase(snapshot), 56);
+        equal(NativeBackup.validateDatabase(snapshot), 57);
         final oldLabel = sqlite3.open(snapshot);
         oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -1497,14 +1497,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          56,
+          57,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/56',
+          'bodytmi-logical-export/57',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',

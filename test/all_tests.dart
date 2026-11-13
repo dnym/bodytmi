@@ -37,6 +37,7 @@ import 'lever_link_test.dart';
 import 'link_consumption_test.dart';
 import 'ordinal_progression_test.dart';
 import 'run_upgrade_test.dart';
+import 'program_overrides_test.dart';
 import 'logical_archive_test.dart';
 import 'backup_test.dart';
 import 'storage_test.dart';
@@ -89,6 +90,7 @@ Future<void> main() async {
   linkConsumptionTests();
   ordinalProgressionTests();
   runUpgradeTests();
+  programOverrideTests();
   logicalArchiveTests();
   backupTests();
   storageTests();

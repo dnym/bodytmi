@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "definition": {
+    "id": "ov-program",
+    "name": "Override program",
+    "plan": {
+      "id": "cycle",
+      "type": "group",
+      "label": "Cycle",
+      "children": [
+        {"id": "a", "type": "day", "label": "Day a", "templateId": "upper-a", "revision": 1},
+        {"id": "b", "type": "day", "label": "Day b", "templateId": "upper-a", "revision": 1}
+      ],
+      "overrides": [
+        {"slotId": "bench-heavy", "metric": "mass", "mode": "scale", "factor": "0.8"}
+      ]
+    }
+  }
+}

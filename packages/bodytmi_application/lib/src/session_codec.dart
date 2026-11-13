@@ -38,6 +38,7 @@ TrainingSession sessionFromJson(Object? input) {
     'bodyMassInputs',
     'initialBodyMassOverrides',
     'derivedPlanInput',
+    'prescriptionOverrides',
   });
   if (json['schemaVersion'] != 1)
     invalid('Unsupported session schema version.');
@@ -241,6 +242,55 @@ TrainingSession sessionFromJson(Object? input) {
   if (status == SessionStatus.finalized &&
       sets.any((s) => s.status == SetStatus.planned))
     invalid('A finalized session cannot contain planned sets.');
+  final prescriptionOverrides = json['prescriptionOverrides'] == null
+      ? const <PrescriptionOverrideRecord>[]
+      : [
+          for (final item in jsonList(json, 'prescriptionOverrides'))
+            PrescriptionOverrideRecord.fromJson(item),
+        ];
+  if (json.containsKey('prescriptionOverrides') &&
+      prescriptionOverrides.isEmpty)
+    invalid('Prescription override records cannot be empty.');
+  if (prescriptionOverrides.isNotEmpty) {
+    if (derivedInput != null)
+      invalid(
+        'Sessions cannot combine derived plans and prescription overrides.',
+      );
+    final recomputed =
+        applyPrescriptionOverrides(revision.definition, baseline.sets, [
+          for (final record in prescriptionOverrides)
+            ScopedProgramOverride(record.path, record.override),
+        ]).records;
+    if (canonicalJson([for (final record in recomputed) record.toJson()]) !=
+        canonicalJson([
+          for (final record in prescriptionOverrides) record.toJson(),
+        ]))
+      invalid(
+        'Prescription override provenance does not match the pinned prescription.',
+      );
+    final overriddenAfter = <String, Map<String, Quantity>>{};
+    for (final record in prescriptionOverrides) {
+      for (final application in record.applied) {
+        overriddenAfter.putIfAbsent(
+          application.setId,
+          () => {},
+        )[record.metric] = application.after;
+      }
+    }
+    for (final set in sets) {
+      for (final entry
+          in (overriddenAfter[set.id] ?? const <String, Quantity>{}).entries) {
+        if (set.manualTargets.contains(entry.key) ||
+            set.carriedTargets.containsKey(entry.key))
+          continue;
+        if (canonicalJson(set.suggested[entry.key]?.toJson()) !=
+            canonicalJson(entry.value.toJson()))
+          invalid(
+            'Set suggestions do not match frozen prescription overrides.',
+          );
+      }
+    }
+  }
   final session = TrainingSession(
     id: id,
     revision: revision,
@@ -257,6 +307,7 @@ TrainingSession sessionFromJson(Object? input) {
         ? bodyMassOverridesFromJson(json['initialBodyMassOverrides'])
         : null,
     derivedPlanInput: derivedInput,
+    prescriptionOverrides: prescriptionOverrides,
     status: status,
     finishedAt: finishedAt,
     contentVersion: _positive(json, 'contentVersion'),

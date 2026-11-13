@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/56';
+const _format = 'bodytmi-logical-export/57';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -117,6 +117,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/53',
       'bodytmi-logical-export/54',
       'bodytmi-logical-export/55',
+      'bodytmi-logical-export/56',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -125,7 +126,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final upgradeData = input['format'] == _format;
+    final overrideData = input['format'] == _format;
+    final upgradeData =
+        overrideData || input['format'] == 'bodytmi-logical-export/56';
     final ordinalData =
         upgradeData || input['format'] == 'bodytmi-logical-export/55';
     final sharedData =
@@ -356,6 +359,17 @@ final class LogicalArchiveFiles {
       }
     }
     final archive = TrainingArchive.fromJson(inputData);
+    if (!overrideData) {
+      if (archive.sessions.any((s) => s.prescriptionOverrides.isNotEmpty) ||
+          archive.progressions.any(
+            (d) => d.session.prescriptionOverrides.isNotEmpty,
+          ))
+        invalid('Program prescription overrides require logical v57.');
+      if (archive.programRevisions.any(
+        (p) => p.definition.hasPrescriptionOverrides,
+      ))
+        invalid('Program prescription overrides require logical v57.');
+    }
     if (!ordinalData &&
         archive.progressions.any((d) => d.ruleType == 'ordinal'))
       invalid('Ordinal progression requires logical v55.');
@@ -615,11 +629,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV56.values) {
+          for (final ddl in schemaV57.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 56');
+          db.execute('PRAGMA user_version = 57');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

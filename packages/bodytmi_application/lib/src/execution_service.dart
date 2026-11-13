@@ -376,6 +376,7 @@ final class ExecutionService {
           bodyMassInputs: current.bodyMassInputs,
           initialBodyMassOverrides: current.initialBodyMassOverrides,
           derivedPlanInput: current.derivedPlanInput,
+          prescriptionOverrides: current.prescriptionOverrides,
         ),
       );
     }
