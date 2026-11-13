@@ -339,6 +339,8 @@ void declineTests() {
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.userVersion = 10;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 10);
@@ -348,7 +350,7 @@ void declineTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), before);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          53,
+          54,
         );
       } finally {
         await migrated.close();
@@ -370,7 +372,7 @@ void declineTests() {
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/53',
+          'bodytmi-logical-export/54',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -416,6 +418,8 @@ void declineTests() {
       forged.execute('DROP TABLE IF EXISTS window_checkpoints');
       forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
       forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       forged.userVersion = 10;
       forged.close();
       rejects(

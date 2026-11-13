@@ -54,7 +54,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 53) {
+            if (native.userVersion > 54) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -115,7 +115,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 53);
+    validateSchema(schema.map((row) => row.data), 54);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -346,6 +346,64 @@ final class TrainingStore implements TrainingRepository {
             linkId: revision.link.id,
             number: revision.number,
             snapshot: _snapshot(revision.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<SharedLeverApplication>> sharedLeverApplications() async {
+    final result = <SharedLeverApplication>[];
+    for (final row in await _db.select(_db.sharedLeverApplications).get()) {
+      final application = SharedLeverApplication.fromJson(
+        jsonDecode(row.snapshot),
+      );
+      if (application.linkId != row.linkId ||
+          application.sequence != row.sequence)
+        invalid('Stored shared lever application identity mismatch.');
+      result.add(application);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> insertSharedLeverApplication(
+    SharedLeverApplication application,
+  ) async {
+    await _db
+        .into(_db.sharedLeverApplications)
+        .insert(
+          SharedLeverApplicationsCompanion.insert(
+            linkId: application.linkId,
+            sequence: application.sequence,
+            snapshot: _snapshot(application.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<LinkRetirementAnchor>> linkRetirements() async {
+    final result = <LinkRetirementAnchor>[];
+    for (final row in await _db.select(_db.linkRetirementAnchors).get()) {
+      final retirement = LinkRetirementAnchor.fromJson(
+        jsonDecode(row.snapshot),
+      );
+      if (retirement.id != row.id)
+        invalid('Stored lever link retirement identity mismatch.');
+      result.add(retirement);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> insertLinkRetirementAnchor(
+    LinkRetirementAnchor retirement,
+  ) async {
+    await _db
+        .into(_db.linkRetirementAnchors)
+        .insert(
+          LinkRetirementAnchorsCompanion.insert(
+            id: retirement.id,
+            snapshot: _snapshot(retirement.toJson()),
           ),
         );
   }

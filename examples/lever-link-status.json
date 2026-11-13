@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "link": {
+    "id": "bench-shared-load",
+    "name": "Shared bench controlled load",
+    "metrics": ["mass"],
+    "cadence": "each-exposure",
+    "baseline": "alpha/bench-heavy",
+    "members": ["alpha/bench-heavy", "beta/bench-heavy"]
+  }
+}

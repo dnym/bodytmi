@@ -150,6 +150,8 @@ void sessionBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       db.userVersion = 34;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/captured.sqlite'));
@@ -528,6 +530,8 @@ void sessionBodyMassTests() {
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.userVersion = 33;
       old.close();
       final migrated = await TrainingStore.open('$dir/old.sqlite');
@@ -569,12 +573,14 @@ void sessionBodyMassTests() {
       await File('$dir/rebind-v33.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/rebind-v33.json'));
       await store.snapshot('$dir/rebind.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/rebind.sqlite'), 53);
+      equal(NativeBackup.validateDatabase('$dir/rebind.sqlite'), 54);
       final raw = sqlite3.open('$dir/rebind.sqlite');
       raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       raw.execute('DROP TABLE IF EXISTS window_checkpoints');
       raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
       raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       raw.userVersion = 33;
       raw.close();
       rejects(() => NativeBackup.validateDatabase('$dir/rebind.sqlite'));
@@ -1464,7 +1470,7 @@ void sessionBodyMassTests() {
       await service.edit(s.id, s.contentVersion, finished);
       await mass.delete('training', 1, confirm: true);
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 53);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 54);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/export.json',
@@ -1529,6 +1535,8 @@ void sessionBodyMassTests() {
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         raw.execute('PRAGMA user_version = 4');
       } finally {
         raw.close();
@@ -1579,6 +1587,8 @@ void sessionBodyMassTests() {
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         raw.execute('PRAGMA user_version = 4');
       } finally {
         raw.close();
@@ -1598,7 +1608,7 @@ void sessionBodyMassTests() {
       }
       final check = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(check.userVersion, 53);
+        equal(check.userVersion, 54);
       } finally {
         check.close();
       }

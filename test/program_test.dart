@@ -979,6 +979,8 @@ void programTests() {
         oldDb.execute('DROP TABLE IF EXISTS window_checkpoints');
         oldDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
         oldDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        oldDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        oldDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         oldDb.userVersion = 35;
         oldDb.close();
         equal(NativeBackup.validateDatabase(previousProfile), 35);
@@ -1044,12 +1046,14 @@ void programTests() {
         );
         final snapshot = '${dir.path}/manual.sqlite';
         await store.snapshot(snapshot);
-        equal(NativeBackup.validateDatabase(snapshot), 53);
+        equal(NativeBackup.validateDatabase(snapshot), 54);
         final oldLabel = sqlite3.open(snapshot);
         oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
         oldLabel.execute('DROP TABLE IF EXISTS progression_reconciliations');
         oldLabel.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        oldLabel.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        oldLabel.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         oldLabel.userVersion = 35;
         oldLabel.close();
         rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -1491,14 +1495,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          53,
+          54,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/53',
+          'bodytmi-logical-export/54',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
@@ -1975,6 +1979,8 @@ void programTests() {
           db.execute('DROP TABLE IF EXISTS window_checkpoints');
           db.execute('DROP TABLE IF EXISTS progression_reconciliations');
           db.execute('DROP TABLE IF EXISTS lever_link_revisions');
+          db.execute('DROP TABLE IF EXISTS shared_lever_applications');
+          db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
           db.execute('PRAGMA user_version = 2');
           db.execute('INSERT INTO revisions VALUES (?,?,?)', [
             rev.definition.id,

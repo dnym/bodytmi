@@ -661,6 +661,8 @@ void numericScaleTests() {
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.userVersion = 17;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 17);
@@ -669,7 +671,7 @@ void numericScaleTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          53,
+          54,
         );
       } finally {
         await upgraded.close();
@@ -751,6 +753,8 @@ void numericScaleTests() {
         forged.execute('DROP TABLE IF EXISTS window_checkpoints');
         forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
         forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         forged.userVersion = 17;
         forged.close();
         rejects(
@@ -1128,6 +1132,8 @@ void fixedRangeTests() {
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.userVersion = 18;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 18);
@@ -1136,7 +1142,7 @@ void fixedRangeTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          53,
+          54,
         );
       } finally {
         await upgraded.close();
@@ -1221,6 +1227,8 @@ void fixedRangeTests() {
         forged.execute('DROP TABLE IF EXISTS window_checkpoints');
         forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
         forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         forged.userVersion = 18;
         forged.close();
         rejects(

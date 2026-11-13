@@ -6,6 +6,9 @@ import 'progression_anchor.dart';
 import 'progression_reconciliation.dart';
 import 'reconciliation_receipt.dart';
 import 'lever_link.dart';
+import 'shared_lever_application.dart';
+import 'link_retirement.dart';
+import 'shared_track_view.dart';
 import 'program_service.dart';
 import 'canonical_json.dart';
 import 'stored_body_mass_service.dart';
@@ -35,6 +38,10 @@ abstract interface class TrainingRepository {
   Future<void> saveProgressionReconciliation(ReconciliationReceipt receipt);
   Future<List<LeverLinkRevision>> leverLinkRevisions();
   Future<void> insertLeverLinkRevision(LeverLinkRevision revision);
+  Future<List<SharedLeverApplication>> sharedLeverApplications();
+  Future<void> insertSharedLeverApplication(SharedLeverApplication application);
+  Future<List<LinkRetirementAnchor>> linkRetirements();
+  Future<void> insertLinkRetirementAnchor(LinkRetirementAnchor retirement);
   Future<List<ProgramRevision>> programRevisions();
   Future<void> insertProgramRevision(ProgramRevision revision);
   Future<WorkoutExecution?> execution(String id);
@@ -67,6 +74,29 @@ abstract interface class TrainingRepository {
   Future<void> recordFinalization(String sessionId);
 }
 
+/// Read-only join of published lever links, durable shared chains,
+/// retirements and resolved anchors inside one repository transaction.
+Future<SharedLinkIndex> buildSharedLinkIndex(
+  TrainingRepository repository,
+) async {
+  final decisions = await repository.progressionDecisions();
+  final receipts = await repository.progressionReconciliations();
+  final retirements = await repository.linkRetirements();
+  return SharedLinkIndex(
+    revisions: await repository.leverLinkRevisions(),
+    applications: await repository.sharedLeverApplications(),
+    retirements: retirements,
+    anchors: {
+      for (final anchor in <ProgressionAnchor>[
+        ...decisions,
+        ...receipts,
+        ...retirements,
+      ])
+        if (anchor.resolvedAt != null) anchor.id: anchor,
+    },
+  );
+}
+
 final class StoredTrainingService {
   const StoredTrainingService(this.repository);
   final TrainingRepository repository;
@@ -85,6 +115,8 @@ final class StoredTrainingService {
       repeatCheckpoints: await repository.repeatCheckpoints(),
       reconciliations: await repository.progressionReconciliations(),
       links: await repository.leverLinkRevisions(),
+      sharedApplications: await repository.sharedLeverApplications(),
+      linkRetirements: await repository.linkRetirements(),
       executions: await repository.executions(),
       programRuns: await repository.programRuns(),
       sessionPrograms: await repository.sessionPrograms(),
@@ -176,16 +208,25 @@ final class StoredTrainingService {
       (r) => r.runId == runId && !r.reconciledAt.isAfter(startedAt),
     );
     final sets = <TrainingSet>[];
+    final retirements = (await repository.linkRetirements()).where(
+      (r) => r.runId == runId && !r.retiredAt.isAfter(startedAt),
+    );
+    final links = await buildSharedLinkIndex(repository);
     final bySlot = <(String, String), ProgressionAnchor?>{
       for (final slot in prescription.definition.slots)
         for (final role in ['work', 'warmup', 'backoff', 'drop'])
-          (slot.id, role): latestTrack(
-            decisions,
-            receipts,
-            prescription.definition.id,
-            slot,
-            runId: runId,
-            role: role,
+          (slot.id, role): linkLinkedTrack(
+            links,
+            latestTrack(
+              decisions,
+              <ProgressionAnchor>[...receipts, ...retirements],
+              prescription.definition.id,
+              slot,
+              runId: runId,
+              role: role,
+            ),
+            at: startedAt,
+            sessionStartedAt: startedAt,
           ),
     };
     final workingCounts = <(String, String), int>{};
@@ -530,16 +571,24 @@ final class StoredTrainingService {
     final receipts = (await repository.progressionReconciliations()).where(
       (r) => r.runId == runId && !r.reconciledAt.isAfter(current.startedAt),
     );
+    final refreshRetirements = (await repository.linkRetirements()).where(
+      (r) => r.runId == runId && !r.retiredAt.isAfter(current.startedAt),
+    );
     final bySlot = <(String, String), ProgressionAnchor?>{
       for (final slot in current.revision.definition.slots)
         for (final role in ['work', 'warmup', 'backoff', 'drop'])
-          (slot.id, role): latestTrack(
-            decisions,
-            receipts,
-            current.revision.definition.id,
-            slot,
-            runId: runId,
-            role: role,
+          (slot.id, role): linkLinkedTrack(
+            await buildSharedLinkIndex(repository),
+            latestTrack(
+              decisions,
+              <ProgressionAnchor>[...receipts, ...refreshRetirements],
+              current.revision.definition.id,
+              slot,
+              runId: runId,
+              role: role,
+            ),
+            at: current.startedAt,
+            sessionStartedAt: current.startedAt,
           ),
     };
     final result = await _resolveSessionPlan(

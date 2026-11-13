@@ -356,6 +356,8 @@ void derivedPlanBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       db.userVersion = 34;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/derived-meta.sqlite'));
@@ -787,12 +789,14 @@ void derivedPlanBodyMassTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 53);
+      equal(NativeBackup.validateDatabase(snapshot), 54);
       final db = sqlite3.open(snapshot);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       db.userVersion = 29;
       db.close();
       rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -988,6 +992,8 @@ void derivedPlanBodyMassTests() {
       forgedDb.execute('DROP TABLE IF EXISTS window_checkpoints');
       forgedDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
       forgedDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      forgedDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      forgedDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       forgedDb.userVersion = 29;
       forgedDb.close();
       rejects(() => NativeBackup.validateDatabase(forgedPath));
@@ -999,6 +1005,8 @@ void derivedPlanBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
       db.execute('DROP TABLE IF EXISTS progression_reconciliations');
       db.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       db.userVersion = 29;
       db.close();
       equal(NativeBackup.validateDatabase(path), 29);

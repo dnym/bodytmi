@@ -2,9 +2,12 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'derived_plan_session.dart';
 import 'session_codec.dart';
 import 'canonical_json.dart';
+import 'progression_anchor.dart';
 import 'progression_decision.dart';
 import 'reconciliation_receipt.dart';
 import 'lever_link.dart';
+import 'link_retirement.dart';
+import 'shared_lever_application.dart';
 import 'program_service.dart';
 import 'stored_body_mass_service.dart';
 import 'timing_service.dart';
@@ -33,7 +36,19 @@ final class TrainingArchive {
     List<DerivedTargetGraphRevision> graphs = const [],
     List<ReconciliationReceipt> reconciliations = const [],
     List<LeverLinkRevision> links = const [],
-  }) : links = List<LeverLinkRevision>.unmodifiable(
+    List<SharedLeverApplication> sharedApplications = const [],
+    List<LinkRetirementAnchor> linkRetirements = const [],
+  }) : sharedApplications = List<SharedLeverApplication>.unmodifiable(
+         <SharedLeverApplication>[...sharedApplications]..sort((a, b) {
+           final id = a.linkId.compareTo(b.linkId);
+           return id == 0 ? a.sequence.compareTo(b.sequence) : id;
+         }),
+       ),
+       linkRetirements = List<LinkRetirementAnchor>.unmodifiable(
+         <LinkRetirementAnchor>[...linkRetirements]
+           ..sort((a, b) => a.id.compareTo(b.id)),
+       ),
+       links = List<LeverLinkRevision>.unmodifiable(
          <LeverLinkRevision>[...links]..sort((a, b) {
            final id = a.link.id.compareTo(b.link.id);
            return id == 0 ? a.number.compareTo(b.number) : id;
@@ -127,6 +142,8 @@ final class TrainingArchive {
       'repeatCheckpoints',
       'reconciliations',
       'links',
+      'sharedApplications',
+      'linkRetirements',
       'executions',
       'families',
       'graphs',
@@ -195,6 +212,14 @@ final class TrainingArchive {
       links: [
         for (final item in optional('links')) LeverLinkRevision.fromJson(item),
       ],
+      sharedApplications: [
+        for (final item in optional('sharedApplications'))
+          SharedLeverApplication.fromJson(item),
+      ],
+      linkRetirements: [
+        for (final item in optional('linkRetirements'))
+          LinkRetirementAnchor.fromJson(item),
+      ],
     );
   }
 
@@ -211,6 +236,8 @@ final class TrainingArchive {
   final List<ProgressionDecision> progressions;
   final List<ReconciliationReceipt> reconciliations;
   final List<LeverLinkRevision> links;
+  final List<SharedLeverApplication> sharedApplications;
+  final List<LinkRetirementAnchor> linkRetirements;
   final List<ProgramRevision> programRevisions;
   final List<ProgramRun> programRuns;
   final List<SessionProgramBinding> sessionPrograms;
@@ -230,6 +257,8 @@ final class TrainingArchive {
     'progressions': [for (final d in progressions) d.toJson()],
     'reconciliations': [for (final r in reconciliations) r.toJson()],
     'links': [for (final l in links) l.toJson()],
+    'sharedApplications': [for (final a in sharedApplications) a.toJson()],
+    'linkRetirements': [for (final r in linkRetirements) r.toJson()],
     'programRevisions': [for (final p in programRevisions) p.toJson()],
     'programRuns': [for (final r in programRuns) r.toJson()],
     'sessionPrograms': [for (final b in sessionPrograms) b.toJson()],
@@ -250,6 +279,8 @@ final class TrainingArchive {
     'progressions': progressions.length,
     'reconciliations': reconciliations.length,
     'links': links.length,
+    'sharedApplications': sharedApplications.length,
+    'linkRetirements': linkRetirements.length,
     'programRevisions': programRevisions.length,
     'programRuns': programRuns.length,
     'sessionPrograms': sessionPrograms.length,
@@ -292,17 +323,45 @@ final class TrainingArchive {
       sessions: sessions,
       finalizations: finalizations,
     );
+    validateLinkRetirements(
+      linkRetirements,
+      links,
+      sharedApplications,
+      progressions,
+      reconciliations,
+    );
+    final linkAnchors = <String, ProgressionAnchor>{
+      for (final anchor in <ProgressionAnchor>[
+        ...progressions,
+        ...reconciliations,
+        ...linkRetirements,
+      ])
+        if (anchor.resolvedAt != null) anchor.id: anchor,
+    };
+    validateSharedLeverApplications(sharedApplications, links, linkAnchors);
+    final linkIndex = SharedLinkIndex(
+      revisions: links,
+      applications: sharedApplications,
+      retirements: linkRetirements,
+      anchors: linkAnchors,
+    );
     validateProgressionReconciliations(
       reconciliations,
       progressions,
       revisions,
       sessions,
+      linkRetirements,
+      linkIndex,
     );
-    validateLeverLinkRevisions(links);
-    validateLeverLinks(links, progressions, reconciliations);
-    validateProgressionDecisions(progressions, sessions, {
-      for (final b in sessionPrograms) b.sessionId: b.runId,
-    }, reconciliations);
+    validateLeverLinkRevisions(links, linkRetirements);
+    validateLeverLinks(links, progressions, reconciliations, linkRetirements);
+    validateProgressionDecisions(
+      progressions,
+      sessions,
+      {for (final b in sessionPrograms) b.sessionId: b.runId},
+      [...reconciliations, ...linkRetirements],
+      linkIndex,
+    );
     final byRevision = <String, WorkoutRevision>{};
     final numbers = <String, int>{};
     for (final revision in revisions) {

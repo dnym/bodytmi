@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "linkId": "bench-shared-load",
+  "expectedSequence": 0,
+  "at": "2026-10-12T09:00:00Z",
+  "confirm": true,
+  "failedSessions": 0,
+  "nextSets": [
+    {
+      "mass": "62.5"
+    },
+    {
+      "mass": "62.5"
+    },
+    {
+      "mass": "62.5"
+    }
+  ]
+}

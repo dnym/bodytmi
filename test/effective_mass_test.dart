@@ -317,13 +317,13 @@ void effectiveMassTests() {
       final next = await service.start('next', definition().id, 2, instant(11));
       equal(_value(_estimate(next)), '109.5');
       equal(canonicalJson(_view(await service.session('old'))), original);
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 53);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 54);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/53',
+        'bodytmi-logical-export/54',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -397,6 +397,8 @@ void effectiveMassTests() {
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         raw.execute('PRAGMA user_version = 5');
       } finally {
         raw.close();
@@ -448,6 +450,8 @@ void effectiveMassTests() {
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         raw.execute('PRAGMA user_version = 5');
       } finally {
         raw.close();

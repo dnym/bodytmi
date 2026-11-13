@@ -160,6 +160,8 @@ void executionTests() {
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.userVersion = 39;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/v39.sqlite'), 39);
@@ -261,12 +263,14 @@ void executionTests() {
       await File('$dir/old-manual.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-manual.json'));
       await store.snapshot('$dir/manual.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 53);
+      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 54);
       final relabeled = sqlite3.open('$dir/manual.sqlite');
       relabeled.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       relabeled.execute('DROP TABLE IF EXISTS window_checkpoints');
       relabeled.execute('DROP TABLE IF EXISTS progression_reconciliations');
       relabeled.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      relabeled.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      relabeled.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       relabeled.userVersion = 39;
       relabeled.close();
       rejects(() => NativeBackup.validateDatabase('$dir/manual.sqlite'));
@@ -580,6 +584,8 @@ void executionTests() {
       previous.execute('DROP TABLE IF EXISTS window_checkpoints');
       previous.execute('DROP TABLE IF EXISTS progression_reconciliations');
       previous.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      previous.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      previous.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       previous.userVersion = 36;
       previous.close();
       equal(NativeBackup.validateDatabase('$dir/v36.sqlite'), 36);
@@ -669,12 +675,14 @@ void executionTests() {
       await File('$dir/old-carry.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-carry.json'));
       await store.snapshot('$dir/carry.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 53);
+      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 54);
       final old = sqlite3.open('$dir/carry.sqlite');
       old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.userVersion = 36;
       old.close();
       rejects(() => NativeBackup.validateDatabase('$dir/carry.sqlite'));
@@ -1005,6 +1013,8 @@ void executionTests() {
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.userVersion = 8;
       old.close();
       equal(await NativeBackup.validateDatabase('$dir/v8/database.sqlite'), 8);
@@ -1014,7 +1024,7 @@ void executionTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          53,
+          54,
         );
       } finally {
         await migrated.close();
@@ -1098,6 +1108,8 @@ void executionTests() {
         forged.execute('DROP TABLE IF EXISTS window_checkpoints');
         forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
         forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         forged.userVersion = 8;
         forged.close();
         rejects(
@@ -2039,13 +2051,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 53);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 54);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/53',
+        'bodytmi-logical-export/54',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -2150,6 +2162,8 @@ void executionTests() {
         raw.execute('DROP TABLE IF EXISTS window_checkpoints');
         raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         raw.execute('PRAGMA user_version = 7');
       } finally {
         raw.close();
@@ -2204,6 +2218,8 @@ void executionTests() {
           forged.execute('DROP TABLE IF EXISTS window_checkpoints');
           forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
           forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
+          forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
+          forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
           forged.execute('PRAGMA user_version = 7');
         } finally {
           forged.close();

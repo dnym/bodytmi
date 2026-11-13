@@ -41,6 +41,8 @@ void activityTests() {
         final raw = sqlite3.open(path);
         raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         raw.userVersion = 50;
         raw.close();
         store = await TrainingStore.open(path);
@@ -109,6 +111,8 @@ void activityTests() {
         final oldDb = sqlite3.open(oldDbPath);
         oldDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
         oldDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        oldDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        oldDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         oldDb.userVersion = 50;
         oldDb.close();
         rejects(() => NativeBackup.validateDatabase(oldDbPath));
@@ -565,6 +569,8 @@ void activityTests() {
         final raw = sqlite3.open(path);
         raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         raw.userVersion = 49;
         raw.close();
         store = await TrainingStore.open(path);
@@ -577,7 +583,7 @@ void activityTests() {
           );
           equal(
             (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-            53,
+            54,
           );
         } finally {
           await store.close();
@@ -790,6 +796,8 @@ void activityTests() {
         final oldDb = sqlite3.open(oldDbPath);
         oldDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
         oldDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        oldDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        oldDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         oldDb.userVersion = 49;
         oldDb.close();
         rejects(() => NativeBackup.validateDatabase(oldDbPath));
@@ -974,6 +982,8 @@ void activityTests() {
       final raw = sqlite3.open(path);
       raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
       raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       raw.userVersion = 48;
       raw.close();
       store = await TrainingStore.open(path);
@@ -983,7 +993,7 @@ void activityTests() {
         equal(canonicalJson(migrated.execution), canonicalJson(execution));
         equal(
           (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-          53,
+          54,
         );
       } finally {
         await store.close();
@@ -1090,6 +1100,8 @@ void activityTests() {
         final oldDb = sqlite3.open(oldDbPath);
         oldDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
         oldDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        oldDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        oldDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         oldDb.userVersion = 48;
         oldDb.close();
         rejects(() => NativeBackup.validateDatabase(oldDbPath));
@@ -1744,7 +1756,7 @@ void activityTests() {
           } finally {
             await prepared.close();
           }
-          equal(NativeBackup.validateDatabase('$backup/database.sqlite'), 53);
+          equal(NativeBackup.validateDatabase('$backup/database.sqlite'), 54);
         } finally {
           await store.close();
         }
@@ -2086,6 +2098,8 @@ void activityTests() {
       raw.execute('DROP TABLE repeat_checkpoints');
       raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
       raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       raw.userVersion = 47;
       raw.close();
       final store = await TrainingStore.open(path);
@@ -2095,7 +2109,7 @@ void activityTests() {
           (await store.backup(
             '${directory.path}/migrated',
           ))['databaseSchemaVersion'],
-          53,
+          54,
         );
       } finally {
         await store.close();
@@ -3779,7 +3793,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          53,
+          54,
         );
       } finally {
         await store.close();
@@ -4176,7 +4190,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          53,
+          54,
         );
       } finally {
         await store.close();
@@ -4313,7 +4327,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            53,
+            54,
           );
         } finally {
           await store.close();
@@ -4524,7 +4538,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            53,
+            54,
           );
         } finally {
           await store.close();
@@ -4914,7 +4928,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            53,
+            54,
           );
         } finally {
           await store.close();
@@ -5069,7 +5083,7 @@ void activityTests() {
           NativeBackup.validateDatabase(
             '${dir.path}/early-backup/database.sqlite',
           ),
-          53,
+          54,
         );
         await expectCheckpointFailure(
           service.completeCurrent(
@@ -5127,7 +5141,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          53,
+          54,
         );
       } finally {
         await store.close();
@@ -5346,7 +5360,7 @@ void activityTests() {
           await reopened.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            53,
+            54,
           );
         } finally {
           await reopened.close();
@@ -5633,7 +5647,7 @@ void activityTests() {
       await store.backup('${dir.path}/backup');
       equal(
         NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-        53,
+        54,
       );
     } finally {
       await store.close();
@@ -7211,7 +7225,7 @@ void activityTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          53,
+          54,
         );
         final archive = jsonObject(
           jsonDecode(await File('${dir.path}/logical.json').readAsString()),
@@ -7257,6 +7271,8 @@ void activityTests() {
         );
         raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
         raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         raw.userVersion = 45;
         raw.close();
         rejects(
@@ -7282,7 +7298,7 @@ void activityTests() {
           NativeBackup.validateDatabase(
             '${dir.path}/finished-native/database.sqlite',
           ),
-          53,
+          54,
         );
         await expectCheckpointFailure(
           WindowCheckpointService(
@@ -7404,7 +7420,7 @@ void activityTests() {
         await store.backup('${dir.path}/native');
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          53,
+          54,
         );
         await LogicalArchiveFiles.export(
           await store.archive(),
@@ -7691,6 +7707,8 @@ void activityTests() {
         final old = sqlite3.open('${dir.path}/native/database.sqlite');
         old.execute('DROP TABLE IF EXISTS progression_reconciliations');
         old.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        old.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         old.userVersion = 46;
         old.close();
         rejects(
@@ -8155,6 +8173,8 @@ void activityTests() {
       raw.execute('DROP TABLE repeat_checkpoints');
       raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
       raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       raw.userVersion = 46;
       raw.close();
       store = await TrainingStore.open(path);
@@ -8163,7 +8183,7 @@ void activityTests() {
       equal(checkpoint.version, 1);
       equal(
         (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-        53,
+        54,
       );
     } finally {
       await store.close();
@@ -8188,6 +8208,8 @@ void activityTests() {
       raw.execute('DROP TABLE window_checkpoints');
       raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
       raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       raw.userVersion = 45;
       raw.close();
       store = await TrainingStore.open(path);
@@ -8198,7 +8220,7 @@ void activityTests() {
       );
       equal(
         (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-        53,
+        54,
       );
     } finally {
       await store.close();

@@ -152,6 +152,7 @@ final class NativeBackup {
           51,
           52,
           53,
+          54,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -298,6 +299,7 @@ final class NativeBackup {
             51,
             52,
             53,
+            54,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -325,6 +327,8 @@ final class NativeBackup {
         if (db.userVersion >= 48) 'repeat_checkpoints',
         if (db.userVersion >= 52) 'progression_reconciliations',
         if (db.userVersion >= 53) 'lever_link_revisions',
+        if (db.userVersion >= 54) 'shared_lever_applications',
+        if (db.userVersion >= 54) 'link_retirement_anchors',
         if (db.userVersion >= 8) 'workout_executions',
         if (db.userVersion >= 12) 'family_revisions',
         if (db.userVersion >= 27) 'derived_target_graphs',
@@ -695,34 +699,108 @@ final class NativeBackup {
             sessions: allSessions,
             finalizations: finalizations,
           );
-          validateProgressionDecisions(
-            decisions,
-            allSessions,
-            {for (final b in bindings) b.sessionId: b.runId},
-            [...reconciliations],
-          );
-          if (reconciliations.isNotEmpty)
-            validateProgressionReconciliations(
-              reconciliations,
+          if (db.userVersion < 53) {
+            validateProgressionDecisions(
               decisions,
-              allRevisions,
               allSessions,
+              {for (final b in bindings) b.sessionId: b.runId},
+              [...reconciliations],
             );
-        }
-        if (db.userVersion >= 53) {
-          final links = <LeverLinkRevision>[];
-          for (final row in db.select(
-            'SELECT link_id,number,snapshot FROM lever_link_revisions',
-          )) {
-            final link = LeverLinkRevision.fromJson(
-              jsonDecode(row['snapshot'] as String),
+            if (reconciliations.isNotEmpty)
+              validateProgressionReconciliations(
+                reconciliations,
+                decisions,
+                allRevisions,
+                allSessions,
+              );
+          } else {
+            final links = <LeverLinkRevision>[];
+            for (final row in db.select(
+              'SELECT link_id,number,snapshot FROM lever_link_revisions',
+            )) {
+              final link = LeverLinkRevision.fromJson(
+                jsonDecode(row['snapshot'] as String),
+              );
+              if (link.link.id != row['link_id'] ||
+                  link.number != row['number'])
+                invalid('Lever link revision row identity mismatch.');
+              links.add(link);
+            }
+            final sharedApplications = <SharedLeverApplication>[];
+            final linkRetirements = <LinkRetirementAnchor>[];
+            if (db.userVersion >= 54) {
+              for (final row in db.select(
+                'SELECT link_id,sequence,snapshot FROM shared_lever_applications',
+              )) {
+                final application = SharedLeverApplication.fromJson(
+                  jsonDecode(row['snapshot'] as String),
+                );
+                if (application.linkId != row['link_id'] ||
+                    application.sequence != row['sequence'])
+                  invalid('Shared lever application row identity mismatch.');
+                sharedApplications.add(application);
+              }
+              for (final row in db.select(
+                'SELECT id,snapshot FROM link_retirement_anchors',
+              )) {
+                final retirement = LinkRetirementAnchor.fromJson(
+                  jsonDecode(row['snapshot'] as String),
+                );
+                if (retirement.id != row['id'])
+                  invalid('Lever link retirement row identity mismatch.');
+                linkRetirements.add(retirement);
+              }
+            }
+            final linkAnchors = <String, ProgressionAnchor>{
+              for (final anchor in <ProgressionAnchor>[
+                ...decisions,
+                ...reconciliations,
+                ...linkRetirements,
+              ])
+                if (anchor.resolvedAt != null) anchor.id: anchor,
+            };
+            final linkIndex = SharedLinkIndex(
+              revisions: links,
+              applications: sharedApplications,
+              anchors: linkAnchors,
+              retirements: linkRetirements,
             );
-            if (link.link.id != row['link_id'] || link.number != row['number'])
-              invalid('Lever link revision row identity mismatch.');
-            links.add(link);
+            validateLinkRetirements(
+              linkRetirements,
+              links,
+              sharedApplications,
+              decisions,
+              reconciliations,
+            );
+            validateSharedLeverApplications(
+              sharedApplications,
+              links,
+              linkAnchors,
+            );
+            validateLeverLinkRevisions(links, linkRetirements);
+            validateLeverLinks(
+              links,
+              decisions,
+              reconciliations,
+              linkRetirements,
+            );
+            if (reconciliations.isNotEmpty)
+              validateProgressionReconciliations(
+                reconciliations,
+                decisions,
+                allRevisions,
+                allSessions,
+                linkRetirements,
+                db.userVersion >= 54 ? linkIndex : null,
+              );
+            validateProgressionDecisions(
+              decisions,
+              allSessions,
+              {for (final b in bindings) b.sessionId: b.runId},
+              [...reconciliations, ...linkRetirements],
+              db.userVersion >= 54 ? linkIndex : null,
+            );
           }
-          validateLeverLinkRevisions(links);
-          validateLeverLinks(links, decisions, reconciliations);
         }
       }
       if (db.userVersion >= 4) {

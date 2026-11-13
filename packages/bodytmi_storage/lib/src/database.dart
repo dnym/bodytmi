@@ -155,6 +155,23 @@ class LeverLinkRevisions extends Table {
   Set<Column> get primaryKey => {linkId, number};
 }
 
+@DataClassName('StoredSharedLeverApplication')
+class SharedLeverApplications extends Table {
+  TextColumn get linkId => text()();
+  IntColumn get sequence => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {linkId, sequence};
+}
+
+@DataClassName('StoredLinkRetirementAnchor')
+class LinkRetirementAnchors extends Table {
+  TextColumn get id => text()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DriftDatabase(
   tables: [
     Revisions,
@@ -174,18 +191,20 @@ class LeverLinkRevisions extends Table {
     RepeatCheckpoints,
     ProgressionReconciliations,
     LeverLinkRevisions,
+    SharedLeverApplications,
+    LinkRetirementAnchors,
   ],
 )
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 53;
+  int get schemaVersion => 54;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
-      await customStatement('PRAGMA user_version = 53');
+      await customStatement('PRAGMA user_version = 54');
       await validateMigration();
     }),
     onUpgrade: (m, from, to) async {
@@ -242,8 +261,9 @@ class TrainingDatabase extends _$TrainingDatabase {
             50,
             51,
             52,
+            53,
           }.contains(from) ||
-          to != 53)
+          to != 54)
         throw StateError('Unsupported database migration $from -> $to.');
       await transaction(() async {
         final schema = await customSelect(
@@ -266,9 +286,13 @@ class TrainingDatabase extends _$TrainingDatabase {
         if (from < 48) await m.createTable(repeatCheckpoints);
         if (from < 52) await m.createTable(progressionReconciliations);
         if (from < 53) await m.createTable(leverLinkRevisions);
+        if (from < 54) {
+          await m.createTable(sharedLeverApplications);
+          await m.createTable(linkRetirementAnchors);
+        }
         // Drift also writes this after the callback. Writing it within our
         // transaction prevents a crash leaving new DDL with the old version.
-        await customStatement('PRAGMA user_version = 53');
+        await customStatement('PRAGMA user_version = 54');
         await validateMigration();
       });
     },
@@ -285,7 +309,7 @@ class TrainingDatabase extends _$TrainingDatabase {
     final schema = await customSelect(
       'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
     ).get();
-    validateSchema(schema.map((row) => row.data), 53);
+    validateSchema(schema.map((row) => row.data), 54);
     if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
       throw const BodyTmiException(
         'storage',

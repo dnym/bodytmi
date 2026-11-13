@@ -83,6 +83,14 @@ const schemaV53 = {
       'CREATE TABLE "lever_link_revisions" ("link_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("link_id", "number"))',
 };
 
+const schemaV54 = {
+  ...schemaV53,
+  'shared_lever_applications':
+      'CREATE TABLE "shared_lever_applications" ("link_id" TEXT NOT NULL, "sequence" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("link_id", "sequence"))',
+  'link_retirement_anchors':
+      'CREATE TABLE "link_retirement_anchors" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -147,6 +155,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   51 => schemaV48, // v51 associates repeats with sessions.
   52 => schemaV52, // v52 adds durable progression reconciliation receipts.
   53 => schemaV53, // v53 adds durable shared lever link revisions.
+  54 => schemaV54, // v54 adds durable shared lever chains and retirements.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

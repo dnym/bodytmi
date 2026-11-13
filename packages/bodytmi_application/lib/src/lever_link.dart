@@ -1,5 +1,6 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
+import 'link_retirement.dart';
 import 'progression_anchor.dart';
 import 'progression_decision.dart';
 import 'reconciliation_receipt.dart';
@@ -188,8 +189,12 @@ final class LeverLinkRevision {
 
 /// Membership and baseline are immutable per link identity; every revision of
 /// one link keeps exactly the same members. A progression context backs at
-/// most one link, so links never overlap implicitly.
-void validateLeverLinkRevisions(List<LeverLinkRevision> revisions) {
+/// most one link at a time; only an explicit retirement lets a context join a
+/// second link, and that later membership must start after the retirement.
+void validateLeverLinkRevisions(
+  List<LeverLinkRevision> revisions, [
+  List<LinkRetirementAnchor> retirements = const [],
+]) {
   final byId = <String, List<LeverLinkRevision>>{};
   for (final revision in revisions)
     byId.putIfAbsent(revision.link.id, () => []).add(revision);
@@ -213,12 +218,30 @@ void validateLeverLinkRevisions(List<LeverLinkRevision> revisions) {
         invalid('Lever link membership and baseline are immutable.');
     }
   }
-  final contexts = <String, String>{};
+  final contexts = <String, Set<String>>{};
   for (final revision in revisions)
     for (final member in revision.link.members)
-      if (contexts.putIfAbsent(member.contextKey, () => revision.link.id) !=
-          revision.link.id)
-        invalid('A progression track belongs to at most one lever link.');
+      contexts
+          .putIfAbsent(member.contextKey, () => <String>{})
+          .add(revision.link.id);
+  for (final entry in contexts.entries) {
+    if (entry.value.length <= 1) continue;
+    final retired = retirements
+        .where((r) => r.contextKey == entry.key)
+        .firstOrNull;
+    if (entry.value.length != 2 ||
+        retired == null ||
+        !entry.value.contains(retired.linkId))
+      invalid('A progression track belongs to at most one lever link.');
+    for (final revision in revisions) {
+      if (revision.link.id == retired.linkId ||
+          !entry.value.contains(revision.link.id))
+        continue;
+      if (revision.link.members.any((m) => m.contextKey == entry.key) &&
+          revision.link.createdAt.isBefore(retired.retiredAt))
+        invalid('A retired track cannot join another link before retiring.');
+    }
+  }
 }
 
 /// Checks each stored member against its durable resolved track and enforces
@@ -228,10 +251,15 @@ void validateLeverLinkRevisions(List<LeverLinkRevision> revisions) {
 void validateLeverLinks(
   List<LeverLinkRevision> links,
   List<ProgressionDecision> decisions,
-  List<ReconciliationReceipt> receipts,
-) {
+  List<ReconciliationReceipt> receipts, [
+  List<LinkRetirementAnchor> retirements = const [],
+]) {
   final anchors = <String, ProgressionAnchor>{
-    for (final anchor in <ProgressionAnchor>[...decisions, ...receipts])
+    for (final anchor in <ProgressionAnchor>[
+      ...decisions,
+      ...receipts,
+      ...retirements,
+    ])
       if (anchor.resolvedAt != null) anchor.id: anchor,
   };
   for (final revision in links) {
@@ -265,6 +293,8 @@ void requireSharedWriterContract(
   List<ProgressionAnchor> anchors,
 ) {
   final first = anchors.first;
+  if (anchors.any((a) => a.nextSets.length != first.nextSets.length))
+    invalid('Linked progression tracks must have the same working-set count.');
   for (final anchor in anchors) {
     if (!link.metrics.every(anchor.controlledMetrics.contains))
       invalid('Every linked track must control every shared metric.');

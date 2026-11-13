@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "linkId": "bench-shared-load",
+  "memberAnchorId": "beta/bench-heavy",
+  "retiredAt": "2026-10-19T09:00:00Z",
+  "confirm": true
+}

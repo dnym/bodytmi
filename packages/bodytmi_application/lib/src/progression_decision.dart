@@ -1,8 +1,11 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'session_codec.dart';
 import 'canonical_json.dart';
+import 'lever_link.dart';
 import 'progression_anchor.dart';
 import 'progression_evaluation.dart';
+import 'shared_lever_application.dart';
+import 'shared_track_view.dart';
 
 /// Stable exposure identity includes role, never a result content version.
 final class ProgressionDecision implements ProgressionAnchor {
@@ -262,6 +265,7 @@ void validateProgressionDecisions(
   List<TrainingSession> sessions, [
   Map<String, String> runBySession = const {},
   List<ProgressionAnchor> anchors = const [],
+  SharedLinkIndex? links,
 ]) {
   final byId = <String, ProgressionDecision>{};
   final byAnchor = <String, ProgressionAnchor>{
@@ -313,6 +317,7 @@ void validateProgressionDecisions(
     final before = d.previousApplication == null
         ? null
         : byAnchor[d.previousApplication];
+    final link = links == null ? null : _activeLinkFor(links, d);
     if (before == null) {
       if (d.previousApplication != null ||
           d.previousSequence != 0 ||
@@ -321,21 +326,59 @@ void validateProgressionDecisions(
       if (d.previousCursor != 0)
         invalid('Initial coordinator cursor must be zero.');
     } else {
+      final shared = link == null
+          ? null
+          : links!.stateAt(link.id, d.session.startedAt);
+      if (link != null && shared == null)
+        invalid('Linked progression lacks its shared chain state.');
       if (before.resolvedAt == null ||
           !sameAnchorContext(d, before) ||
           d.previousSequence != before.sequence ||
-          d.previousFailures != before.failedSessions ||
           d.ruleType != before.ruleType ||
-          d.previousCursor != before.cursor ||
           canonicalJson(d.rule) != canonicalJson(before.rule))
         invalid('Progression lineage is inconsistent.');
-      if (!matchesProgressionBaseline(d, before))
-        invalid('Progression baseline is inconsistent.');
+      if (link == null) {
+        if (d.previousFailures != before.failedSessions ||
+            d.previousCursor != before.cursor)
+          invalid('Progression lineage is inconsistent.');
+        if (!matchesProgressionBaseline(d, before))
+          invalid('Progression baseline is inconsistent.');
+      } else {
+        final state = shared!;
+        if (d.previousFailures != state.failedSessions ||
+            d.previousCursor != state.cursor)
+          invalid('Linked progression counters differ from the shared track.');
+        if (state.vector.length != before.nextSets.length)
+          invalid('Linked shared vector conflicts with the local track.');
+        if (!matchesProgressionBaseline(
+          d,
+          SharedTrackView(local: before, link: link, shared: state),
+        ))
+          invalid('Linked progression baseline is inconsistent.');
+        if (d.resolvedAt != null && link.cadence == 'each-exposure') {
+          final row = links!.rowForOrigin(d.id);
+          if (row == null ||
+              row.linkId != link.id ||
+              row.originSessionId != d.session.id ||
+              row.previousFailures != d.previousFailures ||
+              row.previousCursor != d.previousCursor ||
+              row.failedSessions != d.failedSessions ||
+              row.cursor != d.cursor ||
+              row.occurredAt != d.resolvedAt)
+            invalid('Linked exposure lacks its shared application step.');
+        }
+      }
       if (d.resolvedAt != null && d.resolvedAt!.isBefore(before.resolvedAt!))
         invalid('Progression application chronology is inconsistent.');
     }
   }
 }
+
+/// The published link [d]'s context actively backs, using the same predicate
+/// the consumption path wraps with: not retired before the session started,
+/// and the session started no earlier than the link.
+LeverLink? _activeLinkFor(SharedLinkIndex links, ProgressionDecision d) =>
+    linkedContextFor(links, d, d.session.startedAt);
 
 Object? _freeze(Object? value) {
   if (value is Map<String, Object?>)

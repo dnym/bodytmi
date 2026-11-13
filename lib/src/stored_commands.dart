@@ -76,6 +76,10 @@ const storedCommandNames = [
   'link create',
   'link show',
   'link list',
+  'link status',
+  'link state',
+  'link advance',
+  'link retire',
   'graph publish',
   'graph show',
   'graph list',
@@ -443,6 +447,18 @@ Future<Map<String, Object?>> executeStored(
     'link create' => {'link', 'expectedRevision', 'createdAt', 'confirm'},
     'link show' => {'linkId', 'revision'},
     'link list' => <String>{},
+    'link status' => {'link'},
+    'link state' => {'linkId', 'asOf'},
+    'link advance' => {
+      'linkId',
+      'nextSets',
+      'failedSessions',
+      'cursor',
+      'expectedSequence',
+      'at',
+      'confirm',
+    },
+    'link retire' => {'linkId', 'memberAnchorId', 'retiredAt', 'confirm'},
     'graph publish' => {'graph', 'expectedRevision'},
     'graph show' => {'graphId', 'revision'},
     'graph list' => <String>{},
@@ -1710,6 +1726,39 @@ Future<Map<String, Object?>> executeStored(
         data = [
           for (final l in await LeverLinkService(store).list()) l.toJson(),
         ];
+      case 'link status':
+        data = await LeverLinkService(
+          store,
+        ).status(jsonObject(request['link'], 'link'));
+      case 'link state':
+        data = await LeverLinkService(store).state(
+          identifier(request, 'linkId'),
+          request.containsKey('asOf')
+              ? parseInstant(request['asOf'], 'asOf')
+              : null,
+        );
+      case 'link advance':
+        data = (await LeverLinkService(store).advance(
+          linkId: identifier(request, 'linkId'),
+          nextSets: jsonList(request, 'nextSets'),
+          failedSessions: integer('failedSessions', min: 0),
+          cursor: request.containsKey('cursor')
+              ? integer('cursor', min: 0)
+              : null,
+          expectedSequence: integer('expectedSequence', min: 0),
+          at: parseInstant(request['at'], 'at'),
+          confirm: request['confirm'] == true,
+        )).toJson();
+      case 'link retire':
+        data = (await LeverLinkService(store).retire(
+          linkId: identifier(request, 'linkId'),
+          memberAnchorId: anchorReference(
+            request['memberAnchorId'],
+            'memberAnchorId',
+          ),
+          retiredAt: parseInstant(request['retiredAt'], 'retiredAt'),
+          confirm: request['confirm'] == true,
+        )).toJson();
       case 'graph publish':
         data = (await DerivedTargetGraphService(store).publish(
           DerivedTargetGraph.fromJson(request['graph']),

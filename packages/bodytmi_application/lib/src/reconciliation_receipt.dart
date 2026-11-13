@@ -1,8 +1,11 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
+import 'link_retirement.dart';
 import 'progression_anchor.dart';
 import 'progression_decision.dart';
 import 'progression_reconciliation.dart';
+import 'shared_lever_application.dart';
+import 'shared_track_view.dart';
 import 'training_service.dart';
 
 /// An explicit, durable authorization that re-anchors one run/slot/role
@@ -340,10 +343,13 @@ void validateProgressionReconciliations(
   List<ReconciliationReceipt> reconciliations,
   List<ProgressionDecision> decisions,
   List<WorkoutRevision> revisions,
-  List<TrainingSession> sessions,
-) {
+  List<TrainingSession> sessions, [
+  List<LinkRetirementAnchor> retirements = const [],
+  SharedLinkIndex? links,
+]) {
   final anchors = <String, ProgressionAnchor>{
     for (final decision in decisions) decision.id: decision,
+    for (final retirement in retirements) retirement.id: retirement,
   };
   for (final receipt in reconciliations) {
     if (anchors.containsKey(receipt.id))
@@ -383,9 +389,19 @@ void validateProgressionReconciliations(
         before.resolvedAt == null ||
         !sameAnchorContext(receipt, before) ||
         receipt.previousSequence != before.sequence ||
-        receipt.previousFailures != before.failedSessions ||
-        receipt.previousCursor != before.cursor ||
         receipt.reconciledAt.isBefore(before.resolvedAt!))
+      invalid('Reconciliation lineage is inconsistent.');
+    final link = links == null
+        ? null
+        : linkedContextFor(links, receipt, receipt.reconciledAt);
+    if (link != null) {
+      final state = links!.stateAt(link.id, receipt.reconciledAt);
+      if (state == null ||
+          receipt.previousFailures != state.failedSessions ||
+          receipt.previousCursor != state.cursor)
+        invalid('Linked reconciliation counters differ from the shared track.');
+    } else if (receipt.previousFailures != before.failedSessions ||
+        receipt.previousCursor != before.cursor)
       invalid('Reconciliation lineage is inconsistent.');
     if (canonicalJson(receipt.rule) != canonicalJson(before.rule) &&
         !receipt.acknowledgedKinds.contains('rule'))

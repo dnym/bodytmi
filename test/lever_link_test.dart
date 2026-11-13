@@ -13,6 +13,9 @@ import 'support.dart';
 Map<String, Object?> _rule() =>
     jsonObject(example('double-progression')['rule'], 'rule');
 
+WorkoutDefinition _pair() =>
+    WorkoutDefinition.fromJson(example('lever-link-practice')['definition']);
+
 Map<String, Object?> _thresholdRule({
   List<String> increments = const ['mass', 'reps'],
 }) => {
@@ -36,7 +39,7 @@ Future<TrainingSession> _logged(
 }) async {
   final started = await service.start(
     id,
-    'upper-a',
+    'bench-pair',
     revision,
     instant(day),
     programRun: programRun,
@@ -157,7 +160,7 @@ void leverLinkTests() {
       final dir = await Directory.systemTemp.createTemp('bodytmi-link-');
       final store = await TrainingStore.open('${dir.path}/db.sqlite');
       try {
-        await StoredTrainingService(store).publish(definition(), 0);
+        await StoredTrainingService(store).publish(_pair(), 0);
         final tracks = await _tracks(store);
         equal(tracks.heavy.id, 'accepted/bench-heavy');
         equal(tracks.light.id, 'accepted/bench-light');
@@ -181,7 +184,7 @@ void leverLinkTests() {
         );
         jsonEqual(
           [for (final member in link.members) member.templateId],
-          ['upper-a', 'upper-a'],
+          ['bench-pair', 'bench-pair'],
         );
         equal(link.members.first.slot.id, 'bench-heavy');
         equal(link.members.first.role, 'work');
@@ -205,7 +208,7 @@ void leverLinkTests() {
       final dir = await Directory.systemTemp.createTemp('bodytmi-link-rev-');
       final store = await TrainingStore.open('${dir.path}/db.sqlite');
       try {
-        await StoredTrainingService(store).publish(definition(), 0);
+        await StoredTrainingService(store).publish(_pair(), 0);
         await _tracks(store);
         final service = LeverLinkService(store);
         final first = await service.create(
@@ -294,7 +297,7 @@ void leverLinkTests() {
       final dir = await Directory.systemTemp.createTemp('bodytmi-link-bad-');
       final store = await TrainingStore.open('${dir.path}/db.sqlite');
       try {
-        await StoredTrainingService(store).publish(definition(), 0);
+        await StoredTrainingService(store).publish(_pair(), 0);
         final service = LeverLinkService(store);
         final progression = StoredProgressionService(store);
         final session = await _logged(
@@ -407,7 +410,7 @@ void leverLinkTests() {
       final dir = await Directory.systemTemp.createTemp('bodytmi-link-rule-');
       final store = await TrainingStore.open('${dir.path}/db.sqlite');
       try {
-        await StoredTrainingService(store).publish(definition(), 0);
+        await StoredTrainingService(store).publish(_pair(), 0);
         final service = StoredTrainingService(store);
         final progression = StoredProgressionService(store);
         final session = await _logged(service, 'accepted', 1);
@@ -457,7 +460,7 @@ void leverLinkTests() {
               'id': 'cycle',
               'type': 'day',
               'label': 'Upper',
-              'templateId': 'upper-a',
+              'templateId': 'bench-pair',
               'revision': 1,
             },
           }),
@@ -716,14 +719,14 @@ void leverLinkTests() {
   );
 
   test(
-    'native and logical v53 archives carry links while older labels reject them',
+    'native and logical v54 archives carry links while older labels reject them',
     () async {
       final dir = await Directory.systemTemp.createTemp('bodytmi-link-port-');
       final store = await TrainingStore.open('${dir.path}/db.sqlite');
       TrainingArchive? archived;
       String before;
       try {
-        await StoredTrainingService(store).publish(definition(), 0);
+        await StoredTrainingService(store).publish(_pair(), 0);
         await _tracks(store);
         await LeverLinkService(store).create(
           input: _link(id: 'portable-link', name: 'Portable'),
@@ -735,7 +738,7 @@ void leverLinkTests() {
         before = canonicalJson(archived.toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          53,
+          54,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
         await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
@@ -745,7 +748,7 @@ void leverLinkTests() {
       try {
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          53,
+          54,
         );
         final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
         try {
@@ -770,7 +773,7 @@ void leverLinkTests() {
         check(
           (await _relabelRejects(
             '${dir.path}/bare.json',
-            53,
+            54,
             keep: false,
           )).contains('requires lever links'),
           'the new label names its section',
@@ -792,6 +795,8 @@ void leverLinkTests() {
         );
         final dropped = sqlite3.open('${dir.path}/dropped.sqlite');
         dropped.execute('DROP TABLE lever_link_revisions');
+        dropped.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        dropped.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         dropped.userVersion = 52;
         dropped.close();
         equal(_nativeError('${dir.path}/dropped.sqlite'), 'ok:52');
@@ -804,7 +809,7 @@ void leverLinkTests() {
             (await migrated.backup(
               '${dir.path}/upgraded',
             ))['databaseSchemaVersion'],
-            53,
+            54,
           );
         } finally {
           await migrated.close();
@@ -829,7 +834,7 @@ void leverLinkTests() {
     final path = '${dir.path}/db.sqlite';
     final store = await TrainingStore.open(path);
     try {
-      await StoredTrainingService(store).publish(definition(), 0);
+      await StoredTrainingService(store).publish(_pair(), 0);
       await _tracks(store);
     } finally {
       await store.close();

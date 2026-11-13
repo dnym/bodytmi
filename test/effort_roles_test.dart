@@ -675,13 +675,15 @@ void effortRolesTests() {
       oldProfile.execute('DROP TABLE IF EXISTS window_checkpoints');
       oldProfile.execute('DROP TABLE IF EXISTS progression_reconciliations');
       oldProfile.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      oldProfile.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      oldProfile.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       oldProfile.userVersion = 41;
       oldProfile.close();
       equal(NativeBackup.validateDatabase('${dir.path}/v41.sqlite'), 41);
       final migrated = await TrainingStore.open('${dir.path}/v41.sqlite');
       await migrated.close();
       final migratedDb = sqlite3.open('${dir.path}/v41.sqlite');
-      equal(migratedDb.userVersion, 53);
+      equal(migratedDb.userVersion, 54);
       migratedDb.close();
       await training.publish(_definition(), 0);
       var session = await training.start(
@@ -853,6 +855,8 @@ void effortRolesTests() {
       old.execute('DROP TABLE IF EXISTS window_checkpoints');
       old.execute('DROP TABLE IF EXISTS progression_reconciliations');
       old.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       old.userVersion = 41;
       old.close();
       rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -1237,6 +1241,8 @@ void effortRolesTests() {
         previous.execute('DROP TABLE IF EXISTS window_checkpoints');
         previous.execute('DROP TABLE IF EXISTS progression_reconciliations');
         previous.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        previous.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        previous.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         previous.userVersion = 40;
         previous.close();
         equal(NativeBackup.validateDatabase('${dir.path}/v40.sqlite'), 40);
@@ -1318,12 +1324,14 @@ void effortRolesTests() {
           throwsA(isA<BodyTmiException>()),
         );
         await store.snapshot('${dir.path}/roles.sqlite');
-        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 53);
+        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 54);
         final relabeled = sqlite3.open('${dir.path}/roles.sqlite');
         relabeled.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         relabeled.execute('DROP TABLE IF EXISTS window_checkpoints');
         relabeled.execute('DROP TABLE IF EXISTS progression_reconciliations');
         relabeled.execute('DROP TABLE IF EXISTS lever_link_revisions');
+        relabeled.execute('DROP TABLE IF EXISTS shared_lever_applications');
+        relabeled.execute('DROP TABLE IF EXISTS link_retirement_anchors');
         relabeled.userVersion = 40;
         relabeled.close();
         rejects(

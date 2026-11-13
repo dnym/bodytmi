@@ -4401,6 +4401,501 @@ class LeverLinkRevisionsCompanion
   }
 }
 
+class $SharedLeverApplicationsTable extends SharedLeverApplications
+    with
+        TableInfo<$SharedLeverApplicationsTable, StoredSharedLeverApplication> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SharedLeverApplicationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _linkIdMeta = const VerificationMeta('linkId');
+  @override
+  late final GeneratedColumn<String> linkId = GeneratedColumn<String>(
+    'link_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sequenceMeta = const VerificationMeta(
+    'sequence',
+  );
+  @override
+  late final GeneratedColumn<int> sequence = GeneratedColumn<int>(
+    'sequence',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [linkId, sequence, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shared_lever_applications';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredSharedLeverApplication> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('link_id')) {
+      context.handle(
+        _linkIdMeta,
+        linkId.isAcceptableOrUnknown(data['link_id']!, _linkIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_linkIdMeta);
+    }
+    if (data.containsKey('sequence')) {
+      context.handle(
+        _sequenceMeta,
+        sequence.isAcceptableOrUnknown(data['sequence']!, _sequenceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sequenceMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {linkId, sequence};
+  @override
+  StoredSharedLeverApplication map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredSharedLeverApplication(
+      linkId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}link_id'],
+      )!,
+      sequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequence'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $SharedLeverApplicationsTable createAlias(String alias) {
+    return $SharedLeverApplicationsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredSharedLeverApplication extends DataClass
+    implements Insertable<StoredSharedLeverApplication> {
+  final String linkId;
+  final int sequence;
+  final String snapshot;
+  const StoredSharedLeverApplication({
+    required this.linkId,
+    required this.sequence,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['link_id'] = Variable<String>(linkId);
+    map['sequence'] = Variable<int>(sequence);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  SharedLeverApplicationsCompanion toCompanion(bool nullToAbsent) {
+    return SharedLeverApplicationsCompanion(
+      linkId: Value(linkId),
+      sequence: Value(sequence),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredSharedLeverApplication.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredSharedLeverApplication(
+      linkId: serializer.fromJson<String>(json['linkId']),
+      sequence: serializer.fromJson<int>(json['sequence']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'linkId': serializer.toJson<String>(linkId),
+      'sequence': serializer.toJson<int>(sequence),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredSharedLeverApplication copyWith({
+    String? linkId,
+    int? sequence,
+    String? snapshot,
+  }) => StoredSharedLeverApplication(
+    linkId: linkId ?? this.linkId,
+    sequence: sequence ?? this.sequence,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredSharedLeverApplication copyWithCompanion(
+    SharedLeverApplicationsCompanion data,
+  ) {
+    return StoredSharedLeverApplication(
+      linkId: data.linkId.present ? data.linkId.value : this.linkId,
+      sequence: data.sequence.present ? data.sequence.value : this.sequence,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSharedLeverApplication(')
+          ..write('linkId: $linkId, ')
+          ..write('sequence: $sequence, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(linkId, sequence, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredSharedLeverApplication &&
+          other.linkId == this.linkId &&
+          other.sequence == this.sequence &&
+          other.snapshot == this.snapshot);
+}
+
+class SharedLeverApplicationsCompanion
+    extends UpdateCompanion<StoredSharedLeverApplication> {
+  final Value<String> linkId;
+  final Value<int> sequence;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const SharedLeverApplicationsCompanion({
+    this.linkId = const Value.absent(),
+    this.sequence = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SharedLeverApplicationsCompanion.insert({
+    required String linkId,
+    required int sequence,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : linkId = Value(linkId),
+       sequence = Value(sequence),
+       snapshot = Value(snapshot);
+  static Insertable<StoredSharedLeverApplication> custom({
+    Expression<String>? linkId,
+    Expression<int>? sequence,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (linkId != null) 'link_id': linkId,
+      if (sequence != null) 'sequence': sequence,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SharedLeverApplicationsCompanion copyWith({
+    Value<String>? linkId,
+    Value<int>? sequence,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return SharedLeverApplicationsCompanion(
+      linkId: linkId ?? this.linkId,
+      sequence: sequence ?? this.sequence,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (linkId.present) {
+      map['link_id'] = Variable<String>(linkId.value);
+    }
+    if (sequence.present) {
+      map['sequence'] = Variable<int>(sequence.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedLeverApplicationsCompanion(')
+          ..write('linkId: $linkId, ')
+          ..write('sequence: $sequence, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LinkRetirementAnchorsTable extends LinkRetirementAnchors
+    with TableInfo<$LinkRetirementAnchorsTable, StoredLinkRetirementAnchor> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LinkRetirementAnchorsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'link_retirement_anchors';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredLinkRetirementAnchor> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredLinkRetirementAnchor map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredLinkRetirementAnchor(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $LinkRetirementAnchorsTable createAlias(String alias) {
+    return $LinkRetirementAnchorsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredLinkRetirementAnchor extends DataClass
+    implements Insertable<StoredLinkRetirementAnchor> {
+  final String id;
+  final String snapshot;
+  const StoredLinkRetirementAnchor({required this.id, required this.snapshot});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  LinkRetirementAnchorsCompanion toCompanion(bool nullToAbsent) {
+    return LinkRetirementAnchorsCompanion(
+      id: Value(id),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredLinkRetirementAnchor.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredLinkRetirementAnchor(
+      id: serializer.fromJson<String>(json['id']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredLinkRetirementAnchor copyWith({String? id, String? snapshot}) =>
+      StoredLinkRetirementAnchor(
+        id: id ?? this.id,
+        snapshot: snapshot ?? this.snapshot,
+      );
+  StoredLinkRetirementAnchor copyWithCompanion(
+    LinkRetirementAnchorsCompanion data,
+  ) {
+    return StoredLinkRetirementAnchor(
+      id: data.id.present ? data.id.value : this.id,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredLinkRetirementAnchor(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredLinkRetirementAnchor &&
+          other.id == this.id &&
+          other.snapshot == this.snapshot);
+}
+
+class LinkRetirementAnchorsCompanion
+    extends UpdateCompanion<StoredLinkRetirementAnchor> {
+  final Value<String> id;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const LinkRetirementAnchorsCompanion({
+    this.id = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LinkRetirementAnchorsCompanion.insert({
+    required String id,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       snapshot = Value(snapshot);
+  static Insertable<StoredLinkRetirementAnchor> custom({
+    Expression<String>? id,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LinkRetirementAnchorsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return LinkRetirementAnchorsCompanion(
+      id: id ?? this.id,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LinkRetirementAnchorsCompanion(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
@@ -4440,6 +4935,10 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
       $ProgressionReconciliationsTable(this);
   late final $LeverLinkRevisionsTable leverLinkRevisions =
       $LeverLinkRevisionsTable(this);
+  late final $SharedLeverApplicationsTable sharedLeverApplications =
+      $SharedLeverApplicationsTable(this);
+  late final $LinkRetirementAnchorsTable linkRetirementAnchors =
+      $LinkRetirementAnchorsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4462,6 +4961,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     repeatCheckpoints,
     progressionReconciliations,
     leverLinkRevisions,
+    sharedLeverApplications,
+    linkRetirementAnchors,
   ];
 }
 
@@ -9326,6 +9827,373 @@ typedef $$LeverLinkRevisionsTableProcessedTableManager =
       StoredLeverLinkRevision,
       PrefetchHooks Function()
     >;
+typedef $$SharedLeverApplicationsTableCreateCompanionBuilder =
+    SharedLeverApplicationsCompanion Function({
+      required String linkId,
+      required int sequence,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$SharedLeverApplicationsTableUpdateCompanionBuilder =
+    SharedLeverApplicationsCompanion Function({
+      Value<String> linkId,
+      Value<int> sequence,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$SharedLeverApplicationsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $SharedLeverApplicationsTable> {
+  $$SharedLeverApplicationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get linkId => $composableBuilder(
+    column: $table.linkId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SharedLeverApplicationsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $SharedLeverApplicationsTable> {
+  $$SharedLeverApplicationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get linkId => $composableBuilder(
+    column: $table.linkId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SharedLeverApplicationsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $SharedLeverApplicationsTable> {
+  $$SharedLeverApplicationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get linkId =>
+      $composableBuilder(column: $table.linkId, builder: (column) => column);
+
+  GeneratedColumn<int> get sequence =>
+      $composableBuilder(column: $table.sequence, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$SharedLeverApplicationsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $SharedLeverApplicationsTable,
+          StoredSharedLeverApplication,
+          $$SharedLeverApplicationsTableFilterComposer,
+          $$SharedLeverApplicationsTableOrderingComposer,
+          $$SharedLeverApplicationsTableAnnotationComposer,
+          $$SharedLeverApplicationsTableCreateCompanionBuilder,
+          $$SharedLeverApplicationsTableUpdateCompanionBuilder,
+          (
+            StoredSharedLeverApplication,
+            BaseReferences<
+              _$TrainingDatabase,
+              $SharedLeverApplicationsTable,
+              StoredSharedLeverApplication
+            >,
+          ),
+          StoredSharedLeverApplication,
+          PrefetchHooks Function()
+        > {
+  $$SharedLeverApplicationsTableTableManager(
+    _$TrainingDatabase db,
+    $SharedLeverApplicationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SharedLeverApplicationsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$SharedLeverApplicationsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$SharedLeverApplicationsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> linkId = const Value.absent(),
+                Value<int> sequence = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SharedLeverApplicationsCompanion(
+                linkId: linkId,
+                sequence: sequence,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String linkId,
+                required int sequence,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => SharedLeverApplicationsCompanion.insert(
+                linkId: linkId,
+                sequence: sequence,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $SharedLeverApplicationsTable,
+                    StoredSharedLeverApplication
+                  >(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $SharedLeverApplicationsTable,
+                    StoredSharedLeverApplication
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SharedLeverApplicationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $SharedLeverApplicationsTable,
+      StoredSharedLeverApplication,
+      $$SharedLeverApplicationsTableFilterComposer,
+      $$SharedLeverApplicationsTableOrderingComposer,
+      $$SharedLeverApplicationsTableAnnotationComposer,
+      $$SharedLeverApplicationsTableCreateCompanionBuilder,
+      $$SharedLeverApplicationsTableUpdateCompanionBuilder,
+      (
+        StoredSharedLeverApplication,
+        BaseReferences<
+          _$TrainingDatabase,
+          $SharedLeverApplicationsTable,
+          StoredSharedLeverApplication
+        >,
+      ),
+      StoredSharedLeverApplication,
+      PrefetchHooks Function()
+    >;
+typedef $$LinkRetirementAnchorsTableCreateCompanionBuilder =
+    LinkRetirementAnchorsCompanion Function({
+      required String id,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$LinkRetirementAnchorsTableUpdateCompanionBuilder =
+    LinkRetirementAnchorsCompanion Function({
+      Value<String> id,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$LinkRetirementAnchorsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $LinkRetirementAnchorsTable> {
+  $$LinkRetirementAnchorsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LinkRetirementAnchorsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $LinkRetirementAnchorsTable> {
+  $$LinkRetirementAnchorsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LinkRetirementAnchorsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $LinkRetirementAnchorsTable> {
+  $$LinkRetirementAnchorsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$LinkRetirementAnchorsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $LinkRetirementAnchorsTable,
+          StoredLinkRetirementAnchor,
+          $$LinkRetirementAnchorsTableFilterComposer,
+          $$LinkRetirementAnchorsTableOrderingComposer,
+          $$LinkRetirementAnchorsTableAnnotationComposer,
+          $$LinkRetirementAnchorsTableCreateCompanionBuilder,
+          $$LinkRetirementAnchorsTableUpdateCompanionBuilder,
+          (
+            StoredLinkRetirementAnchor,
+            BaseReferences<
+              _$TrainingDatabase,
+              $LinkRetirementAnchorsTable,
+              StoredLinkRetirementAnchor
+            >,
+          ),
+          StoredLinkRetirementAnchor,
+          PrefetchHooks Function()
+        > {
+  $$LinkRetirementAnchorsTableTableManager(
+    _$TrainingDatabase db,
+    $LinkRetirementAnchorsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LinkRetirementAnchorsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$LinkRetirementAnchorsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$LinkRetirementAnchorsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LinkRetirementAnchorsCompanion(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => LinkRetirementAnchorsCompanion.insert(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $LinkRetirementAnchorsTable,
+                    StoredLinkRetirementAnchor
+                  >(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $LinkRetirementAnchorsTable,
+                    StoredLinkRetirementAnchor
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LinkRetirementAnchorsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $LinkRetirementAnchorsTable,
+      StoredLinkRetirementAnchor,
+      $$LinkRetirementAnchorsTableFilterComposer,
+      $$LinkRetirementAnchorsTableOrderingComposer,
+      $$LinkRetirementAnchorsTableAnnotationComposer,
+      $$LinkRetirementAnchorsTableCreateCompanionBuilder,
+      $$LinkRetirementAnchorsTableUpdateCompanionBuilder,
+      (
+        StoredLinkRetirementAnchor,
+        BaseReferences<
+          _$TrainingDatabase,
+          $LinkRetirementAnchorsTable,
+          StoredLinkRetirementAnchor
+        >,
+      ),
+      StoredLinkRetirementAnchor,
+      PrefetchHooks Function()
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -9368,4 +10236,11 @@ class $TrainingDatabaseManager {
       );
   $$LeverLinkRevisionsTableTableManager get leverLinkRevisions =>
       $$LeverLinkRevisionsTableTableManager(_db, _db.leverLinkRevisions);
+  $$SharedLeverApplicationsTableTableManager get sharedLeverApplications =>
+      $$SharedLeverApplicationsTableTableManager(
+        _db,
+        _db.sharedLeverApplications,
+      );
+  $$LinkRetirementAnchorsTableTableManager get linkRetirementAnchors =>
+      $$LinkRetirementAnchorsTableTableManager(_db, _db.linkRetirementAnchors);
 }

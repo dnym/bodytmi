@@ -93,7 +93,7 @@ Future<String> _relabelRejects(
   );
   final data = jsonObject(json['data'], 'data');
   if (!keep) data.remove('reconciliations');
-  if (label < 53) data.remove('links');
+  if (label < 54) data.remove('links');
   json['format'] = 'bodytmi-logical-export/$label';
   json.remove('sha256');
   json['sha256'] = _digest(canonicalJson(json));
@@ -656,7 +656,7 @@ void reconciliationTests() {
           slotId: _slot,
           asOf: instant(2).add(const Duration(minutes: 1)),
         );
-        equal(track['policy'], 'bodytmi-progression-track/2');
+        equal(track['policy'], 'bodytmi-progression-track/3');
         equal(track['sourceKind'], 'reconciliation');
         equal(track['decisionId'], receipt.id);
         equal(track['supersedes'], applied.id);
@@ -952,7 +952,7 @@ void reconciliationTests() {
         archived = await store.archive();
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          53,
+          54,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
         await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
@@ -962,7 +962,7 @@ void reconciliationTests() {
       final before = canonicalJson(archived.toJson());
       equal(
         NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-        53,
+        54,
       );
       final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
       try {
@@ -1018,6 +1018,8 @@ void reconciliationTests() {
       final dropped = sqlite3.open('${dir.path}/dropped.sqlite');
       dropped.execute('DROP TABLE progression_reconciliations');
       dropped.execute('DROP TABLE IF EXISTS lever_link_revisions');
+      dropped.execute('DROP TABLE IF EXISTS shared_lever_applications');
+      dropped.execute('DROP TABLE IF EXISTS link_retirement_anchors');
       dropped.userVersion = 51;
       dropped.close();
       check(

@@ -1,9 +1,13 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'lever_link.dart';
+import 'link_retirement.dart';
 import 'progression_anchor.dart';
 import 'progression_decision.dart';
 import 'progression_reconciliation.dart';
 import 'reconciliation_receipt.dart';
 import 'role_progression_preview.dart';
+import 'shared_lever_application.dart';
+import 'shared_track_view.dart';
 import 'canonical_json.dart';
 import 'training_repository.dart';
 
@@ -13,6 +17,90 @@ final class StoredProgressionService {
 
   Future<List<ReconciliationReceipt>> _reconciliations() =>
       repository.progressionReconciliations();
+
+  Future<List<LinkRetirementAnchor>> _retirements() =>
+      repository.linkRetirements();
+
+  Future<SharedLinkIndex> _links() => buildSharedLinkIndex(repository);
+
+  /// The shared chain state a linked each-exposure resolution must continue.
+  /// If the chain moved after the session started, or the plan was not the
+  /// chain's, this is a competing-writer conflict: there is no automatic
+  /// rebase. The explicit escape is `link retire` at the session start.
+  SharedTrackState _sharedCas(
+    SharedLinkIndex links,
+    LeverLink link,
+    ProgressionDecision pending,
+  ) {
+    final frozen = links.stateAt(link.id, pending.session.startedAt);
+    if (frozen == null)
+      _conflict('The linked shared lever track lacks its baseline state.');
+    final chain = links.chain(link.id);
+    final head = chain.isEmpty ? null : chain.last;
+    if ((head?.sequence ?? 0) != frozen.applicationSequence)
+      _conflict(
+        'The shared lever track advanced after this session started '
+        '(chain ${frozen.applicationSequence} to ${head!.sequence}). Use '
+        'link retire at the session start to keep this context independent.',
+      );
+    final sets = pending.sets;
+    if (frozen.vector.length != sets.length)
+      _conflict(
+        'The linked shared lever track has ${frozen.vector.length} working '
+        'sets but this session has ${sets.length}.',
+      );
+    for (var i = 0; i < sets.length; i++)
+      for (final metric in link.metrics) {
+        final planned = sets[i].suggested[metric];
+        if (planned == null ||
+            planned.compareTo(frozen.vector[i][metric]!) != 0)
+          _conflict(
+            'This session did not plan against the shared lever track; '
+            'resolve the link before continuing.',
+          );
+      }
+    if (pending.previousFailures != frozen.failedSessions ||
+        pending.previousCursor != frozen.cursor)
+      _conflict(
+        'The shared lever counters changed; propose again before resolving.',
+      );
+    return frozen;
+  }
+
+  Future<void> _appendChain(
+    SharedLinkIndex links,
+    LeverLink link,
+    SharedTrackState frozen,
+    ProgressionDecision resolved,
+    String originKind,
+    DateTime at,
+  ) async {
+    final chain = links.chain(link.id);
+    final head = chain.isEmpty ? null : chain.last;
+    if (head != null && at.isBefore(head.occurredAt))
+      invalid('A shared application cannot precede the chain step it joins.');
+    await repository.insertSharedLeverApplication(
+      SharedLeverApplication(
+        linkId: link.id,
+        sequence: (head?.sequence ?? 0) + 1,
+        ruleType: resolved.ruleType,
+        failedSessions: resolved.failedSessions,
+        cursor: resolved.cursor,
+        nextSets: [
+          for (final set in resolved.nextSets)
+            {for (final metric in link.metrics) metric: set[metric]!},
+        ],
+        originKind: originKind,
+        occurredAt: at,
+        previousApplication: head?.id,
+        previousSequence: head?.sequence ?? 0,
+        previousFailures: frozen.failedSessions,
+        previousCursor: frozen.cursor,
+        originSessionId: resolved.session.id,
+        originDecisionId: resolved.id,
+      ),
+    );
+  }
 
   /// Preview against the current durable lineage without writing a decision.
   Future<Map<String, Object?>> previewFromTrack(
@@ -49,13 +137,21 @@ final class StoredProgressionService {
         .firstOrNull;
     if (existing?.resolvedAt != null)
       _conflict('This exposure is already resolved; use progression show.');
-    final before = latestTrack(
-      all,
-      await _reconciliations(),
-      session.revision.definition.id,
-      candidates.single,
-      runId: runId,
-      role: role,
+    final before = linkLinkedTrack(
+      await _links(),
+      latestTrack(
+        all,
+        <ProgressionAnchor>[
+          ...await _reconciliations(),
+          ...await _retirements(),
+        ],
+        session.revision.definition.id,
+        candidates.single,
+        runId: runId,
+        role: role,
+      ),
+      at: session.startedAt,
+      sessionStartedAt: session.startedAt,
     );
     if (before != null &&
         (before.ruleType != ruleType ||
@@ -151,13 +247,24 @@ final class StoredProgressionService {
           !d.resolvedAt!.isAfter(asOf) &&
           d.session.startedAt.isBefore(asOf),
     );
-    final latest = latestTrack(
-      decisions,
-      (await _reconciliations()).where((r) => !r.reconciledAt.isAfter(asOf)),
-      templateId,
-      slots.single,
-      runId: runId,
-      role: role,
+    final wrapAt = session?.startedAt ?? asOf;
+    final latest = linkLinkedTrack(
+      await _links(),
+      latestTrack(
+        decisions,
+        <ProgressionAnchor>[
+          ...(await _reconciliations()).where(
+            (r) => !r.reconciledAt.isAfter(asOf),
+          ),
+          ...(await _retirements()).where((r) => !r.retiredAt.isAfter(asOf)),
+        ],
+        templateId,
+        slots.single,
+        runId: runId,
+        role: role,
+      ),
+      at: wrapAt,
+      sessionStartedAt: wrapAt,
     );
     final assessment = assessProgressionReconciliation(
       prescription: prescription,
@@ -220,18 +327,30 @@ final class StoredProgressionService {
           !d.resolvedAt!.isAfter(asOf) &&
           d.session.startedAt.isBefore(asOf),
     );
-    final latest = latestTrack(
+    final raw = latestTrack(
       decisions,
-      (await _reconciliations()).where((r) => !r.reconciledAt.isAfter(asOf)),
+      <ProgressionAnchor>[
+        ...(await _reconciliations()).where(
+          (r) => !r.reconciledAt.isAfter(asOf),
+        ),
+        ...(await _retirements()).where((r) => !r.retiredAt.isAfter(asOf)),
+      ],
       templateId,
       slots.single,
       runId: runId,
       role: role,
     );
-    final decision = latest is ProgressionDecision ? latest : null;
-    final receipt = latest is ReconciliationReceipt ? latest : null;
+    final latest = linkLinkedTrack(await _links(), raw, at: asOf);
+    final source = switch (latest) {
+      final value? when value is SharedTrackView => value.local,
+      final value? => value,
+      _ => null,
+    };
+    final decision = source is ProgressionDecision ? source : null;
+    final receipt = source is ReconciliationReceipt ? source : null;
+    final retirement = source is LinkRetirementAnchor ? source : null;
     return {
-      'policy': 'bodytmi-progression-track/2',
+      'policy': 'bodytmi-progression-track/3',
       'asOf': asOf.toUtc().toIso8601String(),
       'templateId': templateId,
       'revision': revision,
@@ -241,11 +360,17 @@ final class StoredProgressionService {
       'resolved': latest != null,
       if (latest != null) ...{
         'decisionId': latest.id,
-        'sourceKind': receipt == null ? 'decision' : 'reconciliation',
+        'sourceKind': decision != null
+            ? 'decision'
+            : receipt != null
+            ? 'reconciliation'
+            : 'retirement',
         'sourceSessionId': decision?.session.id ?? receipt?.sourceSessionId,
         'sourceContentVersion': decision?.session.contentVersion,
         'sourceRevision':
-            decision?.session.revision.number ?? receipt?.revisionNumber,
+            decision?.session.revision.number ??
+            receipt?.revisionNumber ??
+            retirement?.revisionNumber,
         'resolvedAt': latest.resolvedAt!.toUtc().toIso8601String(),
         'status': latest.status,
         if (receipt != null) ...{
@@ -254,11 +379,26 @@ final class StoredProgressionService {
           'resetFailures': receipt.resetFailures,
           if (receipt.resetCursor) 'resetCursor': true,
         },
-        'inputsChanged': await stale(latest),
+        if (retirement != null) ...{
+          'supersedes': retirement.previousApplication,
+          'retirementLink': retirement.linkId,
+        },
+        'inputsChanged': await stale(source!),
         'sequence': latest.sequence,
         'ruleType': latest.ruleType,
         'rule': latest.rule,
         'controlledMetrics': latest.controlledMetrics.toList()..sort(),
+        if (latest case SharedTrackView(:final link, :final shared)) ...{
+          'link': {
+            'linkId': link.id,
+            'cadence': link.cadence,
+            'sharedMetrics': link.metrics,
+            'chainApplicationId': shared.applicationId,
+            'chainSequence': shared.applicationSequence,
+            'baselineAnchor': link.baseline,
+            'members': [for (final member in link.members) member.anchorId],
+          },
+        },
         'state': {
           'failedSessions': latest.failedSessions,
           if (latest.ruleType == 'threshold') 'cursor': latest.cursor,
@@ -312,14 +452,35 @@ final class StoredProgressionService {
       (s) => s.id == slotId,
     );
     if (candidates.isEmpty) invalid('Unknown progression slot.');
-    final before = latestTrack(
-      all,
-      await _reconciliations(),
-      session.revision.definition.id,
-      candidates.single,
-      runId: runId,
-      role: role,
+    final links = await _links();
+    final before = linkLinkedTrack(
+      links,
+      latestTrack(
+        all,
+        <ProgressionAnchor>[
+          ...await _reconciliations(),
+          ...await _retirements(),
+        ],
+        session.revision.definition.id,
+        candidates.single,
+        runId: runId,
+        role: role,
+      ),
+      at: session.startedAt,
+      sessionStartedAt: session.startedAt,
     );
+    if (before case SharedTrackView(
+      :final link,
+    ) when link.cadence == 'each-exposure') {
+      final frozen = links.stateAt(link.id, session.startedAt);
+      final head = links.chain(link.id).lastOrNull;
+      if (frozen == null || (head?.sequence ?? 0) != frozen.applicationSequence)
+        _conflict(
+          'The shared lever track advanced after this session started. '
+          'Resolve linked exposures one session at a time, or use link '
+          'retire at the session start to keep this context independent.',
+        );
+    }
     if (before != null &&
         (before.ruleType != ruleType ||
             canonicalJson(before.rule) != canonicalJson(rule) ||
@@ -376,6 +537,7 @@ final class StoredProgressionService {
   }
 
   Future<bool> stale(ProgressionAnchor anchor) async {
+    if (anchor case SharedTrackView(:final local)) return stale(local);
     if (anchor case ReconciliationReceipt(
       :final revision,
       :final runId,
@@ -402,6 +564,29 @@ final class StoredProgressionService {
           ?.runId;
       return bound != runId;
     }
+    if (anchor case LinkRetirementAnchor retirement) {
+      final anchors = <ProgressionAnchor>[
+        ...await repository.progressionDecisions(),
+        ...await _reconciliations(),
+        ...await _retirements(),
+      ];
+      if (!anchors.any((a) => a.id == retirement.previousApplication))
+        return true;
+      final links = await _links();
+      final state = links.stateAt(retirement.linkId, retirement.retiredAt);
+      if (links.link(retirement.linkId) == null || state == null) return true;
+      if (state.failedSessions != retirement.failedSessions ||
+          state.cursor != retirement.cursor)
+        return true;
+      for (var i = 0; i < retirement.nextSets.length; i++)
+        for (final metric in links.link(retirement.linkId)!.metrics)
+          if (retirement.nextSets[i][metric]?.compareTo(
+                state.vector[i][metric]!,
+              ) !=
+              0)
+            return true;
+      return false;
+    }
     final decision = anchor as ProgressionDecision;
     final runId = (await repository.sessionPrograms())
         .where((b) => b.sessionId == decision.session.id)
@@ -416,13 +601,23 @@ final class StoredProgressionService {
     if (decision.resolvedAt != null) return false;
     final latest = latestTrack(
       await repository.progressionDecisions(),
-      await _reconciliations(),
+      <ProgressionAnchor>[...await _reconciliations(), ...await _retirements()],
       decision.session.revision.definition.id,
       decision.slot,
       runId: runId,
       role: decision.role,
     );
-    return latest?.id != decision.previousApplication;
+    if (latest?.id != decision.previousApplication) return true;
+    final links = await _links();
+    final link = linkedContextFor(links, decision, decision.session.startedAt);
+    if (link != null && link.cadence == 'each-exposure') {
+      final frozen = links.stateAt(link.id, decision.session.startedAt);
+      if (frozen == null ||
+          (links.chain(link.id).lastOrNull?.sequence ?? 0) !=
+              frozen.applicationSequence)
+        return true;
+    }
+    return false;
   }
 
   /// The application or reconciliation a pending exposure continues from.
@@ -432,6 +627,9 @@ final class StoredProgressionService {
             .where((d) => d.id == previousApplication)
             .firstOrNull ??
         (await repository.progressionReconciliations())
+            .where((r) => r.id == previousApplication)
+            .firstOrNull ??
+        (await repository.linkRetirements())
             .where((r) => r.id == previousApplication)
             .firstOrNull;
   }
@@ -458,8 +656,15 @@ final class StoredProgressionService {
       if (at.isBefore(base!.resolvedAt!))
         invalid('Acceptance cannot precede its base application.');
     }
+    final links = await _links();
+    final link = linkedContextFor(links, pending, pending.session.startedAt);
+    final shared = link != null && link.cadence == 'each-exposure'
+        ? _sharedCas(links, link, pending)
+        : null;
     final applied = pending.accept(at);
     await repository.saveProgressionDecision(applied);
+    if (shared != null)
+      await _appendChain(links, link!, shared, applied, 'accept', at);
     return applied;
   });
 
@@ -485,8 +690,15 @@ final class StoredProgressionService {
       if (at.isBefore(base!.resolvedAt!))
         invalid('Decline cannot precede its base application.');
     }
+    final links = await _links();
+    final link = linkedContextFor(links, pending, pending.session.startedAt);
+    final shared = link != null && link.cadence == 'each-exposure'
+        ? _sharedCas(links, link, pending)
+        : null;
     final declined = pending.decline(at);
     await repository.saveProgressionDecision(declined);
+    if (shared != null)
+      await _appendChain(links, link!, shared, declined, 'decline', at);
     return declined;
   });
 
@@ -575,20 +787,30 @@ final class StoredProgressionService {
           d.session.startedAt.isBefore(reconciledAt),
     );
     final receipts = await _reconciliations();
+    final retirements = await _retirements();
     final prior = receipts.where((r) => r.id == id).firstOrNull;
-    final base = prior == null
-        ? latestTrack(
-            decisions,
-            receipts,
-            templateId,
-            slots.single,
-            runId: runId,
-            role: role,
-          )
-        : <String, ProgressionAnchor>{
-            for (final anchor in <ProgressionAnchor>[...decisions, ...receipts])
-              anchor.id: anchor,
-          }[prior.previousApplication];
+    final base = linkLinkedTrack(
+      await _links(),
+      prior == null
+          ? latestTrack(
+              decisions,
+              <ProgressionAnchor>[...receipts, ...retirements],
+              templateId,
+              slots.single,
+              runId: runId,
+              role: role,
+            )
+          : <String, ProgressionAnchor>{
+              for (final anchor in <ProgressionAnchor>[
+                ...decisions,
+                ...receipts,
+                ...retirements,
+              ])
+                anchor.id: anchor,
+            }[prior.previousApplication],
+      at: reconciledAt,
+      sessionStartedAt: reconciledAt,
+    );
     if (base == null || base.resolvedAt == null)
       invalid('There is no resolved progression track to reconcile.');
     if (prior == null && base.sequence != expectedSequence)
