@@ -171,6 +171,63 @@ Future<RepeatCheckpoint> _block(
 String _mass(Metrics targets) => targets['mass']!.enteredValue;
 
 void blockProgressionTests() {
+  test(
+    'block score records compare confirmed rounds within one frozen loop',
+    () => _withStore((store, dir) async {
+      await StoredTrainingService(store).publish(_definition(), 0);
+      await _block(store, 'r1', 1, 6);
+      await _block(store, 'r2', 2, 8);
+      await _block(store, 'r3', 3, 8);
+      await _block(store, 'r4', 4, 9, stopEarly: true);
+      await _block(store, 'r5', 5, 3, finishSession: false);
+      final report = blockScoreRecords(
+        await store.repeatCheckpoints(),
+        await store.sessions(),
+      );
+      equal(report['selectedCount'], 4);
+      equal(
+        jsonObject(jsonList(report, 'excluded').single, 'e')['sessionId'],
+        'r4',
+      );
+      final group = jsonObject(jsonList(report, 'groups').single, 'g');
+      equal(group['amrapId'], 'finisher');
+      equal(group['best'], 8);
+      jsonEqual(
+        [
+          for (final p in jsonList(group, 'points'))
+            jsonObject(p, 'p')['marker'],
+        ],
+        ['initial', 'record', 'tie'],
+      );
+      equal(jsonList(group, 'bestSources').length, 2);
+      // Progressed round targets freeze a different loop and a new group.
+      var d = await BlockProgressionService(
+        store,
+      ).propose('r3', 'finisher', 'push', _rule());
+      d = await BlockProgressionService(store).resolve(
+        'r3',
+        'finisher',
+        'push',
+        expectedVersion: d.version,
+        at: DateTime.utc(2026, 11, 3, 19),
+        accept: true,
+      );
+      await _block(store, 'r6', 6, 5);
+      final split = blockScoreRecords(
+        await store.repeatCheckpoints(),
+        await store.sessions(),
+        context: {'templateId': 'upper-amrap'},
+      );
+      equal(jsonList(split, 'groups').length, 2);
+      final unmatched = blockScoreRecords(
+        await store.repeatCheckpoints(),
+        await store.sessions(),
+        context: {'slotId': 'push'},
+      );
+      check(unmatched.containsKey('excludedAll'));
+      equal(jsonList(unmatched, 'groups').length, 0);
+    }),
+  );
   test('block rules validate and classify one exposure exactly', () {
     rejects(() => BlockProgressionRule.fromJson({..._ruleJson(), 'x': 1}));
     rejects(

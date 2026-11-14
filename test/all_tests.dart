@@ -37,6 +37,7 @@ import 'substitution_test.dart';
 import 'ordinal_branch_test.dart';
 import 'unilateral_side_test.dart';
 import 'phase_override_test.dart';
+import 'extended_records_test.dart';
 import 'load_arrangement_test.dart';
 import 'analytics_test.dart';
 import 'decline_test.dart';
@@ -121,6 +122,7 @@ Future<void> main() async {
   ordinalBranchTests();
   unilateralSideTests();
   phaseOverrideTests();
+  extendedRecordsTests();
   runUpgradeTests();
   programOverrideTests();
   logicalArchiveTests();

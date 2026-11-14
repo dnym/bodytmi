@@ -501,6 +501,10 @@ Future<Map<String, Object?>> executeStored(
       'roles',
       'familyId',
       'familyRevision',
+      'includeImported',
+      'importNamespace',
+      'includeBlocks',
+      'amrapId',
     },
     'store series' => {
       'context',
@@ -1951,8 +1955,12 @@ Future<Map<String, Object?>> executeStored(
         if (request.containsKey('familyRevision') &&
             !request.containsKey('familyId'))
           invalid('familyRevision needs familyId.');
-        data = await store.transaction(
-          () async => const ContextualRecords().evaluate(
+        if (request.containsKey('importNamespace') && !flag('includeImported'))
+          invalid('importNamespace needs includeImported:true.');
+        if (request.containsKey('amrapId') && !flag('includeBlocks'))
+          invalid('amrapId needs includeBlocks:true.');
+        data = await store.transaction(() async {
+          final native = const ContextualRecords().evaluate(
             await store.sessions(),
             metric: identifier(request, 'metric'),
             direction: requiredString(request, 'direction'),
@@ -1983,8 +1991,62 @@ Future<Map<String, Object?>> executeStored(
                         : null,
                   )
                 : null,
-          ),
-        );
+          );
+          final runBySession = {
+            for (final b in await store.sessionPrograms()) b.sessionId: b.runId,
+          };
+          final context = jsonObject(
+            request['context'] ?? <String, Object?>{},
+            'context',
+          );
+          final from = request.containsKey('from')
+              ? parseInstant(request['from'], 'from')
+              : null;
+          final until = request.containsKey('until')
+              ? parseInstant(request['until'], 'until')
+              : null;
+          return {
+            ...native,
+            if (flag('includeBlocks'))
+              'blocks': blockScoreRecords(
+                await store.repeatCheckpoints(),
+                await store.sessions(),
+                runBySession: runBySession,
+                context: context,
+                amrapId: request.containsKey('amrapId')
+                    ? identifier(request, 'amrapId')
+                    : null,
+                from: from,
+                until: until,
+              ),
+            if (flag('includeImported'))
+              'imported': importedRecordsBlock(
+                await store.importedSessions(),
+                metric: identifier(request, 'metric'),
+                direction: requiredString(request, 'direction'),
+                atActuals: metricsFromJson(
+                  request['atActuals'] ?? <String, Object?>{},
+                ),
+                context: context,
+                from: from,
+                until: until,
+                includeWarmups: flag('includeWarmups'),
+                roles: analyticsRoles(request),
+                family: request.containsKey('familyId')
+                    ? await FamilyService(store).revision(
+                        identifier(request, 'familyId'),
+                        request.containsKey('familyRevision')
+                            ? integer('familyRevision')
+                            : null,
+                      )
+                    : null,
+                namespace: request.containsKey('importNamespace')
+                    ? identifier(request, 'importNamespace')
+                    : null,
+                nativePointCount: native['pointCount']! as int,
+              ),
+          };
+        });
       case 'store series':
         if (request.containsKey('familyRevision') &&
             !request.containsKey('familyId'))
