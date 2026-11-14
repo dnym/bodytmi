@@ -684,13 +684,14 @@ void effortRolesTests() {
       oldProfile.execute('DROP TABLE IF EXISTS gym_revisions');
       oldProfile.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       oldProfile.execute('DROP TABLE IF EXISTS imported_sessions');
+      oldProfile.execute('DROP TABLE IF EXISTS block_progressions');
       oldProfile.userVersion = 41;
       oldProfile.close();
       equal(NativeBackup.validateDatabase('${dir.path}/v41.sqlite'), 41);
       final migrated = await TrainingStore.open('${dir.path}/v41.sqlite');
       await migrated.close();
       final migratedDb = sqlite3.open('${dir.path}/v41.sqlite');
-      equal(migratedDb.userVersion, 65);
+      equal(migratedDb.userVersion, 66);
       migratedDb.close();
       await training.publish(_definition(), 0);
       var session = await training.start(
@@ -871,6 +872,7 @@ void effortRolesTests() {
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       old.execute('DROP TABLE IF EXISTS imported_sessions');
+      old.execute('DROP TABLE IF EXISTS block_progressions');
       old.userVersion = 41;
       old.close();
       rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -1264,6 +1266,7 @@ void effortRolesTests() {
         previous.execute('DROP TABLE IF EXISTS gym_revisions');
         previous.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
         previous.execute('DROP TABLE IF EXISTS imported_sessions');
+        previous.execute('DROP TABLE IF EXISTS block_progressions');
         previous.userVersion = 40;
         previous.close();
         equal(NativeBackup.validateDatabase('${dir.path}/v40.sqlite'), 40);
@@ -1345,7 +1348,7 @@ void effortRolesTests() {
           throwsA(isA<BodyTmiException>()),
         );
         await store.snapshot('${dir.path}/roles.sqlite');
-        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 65);
+        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 66);
         final relabeled = sqlite3.open('${dir.path}/roles.sqlite');
         relabeled.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         relabeled.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -1360,6 +1363,7 @@ void effortRolesTests() {
         relabeled.execute('DROP TABLE IF EXISTS gym_revisions');
         relabeled.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
         relabeled.execute('DROP TABLE IF EXISTS imported_sessions');
+        relabeled.execute('DROP TABLE IF EXISTS block_progressions');
         relabeled.userVersion = 40;
         relabeled.close();
         rejects(

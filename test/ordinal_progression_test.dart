@@ -935,7 +935,7 @@ void ordinalProgressionTests() {
         before = canonicalJson(archived.toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          65,
+          66,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
       } finally {
@@ -944,7 +944,7 @@ void ordinalProgressionTests() {
       try {
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          65,
+          66,
         );
         final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
         try {
@@ -968,6 +968,7 @@ void ordinalProgressionTests() {
         labeled.execute('DROP TABLE IF EXISTS gym_revisions');
         labeled.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
         labeled.execute('DROP TABLE IF EXISTS imported_sessions');
+        labeled.execute('DROP TABLE IF EXISTS block_progressions');
         labeled.userVersion = 54;
         labeled.close();
         equal(

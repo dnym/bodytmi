@@ -365,6 +365,7 @@ void derivedPlanBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       db.execute('DROP TABLE IF EXISTS imported_sessions');
+      db.execute('DROP TABLE IF EXISTS block_progressions');
       db.userVersion = 34;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/derived-meta.sqlite'));
@@ -796,7 +797,7 @@ void derivedPlanBodyMassTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 65);
+      equal(NativeBackup.validateDatabase(snapshot), 66);
       final db = sqlite3.open(snapshot);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -811,6 +812,7 @@ void derivedPlanBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       db.execute('DROP TABLE IF EXISTS imported_sessions');
+      db.execute('DROP TABLE IF EXISTS block_progressions');
       db.userVersion = 29;
       db.close();
       rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -1015,6 +1017,7 @@ void derivedPlanBodyMassTests() {
       forgedDb.execute('DROP TABLE IF EXISTS gym_revisions');
       forgedDb.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       forgedDb.execute('DROP TABLE IF EXISTS imported_sessions');
+      forgedDb.execute('DROP TABLE IF EXISTS block_progressions');
       forgedDb.userVersion = 29;
       forgedDb.close();
       rejects(() => NativeBackup.validateDatabase(forgedPath));
@@ -1035,6 +1038,7 @@ void derivedPlanBodyMassTests() {
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       db.execute('DROP TABLE IF EXISTS imported_sessions');
+      db.execute('DROP TABLE IF EXISTS block_progressions');
       db.userVersion = 29;
       db.close();
       equal(NativeBackup.validateDatabase(path), 29);

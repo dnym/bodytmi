@@ -4,6 +4,7 @@ import 'canonical_json.dart';
 import 'training_repository.dart';
 import 'window_repeat_execution.dart';
 import 'window_checkpoint.dart';
+import 'block_progression.dart';
 
 /// A repeat ledger, optionally associated with an existing training session.
 final class RepeatCheckpoint {
@@ -14,6 +15,7 @@ final class RepeatCheckpoint {
     this.reserved,
     this.sessionId,
     this.amrapId,
+    this.blockTargets,
   );
   factory RepeatCheckpoint.fromJson(Object? input) {
     final json = jsonObject(input, 'repeat checkpoint');
@@ -24,6 +26,7 @@ final class RepeatCheckpoint {
       'reserved',
       'sessionId',
       'amrapId',
+      'blockTargets',
     });
     final id = identifier(json, 'id');
     final version = json['version'];
@@ -49,6 +52,24 @@ final class RepeatCheckpoint {
         : null;
     if (amrapId != null && sessionId == null)
       invalid('An authored AMRAP checkpoint needs its session.');
+    final blockTargets = <String, BlockTargetSource>{};
+    if (json.containsKey('blockTargets')) {
+      if (amrapId == null)
+        invalid('Accepted block targets need an authored AMRAP block.');
+      final map = jsonObject(json['blockTargets'], 'blockTargets');
+      if (map.isEmpty) invalid('blockTargets cannot be empty.');
+      for (final entry in map.entries) {
+        identifier({'id': entry.key}, 'id');
+        final source = jsonObject(entry.value, 'block target source');
+        checkKeys(source, {'decisionId', 'targets'});
+        final targets = metricsFromJson(source['targets']);
+        if (targets.isEmpty) invalid('Block target sources need targets.');
+        blockTargets[entry.key] = (
+          decisionId: requiredString(source, 'decisionId'),
+          targets: targets,
+        );
+      }
+    }
     return RepeatCheckpoint._(
       id,
       version,
@@ -56,6 +77,7 @@ final class RepeatCheckpoint {
       reserved,
       sessionId,
       amrapId,
+      Map.unmodifiable(blockTargets),
     );
   }
   final String id;
@@ -65,6 +87,10 @@ final class RepeatCheckpoint {
 
   /// The authored AMRAP block of the session's pinned workout revision.
   final String? amrapId;
+
+  /// Round slot targets supplied by accepted block progression at start,
+  /// with the decision that produced them.
+  final Map<String, BlockTargetSource> blockTargets;
   final String _execution;
   Map<String, Object?> get execution =>
       jsonObject(jsonDecode(_execution), 'execution');
@@ -75,13 +101,48 @@ final class RepeatCheckpoint {
     if (reserved) 'reserved': true,
     if (sessionId != null) 'sessionId': sessionId,
     if (amrapId != null) 'amrapId': amrapId,
+    if (blockTargets.isNotEmpty) 'blockTargets': _blockTargetsJson,
+  };
+
+  Map<String, Object?> get _blockTargetsJson => {
+    for (final entry in (blockTargets.keys.toList()..sort()))
+      entry: {
+        'decisionId': blockTargets[entry]!.decisionId,
+        'targets': metricsToJson(blockTargets[entry]!.targets),
+      },
   };
 
   /// Identity fields carried unchanged through every rewrite.
   Map<String, Object?> get _identity => {
     if (sessionId != null) 'sessionId': sessionId,
     if (amrapId != null) 'amrapId': amrapId,
+    if (blockTargets.isNotEmpty) 'blockTargets': _blockTargetsJson,
   };
+}
+
+typedef BlockTargetSource = ({String decisionId, Metrics targets});
+
+/// The authored block with accepted round slot targets substituted.
+WindowRepeatSpec applyBlockTargets(
+  WindowRepeatSpec authored,
+  Map<String, BlockTargetSource> targets,
+) {
+  if (targets.isEmpty) return authored;
+  final json = jsonObject(jsonDecode(canonicalJson(authored.toJson())), 'loop');
+  final round = jsonObject(json['roundDefinition'], 'round');
+  final slots = jsonList(round, 'slots');
+  for (final entry in targets.entries) {
+    final slot = slots
+        .map((s) => jsonObject(s, 'slot'))
+        .where((s) => s['id'] == entry.key)
+        .firstOrNull;
+    if (slot == null) invalid('Block targets name an unknown round slot.');
+    slot['targets'] = {
+      ...jsonObject(slot['targets'], 'targets'),
+      ...metricsToJson(entry.value.targets),
+    };
+  }
+  return WindowRepeatSpec.fromJson(json);
 }
 
 void validateRepeatSessionBindings(
@@ -106,7 +167,9 @@ void validateRepeatSessionBindings(
     if (canonicalJson(
           jsonObject(checkpoint.execution['cursor'], 'cursor')['loop'],
         ) !=
-        canonicalJson(authored.toJson()))
+        canonicalJson(
+          applyBlockTargets(authored, checkpoint.blockTargets).toJson(),
+        ))
       invalid('Repeat checkpoint loop differs from its authored AMRAP block.');
   }
   final blocks = <String>{};
@@ -200,6 +263,8 @@ final class RepeatCheckpointService {
       'execution': execution,
       if (binding != null) 'sessionId': binding,
       if (existing?.amrapId != null) 'amrapId': existing!.amrapId,
+      if (existing?.blockTargets.isNotEmpty ?? false)
+        'blockTargets': existing!._blockTargetsJson,
     });
     if (existing != null) {
       final oldLoop = jsonObject(
@@ -239,6 +304,7 @@ final class RepeatCheckpointService {
     String sessionId,
     String amrapId,
   ) => repository.transaction(() async {
+    // Accepted block progression for this session's run, as of its start.
     identifier({'id': id}, 'id');
     identifier({'id': sessionId}, 'id');
     identifier({'id': amrapId}, 'id');
@@ -251,12 +317,39 @@ final class RepeatCheckpointService {
           'not_found',
           'The session workout revision has no such AMRAP block.',
         ));
+    final runId = (await repository.sessionPrograms())
+        .where((b) => b.sessionId == sessionId)
+        .firstOrNull
+        ?.runId;
+    final decisions = await repository.blockProgressions();
+    final sources = <String, BlockTargetSource>{};
+    for (final slot in authored.roundDefinition.slots) {
+      final latest = latestBlockDecision(
+        decisions,
+        blockTrackKey(runId, session.revision.definition.id, amrapId, slot.id),
+        asOf: session.startedAt,
+      );
+      if (latest != null)
+        sources[slot.id] = (
+          decisionId: latest.id,
+          targets: latest.resolvedTargets,
+        );
+    }
+    final loop = applyBlockTargets(authored, sources);
     final next = RepeatCheckpoint.fromJson({
       'id': id,
       'version': 1,
-      'execution': const WindowRepeatExecution().start(authored),
+      'execution': const WindowRepeatExecution().start(loop),
       'sessionId': sessionId,
       'amrapId': amrapId,
+      if (sources.isNotEmpty)
+        'blockTargets': {
+          for (final entry in sources.entries)
+            entry.key: {
+              'decisionId': entry.value.decisionId,
+              'targets': metricsToJson(entry.value.targets),
+            },
+        },
     });
     final all = await repository.repeatCheckpoints();
     final existing = all.where((c) => c.id == id).firstOrNull;

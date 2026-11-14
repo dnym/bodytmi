@@ -164,6 +164,7 @@ final class NativeBackup {
           63,
           64,
           65,
+          66,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -322,6 +323,7 @@ final class NativeBackup {
             63,
             64,
             65,
+            66,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -361,6 +363,7 @@ final class NativeBackup {
         if (db.userVersion >= 59) 'equipment_instance_revisions',
         if (db.userVersion >= 27) 'derived_target_graphs',
         if (db.userVersion >= 64) 'imported_sessions',
+        if (db.userVersion >= 66) 'block_progressions',
         if (db.userVersion >= 3) ...[
           'program_revisions',
           'program_runs',
@@ -1074,6 +1077,8 @@ final class NativeBackup {
           );
           if (checkpoint.id != row['id'])
             invalid('Repeat checkpoint row identity mismatch.');
+          if (db.userVersion < 66 && checkpoint.blockTargets.isNotEmpty)
+            invalid('Block progression targets require schema v66.');
           if (db.userVersion < 65 && checkpoint.amrapId != null)
             invalid('Authored AMRAP blocks require schema v65.');
           if (db.userVersion < 51 && checkpoint.sessionId != null)
@@ -1092,6 +1097,33 @@ final class NativeBackup {
           for (final row in db.select('SELECT snapshot FROM sessions'))
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ]);
+        if (db.userVersion >= 66) {
+          final decisions = <BlockProgressionDecision>[];
+          for (final row in db.select('SELECT * FROM block_progressions')) {
+            final decision = BlockProgressionDecision.fromJson(
+              jsonDecode(row['snapshot'] as String),
+            );
+            if (decision.id != row['id'])
+              invalid('Block progression row identity mismatch.');
+            decisions.add(decision);
+          }
+          validateBlockProgressions(
+            decisions,
+            repeatCheckpoints,
+            [
+              for (final row in db.select('SELECT snapshot FROM sessions'))
+                sessionFromJson(jsonDecode(row['snapshot'] as String)),
+            ],
+            [
+              for (final row in db.select(
+                'SELECT snapshot FROM session_programs',
+              ))
+                SessionProgramBinding.fromJson(
+                  jsonDecode(row['snapshot'] as String),
+                ),
+            ],
+          );
+        }
         validateRepeatClockReservations(
           repeatCheckpoints,
           timers: [

@@ -6811,6 +6811,218 @@ class ImportedSessionsCompanion extends UpdateCompanion<StoredImportedSession> {
   }
 }
 
+class $BlockProgressionsTable extends BlockProgressions
+    with TableInfo<$BlockProgressionsTable, StoredBlockProgression> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BlockProgressionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'block_progressions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBlockProgression> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredBlockProgression map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBlockProgression(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $BlockProgressionsTable createAlias(String alias) {
+    return $BlockProgressionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBlockProgression extends DataClass
+    implements Insertable<StoredBlockProgression> {
+  final String id;
+  final String snapshot;
+  const StoredBlockProgression({required this.id, required this.snapshot});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  BlockProgressionsCompanion toCompanion(bool nullToAbsent) {
+    return BlockProgressionsCompanion(id: Value(id), snapshot: Value(snapshot));
+  }
+
+  factory StoredBlockProgression.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBlockProgression(
+      id: serializer.fromJson<String>(json['id']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredBlockProgression copyWith({String? id, String? snapshot}) =>
+      StoredBlockProgression(
+        id: id ?? this.id,
+        snapshot: snapshot ?? this.snapshot,
+      );
+  StoredBlockProgression copyWithCompanion(BlockProgressionsCompanion data) {
+    return StoredBlockProgression(
+      id: data.id.present ? data.id.value : this.id,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBlockProgression(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBlockProgression &&
+          other.id == this.id &&
+          other.snapshot == this.snapshot);
+}
+
+class BlockProgressionsCompanion
+    extends UpdateCompanion<StoredBlockProgression> {
+  final Value<String> id;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const BlockProgressionsCompanion({
+    this.id = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BlockProgressionsCompanion.insert({
+    required String id,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       snapshot = Value(snapshot);
+  static Insertable<StoredBlockProgression> custom({
+    Expression<String>? id,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BlockProgressionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return BlockProgressionsCompanion(
+      id: id ?? this.id,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BlockProgressionsCompanion(')
+          ..write('id: $id, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
@@ -6868,6 +7080,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
   late final $ImportedSessionsTable importedSessions = $ImportedSessionsTable(
     this,
   );
+  late final $BlockProgressionsTable blockProgressions =
+      $BlockProgressionsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6899,6 +7113,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     linkRetirementAnchors,
     programUpgradeReceipts,
     importedSessions,
+    blockProgressions,
   ];
 }
 
@@ -13454,6 +13669,173 @@ typedef $$ImportedSessionsTableProcessedTableManager =
       StoredImportedSession,
       PrefetchHooks Function()
     >;
+typedef $$BlockProgressionsTableCreateCompanionBuilder =
+    BlockProgressionsCompanion Function({
+      required String id,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$BlockProgressionsTableUpdateCompanionBuilder =
+    BlockProgressionsCompanion Function({
+      Value<String> id,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$BlockProgressionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $BlockProgressionsTable> {
+  $$BlockProgressionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BlockProgressionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $BlockProgressionsTable> {
+  $$BlockProgressionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BlockProgressionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $BlockProgressionsTable> {
+  $$BlockProgressionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$BlockProgressionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $BlockProgressionsTable,
+          StoredBlockProgression,
+          $$BlockProgressionsTableFilterComposer,
+          $$BlockProgressionsTableOrderingComposer,
+          $$BlockProgressionsTableAnnotationComposer,
+          $$BlockProgressionsTableCreateCompanionBuilder,
+          $$BlockProgressionsTableUpdateCompanionBuilder,
+          (
+            StoredBlockProgression,
+            BaseReferences<
+              _$TrainingDatabase,
+              $BlockProgressionsTable,
+              StoredBlockProgression
+            >,
+          ),
+          StoredBlockProgression,
+          PrefetchHooks Function()
+        > {
+  $$BlockProgressionsTableTableManager(
+    _$TrainingDatabase db,
+    $BlockProgressionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BlockProgressionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BlockProgressionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BlockProgressionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BlockProgressionsCompanion(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => BlockProgressionsCompanion.insert(
+                id: id,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$BlockProgressionsTable, StoredBlockProgression>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $BlockProgressionsTable,
+                    StoredBlockProgression
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BlockProgressionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $BlockProgressionsTable,
+      StoredBlockProgression,
+      $$BlockProgressionsTableFilterComposer,
+      $$BlockProgressionsTableOrderingComposer,
+      $$BlockProgressionsTableAnnotationComposer,
+      $$BlockProgressionsTableCreateCompanionBuilder,
+      $$BlockProgressionsTableUpdateCompanionBuilder,
+      (
+        StoredBlockProgression,
+        BaseReferences<
+          _$TrainingDatabase,
+          $BlockProgressionsTable,
+          StoredBlockProgression
+        >,
+      ),
+      StoredBlockProgression,
+      PrefetchHooks Function()
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -13527,4 +13909,6 @@ class $TrainingDatabaseManager {
       );
   $$ImportedSessionsTableTableManager get importedSessions =>
       $$ImportedSessionsTableTableManager(_db, _db.importedSessions);
+  $$BlockProgressionsTableTableManager get blockProgressions =>
+      $$BlockProgressionsTableTableManager(_db, _db.blockProgressions);
 }

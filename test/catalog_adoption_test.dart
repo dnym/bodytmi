@@ -434,16 +434,16 @@ void catalogAdoptionTests() {
         expected = canonicalJson((await reopened.archive()).toJson());
         equal(
           (await reopened.backup('$dir/native'))['databaseSchemaVersion'],
-          65,
+          66,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await reopened.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/65',
+          'bodytmi-logical-export/66',
         );
-        equal(NativeBackup.validateDatabase('$dir/native/database.sqlite'), 65);
+        equal(NativeBackup.validateDatabase('$dir/native/database.sqlite'), 66);
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {
           equal(logical.archive.implementations.length, 2);

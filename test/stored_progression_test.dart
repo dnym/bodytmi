@@ -64,6 +64,7 @@ Future<void> _v1(String path) async {
     db.execute('DROP TABLE IF EXISTS gym_revisions');
     db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
     db.execute('DROP TABLE IF EXISTS imported_sessions');
+    db.execute('DROP TABLE IF EXISTS block_progressions');
     db.execute('PRAGMA user_version = 1');
     final rev = revision();
     db.execute('INSERT INTO revisions VALUES (?,?,?)', [
@@ -522,7 +523,7 @@ void storedProgressionTests() {
         );
         final original = canonicalJson((await store.archive()).toJson());
         final manifest = await store.backup('${dir.path}/native');
-        equal(manifest['databaseSchemaVersion'], 65);
+        equal(manifest['databaseSchemaVersion'], 66);
         await LogicalArchiveFiles.export(
           await store.archive(),
           '${dir.path}/logical.json',
@@ -630,7 +631,7 @@ void storedProgressionTests() {
         }
         final db = sqlite3.open(old);
         try {
-          equal(db.userVersion, 65);
+          equal(db.userVersion, 66);
         } finally {
           db.close();
         }

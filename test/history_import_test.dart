@@ -629,12 +629,12 @@ void historyImportTests() {
       final service = HistoryImportService(store);
       await _apply(service, _document(measurements: [_measurement]));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 65);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 66);
       final exported = await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/65');
+      equal(exported['format'], 'bodytmi-logical-export/66');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         equal(logical.archive.importedSessions.length, 2);
@@ -746,6 +746,7 @@ void historyImportTests() {
       await legacyStore.close();
       final old = sqlite3.open(legacy);
       old.execute('DROP TABLE imported_sessions');
+      old.execute('DROP TABLE IF EXISTS block_progressions');
       old.userVersion = 63;
       old.close();
       final upgraded = await TrainingStore.open(legacy);

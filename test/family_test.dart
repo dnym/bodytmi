@@ -261,6 +261,7 @@ void familyTests() {
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       old.execute('DROP TABLE IF EXISTS imported_sessions');
+      old.execute('DROP TABLE IF EXISTS block_progressions');
       old.userVersion = 11;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 11);
@@ -288,7 +289,7 @@ void familyTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          65,
+          66,
         );
       } finally {
         await migrated.close();
@@ -307,7 +308,7 @@ void familyTests() {
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/65',
+          'bodytmi-logical-export/66',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {

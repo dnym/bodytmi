@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/65';
+const _format = 'bodytmi-logical-export/66';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -126,6 +126,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/62',
       'bodytmi-logical-export/63',
       'bodytmi-logical-export/64',
+      'bodytmi-logical-export/65',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -134,7 +135,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final amrapData = input['format'] == _format;
+    final blockData = input['format'] == _format;
+    final amrapData =
+        blockData || input['format'] == 'bodytmi-logical-export/65';
     final importData =
         amrapData || input['format'] == 'bodytmi-logical-export/64';
     final arrangementData =
@@ -280,6 +283,12 @@ final class LogicalArchiveFiles {
     final hadGyms = inputData.containsKey('gyms');
     final hadInstances = inputData.containsKey('instances');
     final hadImportedSessions = inputData.containsKey('importedSessions');
+    final hadBlockProgressions = inputData.containsKey('blockProgressions');
+    if (!blockData &&
+        inputData['blockProgressions'] is List &&
+        (inputData['blockProgressions'] as List).isEmpty) {
+      inputData.remove('blockProgressions');
+    }
     if (!importData &&
         inputData['importedSessions'] is List &&
         (inputData['importedSessions'] as List).isEmpty) {
@@ -376,6 +385,7 @@ final class LogicalArchiveFiles {
       if (inventoryData) 'gyms',
       if (inventoryData) 'instances',
       if (importData) 'importedSessions',
+      if (blockData) 'blockProgressions',
     });
     if (!legacy && !inputData.containsKey('progressions'))
       invalid('Logical format requires progression records.');
@@ -415,6 +425,8 @@ final class LogicalArchiveFiles {
       invalid('Logical v59 requires gym revisions.');
     if (inventoryData && !inputData.containsKey('instances'))
       invalid('Logical v59 requires equipment instance revisions.');
+    if (blockData && !inputData.containsKey('blockProgressions'))
+      invalid('Logical v66 requires block progression decisions.');
     if (importData && !inputData.containsKey('importedSessions'))
       invalid('Logical v64 requires imported history sessions.');
     if (!derivedBodyMassData) {
@@ -441,6 +453,9 @@ final class LogicalArchiveFiles {
         (archive.sessions.any((s) => s.loadInputs.isNotEmpty) ||
             archive.progressions.any((d) => d.session.loadInputs.isNotEmpty)))
       invalid('Session load contexts require logical v62.');
+    if (!blockData &&
+        archive.repeatCheckpoints.any((c) => c.blockTargets.isNotEmpty))
+      invalid('Block progression targets require logical v66.');
     if (!amrapData &&
         (archive.revisions.any((r) => r.definition.hasAmraps) ||
             archive.sessions.any((s) => s.revision.definition.hasAmraps) ||
@@ -719,6 +734,7 @@ final class LogicalArchiveFiles {
     if (!inventoryData && !hadGyms) data.remove('gyms');
     if (!inventoryData && !hadInstances) data.remove('instances');
     if (!importData && !hadImportedSessions) data.remove('importedSessions');
+    if (!blockData && !hadBlockProgressions) data.remove('blockProgressions');
     if (!programData) for (final key in programKeys) data.remove(key);
     if (_checksum({
           'format': input['format'],
@@ -737,11 +753,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV65.values) {
+          for (final ddl in schemaV66.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 65');
+          db.execute('PRAGMA user_version = 66');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
@@ -792,6 +808,12 @@ final class LogicalArchiveFiles {
                 instance.number,
                 canonicalJson(instance.toJson()),
               ],
+            );
+          }
+          for (final decision in archive.blockProgressions) {
+            db.execute(
+              'INSERT INTO block_progressions(id,snapshot) VALUES (?,?)',
+              [decision.id, canonicalJson(decision.toJson())],
             );
           }
           for (final record in archive.importedSessions) {

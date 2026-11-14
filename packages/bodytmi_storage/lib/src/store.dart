@@ -54,7 +54,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 65) {
+            if (native.userVersion > 66) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -115,7 +115,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 65);
+    validateSchema(schema.map((row) => row.data), 66);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -137,6 +137,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM gym_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM equipment_instance_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM imported_sessions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM block_progressions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM derived_target_graphs), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
@@ -854,6 +855,32 @@ final class TrainingStore implements TrainingRepository {
           BodyMassRecordsCompanion.insert(
             id: record.measurement.id,
             snapshot: _snapshot(record.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<List<BlockProgressionDecision>> blockProgressions() async {
+    final result = <BlockProgressionDecision>[];
+    for (final row in await _db.select(_db.blockProgressions).get()) {
+      final decision = BlockProgressionDecision.fromJson(
+        jsonDecode(row.snapshot),
+      );
+      if (decision.id != row.id)
+        invalid('Stored block progression identity is inconsistent.');
+      result.add(decision);
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveBlockProgression(BlockProgressionDecision decision) async {
+    await _db
+        .into(_db.blockProgressions)
+        .insertOnConflictUpdate(
+          BlockProgressionsCompanion.insert(
+            id: decision.id,
+            snapshot: _snapshot(decision.toJson()),
           ),
         );
   }

@@ -289,7 +289,7 @@ void equipmentTests() {
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/65',
+        'bodytmi-logical-export/66',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -379,6 +379,7 @@ void equipmentTests() {
       old.execute('DROP TABLE gym_revisions');
       old.execute('DROP TABLE equipment_instance_revisions');
       old.execute('DROP TABLE IF EXISTS imported_sessions');
+      old.execute('DROP TABLE IF EXISTS block_progressions');
       old.userVersion = 58;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 58);
@@ -391,7 +392,7 @@ void equipmentTests() {
         );
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          65,
+          66,
         );
         equal((await migrated.equipmentInstanceRevisions()).length, 0);
       } finally {
@@ -405,7 +406,7 @@ void equipmentTests() {
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/65',
+          'bodytmi-logical-export/66',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {

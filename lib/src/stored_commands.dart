@@ -43,6 +43,11 @@ const storedCommandNames = [
   'store window-review',
   'repeat-checkpoint save',
   'repeat-checkpoint start-block',
+  'progression block-propose',
+  'progression block-show',
+  'progression block-accept',
+  'progression block-decline',
+  'progression block-track',
   'repeat-checkpoint action',
   'repeat-checkpoint run',
   'repeat-checkpoint reserve',
@@ -310,6 +315,34 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'repeat-checkpoint start-block' => {'id', 'sessionId', 'amrapId'},
+    'progression block-propose' => {
+      'sessionId',
+      'amrapId',
+      'roundSlotId',
+      'rule',
+    },
+    'progression block-show' => {'sessionId', 'amrapId', 'roundSlotId'},
+    'progression block-accept' => {
+      'sessionId',
+      'amrapId',
+      'roundSlotId',
+      'expectedVersion',
+      'acceptedAt',
+    },
+    'progression block-decline' => {
+      'sessionId',
+      'amrapId',
+      'roundSlotId',
+      'expectedVersion',
+      'declinedAt',
+    },
+    'progression block-track' => {
+      'templateId',
+      'amrapId',
+      'roundSlotId',
+      'runId',
+      'asOf',
+    },
     'repeat-checkpoint save' => {
       'id',
       'expectedVersion',
@@ -479,6 +512,7 @@ Future<Map<String, Object?>> executeStored(
       'familyRevision',
       'includeImported',
       'importNamespace',
+      'includeBlocks',
     },
     'family publish' => {'family', 'expectedRevision', 'requireCatalog'},
     'family show' => {'familyId', 'revision'},
@@ -854,6 +888,48 @@ Future<Map<String, Object?>> executeStored(
     final checkpoints = WindowCheckpointService(store);
     final execution = ExecutionService(store);
     switch (command) {
+      case 'progression block-propose':
+      case 'progression block-show':
+      case 'progression block-accept':
+      case 'progression block-decline':
+        final blocks = BlockProgressionService(store);
+        final sessionId = identifier(request, 'sessionId');
+        final amrapId = identifier(request, 'amrapId');
+        final roundSlotId = identifier(request, 'roundSlotId');
+        final decision = switch (command) {
+          'progression block-propose' => await blocks.propose(
+            sessionId,
+            amrapId,
+            roundSlotId,
+            BlockProgressionRule.fromJson(request['rule']),
+          ),
+          'progression block-accept' ||
+          'progression block-decline' => await blocks.resolve(
+            sessionId,
+            amrapId,
+            roundSlotId,
+            expectedVersion: integer('expectedVersion'),
+            at: command == 'progression block-accept'
+                ? parseInstant(request['acceptedAt'], 'acceptedAt')
+                : parseInstant(request['declinedAt'], 'declinedAt'),
+            accept: command == 'progression block-accept',
+          ),
+          _ => await blocks.show(sessionId, amrapId, roundSlotId),
+        };
+        data = {
+          'policy': blockProgressionPolicy,
+          'applied': decision.status == 'accepted',
+          'stale': decision.status == 'pending' && await blocks.stale(decision),
+          ...decision.toJson(),
+        };
+      case 'progression block-track':
+        data = await BlockProgressionService(store).track(
+          templateId: identifier(request, 'templateId'),
+          amrapId: identifier(request, 'amrapId'),
+          roundSlotId: identifier(request, 'roundSlotId'),
+          runId: request['runId'] == null ? null : identifier(request, 'runId'),
+          asOf: parseInstant(request['asOf'], 'asOf'),
+        );
       case 'repeat-checkpoint start-block':
         data = (await RepeatCheckpointService(store).startBlock(
           identifier(request, 'id'),
@@ -1931,9 +2007,27 @@ Future<Map<String, Object?>> executeStored(
             includeActive: flag('includeActive'),
             family: family,
           );
-          if (!flag('includeImported')) return native;
+          final blocks = flag('includeBlocks')
+              ? blockSeriesSection(
+                  await store.repeatCheckpoints(),
+                  await store.sessions(),
+                  runBySession: {
+                    for (final b in await store.sessionPrograms())
+                      b.sessionId: b.runId,
+                  },
+                  context: context,
+                  metric: metric,
+                  from: from,
+                  until: until,
+                  includeWarmups: flag('includeWarmups'),
+                  includeActive: flag('includeActive'),
+                )
+              : null;
+          if (!flag('includeImported'))
+            return blocks == null ? native : {...native, 'blocks': blocks};
           return {
             ...native,
+            'blocks': ?blocks,
             'imported': importedSeriesBlock(
               await store.importedSessions(),
               context: context,

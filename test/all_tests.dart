@@ -32,6 +32,7 @@ import 'history_import_test.dart';
 import 'locale_test.dart';
 import 'amrap_block_test.dart';
 import 'emom_test.dart';
+import 'block_progression_test.dart';
 import 'load_arrangement_test.dart';
 import 'analytics_test.dart';
 import 'decline_test.dart';
@@ -111,6 +112,7 @@ Future<void> main() async {
   localeTests();
   amrapBlockTests();
   emomTests();
+  blockProgressionTests();
   runUpgradeTests();
   programOverrideTests();
   logicalArchiveTests();

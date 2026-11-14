@@ -846,6 +846,7 @@ void publishedObjectiveTests() {
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       db.execute('DROP TABLE IF EXISTS imported_sessions');
+      db.execute('DROP TABLE IF EXISTS block_progressions');
       db.userVersion = 25;
       db.close();
       rejects(
@@ -897,6 +898,7 @@ void publishedObjectiveTests() {
         db.execute('DROP TABLE IF EXISTS gym_revisions');
         db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
         db.execute('DROP TABLE IF EXISTS imported_sessions');
+        db.execute('DROP TABLE IF EXISTS block_progressions');
         db.userVersion = 25;
         db.close();
         equal(
@@ -907,7 +909,7 @@ void publishedObjectiveTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          65,
+          66,
         );
       } finally {
         await store.close();

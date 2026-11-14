@@ -160,6 +160,12 @@ const schemaV65 = {
   // their session-bound repeat checkpoints.
 };
 
+const schemaV66 = {
+  ...schemaV65,
+  'block_progressions':
+      'CREATE TABLE "block_progressions" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -236,6 +242,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   63 => schemaV63, // v63 adds per-set plate arrangement payloads.
   64 => schemaV64, // v64 adds limited source-neutral imported history.
   65 => schemaV65, // v65 adds authored AMRAP blocks.
+  66 => schemaV66, // v66 adds durable AMRAP block progression.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

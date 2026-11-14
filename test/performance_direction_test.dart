@@ -463,6 +463,7 @@ void performanceDirectionTests() {
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
       old.execute('DROP TABLE IF EXISTS imported_sessions');
+      old.execute('DROP TABLE IF EXISTS block_progressions');
       old.userVersion = 19;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 19);
@@ -471,7 +472,7 @@ void performanceDirectionTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          65,
+          66,
         );
       } finally {
         await upgraded.close();
@@ -560,6 +561,7 @@ void performanceDirectionTests() {
         forged.execute('DROP TABLE IF EXISTS gym_revisions');
         forged.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
         forged.execute('DROP TABLE IF EXISTS imported_sessions');
+        forged.execute('DROP TABLE IF EXISTS block_progressions');
         forged.userVersion = 19;
         forged.close();
         rejects(

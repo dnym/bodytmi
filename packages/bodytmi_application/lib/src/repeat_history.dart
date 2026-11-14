@@ -230,3 +230,74 @@ List<(RepeatCheckpoint, TrainingSession, String?)> _select(
   });
   return selected;
 }
+
+/// Opt-in block section for native series (policy bodytmi-block-series/1):
+/// results of authored AMRAP block ledgers, kept in their own rows. Native
+/// context filters map onto rows (runId, templateId) and onto round efforts
+/// (slotId = round slot, exercise, implementation, equipment, setupNote,
+/// role); points never merge into native slot series.
+Map<String, Object?> blockSeriesSection(
+  List<RepeatCheckpoint> checkpoints,
+  List<TrainingSession> sessions, {
+  Map<String, String> runBySession = const {},
+  Map<String, Object?> context = const {},
+  String? metric,
+  DateTime? from,
+  DateTime? until,
+  bool includeWarmups = false,
+  bool includeActive = false,
+}) {
+  final report = const RepeatHistory().series(
+    [
+      for (final c in checkpoints)
+        if (c.amrapId != null) c,
+    ],
+    sessions,
+    runBySession: runBySession,
+    runId: context['runId'] as String?,
+    metric: metric,
+    from: from,
+    until: until,
+    includeWarmups: includeWarmups,
+    includeActive: includeActive,
+  );
+  final hasRunFilter = context.containsKey('runId');
+  final rows = <Object?>[];
+  var count = 0;
+  for (final item in jsonList(report, 'series')) {
+    final row = jsonObject(item, 'row');
+    if (hasRunFilter && row['runId'] != context['runId']) continue;
+    if (context.containsKey('templateId') &&
+        row['templateId'] != context['templateId'])
+      continue;
+    final points = [
+      for (final p in jsonList(row, 'points'))
+        if ([
+          'slotId',
+          'exercise',
+          'implementation',
+          'equipment',
+          'setupNote',
+          'role',
+        ].every(
+          (key) =>
+              !context.containsKey(key) ||
+              jsonObject(p, 'point')[key] == context[key],
+        ))
+          p,
+    ];
+    if (points.isEmpty) continue;
+    count += points.length;
+    rows.add({...row, 'points': points});
+  }
+  return {
+    'policy': {
+      ...jsonObject(report['policy'], 'policy'),
+      'id': 'bodytmi-block-series/1',
+      'origin': 'amrapBlock',
+      'context': context,
+    },
+    'pointCount': count,
+    'series': rows,
+  };
+}
