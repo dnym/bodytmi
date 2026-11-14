@@ -66,6 +66,7 @@ import 'next_features_cli_test.dart';
 import 'cli_test.dart';
 import 'progression_test.dart';
 import 'catalog_labels_test.dart';
+import 'amrap_placement_test.dart';
 import 'quantity_test.dart';
 import 'workflow_test.dart';
 
@@ -127,6 +128,7 @@ Future<void> main() async {
   extendedRecordsTests();
   progressionPresetTests();
   catalogLabelTests();
+  amrapPlacementTests();
   runUpgradeTests();
   programOverrideTests();
   logicalArchiveTests();

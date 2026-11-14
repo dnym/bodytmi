@@ -452,6 +452,7 @@ final class TrainingArchive {
       executions: executions,
     );
     validateExecutionData(executions, sessions, timers);
+    validatePlacementCheckpoints(executions, sessions, repeatCheckpoints);
     if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)
       invalid('Duplicate body-mass observation identity.');
     validateImportedSessions(importedSessions);

@@ -209,6 +209,11 @@ final class WindowClock {
         (state.containsKey('occurrenceStartedMilliseconds') ||
             state.containsKey('boundaryEvidence')))
       invalid('Legacy window clocks cannot contain timing evidence.');
+    if (definition.plan.nodes.any((n) => n is AmrapPlacement))
+      invalid(
+        'Scoped window clocks do not traverse AMRAP placements; '
+        'use execution traversal for placed blocks.',
+      );
     if (canonicalJson(state['definition']) !=
         canonicalJson(definition.toJson()))
       invalid('Window clock definition does not match the pinned workout.');

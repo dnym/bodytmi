@@ -1,5 +1,6 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
+import 'repeat_checkpoint.dart';
 import 'timing_service.dart';
 import 'training_repository.dart';
 import 'training_service.dart';
@@ -41,52 +42,67 @@ final class ExecutionService {
     return candidate;
   });
 
-  Future<Map<String, Object?>> view(String id) =>
-      repository.transaction(() async {
-        final e = await show(id);
-        final s = await StoredTrainingService(repository).session(e.sessionId);
-        final plan = executionPlan(s);
-        final current = e.complete ? null : plan[e.cursor];
-        final kind = current?.activity is Rest ? 'rest' : 'effort';
-        final clock = e.complete
-            ? null
-            : await repository.timingActivity(e.clockId(kind));
-        if (clock != null &&
-            (clock.sessionId != s.id ||
-                clock.setId != current!.id ||
-                clock.plan.restOnly != (kind == 'rest')))
-          invalid(
-            'Managed execution clock identity belongs to another occurrence.',
-          );
-        return {
-          ...e.toJson(),
-          'version': e.version,
-          'cursor': e.cursor,
-          'status': e.complete ? 'completed' : 'active',
-          'sessionContentVersion': s.contentVersion,
-          'groups': [
-            for (final group in activityGroups(
-              s.revision.definition.plan,
-              containing: e.cursor,
-            ))
-              group.toJson(),
-          ],
-          'current': current == null
-              ? null
-              : {
-                  'id': current.id,
-                  'activity': current.activity.toJson(),
-                  if (current.activity is Effort)
-                    'set': s.set(current.id).toJson(),
+  Future<Map<String, Object?>> view(
+    String id,
+  ) => repository.transaction(() async {
+    final e = await show(id);
+    final s = await StoredTrainingService(repository).session(e.sessionId);
+    final plan = executionPlan(s);
+    final current = e.complete ? null : plan[e.cursor];
+    final kind = current == null ? 'effort' : occurrenceKind(current.activity);
+    final clock = e.complete || kind == 'amrap'
+        ? null
+        : await repository.timingActivity(e.clockId(kind));
+    final placed = current?.activity;
+    final block = placed is AmrapPlacement
+        ? _blockCheckpoint(
+            await repository.repeatCheckpoints(),
+            s.id,
+            placed.amrapId,
+          )
+        : null;
+    if (clock != null &&
+        (clock.sessionId != s.id ||
+            clock.setId != current!.id ||
+            clock.plan.restOnly != (kind == 'rest')))
+      invalid(
+        'Managed execution clock identity belongs to another occurrence.',
+      );
+    return {
+      ...e.toJson(),
+      'version': e.version,
+      'cursor': e.cursor,
+      'status': e.complete ? 'completed' : 'active',
+      'sessionContentVersion': s.contentVersion,
+      'groups': [
+        for (final group in activityGroups(
+          s.revision.definition.plan,
+          containing: e.cursor,
+        ))
+          group.toJson(),
+      ],
+      'current': current == null
+          ? null
+          : {
+              'id': current.id,
+              'activity': current.activity.toJson(),
+              'kind': kind,
+              if (current.activity is Effort) 'set': s.set(current.id).toJson(),
+              if (current.activity case AmrapPlacement(:final amrapId))
+                'block': {
+                  'amrapId': amrapId,
+                  'checkpointId': block?.id,
+                  'status': block == null ? 'not-started' : _blockStatus(block),
                 },
-          'timer': clock == null
-              ? null
-              : {
-                  ...clock.toViewJson(),
-                  'requiresRecovery': clock.status == 'running',
-                },
-        };
-      });
+            },
+      'timer': clock == null
+          ? null
+          : {
+              ...clock.toViewJson(),
+              'requiresRecovery': clock.status == 'running',
+            },
+    };
+  });
   Future<TimingActivity> time(
     String id,
     int version,
@@ -99,6 +115,11 @@ final class ExecutionService {
     final s = await StoredTrainingService(repository).session(e.sessionId);
     if (s.status != SessionStatus.active) invalid('Session is finalized.');
     final occurrence = executionPlan(s)[e.cursor];
+    if (occurrence.activity is AmrapPlacement)
+      invalid(
+        'An AMRAP placement is timed by its repeat checkpoint; use '
+        'repeat-checkpoint start-block and run, then execution advance.',
+      );
     final rest = occurrence.activity is Rest;
     if (rest && (occurrence.activity as Rest).isManual) {
       invalid('Manual rest has no duration clock; use execution advance.');
@@ -192,8 +213,27 @@ final class ExecutionService {
       invalid('Invalid execution session/time.');
     final occurrence = executionPlan(s)[e.cursor];
     final rest = occurrence.activity is Rest;
+    final kind = occurrenceKind(occurrence.activity);
     String? sourceTimer;
-    if (action == 'skip') {
+    String? checkpointId;
+    if (occurrence.activity case AmrapPlacement(:final amrapId)) {
+      if (action != 'advance')
+        invalid(
+          'An AMRAP placement has no set results; skip or finish the block '
+          'with repeat-checkpoint action (stop is an explicit skip), then '
+          'execution advance.',
+        );
+      final block = _blockCheckpoint(
+        await repository.repeatCheckpoints(),
+        s.id,
+        amrapId,
+      );
+      if (block == null || _blockStatus(block) != 'finished')
+        invalid(
+          'Finish or explicitly stop AMRAP block $amrapId before advancing.',
+        );
+      checkpointId = block.id;
+    } else if (action == 'skip') {
       if (!confirm)
         invalid('Skipping an execution occurrence requires confirm:true.');
       final clocks = (await repository.timingActivities())
@@ -262,13 +302,14 @@ final class ExecutionService {
     e = e.append({
       'ordinal': e.cursor,
       'path': occurrence.id,
-      'kind': rest ? 'rest' : 'effort',
+      'kind': kind,
       'requestId': requestId,
       'request': request,
       'at': at.toUtc().toIso8601String(),
-      if (!rest) 'setVersion': s.set(occurrence.id).contentVersion,
-      if (!rest) 'resultStatus': s.set(occurrence.id).status.name,
+      if (kind == 'effort') 'setVersion': s.set(occurrence.id).contentVersion,
+      if (kind == 'effort') 'resultStatus': s.set(occurrence.id).status.name,
       if (sourceTimer != null) 'timerId': sourceTimer,
+      if (checkpointId != null) 'checkpointId': checkpointId,
     });
     await repository.saveExecution(e);
     await _prepareRest(e, s, at);
@@ -388,7 +429,7 @@ final class ExecutionService {
       receipts.add({
         'ordinal': i,
         'path': o.id,
-        'kind': set == null ? 'rest' : 'effort',
+        'kind': occurrenceKind(o.activity),
         'requestId': _groupRequestId(requestId, e.cursor, i),
         'request': {...request, 'version': i + 1},
         'at': request['at'],
@@ -420,6 +461,12 @@ void _validateManagedClocks(
   final byId = {for (final t in timers) t.id: t};
   final plan = executionPlan(s);
   for (var i = 0; i < plan.length; i++) {
+    if (plan[i].activity is AmrapPlacement) {
+      if (byId.containsKey('execution-${e.id}-rest-$i') ||
+          byId.containsKey('execution-${e.id}-effort-$i'))
+        invalid('An AMRAP placement has no managed execution clock.');
+      continue;
+    }
     final rest = plan[i].activity is Rest;
     final t = byId['execution-${e.id}-${rest ? 'rest' : 'effort'}-$i'];
     if (t != null &&
@@ -486,6 +533,7 @@ void validateExecutionData(
       final ordinal = r['ordinal']! as int;
       final o = plan[ordinal];
       final rest = o.activity is Rest;
+      final kind = occurrenceKind(o.activity);
       final request = jsonObject(r['request'], 'execution request');
       final action = request['action'];
       final groupSkip = action == 'skip-group';
@@ -522,7 +570,7 @@ void validateExecutionData(
           (request['sessionVersion']! as int) > s.contentVersion ||
           parseInstant(r['at'], 'at').isBefore(s.startedAt) ||
           r['path'] != o.id ||
-          r['kind'] != (rest ? 'rest' : 'effort') ||
+          r['kind'] != kind ||
           ((action == 'skip' || groupSkip) && request['confirm'] != true))
         invalid('Execution receipt context is inconsistent.');
       if (groupSkip) {
@@ -561,7 +609,18 @@ void validateExecutionData(
           }
         }
       }
-      if (rest) {
+      if (o.activity case AmrapPlacement(:final amrapId)) {
+        if (action != 'advance' && !groupSkip)
+          invalid('An AMRAP placement is only advanced or group-skipped.');
+        if (groupSkip
+            ? r.containsKey('checkpointId')
+            : !r.containsKey('checkpointId'))
+          invalid(
+            'AMRAP placement advancement lacks its finished block checkpoint.',
+          );
+        if (s.revision.definition.amrap(amrapId) == null)
+          invalid('AMRAP placement names an undeclared block.');
+      } else if (rest) {
         if (action != 'skip' && action != 'advance' && !groupSkip)
           invalid('Rest receipt cannot certify effort.');
         final timer = r['timerId'] == null ? null : timerMap[r['timerId']];
@@ -647,6 +706,47 @@ void validateExecutionData(
     }
   }
 }
+
+/// Every AMRAP placement advance names this session's finished checkpoint
+/// of the placed block.
+void validatePlacementCheckpoints(
+  List<WorkoutExecution> executions,
+  List<TrainingSession> sessions,
+  List<RepeatCheckpoint> checkpoints,
+) {
+  final byId = {for (final c in checkpoints) c.id: c};
+  final sessionById = {for (final s in sessions) s.id: s};
+  for (final e in executions) {
+    for (final r in e.receipts) {
+      if (r['kind'] != 'amrap' || !r.containsKey('checkpointId')) continue;
+      final c = byId[r['checkpointId']];
+      final placed = sessionById[e.sessionId]?.revision.definition.plan
+          .occurrences()
+          .where((o) => o.id == r['path'])
+          .firstOrNull
+          ?.activity;
+      if (c == null ||
+          c.sessionId != e.sessionId ||
+          placed is! AmrapPlacement ||
+          c.amrapId != placed.amrapId ||
+          _blockStatus(c) != 'finished')
+        invalid(
+          'AMRAP placement advancement lacks its finished block checkpoint.',
+        );
+    }
+  }
+}
+
+RepeatCheckpoint? _blockCheckpoint(
+  List<RepeatCheckpoint> all,
+  String sessionId,
+  String amrapId,
+) => all
+    .where((c) => c.sessionId == sessionId && c.amrapId == amrapId)
+    .firstOrNull;
+
+String _blockStatus(RepeatCheckpoint c) =>
+    jsonObject(c.execution['cursor'], 'cursor')['status']! as String;
 
 Never _conflict([
   String message = 'Execution or session changed; refresh before retrying.',

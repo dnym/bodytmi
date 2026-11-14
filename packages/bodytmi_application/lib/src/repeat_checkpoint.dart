@@ -368,6 +368,22 @@ final class RepeatCheckpointService {
       );
     if (session.status != SessionStatus.active)
       invalid('An AMRAP block can only start in an active session.');
+    // A placed block starts in plan order once traversal has reached it.
+    final placement = session.revision.definition.amrapPlacement(amrapId);
+    if (placement != null) {
+      final traversal = (await repository.executions())
+          .where((e) => e.sessionId == sessionId)
+          .firstOrNull;
+      final index = session.revision.definition.plan
+          .occurrences()
+          .toList()
+          .indexWhere((o) => o.id == placement);
+      if (traversal != null && traversal.cursor < index)
+        invalid(
+          'AMRAP block $amrapId is placed at $placement; advance the '
+          'traversal to it before starting the block.',
+        );
+    }
     await repository.saveRepeatCheckpoint(next);
     return next;
   });
@@ -567,6 +583,13 @@ final class RepeatCheckpointService {
         (await repository.session(current.sessionId!))?.status ==
             SessionStatus.finalized)
       invalid('A finished session keeps its authored AMRAP block results.');
+    if ((await repository.executions()).any(
+      (e) => e.receipts.any((r) => r['checkpointId'] == id),
+    ))
+      invalid(
+        'Traversal already advanced past this AMRAP block; its checkpoint '
+        'stays as the advancement source.',
+      );
     await repository.deleteRepeatCheckpoint(id);
   });
 }

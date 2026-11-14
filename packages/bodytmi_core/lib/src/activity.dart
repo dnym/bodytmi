@@ -119,6 +119,9 @@ sealed class Activity {
           _positiveInt(json, 'durationSeconds'),
           fromJson(json['child'], depth + 1),
         );
+      case 'amrap':
+        checkKeys(json, {'id', 'type', 'amrapId'});
+        return AmrapPlacement(id, identifier(json, 'amrapId'));
       default:
         invalid('Unsupported activity type: ${json['type']}.');
     }
@@ -146,7 +149,7 @@ sealed class Activity {
   Iterable<ActivityOccurrence> occurrences([String prefix = '']) sync* {
     final path = prefix.isEmpty ? id : '$prefix/$id';
     switch (this) {
-      case Effort() || Rest():
+      case Effort() || Rest() || AmrapPlacement():
         yield ActivityOccurrence(path, this);
       case Sequence(:final items):
         for (final child in items) {
@@ -346,6 +349,27 @@ final class TimeWindow extends Activity {
   };
 }
 
+/// Places one authored AMRAP block of the workout in the finite plan. It is a
+/// single traversal occurrence with no sets; the block runs in its own repeat
+/// checkpoint, and traversal moves past it only once that block is finished.
+final class AmrapPlacement extends Activity {
+  const AmrapPlacement(super.id, this.amrapId);
+  final String amrapId;
+  @override
+  Map<String, Object?> toJson() => {
+    'type': 'amrap',
+    'id': id,
+    'amrapId': amrapId,
+  };
+}
+
+/// Traversal kind of one occurrence: effort, rest or amrap.
+String occurrenceKind(Activity activity) => switch (activity) {
+  Rest() => 'rest',
+  AmrapPlacement() => 'amrap',
+  _ => 'effort',
+};
+
 final class ActivityOccurrence {
   const ActivityOccurrence(this.id, this.activity);
   final String id;
@@ -403,7 +427,7 @@ List<ActivityGroupOccurrence> activityGroups(
     final path = prefix.isEmpty ? node.id : '$prefix/${node.id}';
     final start = cursor;
     switch (node) {
-      case Effort() || Rest():
+      case Effort() || Rest() || AmrapPlacement():
         if (++cursor > 10000)
           invalid('Activity traversal exceeds 10000 occurrences.');
         return;

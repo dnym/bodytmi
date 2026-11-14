@@ -734,8 +734,8 @@ final class NativeBackup {
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ]);
       }
+      final executions = <WorkoutExecution>[];
       {
-        final executions = <WorkoutExecution>[];
         for (final row in db.select('SELECT * FROM workout_executions')) {
           final e = WorkoutExecution.fromJson(
             jsonDecode(row['snapshot'] as String),
@@ -770,6 +770,10 @@ final class NativeBackup {
 
           repeatCheckpoints.add(checkpoint);
         }
+        validatePlacementCheckpoints(executions, [
+          for (final row in db.select('SELECT snapshot FROM sessions'))
+            sessionFromJson(jsonDecode(row['snapshot'] as String)),
+        ], repeatCheckpoints);
       }
       {
         validateRepeatSessionBindings(repeatCheckpoints, [

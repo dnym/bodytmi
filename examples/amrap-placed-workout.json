@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "definition": {
+    "id": "upper-amrap-placed",
+    "name": "Upper with a placed AMRAP block",
+    "slots": [
+      {
+        "id": "bench-heavy",
+        "exercise": "bench-press",
+        "implementation": "barbell",
+        "equipment": "gym-bar-1",
+        "setupNote": "Flat bench; bar mass included.",
+        "targets": {
+          "mass": {
+            "value": "60",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "8",
+            "unit": "rep"
+          }
+        },
+        "prefill": [
+          "mass"
+        ]
+      },
+      {
+        "id": "bench-light",
+        "exercise": "bench-press",
+        "implementation": "barbell",
+        "equipment": "gym-bar-1",
+        "targets": {
+          "mass": {
+            "value": "45",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "12",
+            "unit": "rep"
+          }
+        },
+        "prefill": [
+          "mass"
+        ]
+      }
+    ],
+    "plan": {
+      "id": "workout",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "heavy",
+          "type": "repeat",
+          "count": 3,
+          "restBetweenSeconds": 120,
+          "child": {
+            "id": "heavy-set",
+            "type": "effort",
+            "slot": "bench-heavy"
+          }
+        },
+        {
+          "id": "finisher-slot",
+          "type": "amrap",
+          "amrapId": "finisher"
+        },
+        {
+          "id": "light",
+          "type": "effort",
+          "slot": "bench-light"
+        }
+      ]
+    },
+    "amraps": [
+      {
+        "id": "finisher",
+        "durationMilliseconds": 600000,
+        "maxRounds": 100,
+        "maxOccurrences": 1000,
+        "roundDefinition": {
+          "id": "amrap-round",
+          "name": "AMRAP round template",
+          "slots": [
+            {
+              "id": "push",
+              "exercise": "push",
+              "implementation": "bodyweight",
+              "targets": {
+                "reps": {
+                  "value": "5",
+                  "unit": "rep",
+                  "entered": {
+                    "value": "5",
+                    "unit": "rep"
+                  }
+                }
+              },
+              "prefill": []
+            },
+            {
+              "id": "pull",
+              "exercise": "pull",
+              "implementation": "bodyweight",
+              "targets": {
+                "reps": {
+                  "value": "5",
+                  "unit": "rep",
+                  "entered": {
+                    "value": "5",
+                    "unit": "rep"
+                  }
+                }
+              },
+              "prefill": []
+            }
+          ],
+          "plan": {
+            "type": "sequence",
+            "id": "round",
+            "children": [
+              {
+                "type": "effort",
+                "id": "push-set",
+                "slot": "push",
+                "role": "work"
+              },
+              {
+                "type": "effort",
+                "id": "pull-set",
+                "slot": "pull",
+                "role": "work"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "expectedRevision": 0
+}

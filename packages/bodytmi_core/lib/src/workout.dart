@@ -194,6 +194,25 @@ final class WorkoutDefinition {
         invalid('AMRAP block IDs must be unique.');
       amraps.sort((a, b) => a.id.compareTo(b.id));
     }
+    // Placements put a declared block at one unique point of the finite plan.
+    final placed = <String>{};
+    void place(Activity node, bool repeated) {
+      if (node case AmrapPlacement(:final amrapId)) {
+        if (!amraps.any((a) => a.id == amrapId))
+          invalid('AMRAP placement names an undeclared block: $amrapId.');
+        if (repeated)
+          invalid(
+            'An AMRAP placement cannot sit inside a repeat or window; '
+            'it must occur exactly once.',
+          );
+        if (!placed.add(amrapId))
+          invalid('AMRAP block $amrapId is placed more than once.');
+      }
+      for (final child in node.children)
+        place(child, repeated || node is Repeat || node is TimeWindow);
+    }
+
+    place(plan, false);
     return WorkoutDefinition._(
       identifier(json, 'id'),
       requiredString(json, 'name'),
@@ -210,6 +229,13 @@ final class WorkoutDefinition {
   bool get hasAmraps => amraps.isNotEmpty;
   WindowRepeatSpec? amrap(String id) =>
       amraps.where((a) => a.id == id).firstOrNull;
+
+  /// The plan occurrence path placing [amrapId], or null when unplaced.
+  String? amrapPlacement(String amrapId) => [
+    for (final o in plan.occurrences())
+      if (o.activity case AmrapPlacement(amrapId: final id) when id == amrapId)
+        o.id,
+  ].firstOrNull;
   ExerciseSlot slot(String id) => slots.firstWhere((slot) => slot.id == id);
   bool get hasEffortTargets =>
       plan.nodes.whereType<Effort>().any((e) => e.targets.isNotEmpty);

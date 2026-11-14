@@ -53,9 +53,10 @@ final class WorkoutExecution {
         'setVersion',
         'resultStatus',
         'timerId',
+        'checkpointId',
       });
       if (r['ordinal'] != i ||
-          !{'effort', 'rest'}.contains(r['kind']) ||
+          !{'effort', 'rest', 'amrap'}.contains(r['kind']) ||
           !requests.add(identifier(r, 'requestId')))
         invalid(
           'Execution receipts must have distinct requests and contiguous ordinals.',
@@ -71,6 +72,12 @@ final class WorkoutExecution {
           invalid('Invalid execution result acknowledgment.');
       } else if (r.containsKey('setVersion') || r.containsKey('resultStatus'))
         invalid('Rest acknowledgment cannot contain effort actuals.');
+      if (r['kind'] == 'amrap') {
+        if (r.containsKey('timerId'))
+          invalid('An AMRAP placement is not timed by the traversal.');
+        if (r.containsKey('checkpointId')) identifier(r, 'checkpointId');
+      } else if (r.containsKey('checkpointId'))
+        invalid('Only AMRAP placements reference a repeat checkpoint.');
       if (r.containsKey('timerId')) identifier(r, 'timerId');
       receipts.add(_freeze(r) as Map<String, Object?>);
     }
