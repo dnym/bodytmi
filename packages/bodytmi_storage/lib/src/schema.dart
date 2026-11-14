@@ -142,6 +142,12 @@ const schemaV62 = {
   // conventions plus pinned equipment instance revision snapshots.
 };
 
+const schemaV63 = {
+  ...schemaV62,
+  // Same tables; v63 adds per-set plate arrangement payloads recorded
+  // against a session's frozen equipment instance revision.
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -215,6 +221,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   60 => schemaV60, // v60 adds declared loading configurations on instances.
   61 => schemaV61, // v61 adds declared load entry conventions.
   62 => schemaV62, // v62 adds session-frozen load inputs.
+  63 => schemaV63, // v63 adds per-set plate arrangement payloads.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

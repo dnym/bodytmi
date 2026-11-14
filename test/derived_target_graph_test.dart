@@ -1110,7 +1110,7 @@ void derivedTargetGraphTests() {
           jsonDecode(await File(path).readAsString()),
           'envelope',
         );
-        equal(envelope['format'], 'bodytmi-logical-export/62');
+        equal(envelope['format'], 'bodytmi-logical-export/63');
         equal(
           (jsonObject(envelope['data'], 'data')['graphs']! as List<Object?>)
               .length,
@@ -1162,7 +1162,7 @@ void derivedTargetGraphTests() {
         await NativeBackup.create(dbPath, backup);
         final preparedBackup = await NativeBackup.prepare(backup);
         try {
-          equal(preparedBackup.manifest['databaseSchemaVersion'], 62);
+          equal(preparedBackup.manifest['databaseSchemaVersion'], 63);
         } finally {
           await preparedBackup.close();
         }

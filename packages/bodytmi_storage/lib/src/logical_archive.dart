@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/62';
+const _format = 'bodytmi-logical-export/63';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -123,6 +123,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/59',
       'bodytmi-logical-export/60',
       'bodytmi-logical-export/61',
+      'bodytmi-logical-export/62',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -131,7 +132,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final loadContextData = input['format'] == _format;
+    final arrangementData = input['format'] == _format;
+    final loadContextData =
+        arrangementData || input['format'] == 'bodytmi-logical-export/62';
     final conventionData =
         loadContextData || input['format'] == 'bodytmi-logical-export/61';
     final loadingData =
@@ -423,6 +426,14 @@ final class LogicalArchiveFiles {
         (archive.sessions.any((s) => s.loadInputs.isNotEmpty) ||
             archive.progressions.any((d) => d.session.loadInputs.isNotEmpty)))
       invalid('Session load contexts require logical v62.');
+    if (!arrangementData &&
+        (archive.sessions.any(
+              (s) => s.sets.any((t) => t.loadArrangement != null),
+            ) ||
+            archive.progressions.any(
+              (d) => d.session.sets.any((t) => t.loadArrangement != null),
+            )))
+      invalid('Set plate arrangements require logical v63.');
     if (!conventionData &&
         (archive.instances.any((i) => i.instance.convention != null) ||
             archive.revisions.any((r) => r.definition.hasLoadConventions)))
@@ -705,11 +716,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV62.values) {
+          for (final ddl in schemaV63.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 62');
+          db.execute('PRAGMA user_version = 63');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

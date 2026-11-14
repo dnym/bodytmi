@@ -122,6 +122,7 @@ TrainingSession sessionFromJson(Object? input) {
       'actuals',
       'timing',
       'observations',
+      'loadArrangement',
       'objectives',
       'contentVersion',
     });
@@ -239,6 +240,9 @@ TrainingSession sessionFromJson(Object? input) {
         observations: row.containsKey('observations')
             ? SetObservations.fromJson(row['observations'])
             : null,
+        loadArrangement: row['loadArrangement'] == null
+            ? null
+            : LoadArrangement.fromJson(row['loadArrangement']),
         status: setStatus,
         contentVersion: _positive(row, 'contentVersion'),
       ),

@@ -161,6 +161,7 @@ final class NativeBackup {
           60,
           61,
           62,
+          63,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -316,6 +317,7 @@ final class NativeBackup {
             60,
             61,
             62,
+            63,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -602,6 +604,10 @@ final class NativeBackup {
           }
           if (db.userVersion < 62 && session.loadInputs.isNotEmpty) {
             invalid('Session load contexts require schema v62.');
+          }
+          if (db.userVersion < 63 &&
+              session.sets.any((s) => s.loadArrangement != null)) {
+            invalid('Set plate arrangements require schema v63.');
           }
           if (db.userVersion < 21 &&
               session.sets.any((s) => s.observations != null))

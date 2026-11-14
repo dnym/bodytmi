@@ -952,7 +952,7 @@ void reconciliationTests() {
         archived = await store.archive();
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          62,
+          63,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
         await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
@@ -962,7 +962,7 @@ void reconciliationTests() {
       final before = canonicalJson(archived.toJson());
       equal(
         NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-        62,
+        63,
       );
       final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
       try {

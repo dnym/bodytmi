@@ -1,4 +1,5 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'load_arrangement_status.dart';
 import 'training_repository.dart';
 
 /// Authoring for equipment kinds, gyms and their actual instances. Inventory
@@ -36,6 +37,29 @@ final class EquipmentService {
     return all.firstOrNull ??
         (throw const BodyTmiException('not_found', 'Gym revision not found.'));
   }
+
+  /// Read-only comparison of a session's recorded plate arrangements against
+  /// the latest published revision of each bound instance. The recorded
+  /// stacks remain interpreted under their frozen revisions.
+  Future<Map<String, Object?>> arrangeStatus(String sessionId) =>
+      repository.transaction(() async {
+        final session = await repository.session(sessionId);
+        if (session == null)
+          throw const BodyTmiException('not_found', 'Session not found.');
+        final current = <String, LoadInstanceReference>{};
+        for (final entry in session.sets) {
+          if (entry.loadArrangement == null) continue;
+          final frozen = session.loadInputs[entry.slotId]?.instance;
+          if (frozen == null) continue;
+          final latest = await instanceRevision(frozen.instanceId);
+          current[entry.slotId] = LoadInstanceReference(
+            latest.instance.id,
+            latest.instance,
+            latest.number,
+          );
+        }
+        return arrangementStatus(session, currentInstances: current);
+      });
 
   Future<EquipmentInstanceRevision> instanceRevision(
     String id, [

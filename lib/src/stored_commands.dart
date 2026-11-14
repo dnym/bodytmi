@@ -116,6 +116,8 @@ const storedCommandNames = [
   'store effective-load',
   'store complete',
   'store annotate',
+  'store arrange',
+  'store arrange-status',
   'store skip',
   'store skip-remaining',
   'store skip-slot',
@@ -273,6 +275,7 @@ Future<Map<String, Object?>> executeStored(
     },
     'store show' => {'id'},
     'store load-status' => {'id'},
+    'store arrange-status' => {'id'},
     'store assess-objectives' => {'id', 'setId', 'objectives'},
     'store summary' => {'id', 'includeWarmups', 'sumMetrics', 'roles'},
     'store rounds' => {'id', 'groupPath'},
@@ -561,6 +564,13 @@ Future<Map<String, Object?>> executeStored(
       'expectedVersion',
       'setId',
       'observations',
+      'confirm',
+    },
+    'store arrange' => {
+      'id',
+      'expectedVersion',
+      'setId',
+      'arrangement',
       'confirm',
     },
     'store skip' => {'id', 'expectedVersion', 'setId', 'confirm'},
@@ -2109,6 +2119,24 @@ Future<Map<String, Object?>> executeStored(
             confirm: confirm,
           ),
         )).toJson();
+      case 'store arrange':
+        final setId = requiredString(request, 'setId');
+        data = (await service.edit(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          (s) => const TrainingService().arrange(
+            s,
+            setId,
+            request['arrangement'] == null
+                ? null
+                : LoadArrangement.fromJson(request['arrangement']),
+            confirm: flag('confirm'),
+          ),
+        )).toJson();
+      case 'store arrange-status':
+        data = await EquipmentService(
+          store,
+        ).arrangeStatus(identifier(request, 'id'));
       case 'store skip-remaining':
         data = (await service.skipRemaining(
           identifier(request, 'id'),

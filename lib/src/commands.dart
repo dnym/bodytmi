@@ -47,6 +47,8 @@ const commandNames = [
   'session effective-load',
   'session complete',
   'session annotate',
+  'session arrange',
+  'session arrange-status',
   'session edit-target',
   'session carry-actual',
   'session skip',
@@ -763,6 +765,24 @@ final class Commands {
               confirm: _bool(request, 'confirm'),
             )
             .toJson();
+      case 'session arrange':
+        keys({'session', 'setId', 'arrangement', 'confirm'});
+        data = const TrainingService()
+            .arrange(
+              sessionFromJson(request['session']),
+              requiredString(request, 'setId'),
+              request['arrangement'] == null
+                  ? null
+                  : LoadArrangement.fromJson(request['arrangement']),
+              confirm: _bool(request, 'confirm'),
+            )
+            .toJson();
+      case 'session arrange-status':
+        keys({'session', 'instances'});
+        data = arrangementStatus(
+          sessionFromJson(request['session']),
+          currentInstances: loadInstancesFromJson(request['instances']),
+        );
       case 'session edit-target':
         keys({'session', 'setId', 'metric', 'value', 'applyToRemaining'});
         data = const TrainingService()

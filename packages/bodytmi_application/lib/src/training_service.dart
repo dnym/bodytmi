@@ -339,6 +339,35 @@ final class TrainingService {
     session.set(setId).annotate(observations, confirm: confirm),
   );
 
+  /// Records or clears the exact plate stack one completed set used. The
+  /// arrangement must reference the session's frozen instance binding and is
+  /// validated against that pinned revision's declared loading before it is
+  /// stored; later instance revisions never invalidate the recorded stack.
+  TrainingSession arrange(
+    TrainingSession session,
+    String setId,
+    LoadArrangement? arrangement, {
+    bool confirm = false,
+  }) {
+    if (arrangement == null &&
+        session.set(setId).loadArrangement != null &&
+        !confirm)
+      invalid('Confirm before clearing a recorded plate arrangement.');
+    if (arrangement != null) {
+      final instance = session.loadInputs[session.set(setId).slotId]?.instance;
+      if (instance == null)
+        invalid('A plate arrangement requires a frozen session load binding.');
+      if (arrangement.instanceId != instance.instanceId)
+        invalid('Plate arrangement instance identity is inconsistent.');
+      if (instance.snapshot.loading == null)
+        invalid(
+          'A plate arrangement requires an instance with declared loading.',
+        );
+      arrangement.validateAgainst(instance.snapshot.loading!);
+    }
+    return session.replaceSet(session.set(setId).arrange(arrangement));
+  }
+
   /// Edit one planned suggestion and optionally carry it to compatible later sets.
   TrainingSession editTarget(
     TrainingSession session,

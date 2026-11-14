@@ -8,6 +8,7 @@ export 'src/window_repeat.dart';
 export 'src/workout.dart';
 export 'src/catalog.dart';
 export 'src/equipment.dart';
+export 'src/load_arrangement.dart';
 export 'src/load_convention.dart';
 export 'src/load_context.dart';
 export 'src/plate_plan.dart';

@@ -4,6 +4,7 @@ import 'body_mass_input.dart';
 import 'errors.dart';
 import 'effective_mass.dart';
 import 'load_context.dart';
+import 'load_arrangement.dart';
 import 'load_convention.dart';
 import 'quantity.dart';
 import 'timing.dart';
@@ -294,6 +295,7 @@ final class TrainingSet {
     this.contentVersion = 1,
     this.timing,
     SetObservations? observations,
+    this.loadArrangement,
     Set<String> maxEffortMetrics = const {},
     Map<String, NumericObjective> criteria = const {},
   }) : criteria = Map.unmodifiable(criteria),
@@ -320,6 +322,8 @@ final class TrainingSet {
       invalid('Carried targets must be manually selected suggestions.');
     }
     this.observations?.validateStatus(status.name);
+    if (loadArrangement != null && status != SetStatus.completed)
+      invalid('Plate arrangements record only for completed sets.');
     if (this.criteria.length + this.maxEffortMetrics.length > 100)
       invalid('Too many set objectives.');
     for (final entry in this.criteria.entries) {
@@ -357,6 +361,7 @@ final class TrainingSet {
   final Metrics actuals;
   final TimedResult? timing;
   final SetObservations? observations;
+  final LoadArrangement? loadArrangement;
   final Set<String> maxEffortMetrics;
   final Map<String, NumericObjective> criteria;
   Map<String, Object?> get objectivesJson => {
@@ -412,6 +417,7 @@ final class TrainingSet {
               : timing!.edited()),
       status: SetStatus.completed,
       observations: this.observations,
+      loadArrangement: loadArrangement,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       actuals: actual,
@@ -456,6 +462,32 @@ final class TrainingSet {
       actuals: actuals,
       timing: timing,
       observations: replacement,
+      loadArrangement: loadArrangement,
+      maxEffortMetrics: maxEffortMetrics,
+      criteria: criteria,
+      contentVersion: contentVersion + 1,
+    );
+  }
+
+  /// Replaces the recorded plate stack; the caller validates it against the
+  /// session's frozen instance loading before storing.
+  TrainingSet arrange(LoadArrangement? replacement) {
+    if (replacement == null && status != SetStatus.completed)
+      invalid('Only completed sets can clear a plate arrangement.');
+    return TrainingSet(
+      id: id,
+      slotId: slotId,
+      role: role,
+      ordinal: ordinal,
+      suggested: suggested,
+      sources: sources,
+      manualTargets: manualTargets,
+      carriedTargets: carriedTargets,
+      status: status,
+      actuals: actuals,
+      timing: timing,
+      observations: observations,
+      loadArrangement: replacement,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       contentVersion: contentVersion + 1,
@@ -479,6 +511,7 @@ final class TrainingSet {
     'actuals': metricsToJson(actuals),
     if (timing != null) 'timing': timing!.toJson(),
     if (observations != null) 'observations': observations!.toJson(),
+    if (loadArrangement != null) 'loadArrangement': loadArrangement!.toJson(),
     if (maxEffortMetrics.isNotEmpty || criteria.isNotEmpty)
       'objectives': objectivesJson,
     'contentVersion': contentVersion,
@@ -537,6 +570,20 @@ final class TrainingSession {
         slotConvention: slot.convention,
         slotEquipmentId: slot.equipmentId,
       );
+    }
+    for (final set in sets) {
+      final arrangement = set.loadArrangement;
+      if (arrangement == null) continue;
+      final instance = loadInputs[set.slotId]?.instance;
+      if (instance == null)
+        invalid('A plate arrangement requires a frozen session load binding.');
+      if (arrangement.instanceId != instance.instanceId)
+        invalid('Plate arrangement instance identity is inconsistent.');
+      if (instance.snapshot.loading == null)
+        invalid(
+          'A plate arrangement requires an instance with declared loading.',
+        );
+      arrangement.validateAgainst(instance.snapshot.loading!);
     }
   }
   final String id;

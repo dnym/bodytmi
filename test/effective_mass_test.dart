@@ -317,13 +317,13 @@ void effectiveMassTests() {
       final next = await service.start('next', definition().id, 2, instant(11));
       equal(_value(_estimate(next)), '109.5');
       equal(canonicalJson(_view(await service.session('old'))), original);
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 62);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 63);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/62',
+        'bodytmi-logical-export/63',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {

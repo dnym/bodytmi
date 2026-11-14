@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "arranged-bench-session",
+  "templateId": "upper-a",
+  "revision": 1,
+  "startedAt": "2026-11-14T09:00:00+00:00",
+  "loadBindings": {
+    "bench-heavy": "garage-rack-bar-olympic"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "arranged-bench-session",
+  "expectedVersion": 2,
+  "setId": "workout/heavy[0]/heavy-set",
+  "arrangement": {
+    "instanceId": "garage-rack-bar-olympic",
+    "channel": "barbell",
+    "plates": [
+      { "mass": { "value": "20", "unit": "kg" }, "count": 2 },
+      { "mass": { "value": "10", "unit": "kg" }, "count": 2 },
+      { "mass": { "value": "5", "unit": "kg" }, "count": 2 }
+    ]
+  }
+}
