@@ -185,6 +185,33 @@ final class ProgressionDecision implements ProgressionAnchor {
       : declinedAt == null
       ? proposal.nextSets
       : List.unmodifiable([for (final set in sets) set.suggested]);
+  @override
+  late final Set<String> controlledSettings = ruleType == 'ordinal'
+      ? OrdinalRule.fromJson(rule).controlledSettings
+      : const {};
+
+  /// Settings move only with an applied ordinal level change.
+  @override
+  late final List<Map<String, String>> nextSettings = () {
+    String? level;
+    if (controlledSettings.isNotEmpty && declinedAt == null) {
+      level =
+          selectedLevel ??
+          (const {'advance', 'deload'}.contains(proposal.outcome)
+              ? proposal.nextLevel
+              : null);
+    }
+    final settings = level == null
+        ? null
+        : OrdinalRule.fromJson(rule).levelSettings(level);
+    return List<Map<String, String>>.unmodifiable([
+      for (final set in sets)
+        Map<String, String>.unmodifiable({
+          for (final lever in controlledSettings)
+            lever: settings?[lever] ?? set.settings[lever]!,
+        }),
+    ]);
+  }();
   late final ExerciseSlot slot = session.revision.definition.slot(slotId);
   @override
   String get templateId => session.revision.definition.id;

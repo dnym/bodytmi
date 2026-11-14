@@ -20,6 +20,13 @@ abstract interface class ProgressionAnchor {
   /// The target vector later sessions consume for these sets.
   List<Metrics> get nextSets;
   Set<String> get controlledMetrics;
+
+  /// Categorical levers this track moves (ordinal levels with settings).
+  Set<String> get controlledSettings;
+
+  /// Per working set, the categorical settings later sessions consume for
+  /// [controlledSettings]; other levers keep the plan's values.
+  List<Map<String, String>> get nextSettings;
   String get ruleType;
   Map<String, Object?> get rule;
   int get sequence;

@@ -49,6 +49,38 @@ Future<TrainingSession> _session(
   return s;
 }
 
+Map<String, Object?> _ladderJson() {
+  final json = _json();
+  final plan = jsonObject(json['plan'], 'plan');
+  jsonObject(jsonList(plan, 'children')[1], 'effort').remove('settings');
+  return json;
+}
+
+Map<String, Object?> _ladder({bool withUnknownValue = false}) => {
+  'metric': 'reps',
+  'performance': {
+    'direction': 'higher',
+    'failureLimit': {'value': '5', 'unit': 'rep'},
+    'advancementLimit': {'value': '9', 'unit': 'rep'},
+  },
+  'levels': [
+    {
+      'id': 'overhand',
+      'targets': {
+        'reps': {'value': '8', 'unit': 'rep'},
+      },
+      'settings': {'grip': 'overhand'},
+    },
+    {
+      'id': 'neutral',
+      'targets': {
+        'reps': {'value': '6', 'unit': 'rep'},
+      },
+      'settings': {'grip': withUnknownValue ? 'mixed' : 'neutral'},
+    },
+  ],
+};
+
 void categoricalTests() {
   test('categorical levers validate values, defaults and effort settings', () {
     final definition = WorkoutDefinition.fromJson(_json());
@@ -252,6 +284,160 @@ void categoricalTests() {
         await NativeBackup.validateDatabase(
           '${dir.path}/native/database.sqlite',
         );
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    }();
+  });
+
+  test('ordinal levels move categorical settings into later sessions', () {
+    return () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-cat-ladder-');
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        // Level validation: same levers on every level, settings-only allowed.
+        rejects(
+          () => OrdinalRule.fromJson({
+            ..._ladder(),
+            'levels': [
+              {
+                'id': 'a',
+                'settings': {'grip': 'overhand'},
+              },
+              {
+                'id': 'b',
+                'settings': {'hands': 'one'},
+              },
+            ],
+          }),
+        );
+        rejects(
+          () => OrdinalRule.fromJson({
+            ..._ladder(),
+            'levels': [
+              {
+                'id': 'a',
+                'settings': {'grip': 'overhand'},
+              },
+              {
+                'id': 'b',
+                'settings': {'grip': 'overhand'},
+              },
+            ],
+          }),
+        );
+        final settingsOnly = OrdinalRule.fromJson({
+          ..._ladder(),
+          'levels': [
+            {
+              'id': 'a',
+              'settings': {'grip': 'overhand'},
+            },
+            {
+              'id': 'b',
+              'settings': {'grip': 'neutral'},
+            },
+          ],
+        });
+        equal(settingsOnly.controlledMetrics.isEmpty, true);
+        final pure = settingsOnly.evaluate(
+          currentSets: [
+            {'reps': _reps('8')},
+          ],
+          results: [
+            {'reps': _reps('10')},
+          ],
+          currentSettings: [
+            {'grip': 'overhand'},
+          ],
+        );
+        equal(pure.outcome, 'advance');
+        equal(pure.nextLevel, 'b');
+        equal(pure.toJson()['nextLevel'], 'b');
+        rejects(
+          () => settingsOnly.evaluate(
+            currentSets: [
+              {'reps': _reps('8')},
+            ],
+            results: [
+              {'reps': _reps('10')},
+            ],
+          ),
+        );
+
+        final training = StoredTrainingService(store);
+        await training.publish(WorkoutDefinition.fromJson(_ladderJson()), 0);
+        await _session(training, 'a', 1, first: '9', second: '10');
+        final progression = StoredProgressionService(store);
+        equal(
+          (await _failure(
+            () => progression.propose(
+              'a',
+              'pull',
+              _ladder(withUnknownValue: true),
+              ruleType: 'ordinal',
+            ),
+          )).code,
+          'validation',
+        );
+        final proposed = await progression.propose(
+          'a',
+          'pull',
+          _ladder(),
+          ruleType: 'ordinal',
+        );
+        equal(proposed.proposal.outcome, 'advance');
+        equal(proposed.proposal.nextLevel, 'neutral');
+        final accepted = await progression.accept(
+          'a',
+          'pull',
+          proposed.version,
+          instant(1).add(const Duration(hours: 2)),
+        );
+        jsonEqual(accepted.nextSettings, [
+          {'grip': 'neutral'},
+          {'grip': 'neutral'},
+        ]);
+        final track = await progression.track(
+          templateId: 'pull-grips',
+          revision: 1,
+          slotId: 'pull',
+          asOf: instant(2),
+        );
+        jsonEqual(track['controlledSettings'], ['grip']);
+
+        // The next session plans neutral grip with the level's targets.
+        final next = await training.start('b', 'pull-grips', 1, instant(2));
+        for (final set in next.sets) {
+          jsonEqual(set.settings, {'grip': 'neutral'});
+          equal(set.suggested['reps']!.enteredValue, '6');
+        }
+        final done = await training.edit('b', next.contentVersion, (s) {
+          for (final set in s.sets)
+            s = const TrainingService().complete(s, set.id, {
+              'reps': _reps('10'),
+            });
+          return s.finish(instant(2).add(const Duration(hours: 1)));
+        });
+        // The stored session round-trips with progressed settings.
+        jsonEqual(sessionFromJson(done.toJson()).toJson(), done.toJson());
+        final held = await progression.propose(
+          'b',
+          'pull',
+          _ladder(),
+          ruleType: 'ordinal',
+        );
+        equal(held.proposal.outcome, 'blocked');
+        // Declining keeps the current settings.
+        final declined = await progression.decline(
+          'b',
+          'pull',
+          held.version,
+          instant(2).add(const Duration(hours: 2)),
+        );
+        jsonEqual(declined.nextSettings.first, {'grip': 'neutral'});
+        TrainingArchive.fromJson((await store.archive()).toJson());
       } finally {
         await store.close();
         await dir.delete(recursive: true);

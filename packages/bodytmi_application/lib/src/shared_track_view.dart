@@ -67,6 +67,11 @@ final class SharedTrackView implements ProgressionAnchor {
   bool matches(String templateId, ExerciseSlot candidate) =>
       local.matches(templateId, candidate);
 
+  @override
+  Set<String> get controlledSettings => local.controlledSettings;
+  @override
+  List<Map<String, String>> get nextSettings => local.nextSettings;
+
   /// A shared metric's target wins; all other controlled metrics stay local.
   @override
   List<Metrics> get nextSets => List.unmodifiable([

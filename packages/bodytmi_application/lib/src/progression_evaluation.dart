@@ -173,6 +173,7 @@ final class ProgressionEvaluation {
       ],
       observations: [for (final s in sets) s.observations],
       failedSessions: failures,
+      currentSettings: [for (final s in sets) s.settings],
     );
     final changed =
         !missing &&
@@ -215,6 +216,9 @@ final class ProgressionEvaluation {
 
   /// Declared successor levels of an ordinal 'choice' outcome.
   List<String> get candidates => _ordinal?.candidates ?? const [];
+
+  /// The ordinal level an advance/deload proposes.
+  String? get nextLevel => _ordinal?.nextLevel;
   final ThresholdAssessment? assessment;
   final EffortAssessment? effortAssessment;
   final IncrementBandAssessment? incrementBandAssessment;

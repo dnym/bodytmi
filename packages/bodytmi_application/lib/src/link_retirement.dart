@@ -147,6 +147,14 @@ final class LinkRetirementAnchor implements ProgressionAnchor {
   final int previousSequence, previousFailures, previousCursor, cursor;
   @override
   final List<Metrics> nextSets;
+
+  /// Shared links reject ordinal rules, so retirements move no settings.
+  @override
+  Set<String> get controlledSettings => const {};
+  @override
+  List<Map<String, String>> get nextSettings => [
+    for (final _ in nextSets) const <String, String>{},
+  ];
   @override
   final int failedSessions;
   final DateTime retiredAt;

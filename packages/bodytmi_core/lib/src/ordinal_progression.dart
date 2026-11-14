@@ -1,3 +1,4 @@
+import 'categorical.dart';
 import 'errors.dart';
 import 'effort_condition.dart';
 import 'quantity.dart';
@@ -8,22 +9,35 @@ import 'set_observations.dart';
 /// vector. Array order is the declared easier-to-harder progression order.
 /// Difficulty is never inferred from the numbers inside a level.
 final class OrdinalLevel {
-  OrdinalLevel._(this.id, this.targets);
+  OrdinalLevel._(this.id, this.targets, this.settings);
   factory OrdinalLevel.fromJson(Object? input) {
     final json = jsonObject(input, 'ordinal level');
-    checkKeys(json, {'id', 'targets'});
-    final targets = metricsFromJson(json['targets']);
-    if (targets.isEmpty) invalid('Ordinal levels need at least one target.');
+    checkKeys(json, {'id', 'targets', 'settings'});
+    final targets = json.containsKey('targets')
+        ? metricsFromJson(json['targets'])
+        : <String, Quantity>{};
+    final settings = json.containsKey('settings')
+        ? categoricalSettingsFromJson(json['settings'], 'level settings')
+        : const <String, String>{};
+    if (targets.isEmpty && settings.isEmpty)
+      invalid('Ordinal levels need at least one target or setting.');
+    if (json.containsKey('targets') && targets.isEmpty)
+      invalid('Ordinal level targets cannot be empty when present.');
     return OrdinalLevel._(
       identifier(json, 'id'),
       Map<String, Quantity>.unmodifiable(targets),
+      settings,
     );
   }
   final String id;
   final Metrics targets;
+
+  /// Categorical lever values this level prescribes (e.g. grip: neutral).
+  final Map<String, String> settings;
   Map<String, Object?> toJson() => {
     'id': id,
-    'targets': metricsToJson(targets),
+    if (targets.isNotEmpty) 'targets': metricsToJson(targets),
+    if (settings.isNotEmpty) 'settings': settings,
   };
 }
 
@@ -39,6 +53,8 @@ final class OrdinalProposal {
     this.assessment,
     this.effortAssessment,
     List<String> candidates = const [],
+    this.nextLevel,
+    this.withLevel = false,
   }) : candidates = List.unmodifiable(candidates),
        nextSets = List.unmodifiable([
          for (final set in nextSets) Map<String, Quantity>.unmodifiable(set),
@@ -53,11 +69,18 @@ final class OrdinalProposal {
   /// Declared successor levels when more than one is legal ('choice'). No
   /// default branch is chosen: acceptance must name one explicitly.
   final List<String> candidates;
+
+  /// The level advance/deload moves to; null when targets hold.
+  final String? nextLevel;
+
+  /// Whether the rule sets categorical levers (serializes nextLevel).
+  final bool withLevel;
   Map<String, Object?> toJson() => {
     'outcome': outcome,
     if (candidates.isNotEmpty) 'candidates': candidates,
     'reason': reason,
     'nextSets': [for (final set in nextSets) metricsToJson(set)],
+    if (withLevel && nextLevel != null) 'nextLevel': nextLevel,
     'nextState': {'failedSessions': failedSessions},
     'requiresAcceptance': true,
     if (assessment != null) 'assessment': assessment!.toJson(),
@@ -84,7 +107,8 @@ final class OrdinalRule {
     this.deloadLevelId,
     this.successors,
   ) : levels = List.unmodifiable(levels),
-      controlledMetrics = Set.unmodifiable(levels.first.targets.keys);
+      controlledMetrics = Set.unmodifiable(levels.first.targets.keys),
+      controlledSettings = Set.unmodifiable(levels.first.settings.keys);
 
   factory OrdinalRule.fromJson(Object? input) {
     final json = jsonObject(input, 'rule');
@@ -130,10 +154,16 @@ final class OrdinalRule {
         if (entry.value.dimension != controlled[entry.key]!.dimension)
           invalid('Ordinal level target dimensions must match.');
       }
+      final levers = level.settings.keys.toSet(),
+          controlledLevers = levels.first.settings.keys.toSet();
+      if (levers.difference(controlledLevers).isNotEmpty ||
+          controlledLevers.difference(levers).isNotEmpty)
+        invalid('Every ordinal level must set the same categorical levers.');
     }
     for (var i = 0; i < levels.length; i++) {
       for (var j = i + 1; j < levels.length; j++) {
-        if (_sameVector(levels[i].targets, levels[j].targets))
+        if (_sameVector(levels[i].targets, levels[j].targets) &&
+            _sameSettings(levels[i].settings, levels[j].settings))
           invalid('Ordinal levels must have distinct target vectors.');
       }
     }
@@ -229,6 +259,9 @@ final class OrdinalRule {
   final Quantity failureLimit, advancementLimit;
   final List<OrdinalLevel> levels;
   final Set<String> controlledMetrics;
+
+  /// Categorical levers every level sets; empty for numeric-only ladders.
+  final Set<String> controlledSettings;
   final ResultAggregation aggregation, failureAggregation;
   final AdvancementEffort? advancementEffort;
   final int deloadAfter;
@@ -264,6 +297,12 @@ final class OrdinalRule {
     return levels[index].targets;
   }
 
+  Map<String, String> levelSettings(String id) {
+    final index = _levelIndex(id);
+    if (index < 0) invalid('Unknown ordinal level $id.');
+    return levels[index].settings;
+  }
+
   int _levelIndex(String id) => levels.indexWhere((level) => level.id == id);
 
   /// Classify the whole exposure once, then move (or hold) every working set
@@ -273,9 +312,13 @@ final class OrdinalRule {
     required List<Metrics?> results,
     List<SetObservations?>? observations,
     int failedSessions = 0,
+    List<Map<String, String>>? currentSettings,
   }) {
     if (currentSets.isEmpty || currentSets.length > 10000)
       invalid('Ordinal progression needs 1 to 10000 target sets.');
+    if (controlledSettings.isNotEmpty &&
+        currentSettings?.length != currentSets.length)
+      invalid('Categorical ordinal levels need the current set settings.');
     if (failedSessions < 0) invalid('Invalid progression state.');
     for (final current in currentSets) {
       _validateCurrent(current);
@@ -311,6 +354,7 @@ final class OrdinalRule {
       List<Metrics> nextSets,
       int failures, {
       List<String> candidates = const [],
+      String? nextLevel,
     }) => OrdinalProposal(
       outcome,
       reason,
@@ -319,8 +363,10 @@ final class OrdinalRule {
       assessment: assessment,
       effortAssessment: effortAssessment,
       candidates: candidates,
+      nextLevel: nextLevel,
+      withLevel: controlledSettings.isNotEmpty,
     );
-    final current = _resolveLevel(currentSets);
+    final current = _resolveLevel(currentSets, currentSettings);
     if (current == null) {
       return proposal(
         'review',
@@ -348,6 +394,7 @@ final class OrdinalRule {
             'Failed-exposure threshold reached; easier ordinal level proposed.',
             _vectorFor(levels[deloadIndex].targets, currentSets.length),
             0,
+            nextLevel: deloadLevelId,
           );
         }
         return proposal(
@@ -411,6 +458,7 @@ final class OrdinalRule {
       'Advancement predicate reached (inclusive); next ordinal level proposed.',
       _vectorFor(levelTargets(next.single), currentSets.length),
       0,
+      nextLevel: next.single,
     );
   }
 
@@ -426,12 +474,19 @@ final class OrdinalRule {
   /// All sets must match the same single level; anything else needs explicit
   /// reconciliation. Level target vectors are distinct, so at most one match
   /// exists per set.
-  int? _resolveLevel(List<Metrics> currentSets) {
+  int? _resolveLevel(
+    List<Metrics> currentSets,
+    List<Map<String, String>>? currentSettings,
+  ) {
     int? shared;
-    for (final current in currentSets) {
+    for (var s = 0; s < currentSets.length; s++) {
+      final current = currentSets[s];
       var matched = -1, matches = 0;
       for (var i = 0; i < levels.length; i++) {
-        if (_matches(levels[i].targets, current)) {
+        if (_matches(levels[i].targets, current) &&
+            levels[i].settings.entries.every(
+              (e) => currentSettings![s][e.key] == e.value,
+            )) {
           matched = i;
           matches++;
         }
@@ -453,6 +508,9 @@ bool _sameVector(Metrics left, Metrics right) =>
     left.entries.every(
       (entry) => right[entry.key]!.compareTo(entry.value) == 0,
     );
+
+bool _sameSettings(Map<String, String> a, Map<String, String> b) =>
+    a.length == b.length && a.entries.every((e) => b[e.key] == e.value);
 
 List<Metrics> _vectorFor(Metrics level, int count) => [
   for (var i = 0; i < count; i++) {...level},

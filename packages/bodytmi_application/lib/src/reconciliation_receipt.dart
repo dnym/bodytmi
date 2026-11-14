@@ -235,6 +235,15 @@ final class ReconciliationReceipt implements ProgressionAnchor {
   int get cursor => resetCursor ? 0 : previousCursor;
   @override
   List<Metrics> get nextSets => [for (final set in sets) set.suggested];
+
+  /// Reconciliation adopts planned targets only; categorical settings keep
+  /// coming from the plan.
+  @override
+  Set<String> get controlledSettings => const {};
+  @override
+  List<Map<String, String>> get nextSettings => [
+    for (final _ in sets) const <String, String>{},
+  ];
   @override
   String get templateId => revision.definition.id;
   @override

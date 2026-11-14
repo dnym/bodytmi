@@ -392,6 +392,10 @@ final class StoredProgressionService {
         'ruleType': latest.ruleType,
         'rule': latest.rule,
         'controlledMetrics': latest.controlledMetrics.toList()..sort(),
+        if (latest.controlledSettings.isNotEmpty) ...{
+          'controlledSettings': latest.controlledSettings.toList()..sort(),
+          'nextSettings': latest.nextSettings,
+        },
         if (latest case SharedTrackView(:final link, :final shared)) ...{
           'link': {
             'linkId': link.id,
@@ -472,6 +476,14 @@ final class StoredProgressionService {
       (s) => s.id == slotId,
     );
     if (candidates.isEmpty) invalid('Unknown progression slot.');
+    if (ruleType == 'ordinal') {
+      for (final level in OrdinalRule.fromJson(rule).levels)
+        validateCategoricalSettings(
+          level.settings,
+          candidates.single.categories,
+          'Ordinal level ${level.id}',
+        );
+    }
     // A temporary substitute is not an exposure of the slot's own track,
     // and a one-off replacement never establishes linkage.
     if (session.sets.any(

@@ -13,6 +13,7 @@ final class TrainingService {
     Map<String, BodyMassOverride> bodyMassOverrides = const {},
     Map<String, LoadInstanceReference> loadInstances = const {},
     Map<String, LoadConvention> loadConventions = const {},
+    Map<String, Map<String, String>> progressedSettings = const {},
   }) {
     identifier({'id': sessionId}, 'id');
     if (bodyMassOverrides.keys.any(
@@ -86,7 +87,17 @@ final class TrainingService {
       final suggested = <String, Quantity>{
         ...effort.resolveTargets(slot.targets),
       };
-      final planned = revision.definition.plannedSettings(occurrence.id);
+      // Progressed categorical levels replace their levers' planned values,
+      // before prefill, so history only seeds the settings actually planned.
+      final planned = sortedSettings({
+        ...revision.definition.plannedSettings(occurrence.id),
+        ...?progressedSettings[occurrence.id],
+      });
+      validateCategoricalSettings(
+        planned,
+        slot.categories,
+        'Progressed set ${occurrence.id}',
+      );
       final sources = <String, HistorySource>{};
       if (effort.role != 'warmup') {
         for (final metric in slot.prefillMetrics) {

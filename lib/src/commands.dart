@@ -1023,7 +1023,14 @@ final class Commands {
             )
             .toJson();
       case 'progression ordinal':
-        keys({'rule', 'currentSets', 'results', 'state', 'observations'});
+        keys({
+          'rule',
+          'currentSets',
+          'currentSettings',
+          'results',
+          'state',
+          'observations',
+        });
         final state = jsonObject(
           request['state'] ?? <String, Object?>{},
           'state',
@@ -1048,6 +1055,12 @@ final class Commands {
                     ]
                   : null,
               failedSessions: failures,
+              currentSettings: request.containsKey('currentSettings')
+                  ? [
+                      for (final s in jsonList(request, 'currentSettings'))
+                        categoricalSettingsFromJson(s, 'currentSettings'),
+                    ]
+                  : null,
             )
             .toJson();
       case 'measurement trend':

@@ -270,25 +270,6 @@ final class StoredTrainingService {
         invalid('Session precedes program occurrence history.');
       dayPath = day.path;
     }
-    var next = const TrainingService().start(
-      sessionId: id,
-      revision: prescription,
-      bodyMassOverrides: bodyMassOverrides,
-      bodyMassMeasurements: [
-        for (final r in await repository.bodyMassRecords())
-          if (!r.deleted) r.measurement,
-      ],
-      startedAt: startedAt,
-      loadInstances: await _resolveLoadBindings(
-        prescription,
-        loadBindings,
-        await repository.equipmentInstanceRevisions(),
-      ),
-      loadConventions: loadConventions,
-      history: (await repository.sessions())
-          .where((s) => runBySession[s.id] == runId)
-          .toList(),
-    );
     final decisions = (await repository.progressionDecisions()).where(
       (d) =>
           d.runId == runId &&
@@ -321,6 +302,42 @@ final class StoredTrainingService {
             sessionStartedAt: startedAt,
           ),
     };
+    // Ordinal tracks with categorical levels supply those levers' settings.
+    final progressedSettings = <String, Map<String, String>>{};
+    {
+      final ordinals = <(String, String), int>{};
+      for (final occurrence in prescription.definition.plan.occurrences()) {
+        final effort = occurrence.activity;
+        if (effort is! Effort) continue;
+        final key = (effort.slotId, effort.role);
+        final ordinal = ordinals.update(key, (v) => v + 1, ifAbsent: () => 0);
+        final anchor = bySlot[key];
+        if (anchor == null || anchor.controlledSettings.isEmpty) continue;
+        if (ordinal >= anchor.nextSettings.length) continue;
+        final settings = anchor.nextSettings[ordinal];
+        if (settings.isNotEmpty) progressedSettings[occurrence.id] = settings;
+      }
+    }
+    var next = const TrainingService().start(
+      sessionId: id,
+      revision: prescription,
+      bodyMassOverrides: bodyMassOverrides,
+      bodyMassMeasurements: [
+        for (final r in await repository.bodyMassRecords())
+          if (!r.deleted) r.measurement,
+      ],
+      startedAt: startedAt,
+      loadInstances: await _resolveLoadBindings(
+        prescription,
+        loadBindings,
+        await repository.equipmentInstanceRevisions(),
+      ),
+      loadConventions: loadConventions,
+      history: (await repository.sessions())
+          .where((s) => runBySession[s.id] == runId)
+          .toList(),
+      progressedSettings: progressedSettings,
+    );
     final scopedOverrides = programRun == null || dayPath == null
         ? const <ScopedProgramOverride>[]
         : programRun.program.definition.effectiveOverrides(dayPath);
