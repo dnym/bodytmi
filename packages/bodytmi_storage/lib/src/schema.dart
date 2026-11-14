@@ -171,6 +171,11 @@ const schemaV67 = {
   // Same tables; v67 adds temporary set substitution payloads.
 };
 
+const schemaV68 = {
+  ...schemaV67,
+  // Same tables; v68 adds branched ordinal successor graphs and choices.
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -249,6 +254,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   65 => schemaV65, // v65 adds authored AMRAP blocks.
   66 => schemaV66, // v66 adds durable AMRAP block progression.
   67 => schemaV67, // v67 adds temporary set substitutions.
+  68 => schemaV68, // v68 adds branched ordinal successors.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

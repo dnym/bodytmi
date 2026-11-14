@@ -186,6 +186,9 @@ final class ProgressionEvaluation {
   final int failedSessions, cursor;
   final DoubleProgressionProposal? _double;
   final OrdinalProposal? _ordinal;
+
+  /// Declared successor levels of an ordinal 'choice' outcome.
+  List<String> get candidates => _ordinal?.candidates ?? const [];
   final ThresholdAssessment? assessment;
   final EffortAssessment? effortAssessment;
   final IncrementBandAssessment? incrementBandAssessment;

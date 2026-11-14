@@ -166,6 +166,7 @@ final class NativeBackup {
           65,
           66,
           67,
+          68,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -326,6 +327,7 @@ final class NativeBackup {
             65,
             66,
             67,
+            68,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -686,6 +688,10 @@ final class NativeBackup {
           );
           if (receipt.id != row['id'])
             invalid('Reconciliation row identity does not match its key.');
+          if (db.userVersion < 68 &&
+              receipt.ruleType == 'ordinal' &&
+              receipt.rule.containsKey('successors'))
+            invalid('Branched ordinal successors require schema v68.');
           reconciliations.add(receipt);
         }
       }
@@ -699,6 +705,10 @@ final class NativeBackup {
           );
           if (db.userVersion < 55 && d.ruleType == 'ordinal')
             invalid('Ordinal progression requires schema v55.');
+          if (db.userVersion < 68 &&
+              ((d.ruleType == 'ordinal' && d.rule.containsKey('successors')) ||
+                  d.selectedLevel != null))
+            invalid('Branched ordinal successors require schema v68.');
           if (db.userVersion < 67 &&
               d.session.sets.any((s) => s.substitution != null))
             invalid('Frozen set substitutions require schema v67.');

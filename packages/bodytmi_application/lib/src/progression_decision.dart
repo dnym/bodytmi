@@ -23,6 +23,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     this.ruleType = 'double',
     this.previousCursor = 0,
     this.role = 'work',
+    this.selectedLevel,
   }) : rule = _freeze(rule) as Map<String, Object?> {
     if (session.status != SessionStatus.finalized)
       invalid('Progression requires finalized confirmed work.');
@@ -50,6 +51,16 @@ final class ProgressionDecision implements ProgressionAnchor {
       invalid(
         'Unconfirmed or changed-load work requires review before application.',
       );
+    // Incomparable branches move only by an explicit declared successor.
+    if (acceptedAt != null &&
+        outcome == 'choice' &&
+        !proposal.candidates.contains(selectedLevel))
+      invalid(
+        'Accepting a branch choice needs selectedLevel among '
+        '${proposal.candidates.join(', ')}.',
+      );
+    if (selectedLevel != null && (acceptedAt == null || outcome != 'choice'))
+      invalid('selectedLevel only resolves an accepted branch choice.');
   }
   factory ProgressionDecision.fromJson(Object? input) {
     final j = jsonObject(input, 'progression decision');
@@ -68,6 +79,7 @@ final class ProgressionDecision implements ProgressionAnchor {
       'ruleType',
       'previousCursor',
       'role',
+      'selectedLevel',
     });
     int count(String key, int min) {
       final v = j[key];
@@ -102,6 +114,9 @@ final class ProgressionDecision implements ProgressionAnchor {
       ruleType: kind,
       previousCursor: kind == 'threshold' ? count('previousCursor', 0) : 0,
       role: j.containsKey('role') ? requiredString(j, 'role') : 'work',
+      selectedLevel: j.containsKey('selectedLevel')
+          ? identifier(j, 'selectedLevel')
+          : null,
     );
     if (canonicalJson(j['proposal']) !=
         canonicalJson(decision.proposal.toJson()))
@@ -124,6 +139,9 @@ final class ProgressionDecision implements ProgressionAnchor {
   final String ruleType;
   final String role;
   final int previousCursor;
+
+  /// The declared successor chosen when accepting an ordinal branch choice.
+  final String? selectedLevel;
   int get cursor => declinedAt != null ? previousCursor : proposal.cursor;
   late final Set<String> controlledMetrics = ruleType == 'double'
       ? {
@@ -146,7 +164,12 @@ final class ProgressionDecision implements ProgressionAnchor {
   int get failedSessions => declinedAt != null && proposal.outcome == 'deload'
       ? previousFailures + 1
       : proposal.failedSessions;
-  List<Metrics> get nextSets => declinedAt == null
+  List<Metrics> get nextSets => selectedLevel != null
+      ? List.unmodifiable([
+          for (final _ in sets)
+            OrdinalRule.fromJson(rule).levelTargets(selectedLevel!),
+        ])
+      : declinedAt == null
       ? proposal.nextSets
       : List.unmodifiable([for (final set in sets) set.suggested]);
   late final ExerciseSlot slot = session.revision.definition.slot(slotId);
@@ -191,21 +214,23 @@ final class ProgressionDecision implements ProgressionAnchor {
   bool matches(String templateId, ExerciseSlot candidate) =>
       session.revision.definition.id == templateId &&
       slot.compatibleWith(candidate);
-  ProgressionDecision accept(DateTime at) => ProgressionDecision(
-    session: session,
-    slotId: slotId,
-    rule: rule,
-    previousApplication: previousApplication,
-    previousSequence: previousSequence,
-    previousFailures: previousFailures,
-    version: version,
-    acceptedAt: at,
-    declinedAt: declinedAt,
-    runId: runId,
-    ruleType: ruleType,
-    previousCursor: previousCursor,
-    role: role,
-  );
+  ProgressionDecision accept(DateTime at, {String? selectedLevel}) =>
+      ProgressionDecision(
+        session: session,
+        slotId: slotId,
+        rule: rule,
+        previousApplication: previousApplication,
+        previousSequence: previousSequence,
+        previousFailures: previousFailures,
+        version: version,
+        acceptedAt: at,
+        declinedAt: declinedAt,
+        runId: runId,
+        ruleType: ruleType,
+        previousCursor: previousCursor,
+        role: role,
+        selectedLevel: selectedLevel,
+      );
   ProgressionDecision decline(DateTime at) => ProgressionDecision(
     session: session,
     slotId: slotId,
@@ -236,6 +261,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     if (runId != null) 'runId': runId,
     if (ruleType != 'double') 'ruleType': ruleType,
     if (ruleType == 'threshold') 'previousCursor': previousCursor,
+    if (selectedLevel != null) 'selectedLevel': selectedLevel,
   };
 }
 

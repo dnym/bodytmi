@@ -38,7 +38,9 @@ final class OrdinalProposal {
     this.failedSessions, {
     this.assessment,
     this.effortAssessment,
-  }) : nextSets = List.unmodifiable([
+    List<String> candidates = const [],
+  }) : candidates = List.unmodifiable(candidates),
+       nextSets = List.unmodifiable([
          for (final set in nextSets) Map<String, Quantity>.unmodifiable(set),
        ]);
   final String outcome;
@@ -47,8 +49,13 @@ final class OrdinalProposal {
   final int failedSessions;
   final ThresholdAssessment? assessment;
   final EffortAssessment? effortAssessment;
+
+  /// Declared successor levels when more than one is legal ('choice'). No
+  /// default branch is chosen: acceptance must name one explicitly.
+  final List<String> candidates;
   Map<String, Object?> toJson() => {
     'outcome': outcome,
+    if (candidates.isNotEmpty) 'candidates': candidates,
     'reason': reason,
     'nextSets': [for (final set in nextSets) metricsToJson(set)],
     'nextState': {'failedSessions': failedSessions},
@@ -75,6 +82,7 @@ final class OrdinalRule {
     this.advancementEffort,
     this.deloadAfter,
     this.deloadLevelId,
+    this.successors,
   ) : levels = List.unmodifiable(levels),
       controlledMetrics = Set.unmodifiable(levels.first.targets.keys);
 
@@ -89,6 +97,7 @@ final class OrdinalRule {
       'advancementEffort',
       'deloadAfter',
       'deloadLevel',
+      'successors',
     });
     final performance = jsonObject(
       json['performance'],
@@ -151,13 +160,52 @@ final class OrdinalRule {
       invalid('Total aggregation requires count, duration or distance.');
     final after = json['deloadAfter'] ?? 3;
     if (after is! int || after < 1) invalid('deloadAfter must be positive.');
+    final ids = {for (final level in levels) level.id};
+    Map<String, List<String>>? successors;
+    if (json.containsKey('successors')) {
+      final graph = jsonObject(json['successors'], 'successors');
+      if (graph.isEmpty) invalid('successors must declare at least one edge.');
+      successors = {};
+      var edges = 0;
+      for (final entry in graph.entries) {
+        if (!ids.contains(entry.key))
+          invalid('successors names an unknown level ${entry.key}.');
+        final targets = <String>[];
+        for (final item in jsonList(graph, entry.key)) {
+          if (item is! String || !ids.contains(item))
+            invalid('successors of ${entry.key} must name published levels.');
+          if (item == entry.key) invalid('A level cannot succeed itself.');
+          if (targets.contains(item))
+            invalid('Duplicate successor $item of ${entry.key}.');
+          targets.add(item);
+        }
+        if (targets.isEmpty || targets.length > 100)
+          invalid('A level declares 1–100 successors when listed.');
+        edges += targets.length;
+        successors[entry.key] = List.unmodifiable(targets);
+      }
+      if (edges > 10000) invalid('successors exceed 10000 edges.');
+      // Harder-only transitions: the declared graph must be acyclic.
+      final state = <String, int>{};
+      void visit(String id) {
+        if (state[id] == 2) return;
+        if (state[id] == 1) invalid('successors must not contain a cycle.');
+        state[id] = 1;
+        for (final next in successors![id] ?? const <String>[]) visit(next);
+        state[id] = 2;
+      }
+
+      for (final id in successors.keys) visit(id);
+    }
     String? deloadLevelId;
     if (json.containsKey('deloadLevel')) {
       deloadLevelId = identifier(json, 'deloadLevel');
       final index = levels.indexWhere((level) => level.id == deloadLevelId);
       if (index < 0) invalid('deloadLevel must name a published level.');
-      if (index == levels.length - 1)
+      if (successors == null && index == levels.length - 1)
         invalid('deloadLevel must be easier than the hardest level.');
+      if (successors != null && !successors.containsKey(deloadLevelId))
+        invalid('A branched deloadLevel must have declared successors.');
     }
     return OrdinalRule._(
       identifier(json, 'metric'),
@@ -172,6 +220,7 @@ final class OrdinalRule {
           : null,
       after,
       deloadLevelId,
+      successors == null ? null : Map.unmodifiable(successors),
     );
   }
 
@@ -184,6 +233,36 @@ final class OrdinalRule {
   final AdvancementEffort? advancementEffort;
   final int deloadAfter;
   final String? deloadLevelId;
+
+  /// Optional declared successor graph. When present, only its edges
+  /// authorize advancement; array order no longer implies difficulty and
+  /// sibling branches stay incomparable.
+  final Map<String, List<String>>? successors;
+
+  /// Whether [to] is reachable from [from] by declared successor edges.
+  bool reaches(String from, String to) {
+    final graph = successors;
+    if (graph == null) return _levelIndex(from) < _levelIndex(to);
+    final seen = <String>{};
+    final pending = [...?graph[from]];
+    while (pending.isNotEmpty) {
+      final next = pending.removeLast();
+      if (next == to) return true;
+      if (seen.add(next)) pending.addAll(graph[next] ?? const []);
+    }
+    return false;
+  }
+
+  /// Declared harder levels legal from [index].
+  List<String> successorsOf(int index) => successors == null
+      ? [if (index + 1 < levels.length) levels[index + 1].id]
+      : [...?successors![levels[index].id]];
+
+  Metrics levelTargets(String id) {
+    final index = _levelIndex(id);
+    if (index < 0) invalid('Unknown ordinal level $id.');
+    return levels[index].targets;
+  }
 
   bool get hasDeloadLevel => deloadLevelId != null;
 
@@ -232,14 +311,16 @@ final class OrdinalRule {
       String outcome,
       String reason,
       List<Metrics> nextSets,
-      int failures,
-    ) => OrdinalProposal(
+      int failures, {
+      List<String> candidates = const [],
+    }) => OrdinalProposal(
       outcome,
       reason,
       nextSets,
       failures,
       assessment: assessment,
       effortAssessment: effortAssessment,
+      candidates: candidates,
     );
     final current = _resolveLevel(currentSets);
     if (current == null) {
@@ -263,7 +344,7 @@ final class OrdinalRule {
           failedSessions + 1; // one exposure, regardless of failed set count
       if (deloadLevelId != null && failures >= deloadAfter) {
         final deloadIndex = _levelIndex(deloadLevelId!);
-        if (current > deloadIndex) {
+        if (reaches(deloadLevelId!, levels[current].id)) {
           return proposal(
             'deload',
             'Failed-exposure threshold reached; easier ordinal level proposed.',
@@ -306,18 +387,31 @@ final class OrdinalRule {
         unknown ? failedSessions : 0,
       );
     }
-    if (current == levels.length - 1) {
+    final next = successorsOf(current);
+    if (next.isEmpty) {
       return proposal(
         'blocked',
-        'Already at the hardest published ordinal level; advancement blocked.',
+        successors == null
+            ? 'Already at the hardest published ordinal level; advancement blocked.'
+            : 'The current level declares no successor; advancement blocked.',
         currentSets,
         0,
+      );
+    }
+    if (next.length > 1) {
+      // Incomparable branches: hold until one declared successor is chosen.
+      return proposal(
+        'choice',
+        'Advancement reached; select one declared successor level.',
+        currentSets,
+        0,
+        candidates: next,
       );
     }
     return proposal(
       'advance',
       'Advancement predicate reached (inclusive); next ordinal level proposed.',
-      _vectorFor(levels[current + 1].targets, currentSets.length),
+      _vectorFor(levelTargets(next.single), currentSets.length),
       0,
     );
   }

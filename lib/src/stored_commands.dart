@@ -710,6 +710,7 @@ Future<Map<String, Object?>> executeStored(
       'role',
       'expectedVersion',
       'acceptedAt',
+      'selectedLevel',
     },
     'progression decline' => {
       'sessionId',
@@ -1752,6 +1753,9 @@ Future<Map<String, Object?>> executeStored(
             integer('expectedVersion'),
             parseInstant(request['acceptedAt'], 'acceptedAt'),
             role: role,
+            selectedLevel: request.containsKey('selectedLevel')
+                ? identifier(request, 'selectedLevel')
+                : null,
           ),
           'progression decline' => await progression.decline(
             sessionId,

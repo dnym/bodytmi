@@ -678,11 +678,16 @@ final class StoredProgressionService {
     int expectedVersion,
     DateTime at, {
     String role = 'work',
+    String? selectedLevel,
   }) => repository.transaction(() async {
     final pending = await decision(sessionId, slotId, role: role);
     if (pending.version != expectedVersion)
       _conflict('Progression decision version changed.');
-    if (pending.acceptedAt != null) return pending;
+    if (pending.acceptedAt != null) {
+      if (pending.selectedLevel != selectedLevel)
+        _conflict('This exposure was already accepted with another choice.');
+      return pending;
+    }
     if (pending.declinedAt != null)
       _conflict('This exposure was already declined.');
     if (await stale(pending))
@@ -699,7 +704,7 @@ final class StoredProgressionService {
     final shared = link != null && link.cadence == 'each-exposure'
         ? _sharedCas(links, link, pending)
         : null;
-    final applied = pending.accept(at);
+    final applied = pending.accept(at, selectedLevel: selectedLevel);
     await repository.saveProgressionDecision(applied);
     if (shared != null)
       await _appendChain(links, link!, shared, applied, 'accept', at);

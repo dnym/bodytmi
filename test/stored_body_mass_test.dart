@@ -152,7 +152,7 @@ void storedBodyMassTests() {
       await File('$dir/old-meta.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/old-meta.json'));
       await store.snapshot('$dir/meta.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/meta.sqlite'), 67);
+      equal(NativeBackup.validateDatabase('$dir/meta.sqlite'), 68);
       final db = sqlite3.open('$dir/meta.sqlite');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -393,13 +393,13 @@ void storedBodyMassTests() {
       final resolved = canonicalJson(
         (await service.resolve(_query())).toJson(),
       );
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 67);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 68);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/export.json',
         ))['format'],
-        'bodytmi-logical-export/67',
+        'bodytmi-logical-export/68',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/export.json');
       try {
@@ -551,7 +551,7 @@ void storedBodyMassTests() {
       }
       final upgraded = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(upgraded.userVersion, 67);
+        equal(upgraded.userVersion, 68);
       } finally {
         upgraded.close();
       }

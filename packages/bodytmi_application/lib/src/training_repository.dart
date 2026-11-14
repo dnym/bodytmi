@@ -961,7 +961,9 @@ final class StoredTrainingService {
       (t) =>
           t.sessionId == id && (t.active || t.status == 'awaitingConfirmation'),
     ))
-      invalid('Stop and review or discard the session clock before substituting.');
+      invalid(
+        'Stop and review or discard the session clock before substituting.',
+      );
     if ((await repository.windowCheckpoints()).any(
       (c) => c.sessionId == id && c.reserved,
     ))
