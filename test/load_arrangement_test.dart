@@ -913,7 +913,7 @@ void loadArrangementTests() {
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/64');
+      equal(exported['format'], 'bodytmi-logical-export/65');
       var logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         check(

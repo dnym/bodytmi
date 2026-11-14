@@ -42,6 +42,7 @@ const storedCommandNames = [
   'store window-clock',
   'store window-review',
   'repeat-checkpoint save',
+  'repeat-checkpoint start-block',
   'repeat-checkpoint action',
   'repeat-checkpoint run',
   'repeat-checkpoint reserve',
@@ -307,6 +308,7 @@ Future<Map<String, Object?>> executeStored(
       'observations',
       'confirm',
     },
+    'repeat-checkpoint start-block' => {'id', 'sessionId', 'amrapId'},
     'repeat-checkpoint save' => {
       'id',
       'expectedVersion',
@@ -850,6 +852,12 @@ Future<Map<String, Object?>> executeStored(
     final checkpoints = WindowCheckpointService(store);
     final execution = ExecutionService(store);
     switch (command) {
+      case 'repeat-checkpoint start-block':
+        data = (await RepeatCheckpointService(store).startBlock(
+          identifier(request, 'id'),
+          identifier(request, 'sessionId'),
+          identifier(request, 'amrapId'),
+        )).toJson();
       case 'repeat-checkpoint save':
         data = (await RepeatCheckpointService(store).save(
           identifier(request, 'id'),

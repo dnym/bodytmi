@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "finisher-1",
+  "sessionId": "amrap-session",
+  "amrapId": "finisher"
+}

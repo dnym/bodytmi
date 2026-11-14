@@ -709,7 +709,7 @@ void maxEffortTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          64,
+          65,
         );
       } finally {
         await store.close();

@@ -10,6 +10,7 @@ import 'quantity.dart';
 import 'timing.dart';
 import 'set_observations.dart';
 import 'objective.dart';
+import 'window_repeat.dart';
 import 'prescription_overrides.dart';
 
 final class ExerciseSlot {
@@ -114,10 +115,16 @@ final class ExerciseSlot {
 }
 
 final class WorkoutDefinition {
-  WorkoutDefinition._(this.id, this.name, this.slots, this.plan);
+  WorkoutDefinition._(
+    this.id,
+    this.name,
+    this.slots,
+    this.plan, [
+    this.amraps = const [],
+  ]);
   factory WorkoutDefinition.fromJson(Object? input) {
     final json = jsonObject(input, 'workout definition');
-    checkKeys(json, {'id', 'name', 'slots', 'plan'});
+    checkKeys(json, {'id', 'name', 'slots', 'plan', 'amraps'});
     final slots = [
       for (final slot in jsonList(json, 'slots')) ExerciseSlot.fromJson(slot),
     ];
@@ -169,17 +176,39 @@ final class WorkoutDefinition {
       if (occurrence.activity is Effort) efforts++;
     }
     if (efforts == 0) invalid('Plan must contain at least one effort.');
+    // Authored deadline-bounded AMRAP blocks. Each is executed as its own
+    // repeat ledger bound to a session; it is not part of the finite plan.
+    final amraps = <WindowRepeatSpec>[];
+    if (json.containsKey('amraps')) {
+      final list = jsonList(json, 'amraps');
+      if (list.isEmpty || list.length > 16)
+        invalid('amraps must list 1–16 AMRAP blocks when present.');
+      for (final item in list) {
+        final amrap = WindowRepeatSpec.fromJson(item);
+        if (amrap.roundDefinition.amraps.isNotEmpty)
+          invalid('An AMRAP round cannot declare nested AMRAP blocks.');
+        amraps.add(amrap);
+      }
+      if (amraps.map((a) => a.id).toSet().length != amraps.length)
+        invalid('AMRAP block IDs must be unique.');
+      amraps.sort((a, b) => a.id.compareTo(b.id));
+    }
     return WorkoutDefinition._(
       identifier(json, 'id'),
       requiredString(json, 'name'),
       List.unmodifiable(slots),
       plan,
+      List.unmodifiable(amraps),
     );
   }
   final String id;
   final String name;
   final List<ExerciseSlot> slots;
   final Activity plan;
+  final List<WindowRepeatSpec> amraps;
+  bool get hasAmraps => amraps.isNotEmpty;
+  WindowRepeatSpec? amrap(String id) =>
+      amraps.where((a) => a.id == id).firstOrNull;
   ExerciseSlot slot(String id) => slots.firstWhere((slot) => slot.id == id);
   bool get hasEffortTargets =>
       plan.nodes.whereType<Effort>().any((e) => e.targets.isNotEmpty);
@@ -218,6 +247,7 @@ final class WorkoutDefinition {
     'name': name,
     'slots': [for (final slot in slots) slot.toJson()],
     'plan': plan.toJson(),
+    if (amraps.isNotEmpty) 'amraps': [for (final a in amraps) a.toJson()],
   };
 }
 

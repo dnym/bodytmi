@@ -154,6 +154,12 @@ const schemaV64 = {
       'CREATE TABLE "imported_sessions" ("namespace" TEXT NOT NULL, "source_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("namespace", "source_id"))',
 };
 
+const schemaV65 = {
+  ...schemaV64,
+  // Same tables; v65 adds authored AMRAP blocks on workout revisions and
+  // their session-bound repeat checkpoints.
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -229,6 +235,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   62 => schemaV62, // v62 adds session-frozen load inputs.
   63 => schemaV63, // v63 adds per-set plate arrangement payloads.
   64 => schemaV64, // v64 adds limited source-neutral imported history.
+  65 => schemaV65, // v65 adds authored AMRAP blocks.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

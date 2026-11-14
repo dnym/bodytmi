@@ -739,7 +739,7 @@ void linkConsumptionTests() {
         equal(archived.linkRetirements.length, 1);
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          64,
+          65,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
       } finally {
@@ -748,7 +748,7 @@ void linkConsumptionTests() {
       try {
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          64,
+          65,
         );
         final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
         try {
@@ -848,7 +848,7 @@ void linkConsumptionTests() {
             (await plainStore.backup(
               '${dir.path}/plain-native',
             ))['databaseSchemaVersion'],
-            64,
+            65,
           );
         } finally {
           await plainStore.close();
@@ -888,7 +888,7 @@ void linkConsumptionTests() {
             (await migrated.backup(
               '${dir.path}/upgraded',
             ))['databaseSchemaVersion'],
-            64,
+            65,
           );
           final state = await LeverLinkService(migrated).state('idle-link');
           equal((state['chain']! as List).length, 0);

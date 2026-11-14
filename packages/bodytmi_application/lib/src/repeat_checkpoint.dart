@@ -13,10 +13,18 @@ final class RepeatCheckpoint {
     this._execution,
     this.reserved,
     this.sessionId,
+    this.amrapId,
   );
   factory RepeatCheckpoint.fromJson(Object? input) {
     final json = jsonObject(input, 'repeat checkpoint');
-    checkKeys(json, {'id', 'version', 'execution', 'reserved', 'sessionId'});
+    checkKeys(json, {
+      'id',
+      'version',
+      'execution',
+      'reserved',
+      'sessionId',
+      'amrapId',
+    });
     final id = identifier(json, 'id');
     final version = json['version'];
     if (version is! int || version < 1 || version > 2000000000)
@@ -36,18 +44,27 @@ final class RepeatCheckpoint {
     final sessionId = json.containsKey('sessionId')
         ? identifier(json, 'sessionId')
         : null;
+    final amrapId = json.containsKey('amrapId')
+        ? identifier(json, 'amrapId')
+        : null;
+    if (amrapId != null && sessionId == null)
+      invalid('An authored AMRAP checkpoint needs its session.');
     return RepeatCheckpoint._(
       id,
       version,
       canonicalJson(execution),
       reserved,
       sessionId,
+      amrapId,
     );
   }
   final String id;
   final int version;
   final bool reserved;
   final String? sessionId;
+
+  /// The authored AMRAP block of the session's pinned workout revision.
+  final String? amrapId;
   final String _execution;
   Map<String, Object?> get execution =>
       jsonObject(jsonDecode(_execution), 'execution');
@@ -57,6 +74,13 @@ final class RepeatCheckpoint {
     'execution': execution,
     if (reserved) 'reserved': true,
     if (sessionId != null) 'sessionId': sessionId,
+    if (amrapId != null) 'amrapId': amrapId,
+  };
+
+  /// Identity fields carried unchanged through every rewrite.
+  Map<String, Object?> get _identity => {
+    if (sessionId != null) 'sessionId': sessionId,
+    if (amrapId != null) 'amrapId': amrapId,
   };
 }
 
@@ -74,8 +98,46 @@ void validateRepeatSessionBindings(
         jsonObject(checkpoint.execution['cursor'], 'cursor')['status'] !=
             'finished')
       invalid('A finalized session requires finished repeat checkpoints.');
+    final amrapId = checkpoint.amrapId;
+    if (amrapId == null) continue;
+    final authored = session.revision.definition.amrap(amrapId);
+    if (authored == null)
+      invalid('Repeat checkpoint names an AMRAP block its session lacks.');
+    if (canonicalJson(
+          jsonObject(checkpoint.execution['cursor'], 'cursor')['loop'],
+        ) !=
+        canonicalJson(authored.toJson()))
+      invalid('Repeat checkpoint loop differs from its authored AMRAP block.');
+  }
+  final blocks = <String>{};
+  for (final checkpoint in checkpoints) {
+    if (checkpoint.amrapId != null &&
+        !blocks.add('${checkpoint.sessionId}\u0000${checkpoint.amrapId}'))
+      invalid('An authored AMRAP block has more than one checkpoint.');
+  }
+  for (final session in sessions) {
+    if (session.status != SessionStatus.finalized) continue;
+    for (final amrap in session.revision.definition.amraps) {
+      if (!blocks.contains('${session.id}\u0000${amrap.id}'))
+        invalid(
+          'A finalized session needs a finished checkpoint for AMRAP block '
+          '${amrap.id}.',
+        );
+    }
   }
 }
+
+/// Finalization guard: authored AMRAP blocks without a checkpoint.
+List<String> missingAmrapBlocks(
+  TrainingSession session,
+  List<RepeatCheckpoint> checkpoints,
+) => [
+  for (final amrap in session.revision.definition.amraps)
+    if (!checkpoints.any(
+      (c) => c.sessionId == session.id && c.amrapId == amrap.id,
+    ))
+      amrap.id,
+];
 
 void validateRepeatClockReservations(
   List<RepeatCheckpoint> checkpoints, {
@@ -137,6 +199,7 @@ final class RepeatCheckpointService {
       'version': expectedVersion + 1,
       'execution': execution,
       if (binding != null) 'sessionId': binding,
+      if (existing?.amrapId != null) 'amrapId': existing!.amrapId,
     });
     if (existing != null) {
       final oldLoop = jsonObject(
@@ -167,6 +230,55 @@ final class RepeatCheckpointService {
     return next;
   });
 
+  /// Starts the ledger of an authored AMRAP block from the session's pinned
+  /// revision. Retrying the identical request returns the untouched
+  /// checkpoint; any other existing checkpoint for that block conflicts.
+  /// Skipping a block is an explicit confirmed `stop` on this checkpoint.
+  Future<RepeatCheckpoint> startBlock(
+    String id,
+    String sessionId,
+    String amrapId,
+  ) => repository.transaction(() async {
+    identifier({'id': id}, 'id');
+    identifier({'id': sessionId}, 'id');
+    identifier({'id': amrapId}, 'id');
+    final session =
+        await repository.session(sessionId) ??
+        (throw const BodyTmiException('not_found', 'Session not found.'));
+    final authored =
+        session.revision.definition.amrap(amrapId) ??
+        (throw const BodyTmiException(
+          'not_found',
+          'The session workout revision has no such AMRAP block.',
+        ));
+    final next = RepeatCheckpoint.fromJson({
+      'id': id,
+      'version': 1,
+      'execution': const WindowRepeatExecution().start(authored),
+      'sessionId': sessionId,
+      'amrapId': amrapId,
+    });
+    final all = await repository.repeatCheckpoints();
+    final existing = all.where((c) => c.id == id).firstOrNull;
+    if (existing != null) {
+      if (canonicalJson(existing.toJson()) == canonicalJson(next.toJson()))
+        return existing;
+      throw const BodyTmiException(
+        'conflict',
+        'A repeat checkpoint with this ID already exists.',
+      );
+    }
+    if (all.any((c) => c.sessionId == sessionId && c.amrapId == amrapId))
+      throw const BodyTmiException(
+        'conflict',
+        'This AMRAP block already has a checkpoint.',
+      );
+    if (session.status != SessionStatus.active)
+      invalid('An AMRAP block can only start in an active session.');
+    await repository.saveRepeatCheckpoint(next);
+    return next;
+  });
+
   Future<RepeatCheckpoint> reserve(
     String id,
     int expectedVersion,
@@ -193,7 +305,7 @@ final class RepeatCheckpointService {
       'version': current.version + 1,
       'execution': current.execution,
       'reserved': true,
-      if (current.sessionId != null) 'sessionId': current.sessionId,
+      ...current._identity,
     });
     await repository.saveRepeatCheckpoint(next);
     return next;
@@ -219,7 +331,7 @@ final class RepeatCheckpointService {
       'id': id,
       'version': current.version + 1,
       'execution': current.execution,
-      if (current.sessionId != null) 'sessionId': current.sessionId,
+      ...current._identity,
     });
     await repository.saveRepeatCheckpoint(next);
     return next;
@@ -332,7 +444,7 @@ final class RepeatCheckpointService {
       'id': id,
       'version': current.version + 1,
       'execution': execution,
-      if (current.sessionId != null) 'sessionId': current.sessionId,
+      ...current._identity,
       if (current.reserved &&
           {
             'paused',
@@ -358,6 +470,10 @@ final class RepeatCheckpointService {
       );
     if (current.reserved)
       invalid('Release the repeat clock before deleting its checkpoint.');
+    if (current.amrapId != null &&
+        (await repository.session(current.sessionId!))?.status ==
+            SessionStatus.finalized)
+      invalid('A finished session keeps its authored AMRAP block results.');
     await repository.deleteRepeatCheckpoint(id);
   });
 }

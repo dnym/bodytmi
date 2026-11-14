@@ -19,6 +19,7 @@ import 'derived_plan_session.dart';
 import 'window_checkpoint.dart';
 import 'session_window_clock.dart';
 import 'repeat_checkpoint.dart';
+import 'window_repeat_execution.dart';
 import 'history_import_service.dart';
 
 /// One repository transaction is the durability boundary of each operation.
@@ -160,6 +161,9 @@ final class StoredTrainingService {
     final implementations = await repository.implementationRevisions();
     final owners = implementationOwners(implementations);
     validateCatalogSlotAdoption(definition.slots, owners);
+    // Every authored AMRAP loop must be startable by the repeat engine.
+    for (final amrap in definition.amraps)
+      const WindowRepeatExecution().start(amrap);
     if (requireCatalog) {
       final exercises = {
         for (final revision in await repository.exerciseRevisions())
@@ -1015,6 +1019,17 @@ final class StoredTrainingService {
       invalid(
         'Finish or explicitly discard associated repeats before finishing the session.',
       );
+    if (next.status == SessionStatus.finalized) {
+      final missing = missingAmrapBlocks(
+        next,
+        await repository.repeatCheckpoints(),
+      );
+      if (missing.isNotEmpty)
+        invalid(
+          'Start and finish, or explicitly stop, AMRAP blocks before '
+          'finishing the session: ${missing.join(', ')}.',
+        );
+    }
     validateExecutionData(executions, [
       for (final s in await repository.sessions()) s.id == id ? next : s,
     ], await repository.timingActivities());

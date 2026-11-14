@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/64';
+const _format = 'bodytmi-logical-export/65';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -125,6 +125,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/61',
       'bodytmi-logical-export/62',
       'bodytmi-logical-export/63',
+      'bodytmi-logical-export/64',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -133,7 +134,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final importData = input['format'] == _format;
+    final amrapData = input['format'] == _format;
+    final importData =
+        amrapData || input['format'] == 'bodytmi-logical-export/64';
     final arrangementData =
         importData || input['format'] == 'bodytmi-logical-export/63';
     final loadContextData =
@@ -438,6 +441,11 @@ final class LogicalArchiveFiles {
         (archive.sessions.any((s) => s.loadInputs.isNotEmpty) ||
             archive.progressions.any((d) => d.session.loadInputs.isNotEmpty)))
       invalid('Session load contexts require logical v62.');
+    if (!amrapData &&
+        (archive.revisions.any((r) => r.definition.hasAmraps) ||
+            archive.sessions.any((s) => s.revision.definition.hasAmraps) ||
+            archive.repeatCheckpoints.any((c) => c.amrapId != null)))
+      invalid('Authored AMRAP blocks require logical v65.');
     if (!arrangementData &&
         (archive.sessions.any(
               (s) => s.sets.any((t) => t.loadArrangement != null),
@@ -729,11 +737,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV64.values) {
+          for (final ddl in schemaV65.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 64');
+          db.execute('PRAGMA user_version = 65');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

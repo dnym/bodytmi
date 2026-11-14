@@ -75,6 +75,7 @@ final class RepeatHistory {
       if (points.isEmpty) continue;
       rows.add({
         'checkpointId': checkpoint.id,
+        if (checkpoint.amrapId != null) 'amrapId': checkpoint.amrapId,
         'checkpointVersion': checkpoint.version,
         'executionVersion': execution['version'],
         'executionStatus': cursor['status'],
@@ -143,6 +144,7 @@ final class RepeatHistory {
       }
       attempts.add({
         'checkpointId': checkpoint.id,
+        if (checkpoint.amrapId != null) 'amrapId': checkpoint.amrapId,
         'checkpointVersion': checkpoint.version,
         'executionVersion': execution['version'],
         'executionStatus': cursor['status'],
