@@ -5,6 +5,9 @@ import 'objective.dart';
 /// Explicit effort roles. Stored progression defaults to `work` and can select another role.
 const effortRoles = {'work', 'warmup', 'backoff', 'drop'};
 
+/// Authored unilateral sides. An effort without one is not side-specific.
+const effortSides = {'left', 'right'};
+
 Set<String> maxEffortObjectivesFromJson(Object? input) {
   final json = jsonObject(input, 'objectives');
   if (json.isEmpty || json.length > 100)
@@ -45,9 +48,13 @@ sealed class Activity {
           'role',
           'targets',
           'objectives',
+          'side',
         });
         final role = json['role'] ?? 'work';
         if (!effortRoles.contains(role)) invalid('Unknown effort role.');
+        final side = json['side'];
+        if (side != null && !effortSides.contains(side))
+          invalid('Effort side must be left or right.');
         if (json.containsKey('objectives')) {
           if (json.containsKey('targets') &&
               metricsFromJson(json['targets']).isEmpty)
@@ -61,6 +68,7 @@ sealed class Activity {
             targets: json.containsKey('targets')
                 ? metricsFromJson(json['targets'])
                 : const {},
+            side: side as String?,
           );
         }
         return json.containsKey('targets')
@@ -69,8 +77,14 @@ sealed class Activity {
                 identifier(json, 'slot'),
                 role as String,
                 metricsFromJson(json['targets']),
+                side as String?,
               )
-            : Effort(id, identifier(json, 'slot'), role as String);
+            : Effort(
+                id,
+                identifier(json, 'slot'),
+                role as String,
+                side as String?,
+              );
       case 'rest':
         checkKeys(json, {'id', 'type', 'durationSeconds', 'manual'});
         if (json.containsKey('manual')) {
@@ -155,14 +169,19 @@ sealed class Activity {
 }
 
 final class Effort extends Activity {
-  const Effort(super.id, this.slotId, [this.role = 'work'])
+  const Effort(super.id, this.slotId, [this.role = 'work', this.side])
     : targets = const {},
       maxEffortMetrics = const {},
       criteria = const {};
-  Effort.withTargets(super.id, this.slotId, this.role, Metrics targets)
-    : targets = Map.unmodifiable(targets),
-      maxEffortMetrics = const {},
-      criteria = const {} {
+  Effort.withTargets(
+    super.id,
+    this.slotId,
+    this.role,
+    Metrics targets, [
+    this.side,
+  ]) : targets = Map.unmodifiable(targets),
+       maxEffortMetrics = const {},
+       criteria = const {} {
     if (targets.isEmpty) invalid('Effort target overrides cannot be empty.');
   }
   Effort.withObjectives(
@@ -171,6 +190,7 @@ final class Effort extends Activity {
     this.role,
     Set<String> metrics, {
     Metrics targets = const {},
+    this.side,
   }) : targets = Map.unmodifiable(targets),
        maxEffortMetrics = Set.unmodifiable(metrics),
        criteria = const {} {
@@ -188,6 +208,7 @@ final class Effort extends Activity {
     this.role,
     Map<String, NumericObjective> objectives, {
     Metrics targets = const {},
+    this.side,
   }) : targets = Map.unmodifiable(targets),
        maxEffortMetrics = Set.unmodifiable(
          objectives.entries
@@ -248,12 +269,16 @@ final class Effort extends Activity {
 
   final String slotId;
   final String role;
+
+  /// Optional unilateral side; absent means the effort is not side-specific.
+  final String? side;
   @override
   Map<String, Object?> toJson() => {
     'type': 'effort',
     'id': id,
     'slot': slotId,
     'role': role,
+    if (side != null) 'side': side,
     if (targets.isNotEmpty) 'targets': metricsToJson(targets),
     if (maxEffortMetrics.isNotEmpty || criteria.isNotEmpty)
       'objectives': objectivesJson,

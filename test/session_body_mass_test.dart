@@ -589,7 +589,7 @@ void sessionBodyMassTests() {
       await File('$dir/rebind-v33.json').writeAsString(jsonEncode(envelope));
       await _fails(LogicalArchiveFiles.prepare('$dir/rebind-v33.json'));
       await store.snapshot('$dir/rebind.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/rebind.sqlite'), 68);
+      equal(NativeBackup.validateDatabase('$dir/rebind.sqlite'), 69);
       final raw = sqlite3.open('$dir/rebind.sqlite');
       raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       raw.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -1494,7 +1494,7 @@ void sessionBodyMassTests() {
       await service.edit(s.id, s.contentVersion, finished);
       await mass.delete('training', 1, confirm: true);
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 68);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/export.json',
@@ -1648,7 +1648,7 @@ void sessionBodyMassTests() {
       }
       final check = sqlite3.open('$dir/db.sqlite');
       try {
-        equal(check.userVersion, 68);
+        equal(check.userVersion, 69);
       } finally {
         check.close();
       }

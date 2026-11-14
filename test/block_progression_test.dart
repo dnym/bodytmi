@@ -463,12 +463,12 @@ void blockProgressionTests() {
       );
       await _block(store, 's2', 2, 3, finishSession: false, finishBlock: false);
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 68);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
       final exported = await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/68');
+      equal(exported['format'], 'bodytmi-logical-export/69');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         equal(logical.archive.blockProgressions.length, 1);

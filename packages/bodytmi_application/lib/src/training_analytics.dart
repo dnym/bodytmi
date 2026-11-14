@@ -100,6 +100,8 @@ final class TrainingAnalytics {
             'id': set.id,
             'slot': set.slotId,
             'role': set.role,
+            if (session.revision.definition.effortSide(set.id) case final side?)
+              'side': side,
             'ordinal': set.ordinal,
             'status': set.status.name,
             'contentVersion': set.contentVersion,
@@ -205,6 +207,8 @@ final class TrainingAnalytics {
           'equipment': performed.equipment,
           'setupNote': performed.setupNote,
           'role': set.role,
+          if (session.revision.definition.effortSide(set.id) case final side?)
+            'side': side,
           if (performed.substituted) 'substituted': true,
         };
         if (context.entries.any((e) => sourceContext[e.key] != e.value))
@@ -329,6 +333,7 @@ void _context(Map<String, Object?> context) {
     'equipment',
     'setupNote',
     'role',
+    'side',
     'substituted',
   });
   if (context.containsKey('substituted') && context['substituted'] != true)
@@ -342,6 +347,9 @@ void _context(Map<String, Object?> context) {
         invalid('setupNote filter must be a string or null.');
     } else if (e.key == 'role') {
       if (!effortRoles.contains(e.value)) invalid('Unknown series role.');
+    } else if (e.key == 'side') {
+      if (!effortSides.contains(e.value))
+        invalid('The side filter selects left or right.');
     } else {
       identifier(context, e.key);
     }

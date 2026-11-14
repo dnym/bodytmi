@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/68';
+const _format = 'bodytmi-logical-export/69';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -129,6 +129,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/65',
       'bodytmi-logical-export/66',
       'bodytmi-logical-export/67',
+      'bodytmi-logical-export/68',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -137,7 +138,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final branchData = input['format'] == _format;
+    final sideData = input['format'] == _format;
+    final branchData =
+        sideData || input['format'] == 'bodytmi-logical-export/68';
     final substitutionData =
         branchData || input['format'] == 'bodytmi-logical-export/67';
     final blockData =
@@ -504,6 +507,13 @@ final class LogicalArchiveFiles {
     if (!ordinalData &&
         archive.progressions.any((d) => d.ruleType == 'ordinal'))
       invalid('Ordinal progression requires logical v55.');
+    if (!sideData &&
+        (archive.revisions.any((r) => r.definition.hasEffortSides) ||
+            archive.sessions.any((s) => s.revision.definition.hasEffortSides) ||
+            archive.progressions.any(
+              (d) => d.session.revision.definition.hasEffortSides,
+            )))
+      invalid('Unilateral effort sides require logical v69.');
     if (!branchData &&
         (archive.progressions.any(
               (d) =>
@@ -779,11 +789,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV68.values) {
+          for (final ddl in schemaV69.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 68');
+          db.execute('PRAGMA user_version = 69');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

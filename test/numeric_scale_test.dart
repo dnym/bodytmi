@@ -679,7 +679,7 @@ void numericScaleTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          68,
+          69,
         );
       } finally {
         await upgraded.close();
@@ -1166,7 +1166,7 @@ void fixedRangeTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          68,
+          69,
         );
       } finally {
         await upgraded.close();

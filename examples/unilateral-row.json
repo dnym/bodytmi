@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "unilateral-row",
+    "name": "Single-arm row, each side",
+    "slots": [
+      {
+        "id": "row",
+        "exercise": "row",
+        "implementation": "single-arm-dumbbell",
+        "targets": {
+          "mass": {"value": "30", "unit": "kg"},
+          "reps": {"value": "10", "unit": "rep"}
+        },
+        "prefill": ["mass", "reps"]
+      }
+    ],
+    "plan": {
+      "id": "sets",
+      "type": "repeat",
+      "count": 2,
+      "child": {
+        "id": "pair",
+        "type": "sequence",
+        "children": [
+          {"id": "left", "type": "effort", "slot": "row", "side": "left"},
+          {"id": "right", "type": "effort", "slot": "row", "side": "right"}
+        ]
+      }
+    }
+  }
+}

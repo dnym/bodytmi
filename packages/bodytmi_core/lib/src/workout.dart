@@ -216,6 +216,17 @@ final class WorkoutDefinition {
 
   bool get hasLoadConventions => slots.any((s) => s.convention != null);
 
+  bool get hasEffortSides =>
+      plan.nodes.whereType<Effort>().any((e) => e.side != null);
+
+  late final Map<String, String> _sides = Map.unmodifiable({
+    for (final occurrence in plan.occurrences())
+      if (occurrence.activity case Effort(:final side?)) occurrence.id: side,
+  });
+
+  /// The authored unilateral side of an effort occurrence, or null.
+  String? effortSide(String occurrenceId) => _sides[occurrenceId];
+
   bool get hasManualRest => plan.nodes.whereType<Rest>().any((r) => r.isManual);
 
   bool get hasExtendedEffortRoles => plan.nodes.whereType<Effort>().any(

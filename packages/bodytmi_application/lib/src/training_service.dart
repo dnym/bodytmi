@@ -104,6 +104,7 @@ final class TrainingService {
               if (set.slotId == slot.id &&
                   set.substitution == null &&
                   set.role == effort.role &&
+                  past.revision.definition.effortSide(set.id) == effort.side &&
                   set.ordinal == ordinal &&
                   set.eligibleForPerformance &&
                   !set.maxEffortMetrics.contains(metric) &&

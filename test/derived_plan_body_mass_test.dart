@@ -797,7 +797,7 @@ void derivedPlanBodyMassTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 68);
+      equal(NativeBackup.validateDatabase(snapshot), 69);
       final db = sqlite3.open(snapshot);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');

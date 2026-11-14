@@ -607,7 +607,7 @@ void activityTests() {
           );
           equal(
             (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-            68,
+            69,
           );
         } finally {
           await store.close();
@@ -1033,7 +1033,7 @@ void activityTests() {
         equal(canonicalJson(migrated.execution), canonicalJson(execution));
         equal(
           (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-          68,
+          69,
         );
       } finally {
         await store.close();
@@ -1804,7 +1804,7 @@ void activityTests() {
           } finally {
             await prepared.close();
           }
-          equal(NativeBackup.validateDatabase('$backup/database.sqlite'), 68);
+          equal(NativeBackup.validateDatabase('$backup/database.sqlite'), 69);
         } finally {
           await store.close();
         }
@@ -2165,7 +2165,7 @@ void activityTests() {
           (await store.backup(
             '${directory.path}/migrated',
           ))['databaseSchemaVersion'],
-          68,
+          69,
         );
       } finally {
         await store.close();
@@ -3849,7 +3849,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          68,
+          69,
         );
       } finally {
         await store.close();
@@ -4246,7 +4246,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          68,
+          69,
         );
       } finally {
         await store.close();
@@ -4383,7 +4383,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            68,
+            69,
           );
         } finally {
           await store.close();
@@ -4594,7 +4594,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            68,
+            69,
           );
         } finally {
           await store.close();
@@ -4984,7 +4984,7 @@ void activityTests() {
           await store.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            68,
+            69,
           );
         } finally {
           await store.close();
@@ -5139,7 +5139,7 @@ void activityTests() {
           NativeBackup.validateDatabase(
             '${dir.path}/early-backup/database.sqlite',
           ),
-          68,
+          69,
         );
         await expectCheckpointFailure(
           service.completeCurrent(
@@ -5197,7 +5197,7 @@ void activityTests() {
         await store.backup('${dir.path}/backup');
         equal(
           NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-          68,
+          69,
         );
       } finally {
         await store.close();
@@ -5416,7 +5416,7 @@ void activityTests() {
           await reopened.backup('${dir.path}/backup');
           equal(
             NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-            68,
+            69,
           );
         } finally {
           await reopened.close();
@@ -5703,7 +5703,7 @@ void activityTests() {
       await store.backup('${dir.path}/backup');
       equal(
         NativeBackup.validateDatabase('${dir.path}/backup/database.sqlite'),
-        68,
+        69,
       );
     } finally {
       await store.close();
@@ -7281,7 +7281,7 @@ void activityTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          68,
+          69,
         );
         final archive = jsonObject(
           jsonDecode(await File('${dir.path}/logical.json').readAsString()),
@@ -7362,7 +7362,7 @@ void activityTests() {
           NativeBackup.validateDatabase(
             '${dir.path}/finished-native/database.sqlite',
           ),
-          68,
+          69,
         );
         await expectCheckpointFailure(
           WindowCheckpointService(
@@ -7484,7 +7484,7 @@ void activityTests() {
         await store.backup('${dir.path}/native');
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          68,
+          69,
         );
         await LogicalArchiveFiles.export(
           await store.archive(),
@@ -8263,7 +8263,7 @@ void activityTests() {
       equal(checkpoint.version, 1);
       equal(
         (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-        68,
+        69,
       );
     } finally {
       await store.close();
@@ -8308,7 +8308,7 @@ void activityTests() {
       );
       equal(
         (await store.backup('${dir.path}/backup'))['databaseSchemaVersion'],
-        68,
+        69,
       );
     } finally {
       await store.close();

@@ -596,7 +596,7 @@ void leverSelectionTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          68,
+          69,
         );
       } finally {
         await upgraded.close();

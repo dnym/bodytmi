@@ -167,6 +167,7 @@ final class NativeBackup {
           66,
           67,
           68,
+          69,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -328,6 +329,7 @@ final class NativeBackup {
             66,
             67,
             68,
+            69,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -524,6 +526,9 @@ final class NativeBackup {
           if (db.userVersion < 41 &&
               revision.definition.hasExtendedEffortRoles) {
             invalid('Back-off and drop effort roles require schema v41.');
+          }
+          if (db.userVersion < 69 && revision.definition.hasEffortSides) {
+            invalid('Unilateral effort sides require schema v69.');
           }
           if (db.userVersion < 65 && revision.definition.hasAmraps) {
             invalid('Authored AMRAP blocks require schema v65.');

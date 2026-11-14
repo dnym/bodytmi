@@ -375,7 +375,7 @@ void substitutionTests() {
         },
       );
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 68);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',

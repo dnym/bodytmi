@@ -230,7 +230,7 @@ void ordinalBranchTests() {
       final original = canonicalJson((await store.archive()).toJson());
       equal(
         (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-        68,
+        69,
       );
       await LogicalArchiveFiles.export(
         await store.archive(),

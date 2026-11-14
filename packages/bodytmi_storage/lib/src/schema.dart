@@ -176,6 +176,11 @@ const schemaV68 = {
   // Same tables; v68 adds branched ordinal successor graphs and choices.
 };
 
+const schemaV69 = {
+  ...schemaV68,
+  // Same tables; v69 adds unilateral effort sides.
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -255,6 +260,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   66 => schemaV66, // v66 adds durable AMRAP block progression.
   67 => schemaV67, // v67 adds temporary set substitutions.
   68 => schemaV68, // v68 adds branched ordinal successors.
+  69 => schemaV69, // v69 adds unilateral effort sides.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

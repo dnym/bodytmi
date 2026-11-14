@@ -935,7 +935,7 @@ void ordinalProgressionTests() {
         before = canonicalJson(archived.toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          68,
+          69,
         );
         await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
       } finally {
@@ -944,7 +944,7 @@ void ordinalProgressionTests() {
       try {
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          68,
+          69,
         );
         final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
         try {
