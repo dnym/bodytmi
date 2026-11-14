@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, throwsA, isA;
 import 'cli_test.dart';
@@ -526,7 +525,7 @@ void timingTests() {
         instant(1),
       );
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 1);
       await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
@@ -567,75 +566,6 @@ void timingTests() {
         );
       } finally {
         await again.close();
-      }
-    }),
-  );
-  test(
-    'legacy schema/logical v6 migrates to an empty clock collection while old labels reject timing sections',
-    () => _withStore((store, dir) async {
-      final original = (await store.archive()).toJson();
-      final doc = <String, Object?>{
-        'format': 'bodytmi-logical-export/6',
-        'applicationVersion': '0.1.0',
-        'data': Map<String, Object?>.from(original)
-          ..remove('timers')
-          ..remove('families')
-          ..remove('executions'),
-      };
-      doc['sha256'] = sha256
-          .convert(utf8.encode(canonicalJson(doc)))
-          .toString();
-      await File('$dir/v6.json').writeAsString(jsonEncode(doc));
-      final prepared = await LogicalArchiveFiles.prepare('$dir/v6.json');
-      try {
-        jsonEqual(prepared.archive.toJson(), original);
-      } finally {
-        await prepared.close();
-      }
-      doc.remove('sha256');
-      doc['data'] = original;
-      doc['sha256'] = sha256
-          .convert(utf8.encode(canonicalJson(doc)))
-          .toString();
-      await File('$dir/forged.json').writeAsString(jsonEncode(doc));
-      await _fails(LogicalArchiveFiles.prepare('$dir/forged.json'));
-      await store.close();
-      final raw = sqlite3.open('$dir/db.sqlite');
-      try {
-        raw.execute('DROP TABLE family_revisions');
-        raw.execute('DROP TABLE workout_executions');
-        raw.execute('DROP TABLE timing_activities');
-        raw.execute('DROP TABLE derived_target_graphs');
-        raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        raw.execute('DROP TABLE IF EXISTS window_checkpoints');
-        raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        raw.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        raw.execute('DROP TABLE IF EXISTS exercise_revisions');
-        raw.execute('DROP TABLE IF EXISTS implementation_revisions');
-        raw.execute('DROP TABLE IF EXISTS equipment_revisions');
-        raw.execute('DROP TABLE IF EXISTS gym_revisions');
-        raw.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        raw.execute('DROP TABLE IF EXISTS imported_sessions');
-        raw.execute('DROP TABLE IF EXISTS block_progressions');
-        raw.execute('PRAGMA user_version = 6');
-      } finally {
-        raw.close();
-      }
-      equal(
-        (await NativeBackup.create(
-          '$dir/db.sqlite',
-          '$dir/v6-native',
-        ))['databaseSchemaVersion'],
-        6,
-      );
-      final upgraded = await TrainingStore.open('$dir/db.sqlite');
-      try {
-        jsonEqual((await upgraded.archive()).toJson(), original);
-      } finally {
-        await upgraded.close();
       }
     }),
   );

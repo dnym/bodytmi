@@ -624,17 +624,17 @@ void historyImportTests() {
   );
 
   test(
-    'imported history is portable only under v64 formats',
+    'imported history round-trips through native and logical backups',
     () => _withStore((store, dir) async {
       final service = HistoryImportService(store);
       await _apply(service, _document(measurements: [_measurement]));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 1);
       final exported = await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/69');
+      equal(exported['format'], 'bodytmi-logical-export/1');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         equal(logical.archive.importedSessions.length, 2);
@@ -670,39 +670,11 @@ void historyImportTests() {
         await active.close();
       }
 
-      // A non-empty section cannot claim the previous logical label...
       final envelope = jsonObject(
         jsonDecode(await File('$dir/logical.json').readAsString()),
         'logical',
       );
-      final relabeled = copyJson(envelope)
-        ..['format'] = 'bodytmi-logical-export/63';
-      await File(
-        '$dir/old-label.json',
-      ).writeAsString(jsonEncode(await _resign(relabeled)));
-      final logicalError = await _failure(
-        () => LogicalArchiveFiles.prepare('$dir/old-label.json'),
-      );
-      check(
-        logicalError.message.contains('importedSessions'),
-        'older logical labels reject imported history',
-      );
-      // ...while an empty one is equivalent to its absence.
-      final plain = copyJson(envelope)
-        ..['format'] = 'bodytmi-logical-export/63';
-      jsonObject(plain['data'], 'data')['importedSessions'] = <Object?>[];
-      await File(
-        '$dir/plain-label.json',
-      ).writeAsString(jsonEncode(await _resign(plain)));
-      final stripped = await LogicalArchiveFiles.prepare(
-        '$dir/plain-label.json',
-      );
-      try {
-        equal(stripped.archive.importedSessions.length, 0);
-      } finally {
-        await stripped.close();
-      }
-      // v64 requires the section.
+      // The section is required.
       final missing = copyJson(envelope);
       jsonObject(missing['data'], 'data').remove('importedSessions');
       await File(
@@ -712,17 +684,11 @@ void historyImportTests() {
         () => LogicalArchiveFiles.prepare('$dir/missing.json'),
       );
       check(
-        missingError.message.contains('imported history'),
-        'v64 requires imported history sessions',
+        missingError.message.contains('importedSessions'),
+        'logical exports require the imported history section',
       );
 
-      // Native relabels and tampered rows are rejected.
-      final copy = '$dir/relabel.sqlite';
-      File('$dir/native/database.sqlite').copySync(copy);
-      final relabel = sqlite3.open(copy);
-      relabel.userVersion = 63;
-      relabel.close();
-      await _failure(() => NativeBackup.validateDatabase(copy));
+      // Tampered rows are rejected.
       final tamper = '$dir/tamper.sqlite';
       File('$dir/native/database.sqlite').copySync(tamper);
       final db = sqlite3.open(tamper);
@@ -737,25 +703,6 @@ void historyImportTests() {
         tamperError.message.contains('row identity mismatch'),
         'native validation checks imported row identity',
       );
-
-      // A v63 profile migrates by adding the empty table.
-      final legacy = '$dir/legacy.sqlite';
-      final legacyStore = await TrainingStore.open(legacy);
-      await StoredTrainingService(legacyStore).publish(definition(), 0);
-      final before = canonicalJson((await legacyStore.archive()).toJson());
-      await legacyStore.close();
-      final old = sqlite3.open(legacy);
-      old.execute('DROP TABLE imported_sessions');
-      old.execute('DROP TABLE IF EXISTS block_progressions');
-      old.userVersion = 63;
-      old.close();
-      final upgraded = await TrainingStore.open(legacy);
-      try {
-        equal(canonicalJson((await upgraded.archive()).toJson()), before);
-        equal((await HistoryImportService(upgraded).list()).length, 0);
-      } finally {
-        await upgraded.close();
-      }
     }),
   );
 

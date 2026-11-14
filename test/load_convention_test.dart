@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart';
 import 'fixtures.dart';
 import 'support.dart';
@@ -105,14 +103,6 @@ Future<void> _withStore(
     await store.close();
     await dir.delete(recursive: true);
   }
-}
-
-Future<Map<String, Object?>> _resign(Map<String, Object?> envelope) async {
-  envelope.remove('sha256');
-  envelope['sha256'] = sha256
-      .convert(utf8.encode(canonicalJson(envelope)))
-      .toString();
-  return envelope;
 }
 
 Future<BodyTmiException> failure(Object? Function() action) async {
@@ -607,7 +597,7 @@ void loadConventionTests() {
   );
 
   test(
-    'conventions are portable only under v61 formats',
+    'conventions round-trip through native and logical backups',
     () => _withStore((store, dir) async {
       final service = EquipmentService(store);
       await service.publishEquipment(_equipment('barbell'), 0);
@@ -636,7 +626,7 @@ void loadConventionTests() {
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/69');
+      equal(exported['format'], 'bodytmi-logical-export/1');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         check(
@@ -685,71 +675,6 @@ void loadConventionTests() {
       } finally {
         await active.close();
       }
-
-      // Honest current content cannot claim the previous label.
-      final relabeled = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'logical',
-      );
-      relabeled['format'] = 'bodytmi-logical-export/60';
-      await File('$dir/old-label.json')
-        ..createSync()
-        ..writeAsStringSync(jsonEncode(await _resign(relabeled)));
-      final logicalError = await failure(
-        () => LogicalArchiveFiles.prepare('$dir/old-label.json'),
-      );
-      check(
-        logicalError.message.contains('conventions require logical v61'),
-        'older logical labels reject declared conventions',
-      );
-
-      // The same profile without any convention is genuinely older shaped.
-      final plain = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'logical',
-      );
-      final data = jsonObject(plain['data'], 'data');
-      for (final item in data['instances'] as List)
-        jsonObject(
-          jsonObject(item, 'instance revision')['instance'],
-          'instance',
-        ).remove('convention');
-      for (final item in data['revisions'] as List)
-        for (final slot
-            in jsonObject(
-                  jsonObject(item, 'workout revision')['definition'],
-                  'definition',
-                )['slots']
-                as List)
-          jsonObject(slot, 'slot').remove('convention');
-      plain['format'] = 'bodytmi-logical-export/60';
-      await File('$dir/plain-label.json')
-        ..createSync()
-        ..writeAsStringSync(jsonEncode(await _resign(plain)));
-      final stripped = await LogicalArchiveFiles.prepare(
-        '$dir/plain-label.json',
-      );
-      try {
-        check(
-          stripped.archive.instances.single.instance.convention == null,
-          'a convention-free profile is genuinely older shaped',
-        );
-      } finally {
-        await stripped.close();
-      }
-
-      final db = sqlite3.open('$dir/native/database.sqlite');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 60;
-      db.close();
-      final nativeError = await failure(
-        () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
-      );
-      check(
-        nativeError.message.contains('conventions require schema v61'),
-        'an older schema label cannot carry a declared convention',
-      );
     }),
   );
 

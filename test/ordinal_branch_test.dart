@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart';
 import 'fixtures.dart';
 import 'support.dart';
@@ -59,14 +57,6 @@ Future<BodyTmiException> _failure(Object? Function() action) async {
     return error;
   }
   throw StateError('Expected a BodyTmiException.');
-}
-
-Future<Map<String, Object?>> _resign(Map<String, Object?> envelope) async {
-  envelope.remove('sha256');
-  envelope['sha256'] = sha256
-      .convert(utf8.encode(canonicalJson(envelope)))
-      .toString();
-  return envelope;
 }
 
 /// Starts and finishes one session at the current suggestions with [reps].
@@ -230,7 +220,7 @@ void ordinalBranchTests() {
       final original = canonicalJson((await store.archive()).toJson());
       equal(
         (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-        69,
+        1,
       );
       await LogicalArchiveFiles.export(
         await store.archive(),
@@ -251,32 +241,6 @@ void ordinalBranchTests() {
       await store.close();
       store = await TrainingStore.open('${dir.path}/db.sqlite');
       equal(canonicalJson((await store.archive()).toJson()), original);
-      final envelope = jsonObject(
-        jsonDecode(await File('${dir.path}/logical.json').readAsString()),
-        'logical',
-      )..['format'] = 'bodytmi-logical-export/67';
-      await File(
-        '${dir.path}/old.json',
-      ).writeAsString(jsonEncode(await _resign(envelope)));
-      final logicalError = await _failure(
-        () => LogicalArchiveFiles.prepare('${dir.path}/old.json'),
-      );
-      check(
-        logicalError.message.contains('successors require logical v68'),
-        logicalError.message,
-      );
-      final copy = '${dir.path}/relabel.sqlite';
-      File('${dir.path}/native/database.sqlite').copySync(copy);
-      final db = sqlite3.open(copy);
-      db.userVersion = 67;
-      db.close();
-      final nativeError = await _failure(
-        () => NativeBackup.validateDatabase(copy),
-      );
-      check(
-        nativeError.message.contains('successors require schema v68'),
-        nativeError.message,
-      );
     } finally {
       await store.close();
       await dir.delete(recursive: true);

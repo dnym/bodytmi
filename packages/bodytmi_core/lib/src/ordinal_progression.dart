@@ -264,8 +264,6 @@ final class OrdinalRule {
     return levels[index].targets;
   }
 
-  bool get hasDeloadLevel => deloadLevelId != null;
-
   int _levelIndex(String id) => levels.indexWhere((level) => level.id == id);
 
   /// Classify the whole exposure once, then move (or hold) every working set

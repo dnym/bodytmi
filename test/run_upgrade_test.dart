@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 
 import 'cli_test.dart' show invoke;
 import 'fixtures.dart';
@@ -453,7 +451,7 @@ void runUpgradeTests() {
   );
 
   test(
-    'native and logical v56 archives carry upgrade receipts and older labels reject them',
+    'native and logical archives carry upgrade receipts',
     () => withStore((store, dir) async {
       final programs = ProgramService(store);
       await programs.publish(
@@ -477,7 +475,7 @@ void runUpgradeTests() {
         'upgrade-1',
         _at(2),
       );
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 1);
       final archive = await store.archive();
       final before = canonicalJson(archive.toJson());
       await LogicalArchiveFiles.export(archive, '$dir/logical.json');
@@ -492,60 +490,6 @@ void runUpgradeTests() {
       } finally {
         await prepared.close();
       }
-
-      // The same SQLite tables under a v55 label are rejected: the new
-      // table itself does not belong to the v55 schema.
-      File(
-        '$dir/labeled.sqlite',
-      ).writeAsBytesSync(File('$dir/native/database.sqlite').readAsBytesSync());
-      final labeled = sqlite3.open('$dir/labeled.sqlite');
-      labeled.userVersion = 55;
-      labeled.close();
-      final nativeError = await failure(
-        () => NativeBackup.validateDatabase('$dir/labeled.sqlite'),
-      );
-      check(
-        nativeError.message.contains('does not match supported schema'),
-        'old labels fail schema validation because the receipt table is new',
-      );
-
-      // A v55-labeled logical file with an upgrades section is rejected.
-      final json = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'file',
-      );
-      json['format'] = 'bodytmi-logical-export/55';
-      json.remove('sha256');
-      json['sha256'] = sha256
-          .convert(utf8.encode(canonicalJson(json)))
-          .toString();
-      await File('$dir/relabeled.json').writeAsString(jsonEncode(json));
-      final logicalError = await failure(
-        () => LogicalArchiveFiles.prepare('$dir/relabeled.json'),
-      );
-      check(
-        logicalError.message.contains('Unknown fields'),
-        'old logical labels cannot carry upgrades',
-      );
-      // An empty section under the old label remains equivalent to absence.
-      final empty = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'file',
-      );
-      jsonObject(empty['data'], 'data')['programUpgrades'] = [];
-      empty['format'] = 'bodytmi-logical-export/55';
-      empty.remove('sha256');
-      empty['sha256'] = sha256
-          .convert(utf8.encode(canonicalJson(empty)))
-          .toString();
-      await File('$dir/empty-old.json').writeAsString(jsonEncode(empty));
-      final honest = await LogicalArchiveFiles.prepare('$dir/empty-old.json');
-      try {
-        equal(honest.archive.programUpgrades.isEmpty, true);
-      } finally {
-        await honest.close();
-      }
-
       // Forged chains fail archive validation.
       final forged = await store.archive();
       final tampered = forged.toJson();

@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart' show invoke;
 import 'fixtures.dart';
 import 'support.dart';
@@ -122,44 +120,6 @@ Future<String?> _conflict(Future<Object?> action()) async {
     return error.message;
   }
   throw StateError('Expected a conflict.');
-}
-
-String _nativeError(String database) {
-  try {
-    return 'ok:${NativeBackup.validateDatabase(database)}';
-  } on BodyTmiException catch (error) {
-    return error.message;
-  }
-}
-
-String _digest(String canonical) =>
-    sha256.convert(utf8.encode(canonical)).toString();
-
-Future<String> _relabelRejects(
-  String source,
-  int label, {
-  required bool keep,
-}) async {
-  final json = jsonObject(
-    jsonDecode(await File(source).readAsString()),
-    'file',
-  );
-  final data = jsonObject(json['data'], 'data');
-  if (!keep) {
-    data.remove('sharedApplications');
-    data.remove('linkRetirements');
-  }
-  json['format'] = 'bodytmi-logical-export/$label';
-  json.remove('sha256');
-  json['sha256'] = _digest(canonicalJson(json));
-  await File(source).writeAsString(jsonEncode(json));
-  try {
-    final prepared = await LogicalArchiveFiles.prepare(source);
-    await prepared.close();
-  } on BodyTmiException catch (error) {
-    return error.message;
-  }
-  throw StateError('Expected the relabel to be rejected.');
 }
 
 void linkConsumptionTests() {
@@ -688,220 +648,98 @@ void linkConsumptionTests() {
     },
   );
 
-  test(
-    'shared chains and retirements survive portability and old labels reject them',
-    () async {
-      final dir = await Directory.systemTemp.createTemp(
-        'bodytmi-link-use-port-',
+  test('shared chains and retirements survive portability', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-link-use-port-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    TrainingArchive? archived;
+    String before;
+    try {
+      await StoredTrainingService(store).publish(_pair(), 0);
+      await _tracks(store);
+      final linkService = LeverLinkService(store);
+      await linkService.create(
+        input: _link(id: 'portable-chain'),
+        createdAt: instant(2),
+        expectedRevision: 0,
+        confirm: true,
       );
-      final store = await TrainingStore.open('${dir.path}/db.sqlite');
-      TrainingArchive? archived;
-      String before;
+      final training = StoredTrainingService(store);
+      final progression = StoredProgressionService(store);
+      final second = await training.start(
+        'second',
+        'bench-pair',
+        1,
+        instant(3),
+      );
+      await _exposure(training, second, {'bench-light': '12'});
+      final pending = await progression.propose(
+        'second',
+        'bench-light',
+        _rule(),
+      );
+      await progression.accept(
+        'second',
+        'bench-light',
+        pending.version,
+        instant(3).add(const Duration(hours: 3)),
+      );
+      await linkService.retire(
+        linkId: 'portable-chain',
+        memberAnchorId: 'accepted/bench-light',
+        retiredAt: instant(4),
+        confirm: true,
+      );
+      archived = await store.archive();
+      before = canonicalJson(archived.toJson());
+      equal(archived.sharedApplications.length, 1);
+      equal(archived.linkRetirements.length, 1);
+      equal(
+        (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
+        1,
+      );
+      await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
+    } finally {
+      await store.close();
+    }
+    try {
+      equal(
+        NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
+        1,
+      );
+      final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
       try {
-        await StoredTrainingService(store).publish(_pair(), 0);
-        await _tracks(store);
-        final linkService = LeverLinkService(store);
-        await linkService.create(
-          input: _link(id: 'portable-chain'),
-          createdAt: instant(2),
-          expectedRevision: 0,
-          confirm: true,
-        );
-        final training = StoredTrainingService(store);
-        final progression = StoredProgressionService(store);
-        final second = await training.start(
-          'second',
-          'bench-pair',
-          1,
-          instant(3),
-        );
-        await _exposure(training, second, {'bench-light': '12'});
-        final pending = await progression.propose(
-          'second',
-          'bench-light',
-          _rule(),
-        );
-        await progression.accept(
-          'second',
-          'bench-light',
-          pending.version,
-          instant(3).add(const Duration(hours: 3)),
-        );
-        await linkService.retire(
-          linkId: 'portable-chain',
-          memberAnchorId: 'accepted/bench-light',
-          retiredAt: instant(4),
-          confirm: true,
-        );
-        archived = await store.archive();
-        before = canonicalJson(archived.toJson());
-        equal(archived.sharedApplications.length, 1);
-        equal(archived.linkRetirements.length, 1);
-        equal(
-          (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          69,
-        );
-        await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
-      } finally {
-        await store.close();
-      }
-      try {
-        equal(
-          NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          69,
-        );
-        final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
+        equal(canonicalJson(full.archive.toJson()), before);
+        equal(full.archive.sharedApplications.length, 1);
+        equal(full.archive.linkRetirements.length, 1);
+        final target = await TrainingStore.open('${dir.path}/restored.sqlite');
         try {
-          equal(canonicalJson(full.archive.toJson()), before);
-          equal(full.archive.sharedApplications.length, 1);
-          equal(full.archive.linkRetirements.length, 1);
-          final target = await TrainingStore.open(
-            '${dir.path}/restored.sqlite',
-          );
-          try {
-            await target.restore(
-              full.backup,
-              recoveryDestination: '${dir.path}/recovery',
-              confirm: true,
-            );
-          } finally {
-            await target.close();
-          }
-          final reopened = await TrainingStore.open(
-            '${dir.path}/restored.sqlite',
-          );
-          try {
-            equal(canonicalJson((await reopened.archive()).toJson()), before);
-            final state = await LeverLinkService(
-              reopened,
-            ).state('portable-chain');
-            equal((state['chain']! as List).length, 1);
-          } finally {
-            await reopened.close();
-          }
-        } finally {
-          await full.close();
-        }
-        check(
-          (await _relabelRejects(
-            '${dir.path}/full.json',
-            53,
-            keep: true,
-          )).contains('Unknown fields'),
-          'shared chains need the new logical label',
-        );
-        check(
-          (await _relabelRejects(
-            '${dir.path}/full.json',
-            54,
-            keep: false,
-          )).contains('requires shared lever applications'),
-          'the new label names its sections',
-        );
-        File('${dir.path}/labeled.sqlite').writeAsBytesSync(
-          File('${dir.path}/native/database.sqlite').readAsBytesSync(),
-        );
-        final labeled = sqlite3.open('${dir.path}/labeled.sqlite');
-        labeled.userVersion = 53;
-        labeled.close();
-        check(
-          _nativeError(
-            '${dir.path}/labeled.sqlite',
-          ).contains('does not match supported schema v53'),
-          'a v54 profile cannot claim the older schema label',
-        );
-        File('${dir.path}/dropped.sqlite').writeAsBytesSync(
-          File('${dir.path}/native/database.sqlite').readAsBytesSync(),
-        );
-        final dropped = sqlite3.open('${dir.path}/dropped.sqlite');
-        dropped.execute('DROP TABLE shared_lever_applications');
-        dropped.execute('DROP TABLE link_retirement_anchors');
-        dropped.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        dropped.execute('DROP TABLE IF EXISTS exercise_revisions');
-        dropped.execute('DROP TABLE IF EXISTS implementation_revisions');
-        dropped.execute('DROP TABLE IF EXISTS equipment_revisions');
-        dropped.execute('DROP TABLE IF EXISTS gym_revisions');
-        dropped.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        dropped.execute('DROP TABLE IF EXISTS imported_sessions');
-        dropped.execute('DROP TABLE IF EXISTS block_progressions');
-        dropped.userVersion = 53;
-        dropped.close();
-        check(
-          _nativeError(
-            '${dir.path}/dropped.sqlite',
-          ).contains('Progression baseline is inconsistent'),
-          'a relabeled profile cannot silently drop the chain its linked '
-          'exposure decision depends on',
-        );
-        // A genuinely unlinked v53 profile upgrades honestly to v54.
-        final plain = '${dir.path}/plain.sqlite';
-        final plainStore = await TrainingStore.open(plain);
-        try {
-          await StoredTrainingService(plainStore).publish(_pair(), 0);
-          await _tracks(plainStore);
-          await LeverLinkService(plainStore).create(
-            input: _link(id: 'idle-link'),
-            createdAt: instant(2),
-            expectedRevision: 0,
+          await target.restore(
+            full.backup,
+            recoveryDestination: '${dir.path}/recovery',
             confirm: true,
           );
-          equal(
-            (await plainStore.backup(
-              '${dir.path}/plain-native',
-            ))['databaseSchemaVersion'],
-            69,
-          );
         } finally {
-          await plainStore.close();
+          await target.close();
         }
-        final aged = sqlite3.open('${dir.path}/plain-native/database.sqlite');
-        aged.execute('DROP TABLE shared_lever_applications');
-        aged.execute('DROP TABLE link_retirement_anchors');
-        aged.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        aged.execute('DROP TABLE IF EXISTS exercise_revisions');
-        aged.execute('DROP TABLE IF EXISTS implementation_revisions');
-        aged.execute('DROP TABLE IF EXISTS equipment_revisions');
-        aged.execute('DROP TABLE IF EXISTS gym_revisions');
-        aged.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        aged.execute('DROP TABLE IF EXISTS imported_sessions');
-        aged.execute('DROP TABLE IF EXISTS block_progressions');
-        aged.userVersion = 53;
-        aged.close();
-        equal(
-          _nativeError('${dir.path}/plain-native/database.sqlite'),
-          'ok:53',
-        );
-        final migrated = await TrainingStore.open(
-          '${dir.path}/plain-native/database.sqlite',
+        final reopened = await TrainingStore.open(
+          '${dir.path}/restored.sqlite',
         );
         try {
-          final after = await migrated.archive();
-          equal(after.sharedApplications.length, 0);
-          equal(after.linkRetirements.length, 0);
-          check(
-            after.sessions.length == 1,
-            'the v53 profile keeps its sessions through the upgrade',
-          );
-          check(
-            after.links.any((revision) => revision.link.id == 'idle-link'),
-            'the v53 profile keeps its unlinked link through the upgrade',
-          );
-          equal(
-            (await migrated.backup(
-              '${dir.path}/upgraded',
-            ))['databaseSchemaVersion'],
-            69,
-          );
-          final state = await LeverLinkService(migrated).state('idle-link');
-          equal((state['chain']! as List).length, 0);
+          equal(canonicalJson((await reopened.archive()).toJson()), before);
+          final state = await LeverLinkService(
+            reopened,
+          ).state('portable-chain');
+          equal((state['chain']! as List).length, 1);
         } finally {
-          await migrated.close();
+          await reopened.close();
         }
       } finally {
-        await dir.delete(recursive: true);
+        await full.close();
       }
-    },
-  );
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
 
   test('the CLI advances, states and retires one shared lever track', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-link-use-cli-');

@@ -5,8 +5,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:bodytmi_storage/src/schema.dart';
-import 'package:crypto/crypto.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, throwsA, isA;
 import 'cli_test.dart';
@@ -43,45 +41,6 @@ Future<TrainingSession> _finished(
 }
 
 DateTime _approval(int day) => instant(day).add(const Duration(hours: 2));
-
-Future<void> _v1(String path) async {
-  final db = sqlite3.open(path);
-  try {
-    for (final ddl in schemaV1.values) {
-      db.execute(ddl);
-    }
-    db.execute('PRAGMA application_id = 1112821065');
-    db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-    db.execute('DROP TABLE IF EXISTS window_checkpoints');
-    db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-    db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-    db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-    db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-    db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-    db.execute('DROP TABLE IF EXISTS exercise_revisions');
-    db.execute('DROP TABLE IF EXISTS implementation_revisions');
-    db.execute('DROP TABLE IF EXISTS equipment_revisions');
-    db.execute('DROP TABLE IF EXISTS gym_revisions');
-    db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-    db.execute('DROP TABLE IF EXISTS imported_sessions');
-    db.execute('DROP TABLE IF EXISTS block_progressions');
-    db.execute('PRAGMA user_version = 1');
-    final rev = revision();
-    db.execute('INSERT INTO revisions VALUES (?,?,?)', [
-      rev.definition.id,
-      1,
-      jsonEncode(rev.toJson()),
-    ]);
-    final old = finished(start(id: 'legacy-history', from: rev));
-    db.execute('INSERT INTO sessions VALUES (?,?)', [
-      old.id,
-      jsonEncode(old.toJson()),
-    ]);
-    db.execute('INSERT INTO finalizations VALUES (?)', [old.id]);
-  } finally {
-    db.close();
-  }
-}
 
 void storedProgressionTests() {
   test(
@@ -169,14 +128,14 @@ void storedProgressionTests() {
   );
 
   test(
-    'interrupted real Drift migration rolls back and retries without losing v1 data',
+    'interrupted real Drift schema creation rolls back and retries cleanly',
     () async {
       final dir = await Directory.systemTemp.createTemp(
         'bodytmi-migrate-crash-',
       );
       try {
-        final path = '${dir.path}/old.sqlite';
-        await _v1(path);
+        final path = '${dir.path}/new.sqlite';
+        File(path).createSync();
         final binary = await compileNative(
           'packages/bodytmi_storage/test/migration_owner.dart',
           '${dir.path}/migrator',
@@ -195,31 +154,26 @@ void storedProgressionTests() {
           child.kill(ProcessSignal.sigkill);
           await child.exitCode;
           equal(await errors, '');
+          // The creation transaction never committed: no tables, no version.
           final raw = sqlite3.open(path);
           try {
-            equal(raw.userVersion, 1);
-            equal(
-              raw
-                  .select(
-                    "SELECT name FROM sqlite_master WHERE name='progression_decisions'",
-                  )
-                  .length,
-              0,
-            );
+            equal(raw.userVersion, 0);
+            equal(raw.select('SELECT name FROM sqlite_master').length, 0);
           } finally {
             raw.close();
           }
           final store = await TrainingStore.open(path);
           try {
-            equal((await store.archive()).revisions.length, 1);
-            equal(
-              (await store.session('legacy-history'))!.status,
-              SessionStatus.finalized,
-            );
-            equal(await store.finalizationCount(), 1);
-            equal((await store.progressionDecisions()).length, 0);
+            equal((await store.archive()).revisions.length, 0);
+            await StoredTrainingService(store).publish(definition(), 0);
           } finally {
             await store.close();
+          }
+          final reopened = sqlite3.open(path);
+          try {
+            equal(reopened.userVersion, 1);
+          } finally {
+            reopened.close();
           }
         } finally {
           child.kill(ProcessSignal.sigkill);
@@ -523,7 +477,7 @@ void storedProgressionTests() {
         );
         final original = canonicalJson((await store.archive()).toJson());
         final manifest = await store.backup('${dir.path}/native');
-        equal(manifest['databaseSchemaVersion'], 69);
+        equal(manifest['databaseSchemaVersion'], 1);
         await LogicalArchiveFiles.export(
           await store.archive(),
           '${dir.path}/logical.json',
@@ -565,77 +519,6 @@ void storedProgressionTests() {
         equal(canonicalJson((await store.archive()).toJson()), original);
       } finally {
         await store.close();
-        await dir.delete(recursive: true);
-      }
-    },
-  );
-
-  test(
-    'schema v1 migrates without losing history and legacy native/logical backups remain readable',
-    () async {
-      final dir = await Directory.systemTemp.createTemp(
-        'bodytmi-v1-migration-',
-      );
-      try {
-        final old = '${dir.path}/v1.sqlite';
-        await _v1(old);
-        final manifest = await NativeBackup.create(
-          old,
-          '${dir.path}/v1-backup',
-        );
-        equal(manifest['databaseSchemaVersion'], 1);
-        final legacy = <String, Object?>{
-          'format': 'bodytmi-logical-export/1',
-          'applicationVersion': '0.1.0',
-          'data': {
-            'revisions': [revision().toJson()],
-            'sessions': <Object?>[],
-            'finalizations': <Object?>[],
-          },
-        };
-        legacy['sha256'] = sha256
-            .convert(utf8.encode(canonicalJson(legacy)))
-            .toString();
-        await File('${dir.path}/v1.json').writeAsString(jsonEncode(legacy));
-        final logical = await LogicalArchiveFiles.prepare(
-          '${dir.path}/v1.json',
-        );
-        try {
-          equal(logical.summary['format'], 'bodytmi-logical-export/1');
-          equal(logical.archive.revisions.length, 1);
-        } finally {
-          await logical.close();
-        }
-        final store = await TrainingStore.open(old);
-        try {
-          equal((await store.revision(definition().id))!.number, 1);
-          equal((await store.progressionDecisions()).length, 0);
-          final native = await NativeBackup.prepare('${dir.path}/v1-backup');
-          try {
-            await store.restore(
-              native,
-              recoveryDestination: '${dir.path}/recovery',
-              confirm: true,
-            );
-          } finally {
-            await native.close();
-          }
-        } finally {
-          await store.close();
-        }
-        final reopened = await TrainingStore.open(old);
-        try {
-          equal((await reopened.archive()).revisions.length, 1);
-        } finally {
-          await reopened.close();
-        }
-        final db = sqlite3.open(old);
-        try {
-          equal(db.userVersion, 69);
-        } finally {
-          db.close();
-        }
-      } finally {
         await dir.delete(recursive: true);
       }
     },

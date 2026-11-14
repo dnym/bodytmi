@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart';
 import 'fixtures.dart';
 import 'support.dart';
@@ -35,14 +33,6 @@ Future<void> _withStore(
     await store.close();
     await dir.delete(recursive: true);
   }
-}
-
-Future<Map<String, Object?>> _resign(Map<String, Object?> envelope) async {
-  envelope.remove('sha256');
-  envelope['sha256'] = sha256
-      .convert(utf8.encode(canonicalJson(envelope)))
-      .toString();
-  return envelope;
 }
 
 /// Publishes the example workout and starts a session with all finite sets
@@ -300,7 +290,7 @@ void amrapBlockTests() {
   });
 
   test(
-    'authored blocks are portable only under v65 formats',
+    'authored blocks round-trip through native and logical backups',
     () => _withStore((store, dir) async {
       final session = await _ready(store);
       final repeats = RepeatCheckpointService(store);
@@ -314,12 +304,12 @@ void amrapBlockTests() {
         review: {'outcome': 'completed', 'acceptSuggested': true},
       );
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 1);
       final exported = await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/69');
+      equal(exported['format'], 'bodytmi-logical-export/1');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         await store.restore(
@@ -357,34 +347,6 @@ void amrapBlockTests() {
       } finally {
         await active.close();
       }
-
-      final envelope = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'logical',
-      )..['format'] = 'bodytmi-logical-export/64';
-      await File(
-        '$dir/old.json',
-      ).writeAsString(jsonEncode(await _resign(envelope)));
-      final logicalError = await _failure(
-        () => LogicalArchiveFiles.prepare('$dir/old.json'),
-      );
-      check(
-        logicalError.message.contains('AMRAP blocks require logical v65'),
-        logicalError.message,
-      );
-      final copy = '$dir/relabel.sqlite';
-      File('$dir/native/database.sqlite').copySync(copy);
-      final db = sqlite3.open(copy);
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 64;
-      db.close();
-      final nativeError = await _failure(
-        () => NativeBackup.validateDatabase(copy),
-      );
-      check(
-        nativeError.message.contains('AMRAP blocks require schema v65'),
-        nativeError.message,
-      );
     }),
   );
 

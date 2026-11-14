@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:bodytmi_storage/src/database.dart';
 
-/// Pause inside the actual migration transaction after validation, before commit.
+/// Pause inside the actual schema creation transaction after validation, before commit.
 final class PausingDatabase extends TrainingDatabase {
   PausingDatabase(super.executor);
   @override

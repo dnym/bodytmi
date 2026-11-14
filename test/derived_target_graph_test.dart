@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
 import 'package:test/test.dart' show expectLater, throwsA, isA;
 
 import 'fixtures.dart';
@@ -1094,7 +1093,7 @@ void derivedTargetGraphTests() {
   );
 
   test(
-    'graph portability round-trips through logical v30 and native backups, and old labels reject graphs',
+    'graph portability round-trips through logical and native backups',
     () => _stored((store) async {
       final dbPath = store.path;
       await DerivedTargetGraphService(
@@ -1110,7 +1109,7 @@ void derivedTargetGraphTests() {
           jsonDecode(await File(path).readAsString()),
           'envelope',
         );
-        equal(envelope['format'], 'bodytmi-logical-export/69');
+        equal(envelope['format'], 'bodytmi-logical-export/1');
         equal(
           (jsonObject(envelope['data'], 'data')['graphs']! as List<Object?>)
               .length,
@@ -1139,30 +1138,11 @@ void derivedTargetGraphTests() {
         } finally {
           await reopened.close();
         }
-        // A v26 label cannot carry the graphs section.
-        final doc = copyJson(envelope);
-        doc['format'] = 'bodytmi-logical-export/26';
-        doc['sha256'] = sha256
-            .convert(
-              utf8.encode(
-                canonicalJson({
-                  for (final entry in doc.entries)
-                    if (entry.key != 'sha256') entry.key: entry.value,
-                }),
-              ),
-            )
-            .toString();
-        final bad = '${dir.path}/old-label.json';
-        await File(bad).writeAsString(jsonEncode(doc));
-        await expectLater(
-          LogicalArchiveFiles.prepare(bad),
-          throwsA(isA<BodyTmiException>()),
-        );
         final backup = '${dir.path}/backup';
         await NativeBackup.create(dbPath, backup);
         final preparedBackup = await NativeBackup.prepare(backup);
         try {
-          equal(preparedBackup.manifest['databaseSchemaVersion'], 69);
+          equal(preparedBackup.manifest['databaseSchemaVersion'], 1);
         } finally {
           await preparedBackup.close();
         }

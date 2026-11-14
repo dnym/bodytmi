@@ -115,7 +115,7 @@ void main() {
       await store.archive(),
       '${dir.path}/logical.json',
     );
-    expect(exported['format'], 'bodytmi-logical-export/64');
+    expect(exported['format'], 'bodytmi-logical-export/1');
     await store.close();
 
     final restoredPath = '${dir.path}/restored.sqlite';

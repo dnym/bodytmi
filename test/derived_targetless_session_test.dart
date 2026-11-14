@@ -1,11 +1,8 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, isA, throwsA;
 
 import 'fixtures.dart';
@@ -206,102 +203,6 @@ void derivedTargetlessSessionTests() {
       rejects(() => sessionFromJson(noPlan));
     }),
   );
-
-  test(
-    'v31 labels reject derived targetless suggestions',
-    () => withStore((store, dir) async {
-      await DerivedTargetGraphService(
-        store,
-      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
-      await StoredTrainingService(store).start(
-        'planned',
-        'targetless',
-        1,
-        instant(2),
-        derivedPlan: const DerivedPlanRef('bounded-graph', 1, 'plan'),
-      );
-      await LogicalArchiveFiles.export(
-        await store.archive(),
-        '$dir/export.json',
-      );
-      final envelope =
-          jsonDecode(await File('$dir/export.json').readAsString())
-              as Map<String, Object?>;
-      envelope['format'] = 'bodytmi-logical-export/31';
-      envelope['sha256'] = sha256
-          .convert(
-            utf8.encode(
-              canonicalJson({
-                for (final e in envelope.entries)
-                  if (e.key != 'sha256') e.key: e.value,
-              }),
-            ),
-          )
-          .toString();
-      await File('$dir/old.json').writeAsString(jsonEncode(envelope));
-      await expectLater(
-        LogicalArchiveFiles.prepare('$dir/old.json'),
-        throwsA(isA<BodyTmiException>()),
-      );
-      await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 69);
-      final db = sqlite3.open('$dir/snapshot.sqlite');
-      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      db.execute('DROP TABLE IF EXISTS window_checkpoints');
-      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      db.execute('DROP TABLE IF EXISTS exercise_revisions');
-      db.execute('DROP TABLE IF EXISTS implementation_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_revisions');
-      db.execute('DROP TABLE IF EXISTS gym_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 31;
-      db.close();
-      rejects(() => NativeBackup.validateDatabase('$dir/snapshot.sqlite'));
-    }),
-  );
-  test(
-    'v31 profiles migrate without changing existing sessions',
-    () => withStore((store, dir) async {
-      final original = await StoredTrainingService(
-        store,
-      ).start('old', 'targetless', 1, instant(1));
-      await store.snapshot('$dir/old.sqlite');
-      final db = sqlite3.open('$dir/old.sqlite');
-      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      db.execute('DROP TABLE IF EXISTS window_checkpoints');
-      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      db.execute('DROP TABLE IF EXISTS exercise_revisions');
-      db.execute('DROP TABLE IF EXISTS implementation_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_revisions');
-      db.execute('DROP TABLE IF EXISTS gym_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 31;
-      db.close();
-      final reopened = await TrainingStore.open('$dir/old.sqlite');
-      try {
-        final same = await StoredTrainingService(reopened).session('old');
-        equal(canonicalJson(same.toJson()), canonicalJson(original.toJson()));
-      } finally {
-        await reopened.close();
-      }
-      final migrated = sqlite3.open('$dir/old.sqlite');
-      equal(migrated.userVersion, 69);
-      migrated.close();
-    }),
-  );
-
   test(
     'bounded derived objectives work in two independent program runs',
     () => withStore((store, _) async {

@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart';
 import 'fixtures.dart';
 import 'support.dart';
@@ -94,14 +92,6 @@ Future<void> _withStore(
     await store.close();
     await dir.delete(recursive: true);
   }
-}
-
-Future<Map<String, Object?>> _resign(Map<String, Object?> envelope) async {
-  envelope.remove('sha256');
-  envelope['sha256'] = sha256
-      .convert(utf8.encode(canonicalJson(envelope)))
-      .toString();
-  return envelope;
 }
 
 Future<BodyTmiException> failure(Object? Function() action) async {
@@ -469,7 +459,7 @@ void plateMathTests() {
     }),
   );
   test(
-    'loading declarations are portable only under v60 formats',
+    'loading declarations round-trip through native and logical backups',
     () => _withStore((store, dir) async {
       final service = EquipmentService(store);
       await service.publishEquipment(_equipment('barbell'), 0);
@@ -484,7 +474,7 @@ void plateMathTests() {
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/69');
+      equal(exported['format'], 'bodytmi-logical-export/1');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         check(
@@ -531,63 +521,6 @@ void plateMathTests() {
       } finally {
         await active.close();
       }
-
-      // Honest current content cannot claim the older labels.
-      final relabeled = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'logical',
-      );
-      relabeled['format'] = 'bodytmi-logical-export/59';
-      await File('$dir/old-label.json')
-        ..createSync()
-        ..writeAsStringSync(jsonEncode(await _resign(relabeled)));
-      final logicalError = await failure(
-        () => LogicalArchiveFiles.prepare('$dir/old-label.json'),
-      );
-      check(
-        logicalError.message.contains(
-          'loading declarations require logical v60',
-        ),
-        'older logical labels reject declared loading',
-      );
-      // The same payload without loading stays honest at the older label.
-      final plain = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'logical',
-      );
-      for (final item in jsonObject(plain['data'], 'data')['instances'] as List)
-        jsonObject(
-          jsonObject(item, 'instance revision')['instance'],
-          'instance',
-        ).remove('loading');
-      plain['format'] = 'bodytmi-logical-export/59';
-      await File('$dir/plain-label.json')
-        ..createSync()
-        ..writeAsStringSync(jsonEncode(await _resign(plain)));
-      final stripped = await LogicalArchiveFiles.prepare(
-        '$dir/plain-label.json',
-      );
-      try {
-        check(
-          stripped.archive.instances.single.instance.loading == null,
-          'a configuration-free profile is genuinely older shaped',
-        );
-      } finally {
-        await stripped.close();
-      }
-
-      final db = sqlite3.open('$dir/native/database.sqlite');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 59;
-      db.close();
-      final nativeError = await failure(
-        () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
-      );
-      check(
-        nativeError.message.contains('loading declarations require schema v60'),
-        'an older schema label cannot carry a loading declaration',
-      );
     }),
   );
   test(

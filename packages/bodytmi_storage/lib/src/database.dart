@@ -277,131 +277,21 @@ class ProgramUpgradeReceipts extends Table {
 class TrainingDatabase extends _$TrainingDatabase {
   TrainingDatabase(super.executor);
   @override
-  int get schemaVersion => 69;
+  int get schemaVersion => supportedSchemaVersion;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await customStatement('PRAGMA application_id = 1112821065');
-      await customStatement('PRAGMA user_version = 69');
+      await customStatement('PRAGMA user_version = $supportedSchemaVersion');
       await validateMigration();
     }),
-    onUpgrade: (m, from, to) async {
-      if (!{
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            21,
-            22,
-            23,
-            24,
-            25,
-            26,
-            27,
-            28,
-            29,
-            30,
-            31,
-            32,
-            33,
-            34,
-            35,
-            36,
-            37,
-            38,
-            39,
-            40,
-            41,
-            42,
-            43,
-            44,
-            45,
-            46,
-            47,
-            48,
-            49,
-            50,
-            51,
-            52,
-            53,
-            54,
-            55,
-            56,
-            57,
-            58,
-            59,
-            60,
-            61,
-            62,
-            63,
-            64,
-            65,
-            66,
-            67,
-            68,
-          }.contains(from) ||
-          to != 69)
-        throw StateError('Unsupported database migration $from -> $to.');
-      await transaction(() async {
-        final schema = await customSelect(
-          'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
-        ).get();
-        validateSchema(schema.map((row) => row.data), from);
-        if (from == 1) await m.createTable(progressionDecisions);
-        if (from < 3) {
-          await m.createTable(programRevisions);
-          await m.createTable(programRuns);
-          await m.createTable(sessionPrograms);
-          await m.createTable(programReceipts);
-        }
-        if (from < 4) await m.createTable(bodyMassRecords);
-        if (from < 7) await m.createTable(timingActivities);
-        if (from < 8) await m.createTable(workoutExecutions);
-        if (from < 12) await m.createTable(familyRevisions);
-        if (from < 27) await m.createTable(derivedTargetGraphs);
-        if (from < 46) await m.createTable(windowCheckpoints);
-        if (from < 48) await m.createTable(repeatCheckpoints);
-        if (from < 52) await m.createTable(progressionReconciliations);
-        if (from < 53) await m.createTable(leverLinkRevisions);
-        if (from < 56) await m.createTable(programUpgradeReceipts);
-        if (from < 54) {
-          await m.createTable(sharedLeverApplications);
-          await m.createTable(linkRetirementAnchors);
-        }
-        if (from < 58) {
-          await m.createTable(exerciseRevisions);
-          await m.createTable(implementationRevisions);
-        }
-        if (from < 59) {
-          await m.createTable(equipmentRevisions);
-          await m.createTable(gymRevisions);
-          await m.createTable(equipmentInstanceRevisions);
-        }
-        if (from < 64) await m.createTable(importedSessions);
-        if (from < 66) await m.createTable(blockProgressions);
-        // Drift also writes this after the callback. Writing it within our
-        // transaction prevents a crash leaving new DDL with the old version.
-        await customStatement('PRAGMA user_version = 69');
-        await validateMigration();
-      });
-    },
+    // There are no historical schema versions. A future upgrade adds its
+    // steps here: the DDL, the user_version write and validation all run in
+    // one transaction, so a crash leaves the previous schema intact.
+    onUpgrade: (m, from, to) => transaction(() async {
+      throw StateError('Unsupported database migration $from -> $to.');
+    }),
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
       await customStatement('PRAGMA synchronous = FULL');
@@ -415,7 +305,7 @@ class TrainingDatabase extends _$TrainingDatabase {
     final schema = await customSelect(
       'SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL',
     ).get();
-    validateSchema(schema.map((row) => row.data), 69);
+    validateSchema(schema.map((row) => row.data));
     if ((await customSelect('PRAGMA foreign_key_check').get()).isNotEmpty) {
       throw const BodyTmiException(
         'storage',

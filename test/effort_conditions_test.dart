@@ -4,8 +4,6 @@ import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, throwsA, isA;
 import 'cli_test.dart';
 import 'fixtures.dart';
@@ -152,17 +150,6 @@ Future<ProgressionDecision> _propose(
 Future<void> _fails(Future<Object?> value) =>
     expectLater(value, throwsA(isA<BodyTmiException>()));
 DateTime _at(int day) => instant(day).add(const Duration(hours: 2));
-Future<void> _relabel(String source, String destination, String label) async {
-  final j = jsonObject(
-    jsonDecode(await File(source).readAsString()),
-    'logical',
-  );
-  j['format'] = label;
-  j.remove('sha256');
-  j['sha256'] = sha256.convert(utf8.encode(canonicalJson(j))).toString();
-  await File(destination).writeAsString(jsonEncode(j));
-}
-
 void effortConditionsTests() {
   test(
     'effort gates validate explicit scales, inclusive decimal ranges and bounded input shapes',
@@ -608,119 +595,6 @@ void effortConditionsTests() {
         check(s.sets.every((set) => set.observations == null));
       }
       await store.archive();
-    }),
-  );
-  test(
-    'effort gates v21 profiles migrate unchanged while v22 native and logical restore preserve pending assessment and reject old labels',
-    () => _withStore((store, dir) async {
-      final s = await _finish(store, 'one', 1);
-      final legacy = _rule()..remove('advancementEffort');
-      await _propose(store, s.id, rule: legacy);
-      final before = canonicalJson((await store.archive()).toJson());
-      await store.backup('$dir/old');
-      await LogicalArchiveFiles.export(await store.archive(), '$dir/old.json');
-      final old = sqlite3.open('$dir/old/database.sqlite');
-      old.execute('DROP TABLE derived_target_graphs');
-      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      old.execute('DROP TABLE IF EXISTS window_checkpoints');
-      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      old.execute('DROP TABLE IF EXISTS exercise_revisions');
-      old.execute('DROP TABLE IF EXISTS implementation_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_revisions');
-      old.execute('DROP TABLE IF EXISTS gym_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      old.execute('DROP TABLE IF EXISTS imported_sessions');
-      old.execute('DROP TABLE IF EXISTS block_progressions');
-      old.userVersion = 21;
-      old.close();
-      equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 21);
-      final upgraded = await TrainingStore.open('$dir/old/database.sqlite');
-      try {
-        equal(canonicalJson((await upgraded.archive()).toJson()), before);
-        equal(
-          (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          69,
-        );
-      } finally {
-        await upgraded.close();
-      }
-      await _relabel(
-        '$dir/old.json',
-        '$dir/old-label.json',
-        'bodytmi-logical-export/21',
-      );
-      final preparedOld = await LogicalArchiveFiles.prepare(
-        '$dir/old-label.json',
-      );
-      try {
-        equal(canonicalJson(preparedOld.archive.toJson()), before);
-      } finally {
-        await preparedOld.close();
-      }
-      final p = await _propose(store, s.id);
-      final current = canonicalJson((await store.archive()).toJson());
-      await store.backup('$dir/native');
-      final native = await NativeBackup.prepare('$dir/native');
-      final target = await TrainingStore.open('$dir/restored.sqlite');
-      try {
-        await target.restore(
-          native,
-          recoveryDestination: '$dir/recovery',
-          confirm: true,
-        );
-      } finally {
-        await target.close();
-        await native.close();
-      }
-      final restored = await TrainingStore.open('$dir/restored.sqlite');
-      try {
-        equal(canonicalJson((await restored.archive()).toJson()), current);
-        final accepted = await StoredProgressionService(
-          restored,
-        ).accept(s.id, 'movement', p.version, _at(1));
-        equal(accepted.cursor, 1);
-        equal(accepted.proposal.effortAssessment!.status, 'met');
-      } finally {
-        await restored.close();
-      }
-      await LogicalArchiveFiles.export(await store.archive(), '$dir/new.json');
-      final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
-      try {
-        equal(canonicalJson(logical.archive.toJson()), current);
-      } finally {
-        await logical.close();
-      }
-      await _relabel(
-        '$dir/new.json',
-        '$dir/wrong.json',
-        'bodytmi-logical-export/21',
-      );
-      await _fails(LogicalArchiveFiles.prepare('$dir/wrong.json'));
-      final wrong = sqlite3.open('$dir/native/database.sqlite');
-      wrong.execute('DROP TABLE derived_target_graphs');
-      wrong.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      wrong.execute('DROP TABLE IF EXISTS window_checkpoints');
-      wrong.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      wrong.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      wrong.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      wrong.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      wrong.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      wrong.execute('DROP TABLE IF EXISTS exercise_revisions');
-      wrong.execute('DROP TABLE IF EXISTS implementation_revisions');
-      wrong.execute('DROP TABLE IF EXISTS equipment_revisions');
-      wrong.execute('DROP TABLE IF EXISTS gym_revisions');
-      wrong.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      wrong.execute('DROP TABLE IF EXISTS imported_sessions');
-      wrong.execute('DROP TABLE IF EXISTS block_progressions');
-      wrong.userVersion = 21;
-      wrong.close();
-      rejects(
-        () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
-      );
     }),
   );
   test(

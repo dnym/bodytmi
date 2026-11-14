@@ -4,8 +4,6 @@ import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, throwsA, isA;
 import 'cli_test.dart';
 import 'fixtures.dart';
@@ -820,102 +818,7 @@ void publishedObjectiveTests() {
       } finally {
         await reopened.close();
       }
-      final raw = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'logical',
-      );
-      raw['format'] = 'bodytmi-logical-export/25';
-      raw.remove('sha256');
-      raw['sha256'] = sha256
-          .convert(utf8.encode(canonicalJson(raw)))
-          .toString();
-      await File('$dir/old.json').writeAsString(jsonEncode(raw));
-      await _fails(LogicalArchiveFiles.prepare('$dir/old.json'));
-      final db = sqlite3.open('$dir/native/database.sqlite');
-      db.execute('DROP TABLE derived_target_graphs');
-      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      db.execute('DROP TABLE IF EXISTS window_checkpoints');
-      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      db.execute('DROP TABLE IF EXISTS exercise_revisions');
-      db.execute('DROP TABLE IF EXISTS implementation_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_revisions');
-      db.execute('DROP TABLE IF EXISTS gym_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 25;
-      db.close();
-      rejects(
-        () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
-      );
     }),
-  );
-  test(
-    'published objectives migrate existing v25 max-effort data without changing its serialization',
-    () async {
-      final dir = await Directory.systemTemp.createTemp(
-        'bodytmi-published-legacy-',
-      );
-      var store = await TrainingStore.open('${dir.path}/db.sqlite');
-      try {
-        final raw = example('max-effort-bodyweight');
-        final service = StoredTrainingService(store);
-        final revision = await service.publish(
-          WorkoutDefinition.fromJson(raw['definition']),
-          0,
-        );
-        var s = await service.start(
-          'legacy',
-          revision.definition.id,
-          revision.number,
-          instant(1),
-        );
-        s = await service.edit(s.id, s.contentVersion, (s) {
-          s = const TrainingService().complete(s, s.sets.single.id, {
-            'reps': Quantity('0', 'rep'),
-          });
-          return s.finish(instant(1).add(const Duration(hours: 1)));
-        });
-        final before = canonicalJson((await store.archive()).toJson());
-        await store.backup('${dir.path}/old');
-        await store.close();
-        final db = sqlite3.open('${dir.path}/old/database.sqlite');
-        db.execute('DROP TABLE derived_target_graphs');
-        db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        db.execute('DROP TABLE IF EXISTS window_checkpoints');
-        db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        db.execute('DROP TABLE IF EXISTS exercise_revisions');
-        db.execute('DROP TABLE IF EXISTS implementation_revisions');
-        db.execute('DROP TABLE IF EXISTS equipment_revisions');
-        db.execute('DROP TABLE IF EXISTS gym_revisions');
-        db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        db.execute('DROP TABLE IF EXISTS imported_sessions');
-        db.execute('DROP TABLE IF EXISTS block_progressions');
-        db.userVersion = 25;
-        db.close();
-        equal(
-          NativeBackup.validateDatabase('${dir.path}/old/database.sqlite'),
-          25,
-        );
-        store = await TrainingStore.open('${dir.path}/old/database.sqlite');
-        equal(canonicalJson((await store.archive()).toJson()), before);
-        equal(
-          (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          69,
-        );
-      } finally {
-        await store.close();
-        await dir.delete(recursive: true);
-      }
-    },
   );
   test(
     'published objectives CLI retains pinned bounds and pure/stored summary parity',

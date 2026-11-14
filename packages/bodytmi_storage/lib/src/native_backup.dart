@@ -98,77 +98,7 @@ final class NativeBackup {
       'database',
     });
     if (manifest['format'] != _format ||
-        !{
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7,
-          8,
-          9,
-          10,
-          11,
-          12,
-          13,
-          14,
-          15,
-          16,
-          17,
-          18,
-          19,
-          20,
-          21,
-          22,
-          23,
-          24,
-          25,
-          26,
-          27,
-          28,
-          29,
-          30,
-          31,
-          32,
-          33,
-          34,
-          35,
-          36,
-          37,
-          38,
-          39,
-          40,
-          41,
-          42,
-          43,
-          44,
-          45,
-          46,
-          47,
-          48,
-          49,
-          50,
-          51,
-          52,
-          53,
-          54,
-          55,
-          56,
-          57,
-          58,
-          59,
-          60,
-          61,
-          62,
-          63,
-          64,
-          65,
-          66,
-          67,
-          68,
-          69,
-        }.contains(manifest['databaseSchemaVersion'])) {
+        manifest['databaseSchemaVersion'] != supportedSchemaVersion) {
       invalid('Unsupported native backup format or database schema.');
     }
     requiredString(manifest, 'applicationVersion');
@@ -260,77 +190,7 @@ final class NativeBackup {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
-      if (!{
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            21,
-            22,
-            23,
-            24,
-            25,
-            26,
-            27,
-            28,
-            29,
-            30,
-            31,
-            32,
-            33,
-            34,
-            35,
-            36,
-            37,
-            38,
-            39,
-            40,
-            41,
-            42,
-            43,
-            44,
-            45,
-            46,
-            47,
-            48,
-            49,
-            50,
-            51,
-            52,
-            53,
-            54,
-            55,
-            56,
-            57,
-            58,
-            59,
-            60,
-            61,
-            62,
-            63,
-            64,
-            65,
-            66,
-            67,
-            68,
-            69,
-          }.contains(db.userVersion) ||
+      if (db.userVersion != supportedSchemaVersion ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
           db.select('PRAGMA journal_mode').single.values.single != 'delete') {
@@ -341,7 +201,7 @@ final class NativeBackup {
       final schema = db.select(
         'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name',
       );
-      validateSchema(schema, db.userVersion);
+      validateSchema(schema);
       final integrity = db.select('PRAGMA integrity_check');
       if (integrity.length != 1 ||
           integrity.single.values.single != 'ok' ||
@@ -350,27 +210,27 @@ final class NativeBackup {
       for (final table in [
         'revisions',
         'sessions',
-        if (db.userVersion >= 2) 'progression_decisions',
-        if (db.userVersion >= 4) 'body_mass_records',
-        if (db.userVersion >= 7) 'timing_activities',
-        if (db.userVersion >= 46) 'window_checkpoints',
-        if (db.userVersion >= 48) 'repeat_checkpoints',
-        if (db.userVersion >= 52) 'progression_reconciliations',
-        if (db.userVersion >= 53) 'lever_link_revisions',
-        if (db.userVersion >= 54) 'shared_lever_applications',
-        if (db.userVersion >= 54) 'link_retirement_anchors',
-        if (db.userVersion >= 56) 'program_upgrade_receipts',
-        if (db.userVersion >= 8) 'workout_executions',
-        if (db.userVersion >= 12) 'family_revisions',
-        if (db.userVersion >= 58) 'exercise_revisions',
-        if (db.userVersion >= 58) 'implementation_revisions',
-        if (db.userVersion >= 59) 'equipment_revisions',
-        if (db.userVersion >= 59) 'gym_revisions',
-        if (db.userVersion >= 59) 'equipment_instance_revisions',
-        if (db.userVersion >= 27) 'derived_target_graphs',
-        if (db.userVersion >= 64) 'imported_sessions',
-        if (db.userVersion >= 66) 'block_progressions',
-        if (db.userVersion >= 3) ...[
+        'progression_decisions',
+        'body_mass_records',
+        'timing_activities',
+        'window_checkpoints',
+        'repeat_checkpoints',
+        'progression_reconciliations',
+        'lever_link_revisions',
+        'shared_lever_applications',
+        'link_retirement_anchors',
+        'program_upgrade_receipts',
+        'workout_executions',
+        'family_revisions',
+        'exercise_revisions',
+        'implementation_revisions',
+        'equipment_revisions',
+        'gym_revisions',
+        'equipment_instance_revisions',
+        'derived_target_graphs',
+        'imported_sessions',
+        'block_progressions',
+        ...[
           'program_revisions',
           'program_runs',
           'session_programs',
@@ -384,7 +244,7 @@ final class NativeBackup {
           invalid('Backup record exceeds the 8 MiB resource limit.');
         }
       }
-      if (db.userVersion >= 12) {
+      {
         final families = <FamilyRevision>[];
         for (final row in db.select('SELECT * FROM family_revisions')) {
           final family = FamilyRevision.fromJson(
@@ -398,7 +258,7 @@ final class NativeBackup {
         validateFamilyRevisions(families);
       }
       final catalogOwners = <String, String>{};
-      if (db.userVersion >= 58) {
+      {
         final exercises = <ExerciseRevision>[];
         for (final row in db.select('SELECT * FROM exercise_revisions')) {
           final exercise = ExerciseRevision.fromJson(
@@ -423,7 +283,7 @@ final class NativeBackup {
         validateImplementationRevisions(implementations, exercises);
         catalogOwners.addAll(implementationOwners(implementations));
       }
-      if (db.userVersion >= 59) {
+      {
         final equipment = <EquipmentRevision>[];
         for (final row in db.select('SELECT * FROM equipment_revisions')) {
           final entry = EquipmentRevision.fromJson(
@@ -455,42 +315,28 @@ final class NativeBackup {
           if (entry.instance.id != row['instance_id'] ||
               entry.number != row['number'])
             invalid('Equipment instance revision row identity mismatch.');
-          if (db.userVersion < 60 && entry.instance.loading != null)
-            invalid('Equipment loading declarations require schema v60.');
-          if (db.userVersion < 61 && entry.instance.convention != null)
-            invalid('Load entry conventions require schema v61.');
+
           instances.add(entry);
         }
         validateEquipmentInstanceRevisions(instances, equipment, gyms);
-        if (db.userVersion >= 62) {
+        {
           validateLoadInputReferences([
             for (final row in db.select('SELECT snapshot FROM sessions'))
               sessionFromJson(jsonDecode(row['snapshot'] as String)),
           ], instances);
         }
       }
-      if (db.userVersion >= 27) {
+      {
         final graphs = <DerivedTargetGraphRevision>[];
         for (final row in db.select('SELECT * FROM derived_target_graphs')) {
           final graph = DerivedTargetGraphRevision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
-          if (db.userVersion < 39 &&
-              graph.graph.nodes.any((n) => n['kind'] == 'round')) {
-            invalid('Derived native-scale rounding requires schema v39.');
-          }
-          if (db.userVersion < 38 &&
-              graph.graph.nodes.any(
-                (n) => n['kind'] == 'add' || n['kind'] == 'subtract',
-              )) {
-            invalid('Binary derived targets require schema v38.');
-          }
+
           if (graph.graph.id != row['graph_id'] ||
               graph.number != row['number'])
             invalid('Derived target graph row identity mismatch.');
-          if (db.userVersion < 28 && graph.graph.plans.isNotEmpty) {
-            invalid('Published workout plans require schema v28.');
-          }
+
           for (final plan in graph.graph.plans) {
             final rows = db.select(
               'SELECT snapshot FROM revisions WHERE template_id = ? AND number = ?',
@@ -523,40 +369,7 @@ final class NativeBackup {
           final revision = WorkoutRevision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
-          if (db.userVersion < 41 &&
-              revision.definition.hasExtendedEffortRoles) {
-            invalid('Back-off and drop effort roles require schema v41.');
-          }
-          if (db.userVersion < 69 && revision.definition.hasEffortSides) {
-            invalid('Unilateral effort sides require schema v69.');
-          }
-          if (db.userVersion < 65 && revision.definition.hasAmraps) {
-            invalid('Authored AMRAP blocks require schema v65.');
-          }
-          if (db.userVersion < 61 && revision.definition.hasLoadConventions) {
-            invalid('Load entry conventions require schema v61.');
-          }
-          if (db.userVersion < 40 && revision.definition.hasManualRest) {
-            invalid('Manual rest requires schema v40.');
-          }
-          if (db.userVersion < 26 && revision.definition.hasTypedObjectives)
-            invalid('Authored numeric objectives require schema v26.');
-          if (db.userVersion < 25 && revision.definition.hasMaxEffortObjectives)
-            invalid('Max-effort objectives require schema v25.');
-          if (db.userVersion < 24 && revision.definition.hasEffortTargets)
-            invalid('Per-effort target overrides require schema v24.');
-          if (db.userVersion < 45 &&
-              revision.definition.slots.any((s) => s.timing?.openEnded == true))
-            invalid('Open-ended timing defaults require schema v45.');
-          if (db.userVersion < 13 &&
-              revision.definition.slots.any((s) => s.timing != null))
-            invalid('Slot timing defaults require schema v13.');
-          if (db.userVersion < 5 &&
-              revision.definition.slots.any((s) => s.bodyMass != null))
-            invalid('Body-mass session bindings require schema v5.');
-          if (db.userVersion < 6 &&
-              revision.definition.slots.any((s) => s.effectiveMass != null))
-            invalid('Effective-mass models require schema v6.');
+
           if (template != row['template_id']) {
             template = row['template_id'] as String;
             number = 0;
@@ -580,64 +393,9 @@ final class NativeBackup {
             jsonDecode(row['snapshot'] as String),
             'session',
           );
-          if (db.userVersion < 30 &&
-              sessionJson['derivedPlanInput'] != null &&
-              jsonObject(
-                sessionJson['derivedPlanInput'],
-                'derived plan input',
-              ).containsKey('bodyMassSources')) {
-            invalid('Derived body mass session inputs require schema v30.');
-          }
-          if (db.userVersion < 34 &&
-              sessionJson.containsKey('initialBodyMassOverrides')) {
-            invalid('Body-mass rebind identity requires schema v34.');
-          }
+
           final session = sessionFromJson(sessionJson);
-          if (db.userVersion < 44 &&
-              session.sets.any((s) => s.timing?.termination == 'manual'))
-            invalid('Manual timing termination requires schema v44.');
-          if (db.userVersion < 37 &&
-              session.sets.any((s) => s.carriedTargets.isNotEmpty)) {
-            invalid('Carried actual targets require schema v37.');
-          }
-          if (db.userVersion < 36 &&
-              session.sets.any((s) => s.manualTargets.isNotEmpty)) {
-            invalid('Manual session targets require schema v36.');
-          }
-          if (db.userVersion < 35 && sessionHasBodyMassMetadata(session)) {
-            invalid('Body-mass metadata requires schema v35.');
-          }
-          if (db.userVersion < 32 && usesDerivedTargetlessObjective(session)) {
-            invalid('Derived targetless suggestions require schema v32.');
-          }
-          if (db.userVersion < 31 && usesDerivedHistory(session)) {
-            invalid('Derived history session inputs require schema v31.');
-          }
-          if (db.userVersion < 30 && usesDerivedBodyMass(session)) {
-            invalid('Derived body mass session inputs require schema v30.');
-          }
-          if (db.userVersion < 29 && session.derivedPlanInput != null) {
-            invalid('Derived session inputs require schema v29.');
-          }
-          if (db.userVersion < 57 && session.prescriptionOverrides.isNotEmpty) {
-            invalid('Program prescription overrides require schema v57.');
-          }
-          if (db.userVersion < 67 &&
-              session.sets.any((s) => s.substitution != null)) {
-            invalid('Set substitutions require schema v67.');
-          }
-          if (db.userVersion < 62 && session.loadInputs.isNotEmpty) {
-            invalid('Session load contexts require schema v62.');
-          }
-          if (db.userVersion < 63 &&
-              session.sets.any((s) => s.loadArrangement != null)) {
-            invalid('Set plate arrangements require schema v63.');
-          }
-          if (db.userVersion < 21 &&
-              session.sets.any((s) => s.observations != null))
-            invalid('Set observations require schema v21.');
-          if (db.userVersion < 7 && session.sets.any((s) => s.timing != null))
-            invalid('Timing results require schema v7.');
+
           final revision = db.select(
             'SELECT snapshot FROM revisions WHERE template_id = ? AND number = ?',
             [session.revision.definition.id, session.revision.number],
@@ -684,7 +442,7 @@ final class NativeBackup {
         sessions.close();
       }
       final reconciliations = <ReconciliationReceipt>[];
-      if (db.userVersion >= 52) {
+      {
         for (final row in db.select(
           'SELECT id,snapshot FROM progression_reconciliations',
         )) {
@@ -693,14 +451,11 @@ final class NativeBackup {
           );
           if (receipt.id != row['id'])
             invalid('Reconciliation row identity does not match its key.');
-          if (db.userVersion < 68 &&
-              receipt.ruleType == 'ordinal' &&
-              receipt.rule.containsKey('successors'))
-            invalid('Branched ordinal successors require schema v68.');
+
           reconciliations.add(receipt);
         }
       }
-      if (db.userVersion >= 2) {
+      {
         final decisions = <ProgressionDecision>[];
         for (final row in db.select(
           'SELECT session_id,slot_id,snapshot FROM progression_decisions',
@@ -708,83 +463,13 @@ final class NativeBackup {
           final d = ProgressionDecision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
-          if (db.userVersion < 55 && d.ruleType == 'ordinal')
-            invalid('Ordinal progression requires schema v55.');
-          if (db.userVersion < 68 &&
-              ((d.ruleType == 'ordinal' && d.rule.containsKey('successors')) ||
-                  d.selectedLevel != null))
-            invalid('Branched ordinal successors require schema v68.');
-          if (db.userVersion < 67 &&
-              d.session.sets.any((s) => s.substitution != null))
-            invalid('Frozen set substitutions require schema v67.');
-          if (db.userVersion < 57 &&
-              d.session.prescriptionOverrides.isNotEmpty) {
-            invalid('Frozen prescription overrides require schema v57.');
-          }
-          if (db.userVersion < 44 &&
-              d.session.sets.any((s) => s.timing?.termination == 'manual'))
-            invalid('Frozen manual timing termination requires schema v44.');
-          if (db.userVersion < 42 && d.role != 'work')
-            invalid('Role-specific progression requires schema v42.');
-          if (db.userVersion < 37 &&
-              d.session.sets.any((s) => s.carriedTargets.isNotEmpty)) {
-            invalid('Frozen carried actual targets require schema v37.');
-          }
-          if (db.userVersion < 23 &&
-              d.ruleType == 'threshold' &&
-              ThresholdRule.fromJson(d.rule).incrementBands != null)
-            invalid('Performance increment bands require schema v23.');
-          if (db.userVersion < 22 &&
-              d.ruleType == 'threshold' &&
-              ThresholdRule.fromJson(d.rule).advancementEffort != null)
-            invalid('Advancement effort conditions require schema v22.');
-          if (db.userVersion < 21 &&
-              d.session.sets.any((s) => s.observations != null))
-            invalid('Frozen set observations require schema v21.');
-          if (db.userVersion < 20 &&
-              d.ruleType == 'threshold' &&
-              ThresholdRule.fromJson(d.rule).hasPerformancePolicy)
-            invalid('Explicit performance predicates require schema v20.');
-          if (db.userVersion < 19 &&
-              d.ruleType == 'threshold' &&
-              ThresholdRule.fromJson(d.rule).hasScaleRanges)
-            invalid('Fixed-increment scale ranges require schema v19.');
-          if (db.userVersion < 18 &&
-              d.ruleType == 'threshold' &&
-              ThresholdRule.fromJson(d.rule).hasScalePolicy)
-            invalid('Numeric scale bindings require schema v18.');
-          if (db.userVersion < 17 &&
-              d.ruleType == 'threshold' &&
-              ThresholdRule.fromJson(d.rule).hasSelectionPolicy)
-            invalid('Chosen/priority coordination requires schema v17.');
-          if (db.userVersion < 16 &&
-              d.ruleType == 'threshold' &&
-              ThresholdRule.fromJson(d.rule).hasNumericPolicy)
-            invalid('Numeric directions and lower bounds require schema v16.');
-          if (db.userVersion < 15 &&
-              d.ruleType == 'threshold' &&
-              ThresholdRule.fromJson(d.rule).hasExplicitAggregation)
-            invalid('Explicit result aggregation requires schema v15.');
-          if (db.userVersion < 14 && d.ruleType != 'double')
-            invalid('Stored threshold progression requires schema v14.');
-          if (db.userVersion < 11 && d.declinedAt != null)
-            invalid('Progression declines require schema v11.');
+
           if (d.session.id != row['session_id'] ||
               d.storageSlotKey != row['slot_id'])
             invalid('Progression receipt identity mismatch.');
           decisions.add(d);
         }
-        final sources = [
-          for (final row in db.select(
-            'SELECT DISTINCT s.id,s.snapshot FROM sessions s JOIN progression_decisions p ON p.session_id=s.id',
-          ))
-            sessionFromJson(jsonDecode(row['snapshot'] as String)),
-        ];
-        if (db.userVersion < 3) {
-          validateProgressionDecisions(decisions, sources, const {}, [
-            ...reconciliations,
-          ]);
-        } else {
+        {
           final programs = <ProgramRevision>[];
           for (final row in db.select('SELECT * FROM program_revisions')) {
             final p = ProgramRevision.fromJson(
@@ -793,15 +478,7 @@ final class NativeBackup {
             if (p.definition.id != row['program_id'] ||
                 p.number != row['number'])
               invalid('Program revision row identity mismatch.');
-            if (db.userVersion < 33 &&
-                p.definition.plan.nodes.whereType<ProgramDay>().any(
-                  (day) => day.derivedPlan != null,
-                )) {
-              invalid('Program day derived plans require schema v33.');
-            }
-            if (db.userVersion < 57 && p.definition.hasPrescriptionOverrides) {
-              invalid('Program prescription overrides require schema v57.');
-            }
+
             programs.add(p);
           }
           final runs = <ProgramRun>[];
@@ -849,7 +526,7 @@ final class NativeBackup {
               row['session_id'] as String,
           ];
           final upgrades = <ProgramUpgradeReceipt>[];
-          if (db.userVersion >= 56) {
+          {
             for (final row in db.select(
               'SELECT run_id,request_id,snapshot FROM program_upgrade_receipts',
             )) {
@@ -871,21 +548,7 @@ final class NativeBackup {
             sessions: allSessions,
             finalizations: finalizations,
           );
-          if (db.userVersion < 53) {
-            validateProgressionDecisions(
-              decisions,
-              allSessions,
-              {for (final b in bindings) b.sessionId: b.runId},
-              [...reconciliations],
-            );
-            if (reconciliations.isNotEmpty)
-              validateProgressionReconciliations(
-                reconciliations,
-                decisions,
-                allRevisions,
-                allSessions,
-              );
-          } else {
+          {
             final links = <LeverLinkRevision>[];
             for (final row in db.select(
               'SELECT link_id,number,snapshot FROM lever_link_revisions',
@@ -900,7 +563,7 @@ final class NativeBackup {
             }
             final sharedApplications = <SharedLeverApplication>[];
             final linkRetirements = <LinkRetirementAnchor>[];
-            if (db.userVersion >= 54) {
+            {
               for (final row in db.select(
                 'SELECT link_id,sequence,snapshot FROM shared_lever_applications',
               )) {
@@ -963,19 +626,19 @@ final class NativeBackup {
                 allRevisions,
                 allSessions,
                 linkRetirements,
-                db.userVersion >= 54 ? linkIndex : null,
+                linkIndex,
               );
             validateProgressionDecisions(
               decisions,
               allSessions,
               {for (final b in bindings) b.sessionId: b.runId},
               [...reconciliations, ...linkRetirements],
-              db.userVersion >= 54 ? linkIndex : null,
+              linkIndex,
             );
           }
         }
       }
-      if (db.userVersion >= 4) {
+      {
         final massRecords = <BodyMassRecord>[];
         for (final row in db.select(
           'SELECT id,snapshot FROM body_mass_records',
@@ -983,8 +646,7 @@ final class NativeBackup {
           final record = BodyMassRecord.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
-          if (db.userVersion < 35 && record.measurement.hasMetadata)
-            invalid('Body-mass metadata requires schema v35.');
+
           if (record.measurement.id != row['id'])
             invalid('Body-mass row identity mismatch.');
           massRecords.add(record);
@@ -994,7 +656,7 @@ final class NativeBackup {
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ], massRecords);
       }
-      if (db.userVersion >= 64) {
+      {
         final imported = <ImportedSessionRecord>[];
         for (final row in db.select('SELECT * FROM imported_sessions')) {
           final record = ImportedSessionRecord.fromJson(
@@ -1007,7 +669,7 @@ final class NativeBackup {
         }
         validateImportedSessions(imported);
       }
-      if (db.userVersion >= 29) {
+      {
         final graphs = [
           for (final row in db.select(
             'SELECT snapshot FROM derived_target_graphs',
@@ -1037,20 +699,13 @@ final class NativeBackup {
             ProgramRevision.fromJson(jsonDecode(row['snapshot'] as String)),
         ], graphs);
       }
-      if (db.userVersion >= 7) {
+      {
         final timers = <TimingActivity>[];
         for (final row in db.select('SELECT * FROM timing_activities')) {
           final t = TimingActivity.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
-          if (db.userVersion < 44 && t.plan.openEnded)
-            invalid('Open-ended timing requires schema v44.');
-          if (db.userVersion < 43 && t.plan.unplannedDuration)
-            invalid('Unplanned duration timing requires schema v43.');
-          if (db.userVersion < 10 && t.plan.tempo != null)
-            invalid('Tempo timing requires schema v10.');
-          if (db.userVersion < 8 && t.plan.restOnly)
-            invalid('Rest-only timing requires schema v8.');
+
           if (t.id != row['id'] ||
               t.sessionId != row['session_id'] ||
               t.setId != row['set_id'])
@@ -1062,19 +717,13 @@ final class NativeBackup {
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ]);
       }
-      if (db.userVersion >= 8) {
+      {
         final executions = <WorkoutExecution>[];
         for (final row in db.select('SELECT * FROM workout_executions')) {
           final e = WorkoutExecution.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
-          if (db.userVersion < 9 &&
-              e.receipts.any(
-                (r) =>
-                    jsonObject(r['request'], 'execution request')['action'] ==
-                    'skip-group',
-              ))
-            invalid('Group skipping requires schema v9.');
+
           if (e.id != row['id'] || e.sessionId != row['session_id'])
             invalid('Execution row identity mismatch.');
           executions.add(e);
@@ -1094,34 +743,23 @@ final class NativeBackup {
         );
       }
       final repeatCheckpoints = <RepeatCheckpoint>[];
-      if (db.userVersion >= 48) {
+      {
         for (final row in db.select('SELECT * FROM repeat_checkpoints')) {
           final checkpoint = RepeatCheckpoint.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
           if (checkpoint.id != row['id'])
             invalid('Repeat checkpoint row identity mismatch.');
-          if (db.userVersion < 66 && checkpoint.blockTargets.isNotEmpty)
-            invalid('Block progression targets require schema v66.');
-          if (db.userVersion < 65 && checkpoint.amrapId != null)
-            invalid('Authored AMRAP blocks require schema v65.');
-          if (db.userVersion < 51 && checkpoint.sessionId != null)
-            invalid('Repeat session associations require schema v51.');
-          if (db.userVersion < 50 &&
-              jsonObject(checkpoint.execution['cursor'], 'cursor')['status'] ==
-                  'running')
-            invalid('Running repeat clocks require schema v50.');
-          if (db.userVersion < 49 && checkpoint.reserved)
-            invalid('Repeat reservations require schema v49.');
+
           repeatCheckpoints.add(checkpoint);
         }
       }
-      if (db.userVersion >= 48) {
+      {
         validateRepeatSessionBindings(repeatCheckpoints, [
           for (final row in db.select('SELECT snapshot FROM sessions'))
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ]);
-        if (db.userVersion >= 66) {
+        {
           final decisions = <BlockProgressionDecision>[];
           for (final row in db.select('SELECT * FROM block_progressions')) {
             final decision = BlockProgressionDecision.fromJson(
@@ -1164,14 +802,13 @@ final class NativeBackup {
           ],
         );
       }
-      if (db.userVersion >= 46) {
+      {
         final checkpoints = <WindowCheckpoint>[];
         for (final row in db.select('SELECT * FROM window_checkpoints')) {
           final checkpoint = WindowCheckpoint.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
-          if (db.userVersion < 47 && checkpoint.reserved)
-            invalid('Window clock reservations require schema v47.');
+
           if (checkpoint.id != row['id'] ||
               checkpoint.sessionId != row['session_id'])
             invalid('Window checkpoint row identity mismatch.');

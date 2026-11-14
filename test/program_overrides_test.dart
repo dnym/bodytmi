@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import 'cli_test.dart' show invoke;
@@ -394,16 +393,16 @@ void programOverrideTests() {
         // Portability: native and logical v57 round-trip, old labels rejected.
         final before = canonicalJson((await store.archive()).toJson());
         final manifest = await store.backup('${dir.path}/native');
-        equal(manifest['databaseSchemaVersion'], 69);
+        equal(manifest['databaseSchemaVersion'], 1);
         equal(
           NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          69,
+          1,
         );
         final logical = await LogicalArchiveFiles.export(
           await store.archive(),
           '${dir.path}/logical.json',
         );
-        equal(logical['format'], 'bodytmi-logical-export/69');
+        equal(logical['format'], 'bodytmi-logical-export/1');
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
         );
@@ -412,51 +411,6 @@ void programOverrideTests() {
         } finally {
           await prepared.close();
         }
-
-        final relabeled = jsonObject(
-          jsonDecode(await File('${dir.path}/logical.json').readAsString()),
-          'file',
-        );
-        relabeled['format'] = 'bodytmi-logical-export/56';
-        relabeled.remove('sha256');
-        relabeled['sha256'] = sha256
-            .convert(utf8.encode(canonicalJson(relabeled)))
-            .toString();
-        await File(
-          '${dir.path}/relabeled.json',
-        ).writeAsString(jsonEncode(relabeled));
-        final oldLabel = await failure(
-          () => LogicalArchiveFiles.prepare('${dir.path}/relabeled.json'),
-        );
-        check(
-          oldLabel.message.contains(
-            'prescription overrides require logical v57',
-          ),
-          'old logical labels reject overrides',
-        );
-
-        File('${dir.path}/labeled.sqlite').writeAsBytesSync(
-          File('${dir.path}/native/database.sqlite').readAsBytesSync(),
-        );
-        final nativeDb = sqlite3.open('${dir.path}/labeled.sqlite');
-        nativeDb.execute('DROP TABLE IF EXISTS exercise_revisions');
-        nativeDb.execute('DROP TABLE IF EXISTS implementation_revisions');
-        nativeDb.execute('DROP TABLE IF EXISTS equipment_revisions');
-        nativeDb.execute('DROP TABLE IF EXISTS gym_revisions');
-        nativeDb.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        nativeDb.execute('DROP TABLE IF EXISTS imported_sessions');
-        nativeDb.execute('DROP TABLE IF EXISTS block_progressions');
-        nativeDb.userVersion = 56;
-        nativeDb.close();
-        final nativeLabel = await failure(
-          () => NativeBackup.validateDatabase('${dir.path}/labeled.sqlite'),
-        );
-        check(
-          nativeLabel.message.contains(
-            'prescription overrides require schema v57',
-          ),
-          'old native labels reject overrides',
-        );
 
         final restorer = await TrainingStore.open(
           '${dir.path}/restored.sqlite',

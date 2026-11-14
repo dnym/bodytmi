@@ -1,11 +1,8 @@
 import 'dart:io';
-import 'dart:convert';
 
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, isA, throwsA;
 
 import 'fixtures.dart';
@@ -292,89 +289,8 @@ void derivedWorkoutPreviewTests() {
       equal((await store.derivedTargetGraphRevisions()).length, 0);
     }),
   );
-
   test(
-    'schema v27 graphs without workout plans migrate to v30 unchanged',
-    () => withStore((store) async {
-      await DerivedTargetGraphService(
-        store,
-      ).publish(DerivedTargetGraph.fromJson(_graph()), 0);
-      final before = canonicalJson((await store.archive()).toJson());
-      final temp = await Directory.systemTemp.createTemp(
-        'bodytmi-plan-migration-',
-      );
-      try {
-        final path = '${temp.path}/v27.sqlite';
-        await store.snapshot(path);
-        final db = sqlite3.open(path);
-        db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        db.execute('DROP TABLE IF EXISTS window_checkpoints');
-        db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        db.execute('DROP TABLE IF EXISTS exercise_revisions');
-        db.execute('DROP TABLE IF EXISTS implementation_revisions');
-        db.execute('DROP TABLE IF EXISTS equipment_revisions');
-        db.execute('DROP TABLE IF EXISTS gym_revisions');
-        db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        db.execute('DROP TABLE IF EXISTS imported_sessions');
-        db.execute('DROP TABLE IF EXISTS block_progressions');
-        db.userVersion = 27;
-        db.close();
-        equal(NativeBackup.validateDatabase(path), 27);
-        final export = '${temp.path}/v30.json';
-        await LogicalArchiveFiles.export(await store.archive(), export);
-        final document =
-            jsonDecode(await File(export).readAsString())
-                as Map<String, Object?>;
-        document['format'] = 'bodytmi-logical-export/27';
-        document['sha256'] = sha256
-            .convert(
-              utf8.encode(
-                canonicalJson({
-                  for (final e in document.entries)
-                    if (e.key != 'sha256') e.key: e.value,
-                }),
-              ),
-            )
-            .toString();
-        final legacy = '${temp.path}/v27.json';
-        await File(legacy).writeAsString(jsonEncode(document));
-        final prepared = await LogicalArchiveFiles.prepare(legacy);
-        try {
-          equal(prepared.archive.graphs.single.graph.plans.length, 0);
-        } finally {
-          await prepared.close();
-        }
-        await store.close();
-        final upgraded = await TrainingStore.open(path);
-        try {
-          equal(canonicalJson((await upgraded.archive()).toJson()), before);
-          equal(
-            (await DerivedTargetGraphService(
-              upgraded,
-            ).revision('preview-graph')).graph.plans.length,
-            0,
-          );
-        } finally {
-          await upgraded.close();
-        }
-        final reopened = sqlite3.open(path);
-        try {
-          equal(reopened.userVersion, 69);
-        } finally {
-          reopened.close();
-        }
-      } finally {
-        await temp.delete(recursive: true);
-      }
-    }),
-  );
-
-  test(
-    'published workout plans survive portability and old schema labels reject them',
+    'published workout plans survive portability',
     () => withStore((store) async {
       final workout = revision();
       final id = start(
@@ -413,47 +329,6 @@ void derivedWorkoutPreviewTests() {
         } finally {
           await prepared.close();
         }
-        final document =
-            jsonDecode(await File(export).readAsString())
-                as Map<String, Object?>;
-        document['format'] = 'bodytmi-logical-export/27';
-        document['sha256'] = sha256
-            .convert(
-              utf8.encode(
-                canonicalJson({
-                  for (final e in document.entries)
-                    if (e.key != 'sha256') e.key: e.value,
-                }),
-              ),
-            )
-            .toString();
-        final old = '${temp.path}/old.json';
-        await File(old).writeAsString(jsonEncode(document));
-        await expectLater(
-          LogicalArchiveFiles.prepare(old),
-          throwsA(isA<BodyTmiException>()),
-        );
-        final copy = '${temp.path}/snapshot.sqlite';
-        await store.snapshot(copy);
-        equal(NativeBackup.validateDatabase(copy), 69);
-        final db = sqlite3.open(copy);
-        db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        db.execute('DROP TABLE IF EXISTS window_checkpoints');
-        db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        db.execute('DROP TABLE IF EXISTS exercise_revisions');
-        db.execute('DROP TABLE IF EXISTS implementation_revisions');
-        db.execute('DROP TABLE IF EXISTS equipment_revisions');
-        db.execute('DROP TABLE IF EXISTS gym_revisions');
-        db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        db.execute('DROP TABLE IF EXISTS imported_sessions');
-        db.execute('DROP TABLE IF EXISTS block_progressions');
-        db.userVersion = 27;
-        db.close();
-        rejects(() => NativeBackup.validateDatabase(copy));
       } finally {
         await temp.delete(recursive: true);
       }

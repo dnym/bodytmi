@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, throwsA, isA;
 import 'cli_test.dart';
 import 'fixtures.dart';
@@ -154,31 +152,6 @@ void executionTests() {
   test(
     'manual rest advances only explicitly and survives both portability formats',
     () => _withStore((store, dir) async {
-      await store.snapshot('$dir/v39.sqlite');
-      final old = sqlite3.open('$dir/v39.sqlite');
-      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      old.execute('DROP TABLE IF EXISTS window_checkpoints');
-      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      old.execute('DROP TABLE IF EXISTS exercise_revisions');
-      old.execute('DROP TABLE IF EXISTS implementation_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_revisions');
-      old.execute('DROP TABLE IF EXISTS gym_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      old.execute('DROP TABLE IF EXISTS imported_sessions');
-      old.execute('DROP TABLE IF EXISTS block_progressions');
-      old.userVersion = 39;
-      old.close();
-      equal(NativeBackup.validateDatabase('$dir/v39.sqlite'), 39);
-      final migrated = await TrainingStore.open('$dir/v39.sqlite');
-      equal(
-        (await StoredTrainingService(migrated).revision('traversal')).number,
-        1,
-      );
-      await migrated.close();
       final training = StoredTrainingService(store);
       await training.publish(_manualDefinition(), 0);
       final session = await training.start(
@@ -255,41 +228,6 @@ void executionTests() {
       } finally {
         await nativeRestored.close();
       }
-      final envelope =
-          jsonDecode(await File(file).readAsString()) as Map<String, Object?>;
-      envelope['format'] = 'bodytmi-logical-export/39';
-      envelope['sha256'] = sha256
-          .convert(
-            utf8.encode(
-              canonicalJson({
-                for (final entry in envelope.entries)
-                  if (entry.key != 'sha256') entry.key: entry.value,
-              }),
-            ),
-          )
-          .toString();
-      await File('$dir/old-manual.json').writeAsString(jsonEncode(envelope));
-      await _fails(LogicalArchiveFiles.prepare('$dir/old-manual.json'));
-      await store.snapshot('$dir/manual.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/manual.sqlite'), 69);
-      final relabeled = sqlite3.open('$dir/manual.sqlite');
-      relabeled.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      relabeled.execute('DROP TABLE IF EXISTS window_checkpoints');
-      relabeled.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      relabeled.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      relabeled.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      relabeled.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      relabeled.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      relabeled.execute('DROP TABLE IF EXISTS exercise_revisions');
-      relabeled.execute('DROP TABLE IF EXISTS implementation_revisions');
-      relabeled.execute('DROP TABLE IF EXISTS equipment_revisions');
-      relabeled.execute('DROP TABLE IF EXISTS gym_revisions');
-      relabeled.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      relabeled.execute('DROP TABLE IF EXISTS imported_sessions');
-      relabeled.execute('DROP TABLE IF EXISTS block_progressions');
-      relabeled.userVersion = 39;
-      relabeled.close();
-      rejects(() => NativeBackup.validateDatabase('$dir/manual.sqlite'));
       final previous = e;
       e = await service.step(
         e.id,
@@ -594,33 +532,6 @@ void executionTests() {
       var session = await training.session('group-session');
       final first = session.sets.first;
       final rest = await TimingService(store).show(advanced.clockId('rest'));
-      await store.snapshot('$dir/v36.sqlite');
-      final previous = sqlite3.open('$dir/v36.sqlite');
-      previous.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      previous.execute('DROP TABLE IF EXISTS window_checkpoints');
-      previous.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      previous.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      previous.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      previous.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      previous.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      previous.execute('DROP TABLE IF EXISTS exercise_revisions');
-      previous.execute('DROP TABLE IF EXISTS implementation_revisions');
-      previous.execute('DROP TABLE IF EXISTS equipment_revisions');
-      previous.execute('DROP TABLE IF EXISTS gym_revisions');
-      previous.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      previous.execute('DROP TABLE IF EXISTS imported_sessions');
-      previous.execute('DROP TABLE IF EXISTS block_progressions');
-      previous.userVersion = 36;
-      previous.close();
-      equal(NativeBackup.validateDatabase('$dir/v36.sqlite'), 36);
-      final migrated = await TrainingStore.open('$dir/v36.sqlite');
-      equal(
-        canonicalJson(
-          (await StoredTrainingService(migrated).session(session.id)).toJson(),
-        ),
-        canonicalJson(session.toJson()),
-      );
-      await migrated.close();
       session = await training.carryActual(
         session.id,
         session.contentVersion,
@@ -683,41 +594,6 @@ void executionTests() {
       } finally {
         await restored.close();
       }
-      final envelope =
-          jsonDecode(await File(file).readAsString()) as Map<String, Object?>;
-      envelope['format'] = 'bodytmi-logical-export/36';
-      envelope['sha256'] = sha256
-          .convert(
-            utf8.encode(
-              canonicalJson({
-                for (final e in envelope.entries)
-                  if (e.key != 'sha256') e.key: e.value,
-              }),
-            ),
-          )
-          .toString();
-      await File('$dir/old-carry.json').writeAsString(jsonEncode(envelope));
-      await _fails(LogicalArchiveFiles.prepare('$dir/old-carry.json'));
-      await store.snapshot('$dir/carry.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/carry.sqlite'), 69);
-      final old = sqlite3.open('$dir/carry.sqlite');
-      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      old.execute('DROP TABLE IF EXISTS window_checkpoints');
-      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      old.execute('DROP TABLE IF EXISTS exercise_revisions');
-      old.execute('DROP TABLE IF EXISTS implementation_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_revisions');
-      old.execute('DROP TABLE IF EXISTS gym_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      old.execute('DROP TABLE IF EXISTS imported_sessions');
-      old.execute('DROP TABLE IF EXISTS block_progressions');
-      old.userVersion = 36;
-      old.close();
-      rejects(() => NativeBackup.validateDatabase('$dir/carry.sqlite'));
     }),
   );
   test(
@@ -1029,155 +905,6 @@ void executionTests() {
       equal((await programs.run('strength-run')).cursor, 1);
       equal((await store.programReceipts()).length, 1);
       await store.archive();
-    }),
-  );
-
-  test(
-    'v8 profiles migrate unchanged and v9 native/logical restore retains group receipts while old labels reject them',
-    () => _withStore((store, dir) async {
-      final e = await _startGroups(store);
-      final original = canonicalJson((await store.archive()).toJson());
-      await store.backup('$dir/v8');
-      final old = sqlite3.open('$dir/v8/database.sqlite');
-      old.execute('DROP TABLE family_revisions');
-      old.execute('DROP TABLE derived_target_graphs');
-      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      old.execute('DROP TABLE IF EXISTS window_checkpoints');
-      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      old.execute('DROP TABLE IF EXISTS exercise_revisions');
-      old.execute('DROP TABLE IF EXISTS implementation_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_revisions');
-      old.execute('DROP TABLE IF EXISTS gym_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      old.execute('DROP TABLE IF EXISTS imported_sessions');
-      old.execute('DROP TABLE IF EXISTS block_progressions');
-      old.userVersion = 8;
-      old.close();
-      equal(await NativeBackup.validateDatabase('$dir/v8/database.sqlite'), 8);
-      await store.close();
-      final migrated = await TrainingStore.open('$dir/v8/database.sqlite');
-      try {
-        equal(canonicalJson((await migrated.archive()).toJson()), original);
-        equal(
-          (await migrated.backup('$dir/migrated'))['databaseSchemaVersion'],
-          69,
-        );
-      } finally {
-        await migrated.close();
-      }
-      var active = await TrainingStore.open('$dir/db.sqlite');
-      try {
-        await LogicalArchiveFiles.export(
-          await active.archive(),
-          '$dir/old.json',
-        );
-        final legacy = jsonObject(
-          jsonDecode(await File('$dir/old.json').readAsString()),
-          'legacy',
-        );
-        jsonObject(legacy['data'], 'data').remove('families');
-        legacy['format'] = 'bodytmi-logical-export/8';
-        legacy.remove('sha256');
-        legacy['sha256'] = sha256
-            .convert(utf8.encode(canonicalJson(legacy)))
-            .toString();
-        await File('$dir/old.json').writeAsString(jsonEncode(legacy));
-        final oldLogical = await LogicalArchiveFiles.prepare('$dir/old.json');
-        await oldLogical.close();
-        await ExecutionService(active).skipGroup(
-          e.id,
-          1,
-          1,
-          'round',
-          'workout/rounds[0]',
-          instant(1),
-          confirm: true,
-        );
-        final skipped = canonicalJson((await active.archive()).toJson());
-        await active.backup('$dir/native');
-        await LogicalArchiveFiles.export(
-          await active.archive(),
-          '$dir/new.json',
-        );
-        final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
-        try {
-          await active.restore(
-            logical.backup,
-            recoveryDestination: '$dir/recovery-logical',
-            confirm: true,
-          );
-          await active.close();
-          active = await TrainingStore.open('$dir/db.sqlite');
-          equal(canonicalJson((await active.archive()).toJson()), skipped);
-        } finally {
-          await logical.close();
-        }
-        final native = await NativeBackup.prepare('$dir/native');
-        try {
-          await active.restore(
-            native,
-            recoveryDestination: '$dir/recovery-native',
-            confirm: true,
-          );
-          await active.close();
-          active = await TrainingStore.open('$dir/db.sqlite');
-          equal(canonicalJson((await active.archive()).toJson()), skipped);
-        } finally {
-          await native.close();
-        }
-        equal(
-          (await ExecutionService(active).skipGroup(
-            e.id,
-            1,
-            1,
-            'round',
-            'workout/rounds[0]',
-            instant(1),
-            confirm: true,
-          )).cursor,
-          3,
-        );
-        final forged = sqlite3.open('$dir/native/database.sqlite');
-        forged.execute('DROP TABLE family_revisions');
-        forged.execute('DROP TABLE derived_target_graphs');
-        forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        forged.execute('DROP TABLE IF EXISTS window_checkpoints');
-        forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        forged.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        forged.execute('DROP TABLE IF EXISTS exercise_revisions');
-        forged.execute('DROP TABLE IF EXISTS implementation_revisions');
-        forged.execute('DROP TABLE IF EXISTS equipment_revisions');
-        forged.execute('DROP TABLE IF EXISTS gym_revisions');
-        forged.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        forged.execute('DROP TABLE IF EXISTS imported_sessions');
-        forged.execute('DROP TABLE IF EXISTS block_progressions');
-        forged.userVersion = 8;
-        forged.close();
-        rejects(
-          () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
-        );
-        final mislabeled = jsonObject(
-          jsonDecode(await File('$dir/new.json').readAsString()),
-          'export',
-        );
-        jsonObject(mislabeled['data'], 'data').remove('families');
-        mislabeled['format'] = 'bodytmi-logical-export/8';
-        mislabeled.remove('sha256');
-        mislabeled['sha256'] = sha256
-            .convert(utf8.encode(canonicalJson(mislabeled)))
-            .toString();
-        await File('$dir/new.json').writeAsString(jsonEncode(mislabeled));
-        await _fails(LogicalArchiveFiles.prepare('$dir/new.json'));
-      } finally {
-        await active.close();
-      }
     }),
   );
   test(
@@ -2099,13 +1826,13 @@ void executionTests() {
         store,
       ).advance(timer.id, timer.version, 'epoch', 250, instant(1));
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 1);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/69',
+        'bodytmi-logical-export/1',
       );
       final prepared = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -2161,139 +1888,6 @@ void executionTests() {
         );
       } finally {
         await again.close();
-      }
-    }),
-  );
-  test(
-    'schema/logical v7 migrate with unchanged per-set clocks while old labels cannot carry execution or rest-only semantics',
-    () => _withStore((store, dir) async {
-      final timer = await TimingService(store).start(
-        'legacy',
-        'session',
-        'workout/hold-set',
-        'duration',
-        TimingPlan.fromJson({'effortMilliseconds': 1000}),
-        instant(1),
-      );
-      final original = (await store.archive()).toJson();
-      final doc = <String, Object?>{
-        'format': 'bodytmi-logical-export/7',
-        'applicationVersion': '0.1.0',
-        'data': Map<String, Object?>.from(original)
-          ..remove('families')
-          ..remove('executions'),
-      };
-      doc['sha256'] = sha256
-          .convert(utf8.encode(canonicalJson(doc)))
-          .toString();
-      await File('$dir/v7.json').writeAsString(jsonEncode(doc));
-      final prepared = await LogicalArchiveFiles.prepare('$dir/v7.json');
-      try {
-        jsonEqual(prepared.archive.toJson(), original);
-      } finally {
-        await prepared.close();
-      }
-      doc.remove('sha256');
-      doc['data'] = original;
-      doc['sha256'] = sha256
-          .convert(utf8.encode(canonicalJson(doc)))
-          .toString();
-      await File('$dir/forged.json').writeAsString(jsonEncode(doc));
-      await _fails(LogicalArchiveFiles.prepare('$dir/forged.json'));
-      await store.close();
-      final raw = sqlite3.open('$dir/db.sqlite');
-      try {
-        raw.execute('DROP TABLE family_revisions');
-        raw.execute('DROP TABLE workout_executions');
-        raw.execute('DROP TABLE derived_target_graphs');
-        raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        raw.execute('DROP TABLE IF EXISTS window_checkpoints');
-        raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        raw.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        raw.execute('DROP TABLE IF EXISTS exercise_revisions');
-        raw.execute('DROP TABLE IF EXISTS implementation_revisions');
-        raw.execute('DROP TABLE IF EXISTS equipment_revisions');
-        raw.execute('DROP TABLE IF EXISTS gym_revisions');
-        raw.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        raw.execute('DROP TABLE IF EXISTS imported_sessions');
-        raw.execute('DROP TABLE IF EXISTS block_progressions');
-        raw.execute('PRAGMA user_version = 7');
-      } finally {
-        raw.close();
-      }
-      equal(
-        (await NativeBackup.create(
-          '$dir/db.sqlite',
-          '$dir/v7-native',
-        ))['databaseSchemaVersion'],
-        7,
-      );
-      final upgraded = await TrainingStore.open('$dir/db.sqlite');
-      try {
-        jsonEqual(
-          (await TimingService(upgraded).show(timer.id)).toJson(),
-          timer.toJson(),
-        );
-        equal((await upgraded.executions()).length, 0);
-        final timing = TimingService(upgraded);
-        await timing.stop(
-          timer.id,
-          timer.version,
-          instant(1),
-          confirm: true,
-          discard: true,
-        );
-        await timing.startRest(
-          'new-rest',
-          'session',
-          'workout/recovery',
-          instant(1),
-        );
-        await upgraded.backup('$dir/rest-native');
-        final payload = <String, Object?>{
-          'format': 'bodytmi-logical-export/7',
-          'applicationVersion': '0.1.0',
-          'data': (await upgraded.archive()).toJson()
-            ..remove('families')
-            ..remove('executions'),
-        };
-        payload['sha256'] = sha256
-            .convert(utf8.encode(canonicalJson(payload)))
-            .toString();
-        await File('$dir/rest-forged.json').writeAsString(jsonEncode(payload));
-        await _fails(LogicalArchiveFiles.prepare('$dir/rest-forged.json'));
-        final forged = sqlite3.open('$dir/rest-native/database.sqlite');
-        try {
-          forged.execute('DROP TABLE family_revisions');
-          forged.execute('DROP TABLE workout_executions');
-          forged.execute('DROP TABLE derived_target_graphs');
-          forged.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-          forged.execute('DROP TABLE IF EXISTS window_checkpoints');
-          forged.execute('DROP TABLE IF EXISTS progression_reconciliations');
-          forged.execute('DROP TABLE IF EXISTS lever_link_revisions');
-          forged.execute('DROP TABLE IF EXISTS shared_lever_applications');
-          forged.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-          forged.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-          forged.execute('DROP TABLE IF EXISTS exercise_revisions');
-          forged.execute('DROP TABLE IF EXISTS implementation_revisions');
-          forged.execute('DROP TABLE IF EXISTS equipment_revisions');
-          forged.execute('DROP TABLE IF EXISTS gym_revisions');
-          forged.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-          forged.execute('DROP TABLE IF EXISTS imported_sessions');
-          forged.execute('DROP TABLE IF EXISTS block_progressions');
-          forged.execute('PRAGMA user_version = 7');
-        } finally {
-          forged.close();
-        }
-        rejects(
-          () =>
-              NativeBackup.validateDatabase('$dir/rest-native/database.sqlite'),
-        );
-      } finally {
-        await upgraded.close();
       }
     }),
   );

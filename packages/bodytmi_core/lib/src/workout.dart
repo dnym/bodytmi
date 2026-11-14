@@ -227,17 +227,9 @@ final class WorkoutDefinition {
   /// The authored unilateral side of an effort occurrence, or null.
   String? effortSide(String occurrenceId) => _sides[occurrenceId];
 
-  bool get hasManualRest => plan.nodes.whereType<Rest>().any((r) => r.isManual);
-
   bool get hasExtendedEffortRoles => plan.nodes.whereType<Effort>().any(
     (e) => e.role == 'backoff' || e.role == 'drop',
   );
-
-  bool get hasMaxEffortObjectives =>
-      plan.nodes.whereType<Effort>().any((e) => e.maxEffortMetrics.isNotEmpty);
-
-  bool get hasTypedObjectives =>
-      plan.nodes.whereType<Effort>().any((e) => e.criteria.isNotEmpty);
 
   /// Published working targets in the same slot/role ordinal order as sessions.
   List<Metrics> workingTargets(String slotId) => roleTargets(slotId, 'work');

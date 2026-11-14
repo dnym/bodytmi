@@ -4,8 +4,6 @@ import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, throwsA, isA;
 import 'cli_test.dart';
 import 'fixtures.dart';
@@ -153,39 +151,6 @@ void tempoTests() {
           session.contentVersion,
           (s) => const TrainingService().skip(s, 'set', confirm: true),
         );
-        final data = copyJson((await store.archive()).toJson());
-        data['timers'] = <Object?>[];
-        TrainingArchive.fromJson(data);
-        final envelope = <String, Object?>{
-          'format': 'bodytmi-logical-export/43',
-          'applicationVersion': '0.1.0',
-          'data': data,
-        };
-        envelope['sha256'] = sha256
-            .convert(utf8.encode(canonicalJson(envelope)))
-            .toString();
-        await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
-        await _fails(LogicalArchiveFiles.prepare('${dir.path}/old.json'));
-        await store.snapshot('${dir.path}/old.sqlite');
-        final old = sqlite3.open('${dir.path}/old.sqlite');
-        old.execute("DELETE FROM timing_activities WHERE id = 'clock'");
-        old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        old.execute('DROP TABLE IF EXISTS window_checkpoints');
-        old.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        old.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        old.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        old.execute('DROP TABLE IF EXISTS exercise_revisions');
-        old.execute('DROP TABLE IF EXISTS implementation_revisions');
-        old.execute('DROP TABLE IF EXISTS equipment_revisions');
-        old.execute('DROP TABLE IF EXISTS gym_revisions');
-        old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        old.execute('DROP TABLE IF EXISTS imported_sessions');
-        old.execute('DROP TABLE IF EXISTS block_progressions');
-        old.userVersion = 43;
-        old.close();
-        rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
       } finally {
         await store.close();
         await dir.delete(recursive: true);
@@ -252,27 +217,6 @@ void tempoTests() {
           1,
           instant(1),
         );
-        await store.snapshot('${dir.path}/legacy.sqlite');
-        final legacy = sqlite3.open('${dir.path}/legacy.sqlite');
-        legacy.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        legacy.execute('DROP TABLE IF EXISTS window_checkpoints');
-        legacy.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        legacy.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        legacy.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        legacy.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        legacy.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        legacy.execute('DROP TABLE IF EXISTS exercise_revisions');
-        legacy.execute('DROP TABLE IF EXISTS implementation_revisions');
-        legacy.execute('DROP TABLE IF EXISTS equipment_revisions');
-        legacy.execute('DROP TABLE IF EXISTS gym_revisions');
-        legacy.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        legacy.execute('DROP TABLE IF EXISTS imported_sessions');
-        legacy.execute('DROP TABLE IF EXISTS block_progressions');
-        legacy.userVersion = 43;
-        legacy.close();
-        equal(NativeBackup.validateDatabase('${dir.path}/legacy.sqlite'), 43);
-        final migrated = await TrainingStore.open('${dir.path}/legacy.sqlite');
-        await migrated.close();
         final plan = TimingPlan.fromJson({
           'openEnded': true,
           'unplannedDuration': true,
@@ -520,36 +464,6 @@ void tempoTests() {
         } finally {
           await nativeRestored.close();
         }
-        final envelope = jsonObject(
-          jsonDecode(await File(file).readAsString()),
-          'archive',
-        );
-        envelope['format'] = 'bodytmi-logical-export/43';
-        envelope.remove('sha256');
-        envelope['sha256'] = sha256
-            .convert(utf8.encode(canonicalJson(envelope)))
-            .toString();
-        await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
-        await _fails(LogicalArchiveFiles.prepare('${dir.path}/old.json'));
-        await store.snapshot('${dir.path}/old.sqlite');
-        final old = sqlite3.open('${dir.path}/old.sqlite');
-        old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        old.execute('DROP TABLE IF EXISTS window_checkpoints');
-        old.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        old.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        old.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        old.execute('DROP TABLE IF EXISTS exercise_revisions');
-        old.execute('DROP TABLE IF EXISTS implementation_revisions');
-        old.execute('DROP TABLE IF EXISTS equipment_revisions');
-        old.execute('DROP TABLE IF EXISTS gym_revisions');
-        old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        old.execute('DROP TABLE IF EXISTS imported_sessions');
-        old.execute('DROP TABLE IF EXISTS block_progressions');
-        old.userVersion = 43;
-        old.close();
-        rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
       } finally {
         await store.close();
         await dir.delete(recursive: true);
@@ -740,27 +654,6 @@ void tempoTests() {
           1,
           instant(1),
         );
-        await store.snapshot('${dir.path}/legacy.sqlite');
-        final legacyDb = sqlite3.open('${dir.path}/legacy.sqlite');
-        legacyDb.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        legacyDb.execute('DROP TABLE IF EXISTS window_checkpoints');
-        legacyDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        legacyDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        legacyDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        legacyDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        legacyDb.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        legacyDb.execute('DROP TABLE IF EXISTS exercise_revisions');
-        legacyDb.execute('DROP TABLE IF EXISTS implementation_revisions');
-        legacyDb.execute('DROP TABLE IF EXISTS equipment_revisions');
-        legacyDb.execute('DROP TABLE IF EXISTS gym_revisions');
-        legacyDb.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        legacyDb.execute('DROP TABLE IF EXISTS imported_sessions');
-        legacyDb.execute('DROP TABLE IF EXISTS block_progressions');
-        legacyDb.userVersion = 42;
-        legacyDb.close();
-        equal(NativeBackup.validateDatabase('${dir.path}/legacy.sqlite'), 42);
-        final migrated = await TrainingStore.open('${dir.path}/legacy.sqlite');
-        await migrated.close();
         final plan = TimingPlan.fromJson({
           'unplannedDuration': true,
           'preparationMilliseconds': 1000,
@@ -984,36 +877,6 @@ void tempoTests() {
         } finally {
           await nativeRestored.close();
         }
-        final envelope = jsonObject(
-          jsonDecode(await File(file).readAsString()),
-          'archive',
-        );
-        envelope['format'] = 'bodytmi-logical-export/42';
-        envelope.remove('sha256');
-        envelope['sha256'] = sha256
-            .convert(utf8.encode(canonicalJson(envelope)))
-            .toString();
-        await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
-        await _fails(LogicalArchiveFiles.prepare('${dir.path}/old.json'));
-        await store.snapshot('${dir.path}/old.sqlite');
-        final oldDb = sqlite3.open('${dir.path}/old.sqlite');
-        oldDb.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        oldDb.execute('DROP TABLE IF EXISTS window_checkpoints');
-        oldDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        oldDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        oldDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        oldDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        oldDb.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        oldDb.execute('DROP TABLE IF EXISTS exercise_revisions');
-        oldDb.execute('DROP TABLE IF EXISTS implementation_revisions');
-        oldDb.execute('DROP TABLE IF EXISTS equipment_revisions');
-        oldDb.execute('DROP TABLE IF EXISTS gym_revisions');
-        oldDb.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        oldDb.execute('DROP TABLE IF EXISTS imported_sessions');
-        oldDb.execute('DROP TABLE IF EXISTS block_progressions');
-        oldDb.userVersion = 42;
-        oldDb.close();
-        rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
       } finally {
         await store.close();
         await dir.delete(recursive: true);
@@ -1062,70 +925,6 @@ void tempoTests() {
       );
     },
   );
-  test(
-    'schema and logical v9 clocks migrate without acquiring tempo or changing elapsed inputs',
-    () => _withStore((store, dir) async {
-      await TimingService(store).start(
-        'clock',
-        'session',
-        'effort',
-        'duration',
-        TimingPlan.fromJson({'effortMilliseconds': 12000}),
-        instant(1),
-      );
-      final original = canonicalJson((await store.archive()).toJson());
-      await store.backup('$dir/old');
-      await LogicalArchiveFiles.export(await store.archive(), '$dir/old.json');
-      final j = jsonObject(
-        jsonDecode(await File('$dir/old.json').readAsString()),
-        'logical',
-      );
-      jsonObject(j['data'], 'data').remove('families');
-      j['format'] = 'bodytmi-logical-export/9';
-      j.remove('sha256');
-      j['sha256'] = sha256.convert(utf8.encode(canonicalJson(j))).toString();
-      await File('$dir/old.json').writeAsString(jsonEncode(j));
-      final logical = await LogicalArchiveFiles.prepare('$dir/old.json');
-      try {
-        equal(canonicalJson(logical.archive.toJson()), original);
-      } finally {
-        await logical.close();
-      }
-      final old = sqlite3.open('$dir/old/database.sqlite');
-      old.execute('DROP TABLE family_revisions');
-      old.execute('DROP TABLE derived_target_graphs');
-      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      old.execute('DROP TABLE IF EXISTS window_checkpoints');
-      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      old.execute('DROP TABLE IF EXISTS exercise_revisions');
-      old.execute('DROP TABLE IF EXISTS implementation_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_revisions');
-      old.execute('DROP TABLE IF EXISTS gym_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      old.execute('DROP TABLE IF EXISTS imported_sessions');
-      old.execute('DROP TABLE IF EXISTS block_progressions');
-      old.userVersion = 9;
-      old.close();
-      equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 9);
-      await store.close();
-      final migrated = await TrainingStore.open('$dir/old/database.sqlite');
-      try {
-        equal(canonicalJson((await migrated.archive()).toJson()), original);
-        equal((await TimingService(migrated).show('clock')).plan.tempo, null);
-        equal(
-          (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          69,
-        );
-      } finally {
-        await migrated.close();
-      }
-    }),
-  );
-
   test(
     'tempo boundaries use effort only and repeat unequal phases without certifying reps',
     () {
@@ -1421,13 +1220,13 @@ void tempoTests() {
       t = await timing.resume(t.id, t.version, 'epoch', instant(1));
       await timing.advance(t.id, t.version, 'epoch', 4500, instant(1));
       final expected = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 1);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/69',
+        'bodytmi-logical-export/1',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -1471,38 +1270,6 @@ void tempoTests() {
       } finally {
         await active.close();
       }
-      final old = sqlite3.open('$dir/native/database.sqlite');
-      old.execute('DROP TABLE family_revisions');
-      old.execute('DROP TABLE derived_target_graphs');
-      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      old.execute('DROP TABLE IF EXISTS window_checkpoints');
-      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      old.execute('DROP TABLE IF EXISTS exercise_revisions');
-      old.execute('DROP TABLE IF EXISTS implementation_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_revisions');
-      old.execute('DROP TABLE IF EXISTS gym_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      old.execute('DROP TABLE IF EXISTS imported_sessions');
-      old.execute('DROP TABLE IF EXISTS block_progressions');
-      old.userVersion = 9;
-      old.close();
-      rejects(
-        () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
-      );
-      final j = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'logical',
-      );
-      jsonObject(j['data'], 'data').remove('families');
-      j['format'] = 'bodytmi-logical-export/9';
-      j.remove('sha256');
-      j['sha256'] = sha256.convert(utf8.encode(canonicalJson(j))).toString();
-      await File('$dir/logical.json').writeAsString(jsonEncode(j));
-      await _fails(LogicalArchiveFiles.prepare('$dir/logical.json'));
     }),
   );
   test(

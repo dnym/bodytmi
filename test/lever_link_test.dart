@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart' show invoke;
 import 'fixtures.dart';
 import 'support.dart';
@@ -98,9 +96,6 @@ Map<String, Object?> _link({
   'baseline': baseline,
 };
 
-String _digest(String canonical) =>
-    sha256.convert(utf8.encode(canonical)).toString();
-
 Future<String?> _invalid(Future<Object?> action()) async {
   try {
     await action();
@@ -119,38 +114,6 @@ Future<String?> _conflict(Future<Object?> action()) async {
     return error.message;
   }
   throw StateError('Expected a conflict.');
-}
-
-String _nativeError(String database) {
-  try {
-    return 'ok:${NativeBackup.validateDatabase(database)}';
-  } on BodyTmiException catch (error) {
-    return error.message;
-  }
-}
-
-Future<String> _relabelRejects(
-  String source,
-  int label, {
-  required bool keep,
-}) async {
-  final json = jsonObject(
-    jsonDecode(await File(source).readAsString()),
-    'file',
-  );
-  final data = jsonObject(json['data'], 'data');
-  if (!keep) data.remove('links');
-  json['format'] = 'bodytmi-logical-export/$label';
-  json.remove('sha256');
-  json['sha256'] = _digest(canonicalJson(json));
-  await File(source).writeAsString(jsonEncode(json));
-  try {
-    final prepared = await LogicalArchiveFiles.prepare(source);
-    await prepared.close();
-  } on BodyTmiException catch (error) {
-    return error.message;
-  }
-  throw StateError('Expected the relabel to be rejected.');
 }
 
 void leverLinkTests() {
@@ -718,124 +681,61 @@ void leverLinkTests() {
     },
   );
 
-  test(
-    'native and logical v54 archives carry links while older labels reject them',
-    () async {
-      final dir = await Directory.systemTemp.createTemp('bodytmi-link-port-');
-      final store = await TrainingStore.open('${dir.path}/db.sqlite');
-      TrainingArchive? archived;
-      String before;
+  test('native and logical archives carry links', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-link-port-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    TrainingArchive? archived;
+    String before;
+    try {
+      await StoredTrainingService(store).publish(_pair(), 0);
+      await _tracks(store);
+      await LeverLinkService(store).create(
+        input: _link(id: 'portable-link', name: 'Portable'),
+        createdAt: instant(2),
+        expectedRevision: 0,
+        confirm: true,
+      );
+      archived = await store.archive();
+      before = canonicalJson(archived.toJson());
+      equal(
+        (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
+        1,
+      );
+      await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
+      await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
+    } finally {
+      await store.close();
+    }
+    try {
+      equal(
+        NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
+        1,
+      );
+      final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
       try {
-        await StoredTrainingService(store).publish(_pair(), 0);
-        await _tracks(store);
-        await LeverLinkService(store).create(
-          input: _link(id: 'portable-link', name: 'Portable'),
-          createdAt: instant(2),
-          expectedRevision: 0,
-          confirm: true,
+        equal(canonicalJson(full.archive.toJson()), before);
+        check(
+          full.archive.links.any(
+            (revision) => revision.link.id == 'portable-link',
+          ),
+          'the link survives the logical round trip',
         );
-        archived = await store.archive();
-        before = canonicalJson(archived.toJson());
-        equal(
-          (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          69,
-        );
-        await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
-        await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
       } finally {
-        await store.close();
+        await full.close();
       }
+      final reopened = await TrainingStore.open(
+        '${dir.path}/native/database.sqlite',
+      );
       try {
-        equal(
-          NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          69,
-        );
-        final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
-        try {
-          equal(canonicalJson(full.archive.toJson()), before);
-          check(
-            full.archive.links.any(
-              (revision) => revision.link.id == 'portable-link',
-            ),
-            'the link survives the logical round trip',
-          );
-        } finally {
-          await full.close();
-        }
-        check(
-          (await _relabelRejects(
-            '${dir.path}/full.json',
-            52,
-            keep: true,
-          )).contains('Unknown fields'),
-          'links need the new label',
-        );
-        check(
-          (await _relabelRejects(
-            '${dir.path}/bare.json',
-            54,
-            keep: false,
-          )).contains('requires lever links'),
-          'the new label names its section',
-        );
-        File('${dir.path}/labeled.sqlite').writeAsBytesSync(
-          File('${dir.path}/native/database.sqlite').readAsBytesSync(),
-        );
-        final labeled = sqlite3.open('${dir.path}/labeled.sqlite');
-        labeled.userVersion = 52;
-        labeled.close();
-        check(
-          _nativeError(
-            '${dir.path}/labeled.sqlite',
-          ).contains('does not match supported schema v52'),
-          'a v53 profile cannot claim the older schema label',
-        );
-        File('${dir.path}/dropped.sqlite').writeAsBytesSync(
-          File('${dir.path}/native/database.sqlite').readAsBytesSync(),
-        );
-        final dropped = sqlite3.open('${dir.path}/dropped.sqlite');
-        dropped.execute('DROP TABLE lever_link_revisions');
-        dropped.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        dropped.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        dropped.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        dropped.execute('DROP TABLE IF EXISTS exercise_revisions');
-        dropped.execute('DROP TABLE IF EXISTS implementation_revisions');
-        dropped.execute('DROP TABLE IF EXISTS equipment_revisions');
-        dropped.execute('DROP TABLE IF EXISTS gym_revisions');
-        dropped.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        dropped.execute('DROP TABLE IF EXISTS imported_sessions');
-        dropped.execute('DROP TABLE IF EXISTS block_progressions');
-        dropped.userVersion = 52;
-        dropped.close();
-        equal(_nativeError('${dir.path}/dropped.sqlite'), 'ok:52');
-        final migrated = await TrainingStore.open('${dir.path}/dropped.sqlite');
-        try {
-          final after = await migrated.archive();
-          equal(after.links.length, 0);
-          equal(after.sessions.length, 1);
-          equal(
-            (await migrated.backup(
-              '${dir.path}/upgraded',
-            ))['databaseSchemaVersion'],
-            69,
-          );
-        } finally {
-          await migrated.close();
-        }
-        final reopened = await TrainingStore.open(
-          '${dir.path}/native/database.sqlite',
-        );
-        try {
-          equal(canonicalJson((await reopened.archive()).toJson()), before);
-          equal((await LeverLinkService(reopened).list()).length, 1);
-        } finally {
-          await reopened.close();
-        }
+        equal(canonicalJson((await reopened.archive()).toJson()), before);
+        equal((await LeverLinkService(reopened).list()).length, 1);
       } finally {
-        await dir.delete(recursive: true);
+        await reopened.close();
       }
-    },
-  );
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
 
   test('the CLI creates, shows and lists one shared lever link', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-link-act-cli-');

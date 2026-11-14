@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, throwsA, isA;
 import 'cli_test.dart' show invoke;
 import 'fixtures.dart';
@@ -128,17 +126,6 @@ String _invalidError(void Function() action) {
   }
   throw StateError('Expected a validation error.');
 }
-
-String _nativeError(String database) {
-  try {
-    return 'ok:${NativeBackup.validateDatabase(database)}';
-  } on BodyTmiException catch (error) {
-    return error.message;
-  }
-}
-
-String _digest(String canonical) =>
-    sha256.convert(utf8.encode(canonical)).toString();
 
 const _slot = 'row';
 
@@ -905,133 +892,88 @@ void ordinalProgressionTests() {
     }
   });
 
-  test(
-    'native and logical v55 archives carry ordinal progression while older labels reject it',
-    () async {
-      final dir = await Directory.systemTemp.createTemp(
-        'bodytmi-ordinal-port-',
+  test('native and logical archives carry ordinal progression', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-ordinal-port-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    TrainingArchive? archived;
+    String before;
+    try {
+      await StoredTrainingService(store).publish(_definition(), 0);
+      final progression = StoredProgressionService(store);
+      final rule = _rule();
+      final finished = await _finished(store, 'portable', 1);
+      final pending = await progression.propose(
+        finished.id,
+        _slot,
+        rule,
+        ruleType: 'ordinal',
       );
-      final store = await TrainingStore.open('${dir.path}/db.sqlite');
-      TrainingArchive? archived;
-      String before;
+      await progression.accept(
+        finished.id,
+        _slot,
+        pending.version,
+        _approval(1),
+      );
+      archived = await store.archive();
+      before = canonicalJson(archived.toJson());
+      equal(
+        (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
+        1,
+      );
+      await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
+    } finally {
+      await store.close();
+    }
+    try {
+      equal(
+        NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
+        1,
+      );
+      final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
       try {
-        await StoredTrainingService(store).publish(_definition(), 0);
-        final progression = StoredProgressionService(store);
-        final rule = _rule();
-        final finished = await _finished(store, 'portable', 1);
-        final pending = await progression.propose(
-          finished.id,
-          _slot,
-          rule,
-          ruleType: 'ordinal',
+        equal(canonicalJson(full.archive.toJson()), before);
+        check(
+          full.archive.progressions.any((d) => d.ruleType == 'ordinal'),
+          'the ordinal decision survives the logical round trip',
         );
-        await progression.accept(
-          finished.id,
-          _slot,
-          pending.version,
-          _approval(1),
-        );
-        archived = await store.archive();
-        before = canonicalJson(archived.toJson());
-        equal(
-          (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          69,
-        );
-        await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
       } finally {
-        await store.close();
+        await full.close();
       }
+      // Restore keeps the track durable. Restore closes its store handle,
+      // so query through a fresh connection afterwards.
+      final backup = await NativeBackup.prepare('${dir.path}/native');
+      final restorer = await TrainingStore.open('${dir.path}/restored.sqlite');
       try {
-        equal(
-          NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-          69,
+        await restorer.restore(
+          backup,
+          recoveryDestination: '${dir.path}/recovery',
+          confirm: true,
         );
-        final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
-        try {
-          equal(canonicalJson(full.archive.toJson()), before);
-          check(
-            full.archive.progressions.any((d) => d.ruleType == 'ordinal'),
-            'the ordinal decision survives the logical round trip',
-          );
-        } finally {
-          await full.close();
-        }
-        // Same tables, but a v54 label may not claim an ordinal decision.
-        File('${dir.path}/labeled.sqlite').writeAsBytesSync(
-          File('${dir.path}/native/database.sqlite').readAsBytesSync(),
-        );
-        final labeled = sqlite3.open('${dir.path}/labeled.sqlite');
-        labeled.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        labeled.execute('DROP TABLE IF EXISTS exercise_revisions');
-        labeled.execute('DROP TABLE IF EXISTS implementation_revisions');
-        labeled.execute('DROP TABLE IF EXISTS equipment_revisions');
-        labeled.execute('DROP TABLE IF EXISTS gym_revisions');
-        labeled.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        labeled.execute('DROP TABLE IF EXISTS imported_sessions');
-        labeled.execute('DROP TABLE IF EXISTS block_progressions');
-        labeled.userVersion = 54;
-        labeled.close();
-        equal(
-          _nativeError('${dir.path}/labeled.sqlite'),
-          'Ordinal progression requires schema v55.',
-        );
-        final json = jsonObject(
-          jsonDecode(await File('${dir.path}/full.json').readAsString()),
-          'file',
-        );
-        json['format'] = 'bodytmi-logical-export/54';
-        json.remove('sha256');
-        json['sha256'] = _digest(canonicalJson(json));
-        await File(
-          '${dir.path}/relabeled.json',
-        ).writeAsString(jsonEncode(json));
-        final message = await _invalid(
-          () async => (await LogicalArchiveFiles.prepare(
-            '${dir.path}/relabeled.json',
-          )).close(),
-        );
-        equal(message, 'Ordinal progression requires logical v55.');
-
-        // Restore keeps the track durable. Restore closes its store handle,
-        // so query through a fresh connection afterwards.
-        final backup = await NativeBackup.prepare('${dir.path}/native');
-        final restorer = await TrainingStore.open(
-          '${dir.path}/restored.sqlite',
-        );
-        try {
-          await restorer.restore(
-            backup,
-            recoveryDestination: '${dir.path}/recovery',
-            confirm: true,
-          );
-        } finally {
-          await restorer.close();
-        }
-        final restored = await TrainingStore.open(
-          '${dir.path}/restored.sqlite',
-        );
-        try {
-          final track = await StoredProgressionService(restored).track(
-            templateId: 'ordinal-practice',
-            revision: 1,
-            slotId: _slot,
-            asOf: instant(9),
-          );
-          equal(track['ruleType'], 'ordinal');
-          equal(
-            (await restored.archive()).progressions.single.ruleType,
-            'ordinal',
-          );
-          final next = await _finished(restored, 'after-restore', 3);
-          equal(next.sets.last.suggested['mass']!.value.toString(), '22.5');
-        } finally {
-          await restored.close();
-        }
       } finally {
-        await dir.delete(recursive: true);
+        await restorer.close();
       }
-    },
-  );
+      final restored = await TrainingStore.open('${dir.path}/restored.sqlite');
+      try {
+        final track = await StoredProgressionService(restored).track(
+          templateId: 'ordinal-practice',
+          revision: 1,
+          slotId: _slot,
+          asOf: instant(9),
+        );
+        equal(track['ruleType'], 'ordinal');
+        equal(
+          (await restored.archive()).progressions.single.ruleType,
+          'ordinal',
+        );
+        final next = await _finished(restored, 'after-restore', 3);
+        equal(next.sets.last.suggested['mass']!.value.toString(), '22.5');
+      } finally {
+        await restored.close();
+      }
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
 
   test('CLI progression ordinal evaluates pure level moves', () async {
     final result = await invoke(

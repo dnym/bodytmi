@@ -4,7 +4,6 @@ import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
 import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart';
 import 'fixtures.dart';
 import 'support.dart';
@@ -504,7 +503,7 @@ void blockProgressionTests() {
   );
 
   test(
-    'block progression is portable only under v66 formats',
+    'block progression round-trips through native and logical backups',
     () => _withStore((store, dir) async {
       await StoredTrainingService(store).publish(_definition(), 0);
       final blocks = BlockProgressionService(store);
@@ -520,12 +519,12 @@ void blockProgressionTests() {
       );
       await _block(store, 's2', 2, 3, finishSession: false, finishBlock: false);
       final original = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 1);
       final exported = await LogicalArchiveFiles.export(
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/69');
+      equal(exported['format'], 'bodytmi-logical-export/1');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         equal(logical.archive.blockProgressions.length, 1);
@@ -565,9 +564,6 @@ void blockProgressionTests() {
         jsonDecode(await File('$dir/logical.json').readAsString()),
         'logical',
       );
-      final old = copyJson(envelope)..['format'] = 'bodytmi-logical-export/65';
-      await File('$dir/old.json').writeAsString(jsonEncode(await _resign(old)));
-      await _failure(() => LogicalArchiveFiles.prepare('$dir/old.json'));
       // Forged consumed targets do not match the accepted decision.
       final forged = copyJson(envelope);
       for (final c
@@ -586,20 +582,6 @@ void blockProgressionTests() {
         '$dir/forged.json',
       ).writeAsString(jsonEncode(await _resign(forged)));
       await _failure(() => LogicalArchiveFiles.prepare('$dir/forged.json'));
-
-      final copy = '$dir/relabel.sqlite';
-      File('$dir/native/database.sqlite').copySync(copy);
-      final db = sqlite3.open(copy);
-      db.execute('DROP TABLE block_progressions');
-      db.userVersion = 65;
-      db.close();
-      final nativeError = await _failure(
-        () => NativeBackup.validateDatabase(copy),
-      );
-      check(
-        nativeError.message.contains('Block progression targets require'),
-        nativeError.message,
-      );
     }),
   );
 

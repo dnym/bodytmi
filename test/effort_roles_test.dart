@@ -5,8 +5,6 @@ import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, isA, throwsA;
 
 import 'cli_test.dart';
@@ -669,30 +667,6 @@ void effortRolesTests() {
     try {
       final training = StoredTrainingService(store);
       final progression = StoredProgressionService(store);
-      await store.snapshot('${dir.path}/v41.sqlite');
-      final oldProfile = sqlite3.open('${dir.path}/v41.sqlite');
-      oldProfile.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      oldProfile.execute('DROP TABLE IF EXISTS window_checkpoints');
-      oldProfile.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      oldProfile.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      oldProfile.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      oldProfile.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      oldProfile.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      oldProfile.execute('DROP TABLE IF EXISTS exercise_revisions');
-      oldProfile.execute('DROP TABLE IF EXISTS implementation_revisions');
-      oldProfile.execute('DROP TABLE IF EXISTS equipment_revisions');
-      oldProfile.execute('DROP TABLE IF EXISTS gym_revisions');
-      oldProfile.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      oldProfile.execute('DROP TABLE IF EXISTS imported_sessions');
-      oldProfile.execute('DROP TABLE IF EXISTS block_progressions');
-      oldProfile.userVersion = 41;
-      oldProfile.close();
-      equal(NativeBackup.validateDatabase('${dir.path}/v41.sqlite'), 41);
-      final migrated = await TrainingStore.open('${dir.path}/v41.sqlite');
-      await migrated.close();
-      final migratedDb = sqlite3.open('${dir.path}/v41.sqlite');
-      equal(migratedDb.userVersion, 69);
-      migratedDb.close();
       await training.publish(_definition(), 0);
       var session = await training.start(
         'first',
@@ -837,45 +811,6 @@ void effortRolesTests() {
       } finally {
         await nativeRestored.close();
       }
-      final envelope = jsonObject(
-        jsonDecode(await File(file).readAsString()),
-        'envelope',
-      );
-      envelope['format'] = 'bodytmi-logical-export/41';
-      envelope['sha256'] = sha256
-          .convert(
-            utf8.encode(
-              canonicalJson({
-                for (final e in envelope.entries)
-                  if (e.key != 'sha256') e.key: e.value,
-              }),
-            ),
-          )
-          .toString();
-      await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
-      await expectLater(
-        LogicalArchiveFiles.prepare('${dir.path}/old.json'),
-        throwsA(isA<BodyTmiException>()),
-      );
-      await store.snapshot('${dir.path}/old.sqlite');
-      final old = sqlite3.open('${dir.path}/old.sqlite');
-      old.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      old.execute('DROP TABLE IF EXISTS window_checkpoints');
-      old.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      old.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      old.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      old.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      old.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      old.execute('DROP TABLE IF EXISTS exercise_revisions');
-      old.execute('DROP TABLE IF EXISTS implementation_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_revisions');
-      old.execute('DROP TABLE IF EXISTS gym_revisions');
-      old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      old.execute('DROP TABLE IF EXISTS imported_sessions');
-      old.execute('DROP TABLE IF EXISTS block_progressions');
-      old.userVersion = 41;
-      old.close();
-      rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
     } finally {
       await store.close();
       await dir.delete(recursive: true);
@@ -1240,142 +1175,6 @@ void effortRolesTests() {
       }
     },
   );
-
-  test(
-    'role snapshots migrate and reject older native and logical labels',
-    () async {
-      final dir = await Directory.systemTemp.createTemp(
-        'bodytmi-roles-portability-',
-      );
-      final store = await TrainingStore.open('${dir.path}/db.sqlite');
-      try {
-        final training = StoredTrainingService(store);
-        await training.publish(definition(), 0);
-        await store.snapshot('${dir.path}/v40.sqlite');
-        final previous = sqlite3.open('${dir.path}/v40.sqlite');
-        previous.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        previous.execute('DROP TABLE IF EXISTS window_checkpoints');
-        previous.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        previous.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        previous.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        previous.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        previous.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        previous.execute('DROP TABLE IF EXISTS exercise_revisions');
-        previous.execute('DROP TABLE IF EXISTS implementation_revisions');
-        previous.execute('DROP TABLE IF EXISTS equipment_revisions');
-        previous.execute('DROP TABLE IF EXISTS gym_revisions');
-        previous.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        previous.execute('DROP TABLE IF EXISTS imported_sessions');
-        previous.execute('DROP TABLE IF EXISTS block_progressions');
-        previous.userVersion = 40;
-        previous.close();
-        equal(NativeBackup.validateDatabase('${dir.path}/v40.sqlite'), 40);
-        final migrated = await TrainingStore.open('${dir.path}/v40.sqlite');
-        equal(
-          (await StoredTrainingService(
-            migrated,
-          ).revision(definition().id)).number,
-          1,
-        );
-        await migrated.close();
-        await training.publish(_definition(), 0);
-        final session = await training.start(
-          'roles',
-          'role-practice',
-          1,
-          instant(1),
-        );
-        await training.edit(session.id, session.contentVersion, _complete);
-        final original = canonicalJson((await store.archive()).toJson());
-        await store.backup('${dir.path}/native');
-        final file = '${dir.path}/logical.json';
-        await LogicalArchiveFiles.export(await store.archive(), file);
-        final prepared = await LogicalArchiveFiles.prepare(file);
-        final dest = await TrainingStore.open('${dir.path}/restore.sqlite');
-        try {
-          await dest.restore(
-            prepared.backup,
-            recoveryDestination: '${dir.path}/recovery',
-            confirm: true,
-          );
-        } finally {
-          await dest.close();
-          await prepared.close();
-        }
-        final restored = await TrainingStore.open('${dir.path}/restore.sqlite');
-        try {
-          equal(canonicalJson((await restored.archive()).toJson()), original);
-          final native = await NativeBackup.prepare('${dir.path}/native');
-          try {
-            await restored.restore(
-              native,
-              recoveryDestination: '${dir.path}/recovery-native',
-              confirm: true,
-            );
-          } finally {
-            await native.close();
-          }
-        } finally {
-          await restored.close();
-        }
-        final nativeRestored = await TrainingStore.open(
-          '${dir.path}/restore.sqlite',
-        );
-        try {
-          equal(
-            canonicalJson((await nativeRestored.archive()).toJson()),
-            original,
-          );
-        } finally {
-          await nativeRestored.close();
-        }
-        final envelope =
-            jsonDecode(await File(file).readAsString()) as Map<String, Object?>;
-        envelope['format'] = 'bodytmi-logical-export/40';
-        envelope['sha256'] = sha256
-            .convert(
-              utf8.encode(
-                canonicalJson({
-                  for (final e in envelope.entries)
-                    if (e.key != 'sha256') e.key: e.value,
-                }),
-              ),
-            )
-            .toString();
-        await File('${dir.path}/old.json').writeAsString(jsonEncode(envelope));
-        await expectLater(
-          LogicalArchiveFiles.prepare('${dir.path}/old.json'),
-          throwsA(isA<BodyTmiException>()),
-        );
-        await store.snapshot('${dir.path}/roles.sqlite');
-        equal(NativeBackup.validateDatabase('${dir.path}/roles.sqlite'), 69);
-        final relabeled = sqlite3.open('${dir.path}/roles.sqlite');
-        relabeled.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        relabeled.execute('DROP TABLE IF EXISTS window_checkpoints');
-        relabeled.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        relabeled.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        relabeled.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        relabeled.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        relabeled.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        relabeled.execute('DROP TABLE IF EXISTS exercise_revisions');
-        relabeled.execute('DROP TABLE IF EXISTS implementation_revisions');
-        relabeled.execute('DROP TABLE IF EXISTS equipment_revisions');
-        relabeled.execute('DROP TABLE IF EXISTS gym_revisions');
-        relabeled.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        relabeled.execute('DROP TABLE IF EXISTS imported_sessions');
-        relabeled.execute('DROP TABLE IF EXISTS block_progressions');
-        relabeled.userVersion = 40;
-        relabeled.close();
-        rejects(
-          () => NativeBackup.validateDatabase('${dir.path}/roles.sqlite'),
-        );
-      } finally {
-        await store.close();
-        await dir.delete(recursive: true);
-      }
-    },
-  );
-
   test('native CLI publishes, logs and filters explicit roles', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-roles-cli-');
     final path = '${dir.path}/db.sqlite';

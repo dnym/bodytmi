@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart';
 import 'fixtures.dart';
 import 'support.dart';
@@ -117,14 +115,6 @@ Future<void> _seed(TrainingStore store) async {
     ),
     0,
   );
-}
-
-Future<Map<String, Object?>> _resign(Map<String, Object?> envelope) async {
-  envelope.remove('sha256');
-  envelope['sha256'] = sha256
-      .convert(utf8.encode(canonicalJson(envelope)))
-      .toString();
-  return envelope;
 }
 
 Future<BodyTmiException> failure(Object? Function() action) async {
@@ -340,7 +330,7 @@ void loadContextTests() {
     check(plain.loadInputs.isEmpty, 'no declarations, no payload');
     check(
       !plain.toJson().containsKey('loadInputs'),
-      'a load-free session stays honest at older labels',
+      'a load-free session carries no load payload',
     );
 
     final unknownSlot = syncFailure(() {
@@ -614,7 +604,7 @@ void loadContextTests() {
   );
 
   test(
-    'load contexts are portable only under v62 formats',
+    'load contexts round-trip through native and logical backups',
     () => _withStore((store, dir) async {
       await _seed(store);
       await StoredTrainingService(store).start(
@@ -630,7 +620,7 @@ void loadContextTests() {
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/69');
+      equal(exported['format'], 'bodytmi-logical-export/1');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         check(
@@ -680,79 +670,8 @@ void loadContextTests() {
       } finally {
         await active.close();
       }
-
-      // Honest current content cannot claim the previous label.
-      final relabeled = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'logical',
-      );
-      relabeled['format'] = 'bodytmi-logical-export/61';
-      await File('$dir/old-label.json')
-        ..createSync()
-        ..writeAsStringSync(jsonEncode(await _resign(relabeled)));
-      final logicalError = await failure(
-        () => LogicalArchiveFiles.prepare('$dir/old-label.json'),
-      );
-      check(
-        logicalError.message.contains('load contexts require logical v62'),
-        'older logical labels reject frozen load contexts',
-      );
-
-      // The same profile without any load context is genuinely older shaped.
-      final plain = copyJson(relabeled);
-      for (final item in jsonObject(plain['data'], 'data')['sessions'] as List)
-        jsonObject(item, 'session').remove('loadInputs');
-      plain['format'] = 'bodytmi-logical-export/61';
-      await File('$dir/plain-label.json')
-        ..createSync()
-        ..writeAsStringSync(jsonEncode(await _resign(plain)));
-      final stripped = await LogicalArchiveFiles.prepare(
-        '$dir/plain-label.json',
-      );
-      try {
-        check(
-          stripped.archive.sessions.single.loadInputs.isEmpty,
-          'a load-free session is genuinely older shaped',
-        );
-      } finally {
-        await stripped.close();
-      }
-
-      final db = sqlite3.open('$dir/native/database.sqlite');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 61;
-      db.close();
-      final nativeError = await failure(
-        () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
-      );
-      check(
-        nativeError.message.contains('load contexts require schema v62'),
-        'an older schema label cannot carry a frozen load context',
-      );
     }),
   );
-
-  test(
-    'a genuinely load-free profile stays honest under older labels',
-    () => _withStore((store, dir) async {
-      final plainStore = await TrainingStore.open('$dir/plain.sqlite');
-      try {
-        await StoredTrainingService(plainStore).publish(definition(), 0);
-        await plainStore.backup('$dir/plain-native');
-      } finally {
-        await plainStore.close();
-      }
-      final db = sqlite3.open('$dir/plain-native/database.sqlite');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 61;
-      db.close();
-      await NativeBackup.validateDatabase('$dir/plain-native/database.sqlite');
-      check(true, 'a load-free profile passes the older schema label');
-    }),
-  );
-
   test(
     'load context CLI commands start, report and reject bad input',
     () => _withStore((store, dir) async {

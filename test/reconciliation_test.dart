@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart' show invoke;
 import 'fixtures.dart';
 import 'support.dart';
@@ -81,42 +79,6 @@ Map<String, Object?> _thresholdRule() => {
     'order': ['mass', 'reps'],
   },
 };
-
-Future<String> _relabelRejects(
-  String source,
-  int label, {
-  required bool keep,
-}) async {
-  final json = jsonObject(
-    jsonDecode(await File(source).readAsString()),
-    'file',
-  );
-  final data = jsonObject(json['data'], 'data');
-  if (!keep) data.remove('reconciliations');
-  if (label < 54) data.remove('links');
-  json['format'] = 'bodytmi-logical-export/$label';
-  json.remove('sha256');
-  json['sha256'] = _digest(canonicalJson(json));
-  await File(source).writeAsString(jsonEncode(json));
-  try {
-    final prepared = await LogicalArchiveFiles.prepare(source);
-    await prepared.close();
-  } on BodyTmiException catch (error) {
-    return error.message;
-  }
-  throw StateError('Expected the older label to reject receipts.');
-}
-
-String _digest(String canonical) =>
-    sha256.convert(utf8.encode(canonical)).toString();
-
-String _nativeError(String database) {
-  try {
-    return 'ok:${NativeBackup.validateDatabase(database)}';
-  } on BodyTmiException catch (error) {
-    return error.message;
-  }
-}
 
 List<String> _suggested(Object? sets, String metric) => [
   for (final set in sets! as List<Object?>)
@@ -914,141 +876,75 @@ void reconciliationTests() {
     },
   );
 
-  test(
-    'native and logical v52 archives carry receipts while older labels reject them',
-    () async {
-      final dir = await Directory.systemTemp.createTemp(
-        'bodytmi-reconcile-port-',
+  test('native and logical archives carry receipts', () async {
+    final dir = await Directory.systemTemp.createTemp(
+      'bodytmi-reconcile-port-',
+    );
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    TrainingArchive? archived;
+    try {
+      final service = StoredTrainingService(store);
+      final progression = StoredProgressionService(store);
+      await service.publish(definition(), 0);
+      await _acceptedTrack(store, progression);
+      final drifted = copyJson(definition().toJson());
+      _slotTargets(drifted)['reps'] = {'value': '10', 'unit': 'rep'};
+      await service.publish(WorkoutDefinition.fromJson(drifted), 1);
+      await progression.reconcile(
+        id: 'portable-reanchor',
+        templateId: _template,
+        revision: 2,
+        slotId: _slot,
+        expectedSequence: 1,
+        kinds: ['slotTarget'],
+        reconciledAt: instant(2),
+        confirm: true,
       );
-      final store = await TrainingStore.open('${dir.path}/db.sqlite');
-      TrainingArchive? archived;
-      try {
-        final service = StoredTrainingService(store);
-        final progression = StoredProgressionService(store);
-        await service.publish(definition(), 0);
-        await _acceptedTrack(store, progression);
-        final drifted = copyJson(definition().toJson());
-        _slotTargets(drifted)['reps'] = {'value': '10', 'unit': 'rep'};
-        await service.publish(WorkoutDefinition.fromJson(drifted), 1);
-        await progression.reconcile(
-          id: 'portable-reanchor',
-          templateId: _template,
-          revision: 2,
-          slotId: _slot,
-          expectedSequence: 1,
-          kinds: ['slotTarget'],
-          reconciledAt: instant(2),
-          confirm: true,
-        );
-        final started = await service.start('after', _template, 2, instant(2));
-        final finished = await _finish(service, started);
-        final pending = await progression.propose(finished.id, _slot, _rule());
-        await progression.accept(
-          finished.id,
-          _slot,
-          pending.version,
-          instant(3),
-        );
-        archived = await store.archive();
-        equal(
-          (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          69,
-        );
-        await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
-        await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
-      } finally {
-        await store.close();
-      }
-      final before = canonicalJson(archived.toJson());
+      final started = await service.start('after', _template, 2, instant(2));
+      final finished = await _finish(service, started);
+      final pending = await progression.propose(finished.id, _slot, _rule());
+      await progression.accept(finished.id, _slot, pending.version, instant(3));
+      archived = await store.archive();
       equal(
-        NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
-        69,
+        (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
+        1,
       );
-      final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
-      try {
-        equal(canonicalJson(full.archive.toJson()), before);
-        check(
-          full.archive.reconciliations.any(
-            (receipt) => receipt.id == 'portable-reanchor',
-          ),
-          'the receipt survives the logical round trip',
-        );
-      } finally {
-        await full.close();
-      }
+      await LogicalArchiveFiles.export(archived, '${dir.path}/full.json');
+      await LogicalArchiveFiles.export(archived, '${dir.path}/bare.json');
+    } finally {
+      await store.close();
+    }
+    final before = canonicalJson(archived.toJson());
+    equal(
+      NativeBackup.validateDatabase('${dir.path}/native/database.sqlite'),
+      1,
+    );
+    final full = await LogicalArchiveFiles.prepare('${dir.path}/full.json');
+    try {
+      equal(canonicalJson(full.archive.toJson()), before);
       check(
-        (await _relabelRejects(
-          '${dir.path}/full.json',
-          51,
-          keep: true,
-        )).contains('Unknown fields'),
-        'receipts need the new label',
+        full.archive.reconciliations.any(
+          (receipt) => receipt.id == 'portable-reanchor',
+        ),
+        'the receipt survives the logical round trip',
       );
-      check(
-        (await _relabelRejects(
-          '${dir.path}/bare.json',
-          52,
-          keep: false,
-        )).contains('requires progression reconciliations'),
-        'the new label names its section',
+    } finally {
+      await full.close();
+    }
+    final reopened = await TrainingStore.open(
+      '${dir.path}/native/database.sqlite',
+    );
+    try {
+      equal(canonicalJson((await reopened.archive()).toJson()), before);
+      equal(
+        (await StoredProgressionService(reopened).reconciliations()).length,
+        1,
       );
-      check(
-        (await _relabelRejects(
-          '${dir.path}/bare.json',
-          51,
-          keep: false,
-        )).contains('base application'),
-        'an anchored decision cannot cross to an older label',
-      );
-      File('${dir.path}/labeled.sqlite').writeAsBytesSync(
-        File('${dir.path}/native/database.sqlite').readAsBytesSync(),
-      );
-      final labeled = sqlite3.open('${dir.path}/labeled.sqlite');
-      labeled.userVersion = 51;
-      labeled.close();
-      check(
-        _nativeError(
-          '${dir.path}/labeled.sqlite',
-        ).contains('does not match supported schema v51'),
-        'a v52 profile cannot claim the older schema label',
-      );
-      File('${dir.path}/dropped.sqlite').writeAsBytesSync(
-        File('${dir.path}/native/database.sqlite').readAsBytesSync(),
-      );
-      final dropped = sqlite3.open('${dir.path}/dropped.sqlite');
-      dropped.execute('DROP TABLE progression_reconciliations');
-      dropped.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      dropped.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      dropped.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      dropped.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      dropped.execute('DROP TABLE IF EXISTS exercise_revisions');
-      dropped.execute('DROP TABLE IF EXISTS implementation_revisions');
-      dropped.execute('DROP TABLE IF EXISTS equipment_revisions');
-      dropped.execute('DROP TABLE IF EXISTS gym_revisions');
-      dropped.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      dropped.execute('DROP TABLE IF EXISTS imported_sessions');
-      dropped.execute('DROP TABLE IF EXISTS block_progressions');
-      dropped.userVersion = 51;
-      dropped.close();
-      check(
-        _nativeError('${dir.path}/dropped.sqlite').contains('base application'),
-        'a forged v51 profile loses the receipt its decision referenced',
-      );
-      final reopened = await TrainingStore.open(
-        '${dir.path}/native/database.sqlite',
-      );
-      try {
-        equal(canonicalJson((await reopened.archive()).toJson()), before);
-        equal(
-          (await StoredProgressionService(reopened).reconciliations()).length,
-          1,
-        );
-      } finally {
-        await reopened.close();
-      }
-      await dir.delete(recursive: true);
-    },
-  );
+    } finally {
+      await reopened.close();
+    }
+    await dir.delete(recursive: true);
+  });
 
   test(
     'the CLI records one reconciliation and then starts the drifted revision',

@@ -303,8 +303,6 @@ final class ThresholdRule {
   final IncrementBands? incrementBands;
   Quantity get failureLimit => minimum;
   Quantity get advancementLimit => threshold;
-  bool get hasScaleRanges =>
-      scales.values.any((binding) => binding.scale.range != null);
   bool get hasSelectionPolicy => chosenMetric != null || priorityOrder != null;
   bool decreases(String metric) => directions[metric] == 'decrease';
 

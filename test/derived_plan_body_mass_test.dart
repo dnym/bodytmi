@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart' show expectLater, isA, throwsA;
 
 import 'fixtures.dart';
@@ -329,46 +327,6 @@ void derivedPlanBodyMassTests() {
       } finally {
         await prepared.close();
       }
-      final envelope =
-          jsonDecode(await File('$dir/derived-meta.json').readAsString())
-              as Map<String, Object?>;
-      envelope['format'] = 'bodytmi-logical-export/34';
-      envelope['sha256'] = sha256
-          .convert(
-            utf8.encode(
-              canonicalJson({
-                for (final e in envelope.entries)
-                  if (e.key != 'sha256') e.key: e.value,
-              }),
-            ),
-          )
-          .toString();
-      await File(
-        '$dir/derived-meta-v34.json',
-      ).writeAsString(jsonEncode(envelope));
-      await expectLater(
-        LogicalArchiveFiles.prepare('$dir/derived-meta-v34.json'),
-        throwsA(isA<BodyTmiException>()),
-      );
-      await store.snapshot('$dir/derived-meta.sqlite');
-      final db = sqlite3.open('$dir/derived-meta.sqlite');
-      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      db.execute('DROP TABLE IF EXISTS window_checkpoints');
-      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      db.execute('DROP TABLE IF EXISTS exercise_revisions');
-      db.execute('DROP TABLE IF EXISTS implementation_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_revisions');
-      db.execute('DROP TABLE IF EXISTS gym_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 34;
-      db.close();
-      rejects(() => NativeBackup.validateDatabase('$dir/derived-meta.sqlite'));
     }),
   );
 
@@ -774,48 +732,6 @@ void derivedPlanBodyMassTests() {
       final measurement = jsonObject(record['measurement'], 'measurement');
       measurement['mass'] = {'value': '81', 'unit': 'kg'};
       rejects(() => TrainingArchive.fromJson(doc));
-      final path = '$dir/export.json';
-      await LogicalArchiveFiles.export(archive, path);
-      final envelope =
-          jsonDecode(await File(path).readAsString()) as Map<String, Object?>;
-      envelope['format'] = 'bodytmi-logical-export/29';
-      envelope['sha256'] = sha256
-          .convert(
-            utf8.encode(
-              canonicalJson({
-                for (final e in envelope.entries)
-                  if (e.key != 'sha256') e.key: e.value,
-              }),
-            ),
-          )
-          .toString();
-      final legacy = '$dir/old.json';
-      await File(legacy).writeAsString(jsonEncode(envelope));
-      await expectLater(
-        LogicalArchiveFiles.prepare(legacy),
-        throwsA(isA<BodyTmiException>()),
-      );
-      final snapshot = '$dir/snapshot.sqlite';
-      await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 69);
-      final db = sqlite3.open(snapshot);
-      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      db.execute('DROP TABLE IF EXISTS window_checkpoints');
-      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      db.execute('DROP TABLE IF EXISTS exercise_revisions');
-      db.execute('DROP TABLE IF EXISTS implementation_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_revisions');
-      db.execute('DROP TABLE IF EXISTS gym_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 29;
-      db.close();
-      rejects(() => NativeBackup.validateDatabase(snapshot));
     }),
   );
   test(
@@ -936,123 +852,6 @@ void derivedPlanBodyMassTests() {
       equal(sources.single.id, 'm1');
       equal(sources.single.mass.enteredUnit, Unit.lb);
       equal((await store.archive()).sessions.length, 1);
-    }),
-  );
-
-  test(
-    'v29 manual derived sessions migrate without changing snapshots',
-    () => withStore((store, dir) async {
-      final graph = _graph(unused: true);
-      // Remove the unused body node so this is a genuine v29 manual-only snapshot.
-      final nodes = graph['nodes']! as List<Object?>;
-      nodes.removeWhere((n) => (n as Map<String, Object?>)['id'] == 'body');
-      jsonObject(graph['bindings'], 'bindings').remove('body-source');
-      await DerivedTargetGraphService(
-        store,
-      ).publish(DerivedTargetGraph.fromJson(graph), 0);
-      final session = await StoredTrainingService(
-        store,
-      ).start('manual', definition().id, 1, instant(3), derivedPlan: _ref);
-      final before = canonicalJson(session.toJson());
-      final logical = '$dir/current.json';
-      await LogicalArchiveFiles.export(await store.archive(), logical);
-      final envelope =
-          jsonDecode(await File(logical).readAsString())
-              as Map<String, Object?>;
-      envelope['format'] = 'bodytmi-logical-export/29';
-      envelope['sha256'] = sha256
-          .convert(
-            utf8.encode(
-              canonicalJson({
-                for (final e in envelope.entries)
-                  if (e.key != 'sha256') e.key: e.value,
-              }),
-            ),
-          )
-          .toString();
-      final oldLogical = '$dir/v29.json';
-      await File(oldLogical).writeAsString(jsonEncode(envelope));
-      final prepared = await LogicalArchiveFiles.prepare(oldLogical);
-      try {
-        equal(canonicalJson(prepared.archive.sessions.single.toJson()), before);
-      } finally {
-        await prepared.close();
-      }
-      final extraField = copyJson(envelope);
-      final logicalSessions =
-          jsonObject(extraField['data'], 'data')['sessions']! as List<Object?>;
-      final legacySession = jsonObject(logicalSessions.single, 'session');
-      jsonObject(
-        legacySession['derivedPlanInput'],
-        'derived plan input',
-      )['bodyMassSources'] = <String, Object?>{};
-      final invalidLogical = '$dir/forged-v29.json';
-      await File(invalidLogical).writeAsString(jsonEncode(extraField));
-      await expectLater(
-        LogicalArchiveFiles.prepare(invalidLogical),
-        throwsA(isA<BodyTmiException>()),
-      );
-      final forgedPath = '$dir/forged-v29.sqlite';
-      await store.snapshot(forgedPath);
-      final forgedDb = sqlite3.open(forgedPath);
-      final forgedSession = copyJson(session.toJson());
-      jsonObject(
-        forgedSession['derivedPlanInput'],
-        'input',
-      )['bodyMassSources'] = <String, Object?>{};
-      forgedDb.execute('UPDATE sessions SET snapshot = ? WHERE id = ?', [
-        jsonEncode(forgedSession),
-        session.id,
-      ]);
-      forgedDb.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      forgedDb.execute('DROP TABLE IF EXISTS window_checkpoints');
-      forgedDb.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      forgedDb.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      forgedDb.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      forgedDb.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      forgedDb.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      forgedDb.execute('DROP TABLE IF EXISTS exercise_revisions');
-      forgedDb.execute('DROP TABLE IF EXISTS implementation_revisions');
-      forgedDb.execute('DROP TABLE IF EXISTS equipment_revisions');
-      forgedDb.execute('DROP TABLE IF EXISTS gym_revisions');
-      forgedDb.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      forgedDb.execute('DROP TABLE IF EXISTS imported_sessions');
-      forgedDb.execute('DROP TABLE IF EXISTS block_progressions');
-      forgedDb.userVersion = 29;
-      forgedDb.close();
-      rejects(() => NativeBackup.validateDatabase(forgedPath));
-      final path = '$dir/v29.sqlite';
-      await store.snapshot(path);
-      await store.close();
-      final db = sqlite3.open(path);
-      db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-      db.execute('DROP TABLE IF EXISTS window_checkpoints');
-      db.execute('DROP TABLE IF EXISTS progression_reconciliations');
-      db.execute('DROP TABLE IF EXISTS lever_link_revisions');
-      db.execute('DROP TABLE IF EXISTS shared_lever_applications');
-      db.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-      db.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-      db.execute('DROP TABLE IF EXISTS exercise_revisions');
-      db.execute('DROP TABLE IF EXISTS implementation_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_revisions');
-      db.execute('DROP TABLE IF EXISTS gym_revisions');
-      db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 29;
-      db.close();
-      equal(NativeBackup.validateDatabase(path), 29);
-      final migrated = await TrainingStore.open(path);
-      try {
-        equal(
-          canonicalJson(
-            (await StoredTrainingService(migrated).session('manual')).toJson(),
-          ),
-          before,
-        );
-      } finally {
-        await migrated.close();
-      }
     }),
   );
 }

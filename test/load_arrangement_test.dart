@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart';
 import 'fixtures.dart';
 import 'support.dart';
@@ -145,14 +143,6 @@ Future<void> _seed(TrainingStore store) async {
     ),
     0,
   );
-}
-
-Future<Map<String, Object?>> _resign(Map<String, Object?> envelope) async {
-  envelope.remove('sha256');
-  envelope['sha256'] = sha256
-      .convert(utf8.encode(canonicalJson(envelope)))
-      .toString();
-  return envelope;
 }
 
 Future<BodyTmiException> failure(Object? Function() action) async {
@@ -873,7 +863,7 @@ void loadArrangementTests() {
   );
 
   test(
-    'arrangements are portable only under v63 formats',
+    'arrangements round-trip through native and logical backups',
     () => _withStore((store, dir) async {
       await _seed(store);
       final service = StoredTrainingService(store);
@@ -913,7 +903,7 @@ void loadArrangementTests() {
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/69');
+      equal(exported['format'], 'bodytmi-logical-export/1');
       var logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         check(
@@ -959,61 +949,6 @@ void loadArrangementTests() {
       } finally {
         await active.close();
       }
-
-      // The recorded stack cannot claim the previous label.
-      final relabeled = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'logical',
-      );
-      relabeled['format'] = 'bodytmi-logical-export/62';
-      await File('$dir/old-label.json')
-        ..createSync()
-        ..writeAsStringSync(jsonEncode(await _resign(relabeled)));
-      final logicalError = await failure(
-        () => LogicalArchiveFiles.prepare('$dir/old-label.json'),
-      );
-      check(
-        logicalError.message.contains('plate arrangements require logical v63'),
-        'older logical labels reject recorded stacks',
-      );
-
-      // The same profile without any stack is genuinely older shaped.
-      final plain = copyJson(relabeled);
-      for (final item
-          in jsonObject(plain['data'], 'data')['sessions'] as List) {
-        for (final set in jsonObject(item, 'session')['sets'] as List)
-          jsonObject(set, 'set').remove('loadArrangement');
-      }
-      plain['format'] = 'bodytmi-logical-export/62';
-      await File('$dir/plain-label.json')
-        ..createSync()
-        ..writeAsStringSync(jsonEncode(await _resign(plain)));
-      final stripped = await LogicalArchiveFiles.prepare(
-        '$dir/plain-label.json',
-      );
-      try {
-        check(
-          stripped.archive.sessions.single.sets.every(
-            (s) => s.loadArrangement == null,
-          ),
-          'a stack-free session is genuinely older shaped',
-        );
-      } finally {
-        await stripped.close();
-      }
-
-      final db = sqlite3.open('$dir/native/database.sqlite');
-      db.execute('DROP TABLE IF EXISTS imported_sessions');
-      db.execute('DROP TABLE IF EXISTS block_progressions');
-      db.userVersion = 62;
-      db.close();
-      final nativeError = await failure(
-        () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
-      );
-      check(
-        nativeError.message.contains('plate arrangements require schema v63'),
-        'an older schema label cannot carry a recorded stack',
-      );
     }),
   );
 

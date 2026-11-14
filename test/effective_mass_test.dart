@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
-import 'package:crypto/crypto.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'cli_test.dart';
 import 'fixtures.dart';
 import 'support.dart';
@@ -317,13 +315,13 @@ void effectiveMassTests() {
       final next = await service.start('next', definition().id, 2, instant(11));
       equal(_value(_estimate(next)), '109.5');
       equal(canonicalJson(_view(await service.session('old'))), original);
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 69);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 1);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/69',
+        'bodytmi-logical-export/1',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -360,141 +358,6 @@ void effectiveMassTests() {
       }
     }),
   );
-
-  test(
-    'legacy schema/format labels cannot carry new effective-mass model semantics',
-    () => _withStore((store, dir) async {
-      await StoredTrainingService(store).publish(_definition(), 0);
-      await store.backup('$dir/native');
-      await LogicalArchiveFiles.export(
-        await store.archive(),
-        '$dir/logical.json',
-      );
-      final doc = jsonObject(
-        jsonDecode(await File('$dir/logical.json').readAsString()),
-        'document',
-      )..remove('sha256');
-      jsonObject(doc['data'], 'data').remove('families');
-      doc['format'] = 'bodytmi-logical-export/5';
-      doc['sha256'] = sha256
-          .convert(utf8.encode(canonicalJson(doc)))
-          .toString();
-      await File('$dir/forged.json').writeAsString(jsonEncode(doc));
-      var rejected = false;
-      try {
-        await LogicalArchiveFiles.prepare('$dir/forged.json');
-      } on BodyTmiException {
-        rejected = true;
-      }
-      check(rejected);
-      final raw = sqlite3.open('$dir/native/database.sqlite');
-      try {
-        raw.execute('DROP TABLE family_revisions');
-        raw.execute('DROP TABLE workout_executions');
-        raw.execute('DROP TABLE timing_activities');
-        raw.execute('DROP TABLE derived_target_graphs');
-        raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        raw.execute('DROP TABLE IF EXISTS window_checkpoints');
-        raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        raw.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        raw.execute('DROP TABLE IF EXISTS exercise_revisions');
-        raw.execute('DROP TABLE IF EXISTS implementation_revisions');
-        raw.execute('DROP TABLE IF EXISTS equipment_revisions');
-        raw.execute('DROP TABLE IF EXISTS gym_revisions');
-        raw.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        raw.execute('DROP TABLE IF EXISTS imported_sessions');
-        raw.execute('DROP TABLE IF EXISTS block_progressions');
-        raw.execute('PRAGMA user_version = 5');
-      } finally {
-        raw.close();
-      }
-      rejects(
-        () => NativeBackup.validateDatabase('$dir/native/database.sqlite'),
-      );
-    }),
-  );
-
-  test(
-    'v5 profiles retain their exact frozen inputs and do not acquire an estimate model when upgraded',
-    () => _withStore((store, dir) async {
-      final definition = WorkoutDefinition.fromJson(
-        example('bodyweight-practice')['definition'],
-      );
-      final service = StoredTrainingService(store);
-      await service.publish(definition, 0);
-      final m = _measurement().toJson()..remove('contentVersion');
-      await StoredBodyMassService(store).save(m, 0);
-      final s = await service.start('legacy', definition.id, 1, instant(10));
-      final original = (await store.archive()).toJson();
-      final doc = <String, Object?>{
-        'format': 'bodytmi-logical-export/5',
-        'applicationVersion': '0.1.0',
-        'data': (Map<String, Object?>.from(original)
-          ..remove('timers')
-          ..remove('families')
-          ..remove('executions')),
-      };
-      doc['sha256'] = sha256
-          .convert(utf8.encode(canonicalJson(doc)))
-          .toString();
-      await File('$dir/v5.json').writeAsString(jsonEncode(doc));
-      final prepared = await LogicalArchiveFiles.prepare('$dir/v5.json');
-      try {
-        jsonEqual(prepared.archive.toJson(), original);
-      } finally {
-        await prepared.close();
-      }
-      await store.close();
-      final raw = sqlite3.open('$dir/db.sqlite');
-      try {
-        raw.execute('DROP TABLE family_revisions');
-        raw.execute('DROP TABLE workout_executions');
-        raw.execute('DROP TABLE timing_activities');
-        raw.execute('DROP TABLE derived_target_graphs');
-        raw.execute('DROP TABLE IF EXISTS repeat_checkpoints');
-        raw.execute('DROP TABLE IF EXISTS window_checkpoints');
-        raw.execute('DROP TABLE IF EXISTS progression_reconciliations');
-        raw.execute('DROP TABLE IF EXISTS lever_link_revisions');
-        raw.execute('DROP TABLE IF EXISTS shared_lever_applications');
-        raw.execute('DROP TABLE IF EXISTS link_retirement_anchors');
-        raw.execute('DROP TABLE IF EXISTS program_upgrade_receipts');
-        raw.execute('DROP TABLE IF EXISTS exercise_revisions');
-        raw.execute('DROP TABLE IF EXISTS implementation_revisions');
-        raw.execute('DROP TABLE IF EXISTS equipment_revisions');
-        raw.execute('DROP TABLE IF EXISTS gym_revisions');
-        raw.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
-        raw.execute('DROP TABLE IF EXISTS imported_sessions');
-        raw.execute('DROP TABLE IF EXISTS block_progressions');
-        raw.execute('PRAGMA user_version = 5');
-      } finally {
-        raw.close();
-      }
-      equal(
-        (await NativeBackup.create(
-          '$dir/db.sqlite',
-          '$dir/v5-native',
-        ))['databaseSchemaVersion'],
-        5,
-      );
-      final reopened = await TrainingStore.open('$dir/db.sqlite');
-      try {
-        jsonEqual((await reopened.session('legacy'))!.toJson(), s.toJson());
-        equal(
-          jsonList(
-            _view((await reopened.session('legacy'))!),
-            'estimates',
-          ).length,
-          0,
-        );
-      } finally {
-        await reopened.close();
-      }
-    }),
-  );
-
   test(
     'native pure/stored effective-load CLI results match and result corrections change only the actual estimate',
     () async {
