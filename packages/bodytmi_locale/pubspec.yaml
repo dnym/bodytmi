@@ -1,0 +1,10 @@
+name: bodytmi_locale
+version: 0.1.0
+publish_to: none
+description: Pure Dart presentation locale service for human-facing text.
+resolution: workspace
+environment:
+  sdk: ^3.10.0
+dependencies:
+  bodytmi_core: ^0.1.0
+  intl: ^0.20.3

@@ -29,6 +29,7 @@ import 'plate_math_test.dart';
 import 'load_convention_test.dart';
 import 'load_context_test.dart';
 import 'history_import_test.dart';
+import 'locale_test.dart';
 import 'load_arrangement_test.dart';
 import 'analytics_test.dart';
 import 'decline_test.dart';
@@ -105,6 +106,7 @@ Future<void> main() async {
   linkConsumptionTests();
   ordinalProgressionTests();
   historyImportTests();
+  localeTests();
   runUpgradeTests();
   programOverrideTests();
   logicalArchiveTests();

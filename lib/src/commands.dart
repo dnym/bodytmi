@@ -1,10 +1,18 @@
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'package:bodytmi_locale/bodytmi_locale.dart';
 import 'analytics_options.dart';
 import 'session_window_clock_adapter.dart';
 
 const commandNames = [
   'quantity normalize',
+  'locale info',
+  'locale format-number',
+  'locale parse-number',
+  'locale format-date',
+  'locale format-duration',
+  'locale parse-duration',
+  'locale message',
   'target resolve',
   'target capture',
   'target status',
@@ -74,6 +82,72 @@ final class Commands {
         checkKeys(request, {'schemaVersion', ...keys});
     Object? data;
     switch (command) {
+      case 'locale info':
+        keys({'locale'});
+        data = PresentationLocale.resolve(
+          requiredString(request, 'locale'),
+        ).info();
+      case 'locale format-number':
+        keys({'locale', 'value', 'grouping', 'minimumFractionDigits'});
+        final fraction = request['minimumFractionDigits'] ?? 0;
+        if (fraction is! int)
+          invalid('minimumFractionDigits must be an integer.');
+        data = formatNumber(
+          PresentationLocale.resolve(requiredString(request, 'locale')),
+          requiredString(request, 'value'),
+          grouping: _bool(request, 'grouping', true),
+          minimumFractionDigits: fraction,
+        );
+      case 'locale parse-number':
+        keys({'locale', 'text', 'allowGrouping'});
+        data = parseNumber(
+          PresentationLocale.resolve(requiredString(request, 'locale')),
+          requiredString(request, 'text'),
+          allowGrouping: _bool(request, 'allowGrouping'),
+        );
+      case 'locale format-date':
+        keys({'locale', 'value', 'style', 'hourCycle'});
+        data = formatDate(
+          PresentationLocale.resolve(requiredString(request, 'locale')),
+          requiredString(request, 'value'),
+          style: request.containsKey('style')
+              ? requiredString(request, 'style')
+              : 'datetime',
+          hourCycle: request.containsKey('hourCycle')
+              ? requiredString(request, 'hourCycle')
+              : 'locale',
+        );
+      case 'locale format-duration':
+        keys({'locale', 'milliseconds', 'style'});
+        final milliseconds = request['milliseconds'];
+        if (milliseconds is! int) invalid('milliseconds must be an integer.');
+        data = formatDuration(
+          PresentationLocale.resolve(requiredString(request, 'locale')),
+          milliseconds,
+          style: request.containsKey('style')
+              ? requiredString(request, 'style')
+              : 'clock',
+        );
+      case 'locale parse-duration':
+        keys({'locale', 'text'});
+        data = parseDuration(
+          PresentationLocale.resolve(requiredString(request, 'locale')),
+          requiredString(request, 'text'),
+        );
+      case 'locale message':
+        keys({'locale', 'key', 'args'});
+        final locale = PresentationLocale.resolve(
+          requiredString(request, 'locale'),
+        );
+        data = {
+          ...renderMessage(
+            locale.resolved,
+            locale.language,
+            requiredString(request, 'key'),
+            jsonObject(request['args'] ?? <String, Object?>{}, 'args'),
+          ),
+          'resolution': locale.toJson(),
+        };
       case 'quantity normalize':
         keys({'quantity'});
         data = Quantity.fromJson(request['quantity']).toJson();
@@ -947,8 +1021,12 @@ final class Commands {
     return {'schemaVersion': 1, 'data': data};
   }
 
-  static bool _bool(Map<String, Object?> json, String key) {
-    final value = json[key] ?? false;
+  static bool _bool(
+    Map<String, Object?> json,
+    String key, [
+    bool fallback = false,
+  ]) {
+    final value = json[key] ?? fallback;
     if (value is! bool) invalid('$key must be a boolean.');
     return value;
   }
