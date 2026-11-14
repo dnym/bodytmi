@@ -1,6 +1,7 @@
 import 'activity.dart';
 import 'derived_plan_input.dart';
 import 'body_mass_input.dart';
+import 'categorical.dart';
 import 'errors.dart';
 import 'effective_mass.dart';
 import 'load_context.dart';
@@ -27,6 +28,7 @@ final class ExerciseSlot {
     this.effectiveMass,
     this.timing,
     this.convention,
+    this.categories,
   );
 
   factory ExerciseSlot.fromJson(Object? input) {
@@ -43,6 +45,7 @@ final class ExerciseSlot {
       'effectiveMass',
       'timing',
       'convention',
+      'categories',
     });
     final targets = metricsFromJson(json['targets']);
     final prefill = json['prefill'] ?? <Object?>[];
@@ -77,6 +80,9 @@ final class ExerciseSlot {
       json['convention'] == null
           ? null
           : LoadConvention.fromJson(json['convention']),
+      json.containsKey('categories')
+          ? categoricalLeversFromJson(json['categories'])
+          : const {},
     );
   }
 
@@ -91,6 +97,14 @@ final class ExerciseSlot {
   final EffectiveMassModel? effectiveMass;
   final EffortTimingDefaults? timing;
   final LoadConvention? convention;
+
+  /// Declared categorical levers (grip, hand count, …) and their defaults.
+  final Map<String, CategoricalLever> categories;
+
+  /// Lever defaults, before any effort or progression setting.
+  Map<String, String> get defaultSettings => Map.unmodifiable({
+    for (final e in categories.entries) e.key: e.value.defaultValue,
+  });
 
   bool compatibleWith(ExerciseSlot other) =>
       id == other.id &&
@@ -112,6 +126,10 @@ final class ExerciseSlot {
     if (effectiveMass != null) 'effectiveMass': effectiveMass!.toJson(),
     if (timing != null) 'timing': timing!.toJson(),
     if (convention != null) 'convention': convention!.toJson(),
+    if (categories.isNotEmpty)
+      'categories': {
+        for (final e in categories.entries) e.key: e.value.toJson(),
+      },
   };
 }
 
@@ -142,6 +160,11 @@ final class WorkoutDefinition {
         invalid('Unknown slot: ${node.slotId}.');
       if (node is Effort) {
         final slot = slots.firstWhere((s) => s.id == node.slotId);
+        validateCategoricalSettings(
+          node.settings,
+          slot.categories,
+          'Effort ${node.id}',
+        );
         final resolved = node.resolveTargets(slot.targets);
         if (resolved.isEmpty &&
             node.maxEffortMetrics.isEmpty &&
@@ -249,6 +272,20 @@ final class WorkoutDefinition {
     for (final occurrence in plan.occurrences())
       if (occurrence.activity case Effort(:final side?)) occurrence.id: side,
   });
+
+  late final Map<String, Map<String, String>> _settings = Map.unmodifiable({
+    for (final occurrence in plan.occurrences())
+      if (occurrence.activity case final Effort effort)
+        occurrence.id: sortedSettings({
+          ...slot(effort.slotId).defaultSettings,
+          ...effort.settings,
+        }),
+  });
+
+  /// Authored categorical settings of an effort occurrence: slot defaults
+  /// merged with the effort's own settings. Empty without levers.
+  Map<String, String> plannedSettings(String occurrenceId) =>
+      _settings[occurrenceId] ?? const {};
 
   /// The authored unilateral side of an effort occurrence, or null.
   String? effortSide(String occurrenceId) => _sides[occurrenceId];
@@ -359,7 +396,11 @@ final class TrainingSet {
     Set<String> maxEffortMetrics = const {},
     Map<String, NumericObjective> criteria = const {},
     this.substitution,
-  }) : criteria = Map.unmodifiable(criteria),
+    required Map<String, String> settings,
+    required Map<String, String> actualSettings,
+  }) : settings = sortedSettings(settings),
+       actualSettings = sortedSettings(actualSettings),
+       criteria = Map.unmodifiable(criteria),
        carriedTargets = Map.unmodifiable(carriedTargets),
        manualTargets = Set.unmodifiable(manualTargets),
        maxEffortMetrics = Set.unmodifiable(maxEffortMetrics),
@@ -383,6 +424,18 @@ final class TrainingSet {
       invalid('Carried targets must be manually selected suggestions.');
     }
     this.observations?.validateStatus(status.name);
+    if (this.actualSettings.isNotEmpty) {
+      if (status != SetStatus.completed)
+        invalid('Actual categorical settings record only for completed sets.');
+      for (final e in this.actualSettings.entries) {
+        if (!this.settings.containsKey(e.key))
+          invalid(
+            'Actual setting ${e.key} is not a planned lever of this set.',
+          );
+        if (this.settings[e.key] == e.value)
+          invalid('Actual settings record only values that differ from plan.');
+      }
+    }
     final swap = substitution;
     if (swap != null) {
       if (this.sources.isNotEmpty)
@@ -448,6 +501,49 @@ final class TrainingSet {
 
   /// A temporary substitution frozen on this set, if any.
   final SetSubstitution? substitution;
+
+  /// Planned categorical settings frozen at start (lever → value).
+  final Map<String, String> settings;
+
+  /// Settings actually used where they differed from plan (completed only).
+  final Map<String, String> actualSettings;
+
+  /// The settings this result was performed with.
+  Map<String, String> get performedSettings =>
+      sortedSettings({...settings, ...actualSettings});
+
+  /// Records which categorical values were actually used.
+  TrainingSet withActualSettings(Map<String, String> performed) {
+    final differing = {
+      for (final e in performed.entries)
+        if (settings[e.key] != e.value) e.key: e.value,
+    };
+    for (final key in performed.keys)
+      if (!settings.containsKey(key))
+        invalid('Actual setting $key is not a planned lever of this set.');
+    return TrainingSet(
+      id: id,
+      slotId: slotId,
+      role: role,
+      ordinal: ordinal,
+      suggested: suggested,
+      sources: sources,
+      manualTargets: manualTargets,
+      carriedTargets: carriedTargets,
+      status: status,
+      actuals: actuals,
+      timing: timing,
+      observations: observations,
+      loadArrangement: loadArrangement,
+      maxEffortMetrics: maxEffortMetrics,
+      criteria: criteria,
+      substitution: substitution,
+      settings: settings,
+      actualSettings: differing,
+      contentVersion: contentVersion + 1,
+    );
+  }
+
   Map<String, Object?> get objectivesJson => {
     ...maxEffortObjectivesToJson(maxEffortMetrics),
     ...numericObjectivesToJson(criteria),
@@ -514,6 +610,8 @@ final class TrainingSet {
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
+      settings: settings,
+      actualSettings: actualSettings,
       actuals: actual,
       contentVersion: contentVersion + 1,
     );
@@ -536,6 +634,8 @@ final class TrainingSet {
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
+      settings: settings,
+      actualSettings: const {},
       contentVersion: contentVersion + 1,
     );
   }
@@ -561,6 +661,8 @@ final class TrainingSet {
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
+      settings: settings,
+      actualSettings: actualSettings,
       contentVersion: contentVersion + 1,
     );
   }
@@ -587,6 +689,8 @@ final class TrainingSet {
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
+      settings: settings,
+      actualSettings: actualSettings,
       contentVersion: contentVersion + 1,
     );
   }
@@ -612,6 +716,8 @@ final class TrainingSet {
     if (maxEffortMetrics.isNotEmpty || criteria.isNotEmpty)
       'objectives': objectivesJson,
     if (substitution != null) 'substitution': substitution!.toJson(),
+    if (settings.isNotEmpty) 'settings': settings,
+    if (actualSettings.isNotEmpty) 'actualSettings': actualSettings,
     'contentVersion': contentVersion,
   };
 }

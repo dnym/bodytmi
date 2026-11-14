@@ -345,6 +345,8 @@ void aggregationTests() {
         final old = s.sets.last;
         return s.replaceSet(
           TrainingSet(
+            settings: const {},
+            actualSettings: const {},
             id: old.id,
             slotId: old.slotId,
             role: old.role,

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "definition": {
+    "id": "pull-grips",
+    "name": "Pull-ups by grip",
+    "slots": [
+      {
+        "id": "pull",
+        "exercise": "pull-up",
+        "implementation": "bar",
+        "targets": {
+          "reps": {
+            "value": "8",
+            "unit": "rep"
+          }
+        },
+        "prefill": [
+          "reps"
+        ],
+        "categories": {
+          "grip": {
+            "values": [
+              "overhand",
+              "underhand",
+              "neutral"
+            ],
+            "default": "overhand"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "workout",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "pull-1",
+          "type": "effort",
+          "slot": "pull"
+        },
+        {
+          "id": "pull-2",
+          "type": "effort",
+          "slot": "pull",
+          "settings": {
+            "grip": "underhand"
+          }
+        }
+      ]
+    }
+  }
+}

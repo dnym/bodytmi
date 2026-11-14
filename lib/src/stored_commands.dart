@@ -128,6 +128,7 @@ const storedCommandNames = [
   'store effective-load',
   'store complete',
   'store annotate',
+  'store set-settings',
   'store arrange',
   'store arrange-status',
   'store skip',
@@ -621,6 +622,7 @@ Future<Map<String, Object?>> executeStored(
       'actuals',
       'acceptSuggested',
     },
+    'store set-settings' => {'id', 'expectedVersion', 'setId', 'settings'},
     'store annotate' => {
       'id',
       'expectedVersion',
@@ -2485,6 +2487,14 @@ Future<Map<String, Object?>> executeStored(
             observations,
             confirm: confirm,
           ),
+        )).toJson();
+      case 'store set-settings':
+        final setId = requiredString(request, 'setId');
+        final performed = performedSettingsFromJson(request['settings']);
+        data = (await service.edit(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          (s) => const TrainingService().recordSettings(s, setId, performed),
         )).toJson();
       case 'store arrange':
         final setId = requiredString(request, 'setId');

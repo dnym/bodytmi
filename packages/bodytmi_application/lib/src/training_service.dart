@@ -86,6 +86,7 @@ final class TrainingService {
       final suggested = <String, Quantity>{
         ...effort.resolveTargets(slot.targets),
       };
+      final planned = revision.definition.plannedSettings(occurrence.id);
       final sources = <String, HistorySource>{};
       if (effort.role != 'warmup') {
         for (final metric in slot.prefillMetrics) {
@@ -105,6 +106,10 @@ final class TrainingService {
                   set.substitution == null &&
                   set.role == effort.role &&
                   past.revision.definition.effortSide(set.id) == effort.side &&
+                  // Categorical settings (grip, hand count...) are separate
+                  // contexts: only results performed the same way prefill.
+                  canonicalJson(set.performedSettings) ==
+                      canonicalJson(planned) &&
                   set.ordinal == ordinal &&
                   set.eligibleForPerformance &&
                   !set.maxEffortMetrics.contains(metric) &&
@@ -141,6 +146,8 @@ final class TrainingService {
           sources: sources,
           maxEffortMetrics: effort.maxEffortMetrics,
           criteria: effort.criteria,
+          settings: planned,
+          actualSettings: const {},
         ),
       );
     }
@@ -349,6 +356,26 @@ final class TrainingService {
     session.set(setId).annotate(observations, confirm: confirm),
   );
 
+  /// Records which categorical values a completed set was actually performed
+  /// with. [performed] replaces the record: levers it omits count as planned,
+  /// and an empty map clears it. A difference from plan makes the exposure
+  /// review-only for progression and a separate history context.
+  TrainingSession recordSettings(
+    TrainingSession session,
+    String setId,
+    Map<String, String> performed,
+  ) {
+    final set = session.set(setId);
+    if (set.status != SetStatus.completed)
+      invalid('Actual categorical settings record only for completed sets.');
+    validateCategoricalSettings(
+      performed,
+      session.revision.definition.slot(set.slotId).categories,
+      'Set $setId',
+    );
+    return session.replaceSet(set.withActualSettings(performed));
+  }
+
   /// Records or clears the exact plate stack one completed set used. The
   /// arrangement must reference the session's frozen instance binding and is
   /// validated against that pinned revision's declared loading before it is
@@ -494,6 +521,8 @@ final class TrainingService {
           slotId: set.slotId,
           role: set.role,
           ordinal: set.ordinal,
+          settings: set.settings,
+          actualSettings: set.actualSettings,
           suggested: suggested,
           sources: {
             for (final e in set.sources.entries)
@@ -773,6 +802,8 @@ final class TrainingService {
         slotId: set.slotId,
         role: set.role,
         ordinal: set.ordinal,
+        settings: set.settings,
+        actualSettings: set.actualSettings,
         suggested: suggested,
         status: set.status,
         observations: set.observations,
@@ -815,6 +846,8 @@ final class TrainingService {
         slotId: set.slotId,
         role: set.role,
         ordinal: set.ordinal,
+        settings: set.settings,
+        actualSettings: set.actualSettings,
         suggested: original.originalSuggested,
         sources: {
           for (final e in original.originalSources.entries)

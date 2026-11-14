@@ -248,6 +248,8 @@ PrescriptionOverrideResult applyPrescriptionOverrides(
               slotId: set.slotId,
               role: set.role,
               ordinal: set.ordinal,
+              settings: set.settings,
+              actualSettings: set.actualSettings,
               suggested: {...set.suggested, ...replacement[set.id]!},
               sources: {
                 for (final entry in set.sources.entries)

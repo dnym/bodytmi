@@ -197,7 +197,16 @@ final class ProgressionDecision implements ProgressionAnchor {
   late final List<TrainingSet> sets = List.unmodifiable(
     session.sets.where((s) => s.slotId == slotId && s.role == role),
   );
-  late final ProgressionEvaluation proposal = switch (ruleType) {
+  late final ProgressionEvaluation proposal =
+      sets.any((s) => s.actualSettings.isNotEmpty)
+      ? ProgressionEvaluation.categoricalReview(
+          sets,
+          previousFailures,
+          previousCursor,
+          withCursor: ruleType == 'threshold',
+        )
+      : _evaluated;
+  late final ProgressionEvaluation _evaluated = switch (ruleType) {
     'threshold' => ProgressionEvaluation.threshold(
       ThresholdRule.fromJson(rule),
       sets,

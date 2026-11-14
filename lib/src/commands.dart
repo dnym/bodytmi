@@ -56,6 +56,7 @@ const commandNames = [
   'session effective-load',
   'session complete',
   'session annotate',
+  'session set-settings',
   'session arrange',
   'session arrange-status',
   'session edit-target',
@@ -845,6 +846,15 @@ final class Commands {
               requiredString(request, 'setId'),
               SetObservations.fromJson(request['observations']),
               confirm: _bool(request, 'confirm'),
+            )
+            .toJson();
+      case 'session set-settings':
+        keys({'session', 'setId', 'settings'});
+        data = const TrainingService()
+            .recordSettings(
+              sessionFromJson(request['session']),
+              requiredString(request, 'setId'),
+              performedSettingsFromJson(request['settings']),
             )
             .toJson();
       case 'session arrange':

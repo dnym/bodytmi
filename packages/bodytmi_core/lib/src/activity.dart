@@ -1,3 +1,4 @@
+import 'categorical.dart';
 import 'errors.dart';
 import 'quantity.dart';
 import 'objective.dart';
@@ -49,7 +50,16 @@ sealed class Activity {
           'targets',
           'objectives',
           'side',
+          'settings',
         });
+        if (json.containsKey('settings')) {
+          final settings = categoricalSettingsFromJson(
+            json['settings'],
+            'Effort settings',
+          );
+          final base = fromJson({...json}..remove('settings'), depth);
+          return (base as Effort).withSettings(settings);
+        }
         final role = json['role'] ?? 'work';
         if (!effortRoles.contains(role)) invalid('Unknown effort role.');
         final side = json['side'];
@@ -175,7 +185,34 @@ final class Effort extends Activity {
   const Effort(super.id, this.slotId, [this.role = 'work', this.side])
     : targets = const {},
       maxEffortMetrics = const {},
-      criteria = const {};
+      criteria = const {},
+      settings = const {};
+  const Effort._all(
+    super.id,
+    this.slotId,
+    this.role,
+    this.side,
+    this.targets,
+    this.maxEffortMetrics,
+    this.criteria,
+    this.settings,
+  );
+
+  /// The same effort with authored categorical settings overriding its
+  /// slot's lever defaults.
+  Effort withSettings(Map<String, String> settings) => Effort._all(
+    id,
+    slotId,
+    role,
+    side,
+    targets,
+    maxEffortMetrics,
+    criteria,
+    sortedSettings(settings),
+  );
+
+  /// Authored categorical settings (lever → value) over slot defaults.
+  final Map<String, String> settings;
   Effort.withTargets(
     super.id,
     this.slotId,
@@ -184,7 +221,8 @@ final class Effort extends Activity {
     this.side,
   ]) : targets = Map.unmodifiable(targets),
        maxEffortMetrics = const {},
-       criteria = const {} {
+       criteria = const {},
+       settings = const {} {
     if (targets.isEmpty) invalid('Effort target overrides cannot be empty.');
   }
   Effort.withObjectives(
@@ -196,7 +234,8 @@ final class Effort extends Activity {
     this.side,
   }) : targets = Map.unmodifiable(targets),
        maxEffortMetrics = Set.unmodifiable(metrics),
-       criteria = const {} {
+       criteria = const {},
+       settings = const {} {
     if (metrics.isEmpty || metrics.length > 100)
       invalid('Objectives need 1 to 100 metrics.');
     for (final key in metrics) identifier({'metric': key}, 'metric');
@@ -222,7 +261,8 @@ final class Effort extends Activity {
          Map.fromEntries(
            objectives.entries.where((e) => e.value.mode != 'maxEffort'),
          ),
-       ) {
+       ),
+       settings = const {} {
     if (objectives.isEmpty || objectives.length > 100)
       invalid('Objectives need 1 to 100 metrics.');
     for (final key in objectives.keys) identifier({'metric': key}, 'metric');
@@ -282,6 +322,7 @@ final class Effort extends Activity {
     'slot': slotId,
     'role': role,
     if (side != null) 'side': side,
+    if (settings.isNotEmpty) 'settings': settings,
     if (targets.isNotEmpty) 'targets': metricsToJson(targets),
     if (maxEffortMetrics.isNotEmpty || criteria.isNotEmpty)
       'objectives': objectivesJson,

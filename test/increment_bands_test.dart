@@ -516,6 +516,8 @@ void incrementBandsTests() {
       final sets = [
         for (var i = 0; i < 3; i++)
           TrainingSet(
+            settings: const {},
+            actualSettings: const {},
             id: 'set-$i',
             slotId: 'movement',
             role: 'work',

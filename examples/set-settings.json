@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "id": "s1",
+  "expectedVersion": 3,
+  "setId": "workout/pull-1",
+  "settings": {
+    "grip": "neutral"
+  }
+}

@@ -16,7 +16,33 @@ final class ProgressionEvaluation {
     this.effortAssessment,
     this.incrementBandAssessment, [
     this._ordinal,
+    this._withCursor = true,
   ]);
+
+  /// Sets performed with categorical settings other than planned are not an
+  /// exposure of the planned prescription: hold every target and counter.
+  factory ProgressionEvaluation.categoricalReview(
+    List<TrainingSet> sets,
+    int failures,
+    int cursor, {
+    required bool withCursor,
+  }) => ProgressionEvaluation._(
+    'review',
+    'Sets were performed with categorical settings that differ from plan; '
+        'reconcile before progression.',
+    List.unmodifiable([for (final s in sets) s.suggested]),
+    failures,
+    cursor,
+    null,
+    null,
+    null,
+    const [],
+    null,
+    null,
+    null,
+    withCursor,
+  );
+  final bool _withCursor;
   factory ProgressionEvaluation.double(DoubleProgressionProposal p) =>
       ProgressionEvaluation._(
         p.outcome,
@@ -201,7 +227,10 @@ final class ProgressionEvaluation {
         'outcome': outcome,
         'reason': reason,
         'nextSets': [for (final set in nextSets) metricsToJson(set)],
-        'nextState': {'failedSessions': failedSessions, 'cursor': cursor},
+        'nextState': {
+          'failedSessions': failedSessions,
+          if (_withCursor) 'cursor': cursor,
+        },
         'requiresAcceptance': true,
         if (assessment != null) 'assessment': assessment!.toJson(),
         if (effortAssessment != null)

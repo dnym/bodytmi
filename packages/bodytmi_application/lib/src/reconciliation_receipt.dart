@@ -334,6 +334,8 @@ List<TrainingSet> _setsFromJson(Object? input) {
         criteria: Map.fromEntries(
           objectives.entries.where((entry) => entry.value.mode != 'maxEffort'),
         ),
+        settings: const {},
+        actualSettings: const {},
       ),
     );
   }

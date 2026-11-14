@@ -353,6 +353,8 @@ final class WindowRepeatExecution {
           suggested: effort.resolveTargets(slot.targets),
           maxEffortMetrics: effort.maxEffortMetrics,
           criteria: effort.criteria,
+          settings: const {},
+          actualSettings: const {},
         ).complete(
           metricsFromJson(review['actuals'] ?? <String, Object?>{}),
           acceptSuggested: accept,

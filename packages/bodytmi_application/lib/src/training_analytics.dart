@@ -102,6 +102,9 @@ final class TrainingAnalytics {
             'role': set.role,
             if (session.revision.definition.effortSide(set.id) case final side?)
               'side': side,
+            if (set.settings.isNotEmpty) 'settings': set.settings,
+            if (set.actualSettings.isNotEmpty)
+              'actualSettings': set.actualSettings,
             'ordinal': set.ordinal,
             'status': set.status.name,
             'contentVersion': set.contentVersion,
@@ -209,9 +212,16 @@ final class TrainingAnalytics {
           'role': set.role,
           if (session.revision.definition.effortSide(set.id) case final side?)
             'side': side,
+          if (set.performedSettings.isNotEmpty)
+            'settings': set.performedSettings,
           if (performed.substituted) 'substituted': true,
         };
-        if (context.entries.any((e) => sourceContext[e.key] != e.value))
+        if (context.entries.any(
+          (e) => e.key == 'settings'
+              ? canonicalJson(sourceContext['settings']) !=
+                    canonicalJson(e.value)
+              : sourceContext[e.key] != e.value,
+        ))
           continue;
         for (final entry in set.actuals.entries) {
           if (metric != null && entry.key != metric) continue;
@@ -334,6 +344,7 @@ void _context(Map<String, Object?> context) {
     'setupNote',
     'role',
     'side',
+    'settings',
     'substituted',
   });
   if (context.containsKey('substituted') && context['substituted'] != true)
@@ -350,6 +361,8 @@ void _context(Map<String, Object?> context) {
     } else if (e.key == 'side') {
       if (!effortSides.contains(e.value))
         invalid('The side filter selects left or right.');
+    } else if (e.key == 'settings') {
+      categoricalSettingsFromJson(e.value, 'settings filter');
     } else {
       identifier(context, e.key);
     }

@@ -259,6 +259,8 @@ void storedThresholdTests() {
       ) {
         final old = session.sets.last;
         final updated = TrainingSet(
+          settings: const {},
+          actualSettings: const {},
           id: old.id,
           slotId: old.slotId,
           role: old.role,

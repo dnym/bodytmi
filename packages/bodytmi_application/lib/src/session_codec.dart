@@ -125,9 +125,24 @@ TrainingSession sessionFromJson(Object? input) {
       'loadArrangement',
       'objectives',
       'substitution',
+      'settings',
+      'actualSettings',
       'contentVersion',
     });
     final expected = baseline.sets[i];
+    // Categorical settings keep the planned levers and declared values.
+    final levers = revision.definition.slot(expected.slotId).categories;
+    final settings = row.containsKey('settings')
+        ? categoricalSettingsFromJson(row['settings'], 'settings')
+        : const <String, String>{};
+    final actualSettings = row.containsKey('actualSettings')
+        ? categoricalSettingsFromJson(row['actualSettings'], 'actualSettings')
+        : const <String, String>{};
+    if (canonicalJson(settings.keys.toList()) !=
+        canonicalJson(expected.settings.keys.toList()))
+      invalid('Set categorical settings do not match the slot levers.');
+    validateCategoricalSettings(settings, levers, 'Set ${expected.id}');
+    validateCategoricalSettings(actualSettings, levers, 'Set ${expected.id}');
     final substitution = row.containsKey('substitution')
         ? SetSubstitution.fromJson(row['substitution'])
         : null;
@@ -254,6 +269,8 @@ TrainingSession sessionFromJson(Object? input) {
             : LoadArrangement.fromJson(row['loadArrangement']),
         status: setStatus,
         substitution: substitution,
+        settings: settings,
+        actualSettings: actualSettings,
         contentVersion: _positive(row, 'contentVersion'),
       ),
     );

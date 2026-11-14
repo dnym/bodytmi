@@ -917,6 +917,8 @@ final class StoredProgressionService {
             slotId: set.slotId,
             role: set.role,
             ordinal: set.ordinal,
+            settings: set.settings,
+            actualSettings: set.actualSettings,
             suggested: set.suggested,
             maxEffortMetrics: set.maxEffortMetrics,
             criteria: set.criteria,

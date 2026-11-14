@@ -68,6 +68,7 @@ import 'progression_test.dart';
 import 'catalog_labels_test.dart';
 import 'amrap_placement_test.dart';
 import 'save_back_test.dart';
+import 'categorical_test.dart';
 import 'quantity_test.dart';
 import 'workflow_test.dart';
 
@@ -131,6 +132,7 @@ Future<void> main() async {
   catalogLabelTests();
   amrapPlacementTests();
   saveBackTests();
+  categoricalTests();
   runUpgradeTests();
   programOverrideTests();
   logicalArchiveTests();
