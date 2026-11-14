@@ -85,6 +85,7 @@ const storedCommandNames = [
   'exercise show',
   'exercise list',
   'catalog search',
+  'store save-back',
   'preset publish',
   'preset show',
   'preset list',
@@ -531,6 +532,7 @@ Future<Map<String, Object?>> executeStored(
     'exercise show' => {'exerciseId', 'revision'},
     'exercise list' => <String>{},
     'catalog search' => {'query', 'locale', 'kinds', 'limit'},
+    'store save-back' => {'id', 'mode', 'newTemplateId', 'confirm'},
     'preset publish' => {'preset', 'expectedRevision'},
     'preset show' => {'presetId', 'revision'},
     'preset list' => <String>{},
@@ -2197,6 +2199,15 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final p in presets) p.toJson()];
+      case 'store save-back':
+        data = await SaveBackService(store).saveBack(
+          identifier(request, 'id'),
+          mode: requiredString(request, 'mode'),
+          newTemplateId: request.containsKey('newTemplateId')
+              ? identifier(request, 'newTemplateId')
+              : null,
+          confirm: flag('confirm'),
+        );
       case 'catalog search':
         data = searchCatalog(
           query: requiredString(request, 'query'),

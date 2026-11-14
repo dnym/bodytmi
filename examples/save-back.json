@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "id": "a",
+  "mode": "save",
+  "confirm": true
+}
