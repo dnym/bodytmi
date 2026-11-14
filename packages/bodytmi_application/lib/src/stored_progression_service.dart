@@ -424,9 +424,23 @@ final class StoredProgressionService {
     Map<String, Object?> rule, {
     String ruleType = 'double',
     String role = 'work',
+    PresetReference? preset,
   }) => repository.transaction(() async {
     if (!{'work', 'warmup', 'backoff', 'drop'}.contains(role))
       invalid('Unknown progression role.');
+    if (preset != null) {
+      final published = (await repository.progressionPresetRevisions()).where(
+        (p) => p.preset.id == preset.id && p.number == preset.revision,
+      );
+      if (published.isEmpty)
+        throw const BodyTmiException(
+          'not_found',
+          'Progression preset revision not found.',
+        );
+      if (published.single.preset.ruleType != ruleType ||
+          canonicalJson(published.single.preset.rule) != canonicalJson(rule))
+        invalid('The proposed rule does not match the named preset revision.');
+    }
     if (ruleType == 'double') {
       DoubleProgressionRule.fromJson(rule);
     } else if (ruleType == 'threshold') {
@@ -542,6 +556,7 @@ final class StoredProgressionService {
       ruleType: ruleType,
       previousCursor: before?.cursor ?? 0,
       role: role,
+      preset: preset,
     );
     final comparable = next.toJson()
       ..['version'] = existing?.version ?? next.version;

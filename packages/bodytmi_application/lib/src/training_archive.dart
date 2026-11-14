@@ -434,6 +434,7 @@ final class TrainingArchive {
     validateExerciseRevisions(exercises);
     validateImplementationRevisions(implementations, exercises);
     validateProgressionPresetRevisions(presets);
+    validatePresetProvenance(progressions, presets);
     final catalogOwners = implementationOwners(implementations);
     for (final revision in revisions)
       validateCatalogSlotAdoption(revision.definition.slots, catalogOwners);

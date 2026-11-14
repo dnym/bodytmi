@@ -142,6 +142,119 @@ void progressionPresetTests() {
     },
   );
 
+  test('decisions persist preset provenance validated on portability', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-preset-prov-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    try {
+      await StoredTrainingService(store).publish(definition(), 0);
+      await _finished(store, 'a', 1);
+      final presets = PresetService(store);
+      await presets.publish(ProgressionPreset.fromJson(_preset()), 0);
+      final rule = jsonObject(_preset()['rule'], 'rule');
+      final progression = StoredProgressionService(store);
+      // The service re-checks the reference inside its transaction.
+      equal(
+        (await _failure(
+          () => progression.propose(
+            'a',
+            'bench-heavy',
+            rule,
+            preset: (id: 'double-8-12', revision: 2),
+          ),
+        )).code,
+        'not_found',
+      );
+      equal(
+        (await _failure(
+          () => progression.propose(
+            'a',
+            'bench-heavy',
+            {
+              ...rule,
+              'leverStep': {'value': '5', 'unit': 'kg'},
+            },
+            preset: (id: 'double-8-12', revision: 1),
+          ),
+        )).code,
+        'validation',
+      );
+      final proposed = await progression.propose(
+        'a',
+        'bench-heavy',
+        rule,
+        preset: (id: 'double-8-12', revision: 1),
+      );
+      equal(proposed.preset, (id: 'double-8-12', revision: 1));
+      // Re-proposing the same rule inline drops the provenance as a new version.
+      final inline = await progression.propose('a', 'bench-heavy', rule);
+      equal(inline.preset, null);
+      equal(inline.version, proposed.version + 1);
+      final again = await progression.propose(
+        'a',
+        'bench-heavy',
+        rule,
+        preset: (id: 'double-8-12', revision: 1),
+      );
+      final accepted = await progression.accept(
+        'a',
+        'bench-heavy',
+        again.version,
+        instant(1).add(const Duration(hours: 2)),
+      );
+      equal(accepted.preset, (id: 'double-8-12', revision: 1));
+      // A later preset revision never rewrites the decision.
+      await presets.publish(
+        ProgressionPreset.fromJson(_preset(name: 'Renamed')),
+        1,
+      );
+      equal((await progression.decision('a', 'bench-heavy')).preset, (
+        id: 'double-8-12',
+        revision: 1,
+      ));
+
+      final archive = (await store.archive()).toJson();
+      TrainingArchive.fromJson(archive);
+      Map<String, Object?> withDecision(
+        Map<String, Object?> Function(Map<String, Object?>) change,
+      ) {
+        final copy = jsonObject(jsonDecode(jsonEncode(archive)), 'a');
+        final rows = jsonList(copy, 'progressions');
+        rows[0] = change(jsonObject(rows[0], 'row'));
+        return copy;
+      }
+
+      final missing = await _failure(
+        () => TrainingArchive.fromJson(
+          withDecision(
+            (d) => {
+              ...d,
+              'preset': {'id': 'double-8-12', 'revision': 9},
+            },
+          ),
+        ),
+      );
+      check(missing.message.contains('unpublished preset'), missing.message);
+      // Removing the preset rows leaves an orphaned reference.
+      final orphan = jsonObject(jsonDecode(jsonEncode(archive)), 'a')
+        ..['presets'] = <Object?>[];
+      rejects(() => TrainingArchive.fromJson(orphan));
+
+      await store.backup('${dir.path}/native');
+      final copy = '${dir.path}/tamper.sqlite';
+      File('${dir.path}/native/database.sqlite').copySync(copy);
+      final db = sqlite3.open(copy);
+      db.execute('DELETE FROM progression_preset_revisions');
+      db.close();
+      final tampered = await _failure(
+        () => NativeBackup.validateDatabase(copy),
+      );
+      check(tampered.message.contains('unpublished preset'), tampered.message);
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
+
   test('CLI propose resolves an explicit preset revision', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-preset-cli-');
     try {
@@ -187,11 +300,20 @@ void progressionPresetTests() {
         jsonObject(jsonDecode(viaPreset.output), 'r')['data'],
         'data',
       );
-      jsonEqual(data['preset'], {
-        'id': 'double-8-12',
-        'revision': 1,
-        'ruleType': 'double',
+      jsonEqual(data['preset'], {'id': 'double-8-12', 'revision': 1});
+      // The reference is persisted on the decision, not only echoed.
+      final shown = await cmd('progression show', {
+        'sessionId': 'a',
+        'slotId': 'bench-heavy',
       });
+      check(shown.code == 0, shown.error);
+      jsonEqual(
+        jsonObject(
+          jsonObject(jsonDecode(shown.output), 'r')['data'],
+          'data',
+        )['preset'],
+        {'id': 'double-8-12', 'revision': 1},
+      );
       // The same rule given inline yields the same proposal.
       final inline = await cmd('progression propose', {
         'sessionId': 'b',
@@ -206,6 +328,7 @@ void progressionPresetTests() {
         jsonObject(inlineData['proposal'], 'p')['outcome'],
         jsonObject(data['proposal'], 'p')['outcome'],
       );
+      check(!inlineData.containsKey('preset'), 'inline rule has no preset');
       // An explicit revision is required, and rule cannot be mixed in.
       equal(
         (await cmd('progression propose', {

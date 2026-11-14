@@ -284,8 +284,8 @@ final class NativeBackup {
         validateImplementationRevisions(implementations, exercises);
         catalogOwners.addAll(implementationOwners(implementations));
       }
+      final presets = <ProgressionPresetRevision>[];
       {
-        final presets = <ProgressionPresetRevision>[];
         for (final row in db.select(
           'SELECT * FROM progression_preset_revisions',
         )) {
@@ -485,6 +485,7 @@ final class NativeBackup {
             invalid('Progression receipt identity mismatch.');
           decisions.add(d);
         }
+        validatePresetProvenance(decisions, presets);
         {
           final programs = <ProgramRevision>[];
           for (final row in db.select('SELECT * FROM program_revisions')) {

@@ -24,7 +24,12 @@ final class ProgressionDecision implements ProgressionAnchor {
     this.previousCursor = 0,
     this.role = 'work',
     this.selectedLevel,
+    this.preset,
   }) : rule = _freeze(rule) as Map<String, Object?> {
+    if (preset case (:final id, :final revision)) {
+      identifier({'id': id}, 'id');
+      if (revision < 1) invalid('Invalid progression preset reference.');
+    }
     if (session.status != SessionStatus.finalized)
       invalid('Progression requires finalized confirmed work.');
     identifier({'id': slotId}, 'id');
@@ -80,6 +85,7 @@ final class ProgressionDecision implements ProgressionAnchor {
       'previousCursor',
       'role',
       'selectedLevel',
+      'preset',
     });
     int count(String key, int min) {
       final v = j[key];
@@ -117,6 +123,9 @@ final class ProgressionDecision implements ProgressionAnchor {
       selectedLevel: j.containsKey('selectedLevel')
           ? identifier(j, 'selectedLevel')
           : null,
+      preset: j.containsKey('preset')
+          ? presetReferenceFromJson(j['preset'])
+          : null,
     );
     if (canonicalJson(j['proposal']) !=
         canonicalJson(decision.proposal.toJson()))
@@ -142,6 +151,10 @@ final class ProgressionDecision implements ProgressionAnchor {
 
   /// The declared successor chosen when accepting an ordinal branch choice.
   final String? selectedLevel;
+
+  /// Provenance only: the published preset revision whose rule this decision
+  /// froze. The decision's own [rule] stays authoritative.
+  final PresetReference? preset;
   int get cursor => declinedAt != null ? previousCursor : proposal.cursor;
   late final Set<String> controlledMetrics = ruleType == 'double'
       ? {
@@ -230,6 +243,7 @@ final class ProgressionDecision implements ProgressionAnchor {
         previousCursor: previousCursor,
         role: role,
         selectedLevel: selectedLevel,
+        preset: preset,
       );
   ProgressionDecision decline(DateTime at) => ProgressionDecision(
     session: session,
@@ -245,6 +259,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     ruleType: ruleType,
     previousCursor: previousCursor,
     role: role,
+    preset: preset,
   );
   Map<String, Object?> toJson() => {
     'session': session.toJson(),
@@ -262,7 +277,40 @@ final class ProgressionDecision implements ProgressionAnchor {
     if (ruleType != 'double') 'ruleType': ruleType,
     if (ruleType == 'threshold') 'previousCursor': previousCursor,
     if (selectedLevel != null) 'selectedLevel': selectedLevel,
+    if (preset case (:final id, :final revision))
+      'preset': {'id': id, 'revision': revision},
   };
+}
+
+typedef PresetReference = ({String id, int revision});
+
+PresetReference presetReferenceFromJson(Object? input) {
+  final j = jsonObject(input, 'preset');
+  checkKeys(j, {'id', 'revision'});
+  final revision = j['revision'];
+  if (revision is! int || revision < 1)
+    invalid('preset.revision must be a positive integer.');
+  return (id: identifier(j, 'id'), revision: revision);
+}
+
+/// Every decision naming a preset must name a published revision whose rule
+/// and rule type it froze verbatim.
+void validatePresetProvenance(
+  Iterable<ProgressionDecision> decisions,
+  Iterable<ProgressionPresetRevision> presets,
+) {
+  for (final decision in decisions) {
+    final reference = decision.preset;
+    if (reference == null) continue;
+    final match = presets.where(
+      (p) => p.preset.id == reference.id && p.number == reference.revision,
+    );
+    if (match.isEmpty)
+      invalid('Progression decision names an unpublished preset revision.');
+    if (match.single.preset.ruleType != decision.ruleType ||
+        canonicalJson(match.single.preset.rule) != canonicalJson(decision.rule))
+      invalid('Progression decision rule does not match its preset revision.');
+  }
 }
 
 ProgressionDecision? latestApplication(

@@ -1753,14 +1753,10 @@ Future<Map<String, Object?>> executeStored(
         if (command == 'progression propose' && request.containsKey('preset')) {
           if (request.containsKey('rule') || request.containsKey('ruleType'))
             invalid('preset replaces rule and ruleType; supply only one.');
-          final reference = jsonObject(request['preset'], 'preset');
-          checkKeys(reference, {'id', 'revision'});
-          final revision = reference['revision'];
-          if (revision is! int || revision < 1)
-            invalid('preset.revision must be a positive integer.');
+          final reference = presetReferenceFromJson(request['preset']);
           preset = await PresetService(
             store,
-          ).revision(identifier(reference, 'id'), revision);
+          ).revision(reference.id, reference.revision);
         }
         final decision = switch (command) {
           'progression propose' => await progression.propose(
@@ -1773,6 +1769,9 @@ Future<Map<String, Object?>> executeStored(
                     ? requiredString(request, 'ruleType')
                     : 'double'),
             role: role,
+            preset: preset == null
+                ? null
+                : (id: preset.preset.id, revision: preset.number),
           ),
           'progression accept' => await progression.accept(
             sessionId,
@@ -1811,12 +1810,6 @@ Future<Map<String, Object?>> executeStored(
           'sequence': decision.sequence,
           'inputsChanged': changed,
           'stale': decision.resolvedAt == null && changed,
-          if (preset != null)
-            'preset': {
-              'id': preset.preset.id,
-              'revision': preset.number,
-              'ruleType': preset.preset.ruleType,
-            },
           ...decision.toJson(),
         };
       case 'archive export':
