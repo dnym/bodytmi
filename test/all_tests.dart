@@ -27,6 +27,7 @@ import 'catalog_adoption_test.dart';
 import 'equipment_test.dart';
 import 'plate_math_test.dart';
 import 'load_convention_test.dart';
+import 'load_context_test.dart';
 import 'analytics_test.dart';
 import 'decline_test.dart';
 import 'tempo_test.dart';
@@ -85,6 +86,7 @@ Future<void> main() async {
   equipmentTests();
   plateMathTests();
   loadConventionTests();
+  loadContextTests();
   analyticsTests();
   declineTests();
   tempoTests();

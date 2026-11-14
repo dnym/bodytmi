@@ -406,7 +406,7 @@ void setObservationsTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          61,
+          62,
         );
         final logical = jsonObject(
           jsonDecode(await File('${dir.path}/legacy.json').readAsString()),

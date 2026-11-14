@@ -892,6 +892,7 @@ final class WindowCheckpointService {
       finishedAt: session.finishedAt,
       contentVersion: session.contentVersion + 1,
       bodyMassInputs: session.bodyMassInputs,
+      loadInputs: session.loadInputs,
       initialBodyMassOverrides: session.initialBodyMassOverrides,
       derivedPlanInput: session.derivedPlanInput,
       prescriptionOverrides: session.prescriptionOverrides,

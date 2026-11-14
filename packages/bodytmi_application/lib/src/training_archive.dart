@@ -393,6 +393,7 @@ final class TrainingArchive {
     validateEquipmentRevisions(equipment);
     validateGymRevisions(gyms);
     validateEquipmentInstanceRevisions(instances, equipment, gyms);
+    validateLoadInputReferences(sessions, instances);
     validateDerivedTargetGraphRevisions(graphs);
     validateProgramPlanReferences(programRevisions, graphs);
     validateTimingData(timers, sessions);
@@ -518,6 +519,32 @@ final class TrainingArchive {
           }
         }
       }
+    }
+  }
+}
+
+/// A frozen session instance reference must exist as the corresponding
+/// published instance revision with exactly the same snapshot content.
+void validateLoadInputReferences(
+  List<TrainingSession> sessions,
+  List<EquipmentInstanceRevision> instances,
+) {
+  final published = {
+    for (final r in instances) '${r.instance.id}\u0000${r.number}': r,
+  };
+  for (final session in sessions) {
+    for (final entry in session.loadInputs.entries) {
+      final reference = entry.value.instance;
+      if (reference == null) continue;
+      final row =
+          published['${reference.instanceId}\u0000${reference.revision}'];
+      if (row == null ||
+          canonicalJson(row.instance.toJson()) !=
+              canonicalJson(reference.snapshot.toJson()))
+        invalid(
+          'Session load input instance reference, revision or snapshot '
+          'is inconsistent.',
+        );
     }
   }
 }

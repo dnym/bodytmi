@@ -337,6 +337,8 @@ final class ProgramService {
     DateTime at, {
     Map<String, BodyMassOverride> bodyMassOverrides = const {},
     DerivedPlanRef? derivedPlan,
+    Map<String, String> loadBindings = const {},
+    Map<String, LoadConvention> loadConventions = const {},
   }) => repository.transaction(() async {
     final current = await run(runId);
     final bindings = await repository.sessionPrograms();
@@ -359,6 +361,7 @@ final class ProgramService {
       if (existing.runId != runId ||
           session.startedAt != at ||
           !sameBodyMassOverrides(session, bodyMassOverrides) ||
+          !sameLoadInputs(session, loadBindings, loadConventions) ||
           canonicalJson(session.derivedPlanInput?.reference.toJson()) !=
               canonicalJson(effectivePlan?.toJson()))
         programConflict('Session identity belongs to another occurrence.');
@@ -395,6 +398,8 @@ final class ProgramService {
       programRun: current,
       bodyMassOverrides: bodyMassOverrides,
       derivedPlan: pinned ?? derivedPlan,
+      loadBindings: loadBindings,
+      loadConventions: loadConventions,
     );
   });
   Future<ProgramReceipt> skip(

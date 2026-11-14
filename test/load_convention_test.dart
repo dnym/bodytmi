@@ -636,7 +636,7 @@ void loadConventionTests() {
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/61');
+      equal(exported['format'], 'bodytmi-logical-export/62');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         check(

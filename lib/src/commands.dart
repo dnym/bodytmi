@@ -30,6 +30,7 @@ const commandNames = [
   'tempo sample',
   'session start',
   'session show',
+  'session load-status',
   'session summary',
   'session rounds',
   'session window-clock',
@@ -421,6 +422,8 @@ final class Commands {
           'history',
           'bodyMassMeasurements',
           'bodyMassOverrides',
+          'loadInstances',
+          'loadConventions',
         });
         final history = request['history'] ?? <Object?>[];
         if (history is! List<Object?>) invalid('history must be an array.');
@@ -440,8 +443,23 @@ final class Commands {
               bodyMassOverrides: bodyMassOverridesFromJson(
                 request['bodyMassOverrides'],
               ),
+              loadInstances: loadInstancesFromJson(request['loadInstances']),
+              loadConventions: loadConventionsFromJson(
+                request['loadConventions'],
+              ),
             )
             .toJson();
+      case 'session load-status':
+        keys({'session', 'instances'});
+        final session = sessionFromJson(request['session']);
+        data = loadStatus(
+          session.loadInputs,
+          slotConventions: {
+            for (final slot in session.revision.definition.slots)
+              slot.id: slot.convention,
+          },
+          instances: loadInstancesFromJson(request['instances']),
+        );
       case 'session window-clock':
         keys({
           'session',

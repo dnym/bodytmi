@@ -36,6 +36,7 @@ const storedCommandNames = [
   'store revision',
   'store start',
   'store show',
+  'store load-status',
   'store summary',
   'store rounds',
   'store window-clock',
@@ -267,8 +268,11 @@ Future<Map<String, Object?>> executeStored(
       'startedAt',
       'bodyMassOverrides',
       'derivedPlan',
+      'loadBindings',
+      'loadConventions',
     },
     'store show' => {'id'},
+    'store load-status' => {'id'},
     'store assess-objectives' => {'id', 'setId', 'objectives'},
     'store summary' => {'id', 'includeWarmups', 'sumMetrics', 'roles'},
     'store rounds' => {'id', 'groupPath'},
@@ -668,6 +672,8 @@ Future<Map<String, Object?>> executeStored(
       'startedAt',
       'bodyMassOverrides',
       'derivedPlan',
+      'loadBindings',
+      'loadConventions',
     },
     'run skip' => {'runId', 'expectedVersion', 'requestId', 'skippedAt'},
     'run upgrade' => {
@@ -1403,6 +1409,8 @@ Future<Map<String, Object?>> executeStored(
           derivedPlan: request['derivedPlan'] == null
               ? null
               : DerivedPlanRef.fromJson(request['derivedPlan']),
+          loadBindings: loadBindingsFromJson(request['loadBindings']),
+          loadConventions: loadConventionsFromJson(request['loadConventions']),
         )).toJson();
       case 'run skip':
         final runId = identifier(request, 'runId');
@@ -1606,7 +1614,41 @@ Future<Map<String, Object?>> executeStored(
           derivedPlan: request['derivedPlan'] == null
               ? null
               : DerivedPlanRef.fromJson(request['derivedPlan']),
+          loadBindings: loadBindingsFromJson(request['loadBindings']),
+          loadConventions: loadConventionsFromJson(request['loadConventions']),
         )).toJson();
+      case 'store load-status':
+        data = await store.transaction(() async {
+          final session = await service.session(identifier(request, 'id'));
+          final revisions = await store.equipmentInstanceRevisions();
+          final latest = <String, EquipmentInstanceRevision>{};
+          for (final r in revisions) {
+            final prior = latest[r.instance.id];
+            if (prior == null || r.number > prior.number)
+              latest[r.instance.id] = r;
+          }
+          return loadStatus(
+            session.loadInputs,
+            slotConventions: {
+              for (final slot in session.revision.definition.slots)
+                slot.id: slot.convention,
+            },
+            instances: {
+              for (final entry in session.loadInputs.entries)
+                entry.key: (() {
+                  final id = entry.value.instance?.instanceId;
+                  final found = id == null ? null : latest[id];
+                  return found == null
+                      ? null
+                      : LoadInstanceReference(
+                          found.instance.id,
+                          found.instance,
+                          found.number,
+                        );
+                })(),
+            },
+          );
+        });
       case 'store effective-load':
         data = const EffectiveMassService().evaluate(
           await service.session(identifier(request, 'id')),

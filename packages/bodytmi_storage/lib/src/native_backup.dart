@@ -160,6 +160,7 @@ final class NativeBackup {
           59,
           60,
           61,
+          62,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -314,6 +315,7 @@ final class NativeBackup {
             59,
             60,
             61,
+            62,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -444,6 +446,12 @@ final class NativeBackup {
           instances.add(entry);
         }
         validateEquipmentInstanceRevisions(instances, equipment, gyms);
+        if (db.userVersion >= 62) {
+          validateLoadInputReferences([
+            for (final row in db.select('SELECT snapshot FROM sessions'))
+              sessionFromJson(jsonDecode(row['snapshot'] as String)),
+          ], instances);
+        }
       }
       if (db.userVersion >= 27) {
         final graphs = <DerivedTargetGraphRevision>[];
@@ -591,6 +599,9 @@ final class NativeBackup {
           }
           if (db.userVersion < 57 && session.prescriptionOverrides.isNotEmpty) {
             invalid('Program prescription overrides require schema v57.');
+          }
+          if (db.userVersion < 62 && session.loadInputs.isNotEmpty) {
+            invalid('Session load contexts require schema v62.');
           }
           if (db.userVersion < 21 &&
               session.sets.any((s) => s.observations != null))

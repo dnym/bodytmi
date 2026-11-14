@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "loaded-row-session",
+  "templateId": "upper-a",
+  "revision": 1,
+  "startedAt": "2026-11-14T08:00:00+00:00",
+  "loadBindings": {
+    "bench-heavy": "garage-bar-1"
+  },
+  "loadConventions": {
+    "bench-heavy": {
+      "massBasis": "added-load",
+      "notes": "Entered plates only at this session; the declared 20 kg bar stays separate."
+    }
+  }
+}

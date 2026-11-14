@@ -11,6 +11,8 @@ final class TrainingService {
     List<TrainingSession> history = const [],
     List<BodyMassMeasurement> bodyMassMeasurements = const [],
     Map<String, BodyMassOverride> bodyMassOverrides = const {},
+    Map<String, LoadInstanceReference> loadInstances = const {},
+    Map<String, LoadConvention> loadConventions = const {},
   }) {
     identifier({'id': sessionId}, 'id');
     if (bodyMassOverrides.keys.any(
@@ -19,6 +21,29 @@ final class TrainingService {
       ),
     ))
       invalid('Body-mass override names an unconfigured slot.');
+    for (final id in {...loadInstances.keys, ...loadConventions.keys}) {
+      if (!revision.definition.slots.any((s) => s.id == id))
+        invalid('Load binding names an unknown slot.');
+    }
+    for (final entry in loadInstances.entries) {
+      final slot = revision.definition.slot(entry.key);
+      if (slot.equipmentId != null &&
+          slot.equipmentId != entry.value.snapshot.equipmentId)
+        invalid(
+          'Equipment instance ${entry.value.instanceId} belongs to '
+          '${entry.value.snapshot.equipmentId}, not the equipment declared '
+          'by slot ${entry.key}.',
+        );
+    }
+    final loadInputs = <String, LoadInputSnapshot>{};
+    for (final slot in revision.definition.slots) {
+      final snapshot = LoadInputSnapshot.capture(
+        sessionConvention: loadConventions[slot.id],
+        slotConvention: slot.convention,
+        instance: loadInstances[slot.id],
+      );
+      if (!snapshot.isTrivial) loadInputs[slot.id] = snapshot;
+    }
     final massInputs = {
       for (final slot in revision.definition.slots)
         if (slot.bodyMass != null)
@@ -115,6 +140,7 @@ final class TrainingService {
       startedAt: startedAt,
       sets: sets,
       bodyMassInputs: massInputs,
+      loadInputs: loadInputs,
     );
   }
 
@@ -159,6 +185,7 @@ final class TrainingService {
       finishedAt: session.finishedAt,
       contentVersion: session.contentVersion + 1,
       bodyMassInputs: refreshed,
+      loadInputs: session.loadInputs,
       initialBodyMassOverrides: session.initialBodyMassOverrides,
       derivedPlanInput: session.derivedPlanInput,
       prescriptionOverrides: session.prescriptionOverrides,
@@ -223,6 +250,7 @@ final class TrainingService {
       finishedAt: session.finishedAt,
       contentVersion: session.contentVersion + 1,
       bodyMassInputs: inputs,
+      loadInputs: session.loadInputs,
       initialBodyMassOverrides: original,
       derivedPlanInput: session.derivedPlanInput,
       prescriptionOverrides: session.prescriptionOverrides,
@@ -460,6 +488,7 @@ final class TrainingService {
       finishedAt: session.finishedAt,
       contentVersion: session.contentVersion + 1,
       bodyMassInputs: session.bodyMassInputs,
+      loadInputs: session.loadInputs,
       initialBodyMassOverrides: session.initialBodyMassOverrides,
       derivedPlanInput: session.derivedPlanInput,
       prescriptionOverrides: session.prescriptionOverrides,
@@ -532,6 +561,7 @@ final class TrainingService {
               : set,
       ],
       bodyMassInputs: session.bodyMassInputs,
+      loadInputs: session.loadInputs,
       initialBodyMassOverrides: session.initialBodyMassOverrides,
       derivedPlanInput: session.derivedPlanInput,
       prescriptionOverrides: session.prescriptionOverrides,

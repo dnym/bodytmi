@@ -374,6 +374,7 @@ final class ExecutionService {
           finishedAt: current.finishedAt,
           contentVersion: current.contentVersion + 1,
           bodyMassInputs: current.bodyMassInputs,
+          loadInputs: current.loadInputs,
           initialBodyMassOverrides: current.initialBodyMassOverrides,
           derivedPlanInput: current.derivedPlanInput,
           prescriptionOverrides: current.prescriptionOverrides,

@@ -24,6 +24,32 @@ Map<String, BodyMassOverride?> bodyMassRebindingsFromJson(Object? input) => {
         : BodyMassOverride.fromJson(e.value),
 };
 
+Map<String, LoadInstanceReference> loadInstancesFromJson(Object? input) => {
+  for (final e in jsonObject(
+    input ?? <String, Object?>{},
+    'loadInstances',
+  ).entries)
+    identifier({'id': e.key}, 'id'): LoadInstanceReference.fromJson(e.value),
+};
+
+Map<String, LoadConvention> loadConventionsFromJson(Object? input) => {
+  for (final e in jsonObject(
+    input ?? <String, Object?>{},
+    'loadConventions',
+  ).entries)
+    identifier({'id': e.key}, 'id'): LoadConvention.fromJson(e.value),
+};
+
+Map<String, String> loadBindingsFromJson(Object? input) => {
+  for (final e in jsonObject(
+    input ?? <String, Object?>{},
+    'loadBindings',
+  ).entries)
+    identifier({'id': e.key}, 'id'): identifier({
+      'instanceId': e.value,
+    }, 'instanceId'),
+};
+
 TrainingSession sessionFromJson(Object? input) {
   final json = jsonObject(input, 'session');
   checkKeys(json, {
@@ -36,6 +62,7 @@ TrainingSession sessionFromJson(Object? input) {
     'contentVersion',
     'sets',
     'bodyMassInputs',
+    'loadInputs',
     'initialBodyMassOverrides',
     'derivedPlanInput',
     'prescriptionOverrides',
@@ -251,6 +278,9 @@ TrainingSession sessionFromJson(Object? input) {
   if (json.containsKey('prescriptionOverrides') &&
       prescriptionOverrides.isEmpty)
     invalid('Prescription override records cannot be empty.');
+  if (json.containsKey('loadInputs') &&
+      jsonObject(json['loadInputs'], 'loadInputs').isEmpty)
+    invalid('Session load inputs cannot be empty.');
   if (prescriptionOverrides.isNotEmpty) {
     if (derivedInput != null)
       invalid(
@@ -302,6 +332,13 @@ TrainingSession sessionFromJson(Object? input) {
         'bodyMassInputs',
       ).entries)
         e.key: BodyMassInputSnapshot.fromJson(e.value),
+    },
+    loadInputs: {
+      for (final e in jsonObject(
+        json['loadInputs'] ?? <String, Object?>{},
+        'loadInputs',
+      ).entries)
+        e.key: LoadInputSnapshot.fromJson(e.value),
     },
     initialBodyMassOverrides: json.containsKey('initialBodyMassOverrides')
         ? bodyMassOverridesFromJson(json['initialBodyMassOverrides'])

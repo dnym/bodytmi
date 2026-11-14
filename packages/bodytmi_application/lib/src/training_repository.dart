@@ -193,6 +193,8 @@ final class StoredTrainingService {
     ProgramRun? programRun,
     Map<String, BodyMassOverride> bodyMassOverrides = const {},
     DerivedPlanRef? derivedPlan,
+    Map<String, String> loadBindings = const {},
+    Map<String, LoadConvention> loadConventions = const {},
   }) => repository.transaction(() async {
     final runId = programRun?.id;
     final prescription = await revision(templateId, number);
@@ -205,6 +207,7 @@ final class StoredTrainingService {
           existing.revision.number != number ||
           existing.startedAt != startedAt ||
           !sameBodyMassOverrides(existing, bodyMassOverrides) ||
+          !sameLoadInputs(existing, loadBindings, loadConventions) ||
           canonicalJson(existing.derivedPlanInput?.reference.toJson()) !=
               canonicalJson(derivedPlan?.toJson()))
         _conflict();
@@ -246,6 +249,12 @@ final class StoredTrainingService {
           if (!r.deleted) r.measurement,
       ],
       startedAt: startedAt,
+      loadInstances: await _resolveLoadBindings(
+        prescription,
+        loadBindings,
+        await repository.equipmentInstanceRevisions(),
+      ),
+      loadConventions: loadConventions,
       history: (await repository.sessions())
           .where((s) => runBySession[s.id] == runId)
           .toList(),
@@ -450,6 +459,7 @@ final class StoredTrainingService {
       startedAt: next.startedAt,
       sets: finalSets,
       bodyMassInputs: next.bodyMassInputs,
+      loadInputs: next.loadInputs,
       initialBodyMassOverrides: next.initialBodyMassOverrides,
       derivedPlanInput: derivedInput,
       prescriptionOverrides: overridden.records,
@@ -693,6 +703,7 @@ final class StoredTrainingService {
       startedAt: current.startedAt,
       sets: result.$1,
       bodyMassInputs: current.bodyMassInputs,
+      loadInputs: current.loadInputs,
       initialBodyMassOverrides: current.initialBodyMassOverrides,
       derivedPlanInput: result.$2,
       prescriptionOverrides: current.prescriptionOverrides,
@@ -1029,6 +1040,71 @@ bool sameBodyMassOverrides(
   return session.bodyMassInputs.entries.every(
     (e) => e.value.sameOverride(overrides[e.key]),
   );
+}
+
+/// Resolves requested slot-to-instance bindings to the latest published
+/// revision snapshot of each instance. Unknown instances are a not_found
+/// error; slot membership and convention capability are checked purely.
+Future<Map<String, LoadInstanceReference>> _resolveLoadBindings(
+  WorkoutRevision revision,
+  Map<String, String> bindings,
+  List<EquipmentInstanceRevision> instances,
+) async {
+  if (bindings.isEmpty) return const {};
+  final latest = <String, EquipmentInstanceRevision>{};
+  for (final revisionRow in instances) {
+    final prior = latest[revisionRow.instance.id];
+    if (prior == null || revisionRow.number > prior.number)
+      latest[revisionRow.instance.id] = revisionRow;
+  }
+  for (final slotId in bindings.keys) {
+    if (!revision.definition.slots.any((s) => s.id == slotId))
+      invalid('Load binding names an unknown slot.');
+  }
+  return {
+    for (final entry in bindings.entries)
+      entry.key: (() {
+        final found = latest[entry.value];
+        if (found == null)
+          throw BodyTmiException(
+            'not_found',
+            'Equipment instance not found: ${entry.value}.',
+          );
+        return LoadInstanceReference(
+          found.instance.id,
+          found.instance,
+          found.number,
+        );
+      })(),
+  };
+}
+
+/// A start retry must present the same load request the frozen session
+/// recorded: the same slot-to-instance bindings (by instance identity; the
+/// pinned revision stays frozen) and the same explicit session conventions.
+bool sameLoadInputs(
+  TrainingSession session,
+  Map<String, String> bindings,
+  Map<String, LoadConvention> conventions,
+) {
+  if (bindings.length !=
+      session.loadInputs.values.where((s) => s.instance != null).length)
+    return false;
+  for (final entry in bindings.entries) {
+    if (session.loadInputs[entry.key]?.instance?.instanceId != entry.value)
+      return false;
+  }
+  if (conventions.length !=
+      session.loadInputs.values.where((s) => s.source == 'session').length)
+    return false;
+  for (final entry in conventions.entries) {
+    final captured = session.loadInputs[entry.key];
+    if (captured?.source != 'session' ||
+        canonicalJson(captured!.convention!.toJson()) !=
+            canonicalJson(entry.value.toJson()))
+      return false;
+  }
+  return true;
 }
 
 /// A bound-start retry must reproduce the effective prescription overrides

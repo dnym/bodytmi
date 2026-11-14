@@ -3,6 +3,7 @@ import 'derived_plan_input.dart';
 import 'body_mass_input.dart';
 import 'errors.dart';
 import 'effective_mass.dart';
+import 'load_context.dart';
 import 'load_convention.dart';
 import 'quantity.dart';
 import 'timing.dart';
@@ -497,9 +498,11 @@ final class TrainingSession {
     Map<String, BodyMassOverride>? initialBodyMassOverrides,
     this.derivedPlanInput,
     List<PrescriptionOverrideRecord> prescriptionOverrides = const [],
+    Map<String, LoadInputSnapshot> loadInputs = const {},
   }) : sets = List.unmodifiable(sets),
        prescriptionOverrides = List.unmodifiable(prescriptionOverrides),
        bodyMassInputs = Map.unmodifiable(bodyMassInputs),
+       loadInputs = Map.unmodifiable(loadInputs),
        initialBodyMassOverrides = initialBodyMassOverrides == null
            ? null
            : Map.unmodifiable(initialBodyMassOverrides) {
@@ -523,6 +526,18 @@ final class TrainingSession {
       invalid(
         'Session body-mass inputs do not match its pinned slots and start time.',
       );
+    for (final entry in this.loadInputs.entries) {
+      final slot = revision.definition.slots
+          .where((s) => s.id == entry.key)
+          .firstOrNull;
+      if (slot == null || entry.value.isTrivial)
+        invalid('Session load inputs name an unknown or trivial slot.');
+      entry.value.matchesSlot(
+        slotId: entry.key,
+        slotConvention: slot.convention,
+        slotEquipmentId: slot.equipmentId,
+      );
+    }
   }
   final String id;
   final WorkoutRevision revision;
@@ -530,6 +545,10 @@ final class TrainingSession {
   final DateTime? finishedAt;
   final List<TrainingSet> sets;
   final Map<String, BodyMassInputSnapshot> bodyMassInputs;
+
+  /// Frozen load entry contexts captured at start: the entry convention
+  /// resolved per slot and the equipment instance revision the session used.
+  final Map<String, LoadInputSnapshot> loadInputs;
 
   /// Original start request overrides, retained after explicit rebinding.
   final Map<String, BodyMassOverride>? initialBodyMassOverrides;
@@ -553,6 +572,7 @@ final class TrainingSession {
       finishedAt: finishedAt,
       contentVersion: contentVersion + 1,
       bodyMassInputs: bodyMassInputs,
+      loadInputs: loadInputs,
       initialBodyMassOverrides: initialBodyMassOverrides,
       derivedPlanInput: derivedPlanInput,
       prescriptionOverrides: prescriptionOverrides,
@@ -571,6 +591,7 @@ final class TrainingSession {
       startedAt: startedAt,
       sets: sets,
       bodyMassInputs: bodyMassInputs,
+      loadInputs: loadInputs,
       initialBodyMassOverrides: initialBodyMassOverrides,
       derivedPlanInput: derivedPlanInput,
       prescriptionOverrides: prescriptionOverrides,
@@ -606,6 +627,10 @@ final class TrainingSession {
     if (bodyMassInputs.isNotEmpty)
       'bodyMassInputs': {
         for (final e in bodyMassInputs.entries) e.key: e.value.toJson(),
+      },
+    if (loadInputs.isNotEmpty)
+      'loadInputs': {
+        for (final e in loadInputs.entries) e.key: e.value.toJson(),
       },
     if (prescriptionOverrides.isNotEmpty)
       'prescriptionOverrides': [
