@@ -241,54 +241,21 @@ final class HistoryImportService {
     final selectedRoles = roles ?? historyImportRoles.difference({'warmup'});
     if (selectedRoles.isEmpty || !historyImportRoles.containsAll(selectedRoles))
       invalid('roles must name ${historyImportRoles.join('/')}.');
-    final contexts = <String, Map<String, Object?>>{};
-    final points = <String, List<_Point>>{};
-    var count = 0;
-    for (final record in await list(namespace: namespace)) {
-      final session = record.session;
-      if (from != null && session.date.compareTo(from) < 0) continue;
-      if (until != null && session.date.compareTo(until) >= 0) continue;
-      for (final exercise in session.exercises) {
-        if (exerciseId != null && exercise.exerciseId != exerciseId) continue;
-        if (exerciseName != null && exercise.name != exerciseName) continue;
-        for (final set in exercise.sets) {
-          final value = set.actuals[metric];
-          if (value == null || !selectedRoles.contains(set.role)) continue;
-          final context = {
-            'namespace': record.namespace,
-            'exerciseId': exercise.exerciseId,
-            if (exercise.exerciseId == null) 'exerciseName': exercise.name,
-            'implementationId': exercise.implementationId,
-            'equipment': exercise.equipment,
-            'convention': exercise.convention?.toJson(),
-            'role': set.role,
-            'metric': metric,
-            'unit': value.enteredUnit.name,
-          };
-          final key = canonicalJson(context);
-          contexts[key] = context;
-          if (++count > 10000)
-            invalid('Imported series selects more than 10000 points.');
-          (points[key] ??= []).add(_Point(record, exercise, set, value));
-        }
-      }
-    }
-    final keys = contexts.keys.toList()..sort();
+    final selection = selectImportedSeries(
+      await list(namespace: namespace),
+      metric: metric,
+      roles: selectedRoles,
+      exerciseId: exerciseId,
+      exerciseName: exerciseName,
+      fromDate: from,
+      untilDate: until,
+    );
     return {
       'policy': 'bodytmi-imported-series/1',
-      'ordering': 'calendar-date, then recorded instant where known',
+      'ordering': importedSeriesOrdering,
       'metric': metric,
       'roles': selectedRoles.toList()..sort(),
-      'series': [
-        for (final key in keys)
-          {
-            'context': contexts[key],
-            'points': [
-              for (final p in points[key]!..sort((a, b) => a.compareTo(b)))
-                p.toJson(),
-            ],
-          },
-      ],
+      'series': selection.series,
     };
   });
 
@@ -359,6 +326,105 @@ final class HistoryImportService {
       ]..sort(),
     );
   }
+}
+
+const importedSeriesOrdering =
+    'calendar-date, then recorded instant where known';
+
+/// The selected imported points plus what was excluded and why.
+typedef ImportedSeriesSelection = ({
+  List<Map<String, Object?>> series,
+  int pointCount,
+  int dateOnlyExcluded,
+});
+
+/// Pure selection shared by `import series` and the opt-in imported block of
+/// native series. Every filter is an exact match; a null exerciseId never
+/// matches a requested exerciseId or family member. Instant bounds apply only
+/// to timestamped sessions: a date-only session cannot be placed against an
+/// instant without inventing a time and timezone, so it is excluded and
+/// counted instead.
+ImportedSeriesSelection selectImportedSeries(
+  List<ImportedSessionRecord> records, {
+  String? metric,
+  required Set<String> roles,
+  String? exerciseId,
+  String? exerciseName,
+  String? implementationId,
+  String? equipment,
+  Set<String>? members,
+  String? fromDate,
+  String? untilDate,
+  DateTime? fromInstant,
+  DateTime? untilInstant,
+  int maxPoints = 10000,
+}) {
+  final contexts = <String, Map<String, Object?>>{};
+  final points = <String, List<_Point>>{};
+  var count = 0;
+  var dateOnlyExcluded = 0;
+  final instantBounds = fromInstant != null || untilInstant != null;
+  for (final record in [...records]..sort(_order)) {
+    final session = record.session;
+    if (fromDate != null && session.date.compareTo(fromDate) < 0) continue;
+    if (untilDate != null && session.date.compareTo(untilDate) >= 0) continue;
+    if (instantBounds) {
+      final started = session.startedAt;
+      if (started == null) {
+        dateOnlyExcluded++;
+        continue;
+      }
+      if (fromInstant != null && started.isBefore(fromInstant)) continue;
+      if (untilInstant != null && !started.isBefore(untilInstant)) continue;
+    }
+    for (final exercise in session.exercises) {
+      if (exerciseId != null && exercise.exerciseId != exerciseId) continue;
+      if (exerciseName != null && exercise.name != exerciseName) continue;
+      if (implementationId != null &&
+          exercise.implementationId != implementationId)
+        continue;
+      if (equipment != null && exercise.equipment != equipment) continue;
+      if (members != null && !members.contains(exercise.exerciseId)) continue;
+      for (final set in exercise.sets) {
+        if (!roles.contains(set.role)) continue;
+        for (final entry in set.actuals.entries) {
+          if (metric != null && entry.key != metric) continue;
+          final value = entry.value;
+          final context = {
+            'namespace': record.namespace,
+            'exerciseId': exercise.exerciseId,
+            if (exercise.exerciseId == null) 'exerciseName': exercise.name,
+            'implementationId': exercise.implementationId,
+            'equipment': exercise.equipment,
+            'convention': exercise.convention?.toJson(),
+            'role': set.role,
+            'metric': entry.key,
+            'unit': value.enteredUnit.name,
+          };
+          final key = canonicalJson(context);
+          contexts[key] = context;
+          if (++count > maxPoints)
+            invalid('Imported series selects more than $maxPoints points.');
+          (points[key] ??= []).add(_Point(record, exercise, set, value));
+        }
+      }
+    }
+  }
+  final keys = contexts.keys.toList()..sort();
+  return (
+    series: [
+      for (final key in keys)
+        {
+          'context': contexts[key],
+          'points': [
+            for (final p in points[key]!..sort((a, b) => a.compareTo(b)))
+              p.toJson(),
+          ],
+        },
+    ],
+    pointCount: count,
+    dateOnlyExcluded: dateOnlyExcluded,
+  );
 }
 
 int _order(ImportedSessionRecord a, ImportedSessionRecord b) {
@@ -466,5 +532,87 @@ final class _Plan {
     'absentSessions': absentSessions,
     'absentMeasurements': absentMeasurements,
     'unknowns': document.unknowns,
+  };
+}
+
+/// Opt-in imported block for native series (policy bodytmi-imported-series/2).
+/// It never merges into native contexts: imported history has no run,
+/// template, slot or setup, so a filter on any of those excludes it, and
+/// warmup selection follows the native flags while unknown roles stay
+/// visible by default. The combined point budget is shared with native series.
+Map<String, Object?> importedSeriesBlock(
+  List<ImportedSessionRecord> records, {
+  Map<String, Object?> context = const {},
+  String? metric,
+  DateTime? from,
+  DateTime? until,
+  bool includeWarmups = false,
+  List<String>? roles,
+  FamilyRevision? family,
+  String? namespace,
+  int nativePointCount = 0,
+}) {
+  if (namespace != null) identifier({'namespace': namespace}, 'namespace');
+  final selectedRoles = roles != null
+      ? roles.toSet()
+      : includeWarmups
+      ? historyImportRoles
+      : historyImportRoles.difference({'warmup'});
+  final unrepresented = [
+    for (final key in ['runId', 'templateId', 'slotId', 'setupNote'])
+      if (context.containsKey(key)) key,
+  ];
+  final policy = <String, Object?>{
+    'id': 'bodytmi-imported-series/2',
+    'origin': 'imported',
+    'namespace': namespace,
+    'roles': selectedRoles.toList()..sort(),
+    'ordering': importedSeriesOrdering,
+  };
+  if (unrepresented.isNotEmpty)
+    return {
+      'policy': policy,
+      'pointCount': 0,
+      'excluded': {
+        'all': true,
+        'reason':
+            'Imported history has no ${unrepresented.join('/')} context to match.',
+      },
+      'series': const <Object?>[],
+    };
+  String? text(String key) {
+    final value = context[key];
+    if (value != null && value is! String)
+      invalid('Series context $key must be a string.');
+    return value as String?;
+  }
+
+  final role = text('role');
+  final selection = selectImportedSeries(
+    [
+      for (final r in records)
+        if (namespace == null || r.namespace == namespace) r,
+    ],
+    metric: metric,
+    roles: role == null ? selectedRoles : selectedRoles.intersection({role}),
+    exerciseId: text('exercise'),
+    implementationId: text('implementation'),
+    equipment: text('equipment'),
+    members: family?.family.exercises.toSet(),
+    fromInstant: from,
+    untilInstant: until,
+    maxPoints: 10000 - nativePointCount,
+  );
+  return {
+    'policy': policy,
+    'pointCount': selection.pointCount,
+    'excluded': {
+      'all': false,
+      'dateOnlySessions': selection.dateOnlyExcluded,
+      if (selection.dateOnlyExcluded > 0)
+        'reason':
+            'Date-only imported sessions cannot be compared with instant bounds.',
+    },
+    'series': selection.series,
   };
 }

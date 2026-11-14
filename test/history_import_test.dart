@@ -840,4 +840,134 @@ void historyImportTests() {
       equal(deleted.code, 0);
     }),
   );
+
+  test(
+    'native series opt into a separate imported block',
+    () => _withStore((store, dir) async {
+      final service = HistoryImportService(store);
+      await _apply(
+        service,
+        _document(
+          sessions: [
+            {
+              'sourceId': 'dated',
+              'date': '2026-01-04',
+              'exercises': [
+                _exercise(
+                  'e',
+                  [
+                    _set('w', 1, role: 'warmup', load: '60'),
+                    _set('u', 2, role: 'unknown', load: '90'),
+                  ],
+                  extra: {'exerciseId': 'squat'},
+                ),
+              ],
+            },
+            {
+              'sourceId': 'timed',
+              'startedAt': '2026-01-05T18:00:00+01:00',
+              'exercises': [
+                _exercise(
+                  'e',
+                  [_set('a', 1, load: '100')],
+                  extra: {'exerciseId': 'squat', 'equipment': 'rack'},
+                ),
+                _exercise('f', [_set('a', 1, load: '40')], order: 2),
+              ],
+            },
+          ],
+        ),
+      );
+      final records = await store.importedSessions();
+      Map<String, Object?> block({
+        Map<String, Object?> context = const {},
+        String? metric = 'load',
+        DateTime? from,
+        bool includeWarmups = false,
+        List<String>? roles,
+        FamilyRevision? family,
+        int native = 0,
+      }) => importedSeriesBlock(
+        records,
+        context: context,
+        metric: metric,
+        from: from,
+        includeWarmups: includeWarmups,
+        roles: roles,
+        family: family,
+        nativePointCount: native,
+      );
+      equal(block()['pointCount'], 3);
+      equal(block(includeWarmups: true)['pointCount'], 4);
+      // Explicit native roles cannot name the import-only unknown role.
+      equal(block(roles: ['work'])['pointCount'], 2);
+      equal(block(context: {'exercise': 'squat'})['pointCount'], 2);
+      equal(
+        block(
+          context: {'exercise': 'squat', 'equipment': 'rack'},
+        )['pointCount'],
+        1,
+      );
+      final scoped = block(context: {'templateId': 'upper-a'});
+      equal(scoped['pointCount'], 0);
+      equal(jsonObject(scoped['excluded'], 'excluded')['all'], true);
+      final bounded = block(from: DateTime.utc(2026));
+      equal(bounded['pointCount'], 2);
+      equal(jsonObject(bounded['excluded'], 'excluded')['dateOnlySessions'], 1);
+      final family = FamilyRevision.publish(
+        ExerciseFamily.fromJson({
+          'id': 'squats',
+          'name': 'Squats',
+          'exercises': ['squat'],
+        }),
+      );
+      // An unmapped exercise never joins a family by its source name.
+      equal(block(family: family)['pointCount'], 2);
+      equal(block(metric: null)['pointCount'], 6);
+      equal((await _failure(() => block(native: 9999))).code, 'validation');
+
+      await store.close();
+      Future<Map<String, Object?>> series(Map<String, Object?> input) async {
+        final result = await invoke(
+          ['store', 'series'],
+          jsonEncode({
+            'schemaVersion': 1,
+            'database': '$dir/db.sqlite',
+            ...input,
+          }),
+        );
+        equal(result.code, 0);
+        return jsonObject(
+          jsonObject(jsonDecode(result.output), 'response')['data'],
+          'data',
+        );
+      }
+
+      final plain = await series({'metric': 'load'});
+      check(!plain.containsKey('imported'), 'imported history is opt-in');
+      final opted = await series({'metric': 'load', 'includeImported': true});
+      final imported = jsonObject(opted['imported'], 'imported');
+      equal(
+        jsonObject(imported['policy'], 'policy')['id'],
+        'bodytmi-imported-series/2',
+      );
+      equal(imported['pointCount'], 3);
+      jsonEqual(opted['series'], plain['series']);
+      final missing = await series({
+        'metric': 'load',
+        'includeImported': true,
+        'importNamespace': 'nobody',
+      });
+      equal(jsonObject(missing['imported'], 'imported')['pointCount'], 0);
+      final bad = await invoke(
+        ['store', 'series'],
+        jsonEncode({
+          'schemaVersion': 1,
+          'database': '$dir/db.sqlite',
+          'importNamespace': 'old-log',
+        }),
+      );
+      equal(bad.code, 2);
+    }),
+  );
 }

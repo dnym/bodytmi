@@ -473,6 +473,8 @@ Future<Map<String, Object?>> executeStored(
       'includeActive',
       'familyId',
       'familyRevision',
+      'includeImported',
+      'importNamespace',
     },
     'family publish' => {'family', 'expectedRevision', 'requireCatalog'},
     'family show' => {'familyId', 'revision'},
@@ -1874,39 +1876,65 @@ Future<Map<String, Object?>> executeStored(
         if (request.containsKey('familyRevision') &&
             !request.containsKey('familyId'))
           invalid('familyRevision needs familyId.');
-        data = await store.transaction(
-          () async => const TrainingAnalytics().series(
+        if (request.containsKey('importNamespace') && !flag('includeImported'))
+          invalid('importNamespace needs includeImported:true.');
+        data = await store.transaction(() async {
+          final context = jsonObject(
+            request['context'] ?? <String, Object?>{},
+            'context',
+          );
+          final metric = request.containsKey('metric')
+              ? identifier(request, 'metric')
+              : null;
+          final from = request.containsKey('from')
+              ? parseInstant(request['from'], 'from')
+              : null;
+          final until = request.containsKey('until')
+              ? parseInstant(request['until'], 'until')
+              : null;
+          final roles = analyticsRoles(request);
+          final family = request.containsKey('familyId')
+              ? await FamilyService(store).revision(
+                  identifier(request, 'familyId'),
+                  request.containsKey('familyRevision')
+                      ? integer('familyRevision')
+                      : null,
+                )
+              : null;
+          final native = const TrainingAnalytics().series(
             await store.sessions(),
             runBySession: {
               for (final b in await store.sessionPrograms())
                 b.sessionId: b.runId,
             },
-            context: jsonObject(
-              request['context'] ?? <String, Object?>{},
-              'context',
-            ),
-            metric: request.containsKey('metric')
-                ? identifier(request, 'metric')
-                : null,
-            from: request.containsKey('from')
-                ? parseInstant(request['from'], 'from')
-                : null,
-            until: request.containsKey('until')
-                ? parseInstant(request['until'], 'until')
-                : null,
+            context: context,
+            metric: metric,
+            from: from,
+            until: until,
             includeWarmups: flag('includeWarmups'),
-            roles: analyticsRoles(request),
+            roles: roles,
             includeActive: flag('includeActive'),
-            family: request.containsKey('familyId')
-                ? await FamilyService(store).revision(
-                    identifier(request, 'familyId'),
-                    request.containsKey('familyRevision')
-                        ? integer('familyRevision')
-                        : null,
-                  )
-                : null,
-          ),
-        );
+            family: family,
+          );
+          if (!flag('includeImported')) return native;
+          return {
+            ...native,
+            'imported': importedSeriesBlock(
+              await store.importedSessions(),
+              context: context,
+              metric: metric,
+              from: from,
+              until: until,
+              includeWarmups: flag('includeWarmups'),
+              roles: roles,
+              family: family,
+              namespace: request.containsKey('importNamespace')
+                  ? identifier(request, 'importNamespace')
+                  : null,
+              nativePointCount: native['pointCount']! as int,
+            ),
+          };
+        });
       case 'family publish':
         data = (await FamilyService(store).publish(
           ExerciseFamily.fromJson(request['family']),
