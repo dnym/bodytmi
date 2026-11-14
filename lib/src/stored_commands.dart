@@ -53,6 +53,7 @@ const storedCommandNames = [
   'repeat-checkpoint rounds',
   'repeat-checkpoint delete',
   'checkpoint save',
+  'checkpoint start',
   'checkpoint review',
   'checkpoint complete-current',
   'checkpoint advance-boundary',
@@ -357,6 +358,7 @@ Future<Map<String, Object?>> executeStored(
     },
     'repeat-checkpoint delete' => {'id', 'expectedVersion', 'confirm'},
     'checkpoint save' => {'id', 'sessionId', 'expectedVersion', 'clock'},
+    'checkpoint start' => {'id', 'sessionId'},
     'checkpoint reserve' => {'id', 'expectedVersion'},
     'checkpoint release' => {'id', 'expectedVersion', 'confirm'},
     'checkpoint skip-expired' => {
@@ -989,6 +991,11 @@ Future<Map<String, Object?>> executeStored(
           store,
         ).delete(id, integer('expectedVersion'), confirm: flag('confirm'));
         data = {'id': id, 'deleted': true};
+      case 'checkpoint start':
+        data = (await WindowCheckpointService(store).start(
+          identifier(request, 'id'),
+          identifier(request, 'sessionId'),
+        )).toJson();
       case 'checkpoint save':
         data = (await checkpoints.save(
           identifier(request, 'id'),

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "definition": {
+    "id": "emom-12",
+    "name": "12-minute EMOM",
+    "slots": [
+      {
+        "id": "swing",
+        "exercise": "kettlebell-swing",
+        "implementation": "two-hand",
+        "targets": {
+          "reps": {
+            "value": "10",
+            "unit": "rep"
+          },
+          "mass": {
+            "value": "24",
+            "unit": "kg"
+          }
+        },
+        "prefill": []
+      }
+    ],
+    "plan": {
+      "id": "minutes",
+      "type": "repeat",
+      "count": 12,
+      "child": {
+        "id": "minute",
+        "type": "window",
+        "durationSeconds": 60,
+        "child": {
+          "id": "swings",
+          "type": "effort",
+          "slot": "swing"
+        }
+      }
+    }
+  },
+  "expectedRevision": 0
+}

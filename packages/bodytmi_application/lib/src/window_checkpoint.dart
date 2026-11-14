@@ -285,6 +285,34 @@ final class WindowCheckpointService {
     return next;
   });
 
+  /// Creates a session's scoped clock checkpoint at its first occurrence in
+  /// one step. An identical retry returns the untouched checkpoint; any other
+  /// existing checkpoint with this ID conflicts.
+  Future<WindowCheckpoint> start(String id, String sessionId) =>
+      repository.transaction(() async {
+        identifier({'id': id}, 'id');
+        identifier({'id': sessionId}, 'id');
+        final session =
+            await repository.session(sessionId) ??
+            (throw const BodyTmiException('not_found', 'Session not found.'));
+        if (session.status != SessionStatus.active)
+          invalid('A scoped clock can only start in an active session.');
+        final initial = const SessionWindowClock().start(session);
+        final current = await repository.windowCheckpoint(id);
+        if (current != null) {
+          if (current.version == 1 &&
+              current.sessionId == sessionId &&
+              !current.reserved &&
+              canonicalJson(current.clock) == canonicalJson(initial))
+            return current;
+          throw const BodyTmiException(
+            'conflict',
+            'A checkpoint with this ID already exists.',
+          );
+        }
+        return save(id, sessionId, 0, initial);
+      });
+
   Future<WindowCheckpoint> show(String id) => repository.transaction(() async {
     final checkpoint =
         await repository.windowCheckpoint(id) ??
@@ -362,6 +390,11 @@ final class WindowCheckpointService {
       }
       return {
         'policy': 'bodytmi-window-checkpoint-status/1',
+        // The single supported overrun policy, stated so it is reviewable:
+        // boundaries stay on the authored grid; unfinished work at a
+        // boundary is explicitly reviewed (possibly partial) or skipped
+        // before the next window, which starts at that same boundary.
+        'overrunPolicy': 'bodytmi-window-overrun/1:stop-partial',
         'checkpoint': checkpoint.toJson(),
         'sessionStatus': session.status.name,
         'sessionContentVersion': session.contentVersion,

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "emom-clock",
+  "sessionId": "emom-session"
+}
