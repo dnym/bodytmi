@@ -1,0 +1,21 @@
+name: bodytmi_flutter
+version: 0.1.0
+publish_to: none
+description: Flutter presentation adapters over the pure Dart BodyTMI services.
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  bodytmi_locale:
+    path: ../../packages/bodytmi_locale
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  material_ui: ^1.11.0
+dependency_overrides:
+  # Workspace siblings resolve by path; this package is outside the pure Dart
+  # workspace so the CLI never needs a Flutter SDK.
+  bodytmi_core:
+    path: ../../packages/bodytmi_core

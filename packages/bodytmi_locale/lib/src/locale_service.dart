@@ -223,7 +223,13 @@ Map<String, Object?> parseNumber(
         ? integer.replaceAll(RegExp('[   ]'), group)
         : integer;
     final digits = ascii(normalized.replaceAll(group, ''), 'integer');
-    if (_group(digits, _grouping(symbols.DECIMAL_PATTERN), group) != normalized)
+    // Compare positions in ASCII so locale digits cannot mask a misplacement.
+    final asciiGrouped = normalized
+        .split(group)
+        .map((part) => ascii(part, 'integer'))
+        .join(group);
+    if (_group(digits, _grouping(symbols.DECIMAL_PATTERN), group) !=
+        asciiGrouped)
       invalid('Group separators are not at locale grouping positions.');
     integer = digits;
   } else {

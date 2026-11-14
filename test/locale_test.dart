@@ -74,7 +74,16 @@ void localeTests() {
       '1234.5',
     );
     for (final value in ['0', '7', '1000', '-1000000.125', '0.001']) {
-      for (final tag in ['en', 'sv', 'de', 'hi', 'fr']) {
+      for (final tag in [
+        'en',
+        'sv',
+        'de',
+        'hi',
+        'fr',
+        'ar-EG',
+        'ja',
+        'pt-BR',
+      ]) {
         equal(_parse(tag, _number(tag, value), grouping: true), value);
       }
     }

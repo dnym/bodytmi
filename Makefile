@@ -1,6 +1,6 @@
 DART ?= dart
 
-.PHONY: check format test analyze build
+.PHONY: check format test analyze build flutter-check
 check: analyze test
 	$(DART) --suppress-analytics format --output=none --set-exit-if-changed bin lib packages test
 
@@ -17,3 +17,11 @@ build:
 	mkdir -p build
 	$(DART) --suppress-analytics build cli --output build/native
 	ln -sfn native/bundle/bin/bodytmi build/bodytmi
+
+# Optional Flutter adapter checks, outside the pure Dart workspace. Point
+# FLUTTER at an SDK, e.g. make flutter-check FLUTTER=~/fvm/versions/stable/bin/flutter
+FLUTTER ?= flutter
+flutter-check:
+	cd adapters/bodytmi_flutter && $(FLUTTER) --suppress-analytics pub get
+	cd adapters/bodytmi_flutter && $(FLUTTER) --suppress-analytics analyze --fatal-infos
+	cd adapters/bodytmi_flutter && $(FLUTTER) --suppress-analytics test
