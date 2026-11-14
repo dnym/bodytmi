@@ -618,6 +618,7 @@ final class StoredTrainingService {
               criteria: set.criteria,
               manualTargets: set.manualTargets,
               carriedTargets: set.carriedTargets,
+              substitution: set.substitution,
               sources: {
                 for (final e in set.sources.entries)
                   if (!mapped[set.id]!.containsKey(e.key)) e.key: e.value,
@@ -947,6 +948,82 @@ final class StoredTrainingService {
           );
     if (identical(next, current)) return current;
     return edit(id, expectedVersion, (_) => next);
+  });
+
+  /// Guards shared by substitution and its revert: no guided traversal,
+  /// effort clock or reserved scoped clock may own the session.
+  Future<void> _guardSubstitution(String id) async {
+    if ((await repository.executions()).any(
+      (e) => e.sessionId == id && !e.complete,
+    ))
+      invalid('Substitute before or after guided traversal, not during it.');
+    if ((await repository.timingActivities()).any(
+      (t) =>
+          t.sessionId == id && (t.active || t.status == 'awaitingConfirmation'),
+    ))
+      invalid('Stop and review or discard the session clock before substituting.');
+    if ((await repository.windowCheckpoints()).any(
+      (c) => c.sessionId == id && c.reserved,
+    ))
+      invalid('Release the scoped clock before substituting.');
+  }
+
+  Future<TrainingSession> substitute(
+    String id,
+    int expectedVersion, {
+    required String slotId,
+    required String scope,
+    String? setId,
+    required SubstituteComposition composition,
+    Map<String, Map<String, Object?>> targets = const {},
+  }) => repository.transaction(() async {
+    final current = await session(id);
+    if (current.contentVersion != expectedVersion) _conflict();
+    await _guardSubstitution(id);
+    final owner = implementationOwners(
+      await repository.implementationRevisions(),
+    )[composition.implementation];
+    if (owner != null && owner != composition.exerciseId)
+      invalid(
+        'Implementation ${composition.implementation} belongs to exercise '
+        '$owner, not ${composition.exerciseId}.',
+      );
+    final history = await repository.sessions();
+    return edit(
+      id,
+      expectedVersion,
+      (s) => const TrainingService().substitute(
+        s,
+        slotId: slotId,
+        scope: scope,
+        setId: setId,
+        composition: composition,
+        targets: targets,
+        history: history,
+      ),
+    );
+  });
+
+  Future<TrainingSession> revertSubstitution(
+    String id,
+    int expectedVersion, {
+    required String slotId,
+    required String scope,
+    String? setId,
+  }) => repository.transaction(() async {
+    final current = await session(id);
+    if (current.contentVersion != expectedVersion) _conflict();
+    await _guardSubstitution(id);
+    return edit(
+      id,
+      expectedVersion,
+      (s) => const TrainingService().revertSubstitution(
+        s,
+        slotId: slotId,
+        scope: scope,
+        setId: setId,
+      ),
+    );
   });
 
   Future<TrainingSession> edit(

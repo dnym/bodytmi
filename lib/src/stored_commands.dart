@@ -128,6 +128,8 @@ const storedCommandNames = [
   'store skip',
   'store skip-remaining',
   'store skip-slot',
+  'store substitute',
+  'store revert-substitution',
   'store edit-target',
   'store carry-actual',
   'store finish',
@@ -622,6 +624,22 @@ Future<Map<String, Object?>> executeStored(
     'store skip' => {'id', 'expectedVersion', 'setId', 'confirm'},
     'store skip-remaining' => {'id', 'expectedVersion', 'confirm'},
     'store skip-slot' => {'id', 'expectedVersion', 'slotId', 'role', 'confirm'},
+    'store substitute' => {
+      'id',
+      'expectedVersion',
+      'slotId',
+      'scope',
+      'setId',
+      'composition',
+      'targets',
+    },
+    'store revert-substitution' => {
+      'id',
+      'expectedVersion',
+      'slotId',
+      'scope',
+      'setId',
+    },
     'store edit-target' => {
       'id',
       'expectedVersion',
@@ -2356,6 +2374,28 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'id'),
           integer('expectedVersion'),
           confirm: flag('confirm'),
+        )).toJson();
+      case 'store substitute':
+        data = (await service.substitute(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          slotId: requiredString(request, 'slotId'),
+          scope: requiredString(request, 'scope'),
+          setId: request.containsKey('setId')
+              ? requiredString(request, 'setId')
+              : null,
+          composition: SubstituteComposition.fromJson(request['composition']),
+          targets: substitutionTargets(request['targets']),
+        )).toJson();
+      case 'store revert-substitution':
+        data = (await service.revertSubstitution(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          slotId: requiredString(request, 'slotId'),
+          scope: requiredString(request, 'scope'),
+          setId: request.containsKey('setId')
+              ? requiredString(request, 'setId')
+              : null,
         )).toJson();
       case 'store skip-slot':
         data = (await service.skipSlot(

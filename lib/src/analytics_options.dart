@@ -58,3 +58,13 @@ Map<String, String> analyticsBindings(Map<String, Object?> request) => {
   ).entries)
     identifier({'id': entry.key}, 'id'): identifier({'id': entry.value}, 'id'),
 };
+
+/// Parses `targets: {metric: {source, value?}}` for substitution requests.
+Map<String, Map<String, Object?>> substitutionTargets(Object? input) {
+  if (input == null) return const {};
+  final json = jsonObject(input, 'targets');
+  return {
+    for (final e in json.entries)
+      identifier({'metric': e.key}, 'metric'): jsonObject(e.value, 'target'),
+  };
+}

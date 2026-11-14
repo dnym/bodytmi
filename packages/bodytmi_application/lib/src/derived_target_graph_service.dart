@@ -380,6 +380,8 @@ typedef _Selection = (Quantity, int, String, String, DateTime, int);
       if (!includeWarmups && set.role == 'warmup') continue;
       if (set.status != SetStatus.completed) continue;
       if (set.observations?.interrupted ?? false) continue;
+      // A temporary substitute is not history of the slot's composition.
+      if (set.substitution != null) continue;
       final actual = set.actuals[metric];
       if (actual == null || actual.dimension != unit.dimension) continue;
       final slot = definition.slot(set.slotId);

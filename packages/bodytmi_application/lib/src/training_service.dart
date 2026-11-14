@@ -102,6 +102,7 @@ final class TrainingService {
             for (final set in past.sets) {
               final value = set.actuals[metric];
               if (set.slotId == slot.id &&
+                  set.substitution == null &&
                   set.role == effort.role &&
                   set.ordinal == ordinal &&
                   set.eligibleForPerformance &&
@@ -496,6 +497,7 @@ final class TrainingService {
             if (!includeSelected)
               metric: CarriedTargetSource(selected.id, selected.contentVersion),
           },
+          substitution: set.substitution,
           status: set.status,
           actuals: set.actuals,
           timing: set.timing,
@@ -605,4 +607,243 @@ final class TrainingService {
     String setId, {
     bool confirm = false,
   }) => session.replaceSet(session.set(setId).skip(confirm: confirm));
+
+  /// Planned sets a substitution or revert addresses: exactly one occurrence,
+  /// or every remaining planned set of the slot.
+  List<TrainingSet> _scope(
+    TrainingSession session,
+    String slotId,
+    String scope,
+    String? setId,
+  ) {
+    identifier({'slotId': slotId}, 'slotId');
+    if (!session.revision.definition.slots.any((s) => s.id == slotId))
+      invalid('Unknown workout slot: $slotId.');
+    if (session.status != SessionStatus.active)
+      invalid('Substitution needs an active session.');
+    switch (scope) {
+      case 'occurrence':
+        if (setId == null) invalid('An occurrence substitution needs setId.');
+        final set = session.set(setId);
+        if (set.slotId != slotId) invalid('The set belongs to another slot.');
+        if (set.status != SetStatus.planned)
+          invalid('Only a planned set can be substituted.');
+        return [set];
+      case 'remaining':
+        if (setId != null) invalid('A remaining substitution takes no setId.');
+        final sets = [
+          for (final set in session.sets)
+            if (set.slotId == slotId && set.status == SetStatus.planned) set,
+        ];
+        if (sets.isEmpty) invalid('The slot has no remaining planned sets.');
+        return sets;
+      default:
+        invalid('scope must be occurrence or remaining.');
+    }
+  }
+
+  /// Temporary substitution (policy bodytmi-substitution/1). Each target
+  /// metric resolves from `keep` (the slot's planned value), `history` (the
+  /// latest finished result for the same template, slot, role, ordinal and
+  /// replacement composition) or `explicit`; anything else stays unresolved
+  /// with a reason, so an original implementation's value is never
+  /// inherited silently. Unlisted metrics default to `history`.
+  TrainingSession substitute(
+    TrainingSession session, {
+    required String slotId,
+    required String scope,
+    String? setId,
+    required SubstituteComposition composition,
+    Map<String, Map<String, Object?>> targets = const {},
+    List<TrainingSession> history = const [],
+  }) {
+    final slot = session.revision.definition.slot(slotId);
+    if (composition.sameAs(
+      exerciseId: slot.exerciseId,
+      implementation: slot.implementation,
+      equipmentId: slot.equipmentId,
+      setupNote: slot.setupNote,
+    ))
+      invalid('The replacement equals the slot composition; revert instead.');
+    final selected = _scope(session, slotId, scope, setId);
+    final input = session.derivedPlanInput;
+    if (input != null) {
+      final plan = DerivedWorkoutPlan.fromJson(input.snapshot['plan']);
+      final mapped = {for (final b in plan.bindings) b['occurrenceId']};
+      if (selected.any((set) => mapped.contains(set.id)))
+        invalid('Sets with derived plan targets cannot be substituted.');
+    }
+    for (final metric in targets.keys) {
+      if (!selected.any((set) => set.suggested.containsKey(metric)))
+        invalid('Substitution target $metric is not planned for these sets.');
+    }
+    final past =
+        history
+            .where(
+              (h) =>
+                  h.status == SessionStatus.finalized &&
+                  h.id != session.id &&
+                  h.revision.definition.id == session.revision.definition.id &&
+                  h.startedAt.isBefore(session.startedAt),
+            )
+            .toList()
+          ..sort((a, b) {
+            final date = b.startedAt.compareTo(a.startedAt);
+            return date == 0 ? a.id.compareTo(b.id) : date;
+          });
+    final replaced = <String, TrainingSet>{};
+    for (final set in selected) {
+      // Re-substituting keeps the original prior planned state.
+      final original = set.substitution;
+      final originalSuggested = original?.originalSuggested ?? set.suggested;
+      final suggested = <String, Quantity>{};
+      final resolved = <String, SubstitutionTarget>{};
+      for (final entry in originalSuggested.entries) {
+        final metric = entry.key;
+        final dimension = entry.value.dimension;
+        final request = targets[metric] ?? const {'source': 'history'};
+        checkKeys(request, {'source', 'value'});
+        final source = requiredString(request, 'source');
+        switch (source) {
+          case 'keep':
+            if (request.containsKey('value'))
+              invalid('A keep target takes no value.');
+            suggested[metric] = entry.value;
+            resolved[metric] = SubstitutionTarget.keep(dimension);
+          case 'explicit':
+            final value = Quantity.fromJson(request['value']);
+            if (value.dimension != dimension)
+              invalid('Explicit $metric has another dimension.');
+            suggested[metric] = value;
+            resolved[metric] = SubstitutionTarget.explicit(dimension);
+          case 'history':
+            if (request.containsKey('value'))
+              invalid('A history target takes no value.');
+            TrainingSet? found;
+            TrainingSession? foundSession;
+            search:
+            for (final h in past) {
+              for (final old in h.sets) {
+                final value = old.actuals[metric];
+                if (old.slotId == slotId &&
+                    old.role == set.role &&
+                    old.ordinal == set.ordinal &&
+                    old.substitution?.composition == composition &&
+                    old.eligibleForPerformance &&
+                    value != null &&
+                    value.dimension == dimension) {
+                  found = old;
+                  foundSession = h;
+                  break search;
+                }
+              }
+            }
+            if (found == null) {
+              resolved[metric] = SubstitutionTarget.unresolved(
+                dimension,
+                'No finished result for this slot with the replacement '
+                'composition; supply an explicit value or actual.',
+              );
+            } else {
+              suggested[metric] = found.actuals[metric]!;
+              resolved[metric] = SubstitutionTarget.history(
+                dimension,
+                foundSession!.id,
+                found.id,
+                found.contentVersion,
+              );
+            }
+          default:
+            invalid(
+              'Substitution target source must be keep, history or explicit.',
+            );
+        }
+      }
+      replaced[set.id] = TrainingSet(
+        id: set.id,
+        slotId: set.slotId,
+        role: set.role,
+        ordinal: set.ordinal,
+        suggested: suggested,
+        status: set.status,
+        observations: set.observations,
+        maxEffortMetrics: set.maxEffortMetrics,
+        criteria: set.criteria,
+        contentVersion: set.contentVersion + 1,
+        substitution: SetSubstitution(
+          composition: composition,
+          scope: scope,
+          targets: resolved,
+          originalSuggested: originalSuggested,
+          originalSources:
+              original?.originalSources ??
+              {for (final e in set.sources.entries) e.key: e.value.toJson()},
+          originalManualTargets:
+              original?.originalManualTargets ?? set.manualTargets,
+        ),
+      );
+    }
+    return _withSets(session, replaced);
+  }
+
+  /// Restores substituted planned sets to their exact prior planned state.
+  TrainingSession revertSubstitution(
+    TrainingSession session, {
+    required String slotId,
+    required String scope,
+    String? setId,
+  }) {
+    final selected = [
+      for (final set in _scope(session, slotId, scope, setId))
+        if (set.substitution != null) set,
+    ];
+    if (selected.isEmpty) invalid('No substituted planned sets in scope.');
+    final replaced = <String, TrainingSet>{};
+    for (final set in selected) {
+      final original = set.substitution!;
+      replaced[set.id] = TrainingSet(
+        id: set.id,
+        slotId: set.slotId,
+        role: set.role,
+        ordinal: set.ordinal,
+        suggested: original.originalSuggested,
+        sources: {
+          for (final e in original.originalSources.entries)
+            e.key: () {
+              final h = jsonObject(e.value, 'history source');
+              return HistorySource(
+                identifier(h, 'sessionId'),
+                requiredString(h, 'setId'),
+                h['contentVersion']! as int,
+              );
+            }(),
+        },
+        manualTargets: original.originalManualTargets,
+        status: set.status,
+        observations: set.observations,
+        maxEffortMetrics: set.maxEffortMetrics,
+        criteria: set.criteria,
+        contentVersion: set.contentVersion + 1,
+      );
+    }
+    return _withSets(session, replaced);
+  }
+
+  TrainingSession _withSets(
+    TrainingSession session,
+    Map<String, TrainingSet> replaced,
+  ) => TrainingSession(
+    id: session.id,
+    revision: session.revision,
+    startedAt: session.startedAt,
+    sets: [for (final set in session.sets) replaced[set.id] ?? set],
+    bodyMassInputs: session.bodyMassInputs,
+    loadInputs: session.loadInputs,
+    initialBodyMassOverrides: session.initialBodyMassOverrides,
+    derivedPlanInput: session.derivedPlanInput,
+    prescriptionOverrides: session.prescriptionOverrides,
+    status: session.status,
+    finishedAt: session.finishedAt,
+    contentVersion: session.contentVersion + 1,
+  );
 }

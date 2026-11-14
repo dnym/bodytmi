@@ -63,6 +63,8 @@ const commandNames = [
   'session skip',
   'session skip-remaining',
   'session skip-slot',
+  'session substitute',
+  'session revert-substitution',
   'session finish',
   'progression evaluate',
   'progression double',
@@ -889,6 +891,49 @@ final class Commands {
             .skipRemaining(
               sessionFromJson(request['session']),
               confirm: _bool(request, 'confirm'),
+            )
+            .toJson();
+      case 'session substitute':
+        keys({
+          'session',
+          'slotId',
+          'scope',
+          'setId',
+          'composition',
+          'targets',
+          'history',
+        });
+        data = const TrainingService()
+            .substitute(
+              sessionFromJson(request['session']),
+              slotId: requiredString(request, 'slotId'),
+              scope: requiredString(request, 'scope'),
+              setId: request.containsKey('setId')
+                  ? requiredString(request, 'setId')
+                  : null,
+              composition: SubstituteComposition.fromJson(
+                request['composition'],
+              ),
+              targets: substitutionTargets(request['targets']),
+              history: [
+                for (final h
+                    in request.containsKey('history')
+                        ? jsonList(request, 'history')
+                        : const <Object?>[])
+                  sessionFromJson(h),
+              ],
+            )
+            .toJson();
+      case 'session revert-substitution':
+        keys({'session', 'slotId', 'scope', 'setId'});
+        data = const TrainingService()
+            .revertSubstitution(
+              sessionFromJson(request['session']),
+              slotId: requiredString(request, 'slotId'),
+              scope: requiredString(request, 'scope'),
+              setId: request.containsKey('setId')
+                  ? requiredString(request, 'setId')
+                  : null,
             )
             .toJson();
       case 'session skip-slot':

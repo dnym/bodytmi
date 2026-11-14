@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "database": "bodytmi.sqlite",
+  "id": "s1",
+  "expectedVersion": 1,
+  "slotId": "bench-heavy",
+  "scope": "remaining",
+  "composition": {"exercise": "bench-press", "implementation": "dumbbell"},
+  "targets": {"reps": {"source": "keep"}}
+}

@@ -458,6 +458,16 @@ final class StoredProgressionService {
       (s) => s.id == slotId,
     );
     if (candidates.isEmpty) invalid('Unknown progression slot.');
+    // A temporary substitute is not an exposure of the slot's own track,
+    // and a one-off replacement never establishes linkage.
+    if (session.sets.any(
+      (set) =>
+          set.slotId == slotId && set.role == role && set.substitution != null,
+    ))
+      invalid(
+        'Substituted $role sets are not an exposure of this slot track; '
+        'nothing is proposed for it.',
+      );
     final links = await _links();
     final before = linkLinkedTrack(
       links,

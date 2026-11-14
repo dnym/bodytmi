@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/66';
+const _format = 'bodytmi-logical-export/67';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -127,6 +127,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/63',
       'bodytmi-logical-export/64',
       'bodytmi-logical-export/65',
+      'bodytmi-logical-export/66',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -135,7 +136,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final blockData = input['format'] == _format;
+    final substitutionData = input['format'] == _format;
+    final blockData =
+        substitutionData || input['format'] == 'bodytmi-logical-export/66';
     final amrapData =
         blockData || input['format'] == 'bodytmi-logical-export/65';
     final importData =
@@ -453,6 +456,14 @@ final class LogicalArchiveFiles {
         (archive.sessions.any((s) => s.loadInputs.isNotEmpty) ||
             archive.progressions.any((d) => d.session.loadInputs.isNotEmpty)))
       invalid('Session load contexts require logical v62.');
+    if (!substitutionData &&
+        (archive.sessions.any(
+              (s) => s.sets.any((t) => t.substitution != null),
+            ) ||
+            archive.progressions.any(
+              (d) => d.session.sets.any((t) => t.substitution != null),
+            )))
+      invalid('Set substitutions require logical v67.');
     if (!blockData &&
         archive.repeatCheckpoints.any((c) => c.blockTargets.isNotEmpty))
       invalid('Block progression targets require logical v66.');
@@ -753,11 +764,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV66.values) {
+          for (final ddl in schemaV67.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 66');
+          db.execute('PRAGMA user_version = 67');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',

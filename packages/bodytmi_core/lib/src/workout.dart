@@ -11,6 +11,7 @@ import 'timing.dart';
 import 'set_observations.dart';
 import 'objective.dart';
 import 'window_repeat.dart';
+import 'substitution.dart';
 import 'prescription_overrides.dart';
 
 final class ExerciseSlot {
@@ -328,6 +329,7 @@ final class TrainingSet {
     this.loadArrangement,
     Set<String> maxEffortMetrics = const {},
     Map<String, NumericObjective> criteria = const {},
+    this.substitution,
   }) : criteria = Map.unmodifiable(criteria),
        carriedTargets = Map.unmodifiable(carriedTargets),
        manualTargets = Set.unmodifiable(manualTargets),
@@ -352,6 +354,26 @@ final class TrainingSet {
       invalid('Carried targets must be manually selected suggestions.');
     }
     this.observations?.validateStatus(status.name);
+    final swap = substitution;
+    if (swap != null) {
+      if (this.sources.isNotEmpty)
+        invalid('A substituted set keeps no original-context history sources.');
+      if (loadArrangement != null)
+        invalid('A substituted set cannot record the slot plate arrangement.');
+      for (final metric in this.suggested.keys) {
+        if (!swap.targets.containsKey(metric))
+          invalid('Substituted suggestion $metric has no target source.');
+      }
+      for (final entry in swap.targets.entries) {
+        final suggested = this.suggested.containsKey(entry.key);
+        if (entry.value.source == 'unresolved' &&
+            suggested &&
+            !this.manualTargets.contains(entry.key))
+          invalid('An unresolved substitute target cannot be suggested.');
+        if (entry.value.source != 'unresolved' && !suggested)
+          invalid('A resolved substitute target must be suggested.');
+      }
+    }
     if (loadArrangement != null && status != SetStatus.completed)
       invalid('Plate arrangements record only for completed sets.');
     if (this.criteria.length + this.maxEffortMetrics.length > 100)
@@ -394,6 +416,9 @@ final class TrainingSet {
   final LoadArrangement? loadArrangement;
   final Set<String> maxEffortMetrics;
   final Map<String, NumericObjective> criteria;
+
+  /// A temporary substitution frozen on this set, if any.
+  final SetSubstitution? substitution;
   Map<String, Object?> get objectivesJson => {
     ...maxEffortObjectivesToJson(maxEffortMetrics),
     ...numericObjectivesToJson(criteria),
@@ -429,6 +454,15 @@ final class TrainingSet {
           'Max-effort repetitions require an explicitly supplied count: $metric.',
         );
     }
+    // An unresolved substitute target is never filled from the original.
+    for (final metric in substitution?.unresolved ?? const <String>{}) {
+      if (suggested.containsKey(metric)) continue;
+      if (observations[metric]?.dimension !=
+          substitution!.targets[metric]!.dimension)
+        invalid(
+          'Substituted target $metric is unresolved; supply its actual explicitly.',
+        );
+    }
     return TrainingSet(
       id: id,
       slotId: slotId,
@@ -450,6 +484,7 @@ final class TrainingSet {
       loadArrangement: loadArrangement,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
+      substitution: substitution,
       actuals: actual,
       contentVersion: contentVersion + 1,
     );
@@ -471,6 +506,7 @@ final class TrainingSet {
       observations: observations?.notesOnly,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
+      substitution: substitution,
       contentVersion: contentVersion + 1,
     );
   }
@@ -495,6 +531,7 @@ final class TrainingSet {
       loadArrangement: loadArrangement,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
+      substitution: substitution,
       contentVersion: contentVersion + 1,
     );
   }
@@ -520,6 +557,7 @@ final class TrainingSet {
       loadArrangement: replacement,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
+      substitution: substitution,
       contentVersion: contentVersion + 1,
     );
   }
@@ -544,6 +582,7 @@ final class TrainingSet {
     if (loadArrangement != null) 'loadArrangement': loadArrangement!.toJson(),
     if (maxEffortMetrics.isNotEmpty || criteria.isNotEmpty)
       'objectives': objectivesJson,
+    if (substitution != null) 'substitution': substitution!.toJson(),
     'contentVersion': contentVersion,
   };
 }
@@ -714,4 +753,33 @@ final class TrainingSession {
         for (final record in prescriptionOverrides) record.toJson(),
       ],
   };
+}
+
+/// The composition a set was actually performed with: its frozen
+/// substitution when present, otherwise the pinned slot's own.
+typedef EffectiveComposition = ({
+  String exercise,
+  String implementation,
+  String? equipment,
+  String? setupNote,
+  bool substituted,
+});
+
+EffectiveComposition effectiveComposition(ExerciseSlot slot, TrainingSet set) {
+  final swap = set.substitution?.composition;
+  return swap == null
+      ? (
+          exercise: slot.exerciseId,
+          implementation: slot.implementation,
+          equipment: slot.equipmentId,
+          setupNote: slot.setupNote,
+          substituted: false,
+        )
+      : (
+          exercise: swap.exerciseId,
+          implementation: swap.implementation,
+          equipment: swap.equipmentId,
+          setupNote: swap.setupNote,
+          substituted: true,
+        );
 }

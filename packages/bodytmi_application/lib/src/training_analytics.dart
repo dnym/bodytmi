@@ -193,16 +193,19 @@ final class TrainingAnalytics {
                 (includeWarmups || set.role != 'warmup')))
           continue;
         final slot = session.revision.definition.slot(set.slotId);
-        if (members != null && !members.contains(slot.exerciseId)) continue;
+        // Substituted sets stay in their own slot + replacement context.
+        final performed = effectiveComposition(slot, set);
+        if (members != null && !members.contains(performed.exercise)) continue;
         final sourceContext = <String, Object?>{
           'runId': runBySession[session.id],
           'templateId': session.revision.definition.id,
           'slotId': slot.id,
-          'exercise': slot.exerciseId,
-          'implementation': slot.implementation,
-          'equipment': slot.equipmentId,
-          'setupNote': slot.setupNote,
+          'exercise': performed.exercise,
+          'implementation': performed.implementation,
+          'equipment': performed.equipment,
+          'setupNote': performed.setupNote,
           'role': set.role,
+          if (performed.substituted) 'substituted': true,
         };
         if (context.entries.any((e) => sourceContext[e.key] != e.value))
           continue;
@@ -326,8 +329,12 @@ void _context(Map<String, Object?> context) {
     'equipment',
     'setupNote',
     'role',
+    'substituted',
   });
+  if (context.containsKey('substituted') && context['substituted'] != true)
+    invalid('The substituted filter selects substitutes with true only.');
   for (final e in context.entries) {
+    if (e.key == 'substituted') continue;
     if (e.value == null && {'runId', 'equipment', 'setupNote'}.contains(e.key))
       continue;
     if (e.key == 'setupNote') {

@@ -43,3 +43,4 @@ export 'src/derived_workout_plan.dart';
 export 'src/derived_plan_input.dart';
 export 'src/prescription_overrides.dart';
 export 'src/history_import.dart';
+export 'src/substitution.dart';

@@ -124,9 +124,15 @@ TrainingSession sessionFromJson(Object? input) {
       'observations',
       'loadArrangement',
       'objectives',
+      'substitution',
       'contentVersion',
     });
     final expected = baseline.sets[i];
+    final substitution = row.containsKey('substitution')
+        ? SetSubstitution.fromJson(row['substitution'])
+        : null;
+    if (substitution != null && _positive(row, 'contentVersion') < 2)
+      invalid('A substitution requires a later set version.');
     if (row['id'] != expected.id ||
         row['slot'] != expected.slotId ||
         row['role'] != expected.role ||
@@ -157,7 +163,10 @@ TrainingSession sessionFromJson(Object? input) {
               !(mappedTargets[expected.id]?.contains(metric) ?? false);
         }) ||
         expected.suggested.keys.any(
-          (k) => suggested[k]?.dimension != expected.suggested[k]!.dimension,
+          (k) =>
+              !(substitution?.unresolved.contains(k) == true &&
+                  !suggested.containsKey(k)) &&
+              suggested[k]?.dimension != expected.suggested[k]!.dimension,
         ))
       invalid('Set suggestions have incompatible metrics.');
     final actuals = metricsFromJson(row['actuals']);
@@ -244,6 +253,7 @@ TrainingSession sessionFromJson(Object? input) {
             ? null
             : LoadArrangement.fromJson(row['loadArrangement']),
         status: setStatus,
+        substitution: substitution,
         contentVersion: _positive(row, 'contentVersion'),
       ),
     );
@@ -315,7 +325,9 @@ TrainingSession sessionFromJson(Object? input) {
       for (final entry
           in (overriddenAfter[set.id] ?? const <String, Quantity>{}).entries) {
         if (set.manualTargets.contains(entry.key) ||
-            set.carriedTargets.containsKey(entry.key))
+            set.carriedTargets.containsKey(entry.key) ||
+            (set.substitution != null &&
+                set.substitution!.targets[entry.key]?.source != 'keep'))
           continue;
         if (canonicalJson(set.suggested[entry.key]?.toJson()) !=
             canonicalJson(entry.value.toJson()))

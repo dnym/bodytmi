@@ -165,6 +165,7 @@ final class NativeBackup {
           64,
           65,
           66,
+          67,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -324,6 +325,7 @@ final class NativeBackup {
             64,
             65,
             66,
+            67,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -613,6 +615,10 @@ final class NativeBackup {
           if (db.userVersion < 57 && session.prescriptionOverrides.isNotEmpty) {
             invalid('Program prescription overrides require schema v57.');
           }
+          if (db.userVersion < 67 &&
+              session.sets.any((s) => s.substitution != null)) {
+            invalid('Set substitutions require schema v67.');
+          }
           if (db.userVersion < 62 && session.loadInputs.isNotEmpty) {
             invalid('Session load contexts require schema v62.');
           }
@@ -693,6 +699,9 @@ final class NativeBackup {
           );
           if (db.userVersion < 55 && d.ruleType == 'ordinal')
             invalid('Ordinal progression requires schema v55.');
+          if (db.userVersion < 67 &&
+              d.session.sets.any((s) => s.substitution != null))
+            invalid('Frozen set substitutions require schema v67.');
           if (db.userVersion < 57 &&
               d.session.prescriptionOverrides.isNotEmpty) {
             invalid('Frozen prescription overrides require schema v57.');
