@@ -208,6 +208,7 @@ void timingDefaultsTests() {
       db.execute('DROP TABLE IF EXISTS equipment_revisions');
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      db.execute('DROP TABLE IF EXISTS imported_sessions');
       db.execute('PRAGMA user_version = 44');
       db.close();
       store = await TrainingStore.open(path);
@@ -217,7 +218,7 @@ void timingDefaultsTests() {
       );
       equal(
         (await store.backup('${dir.path}/migrated'))['databaseSchemaVersion'],
-        63,
+        64,
       );
     } finally {
       await store.close();
@@ -337,6 +338,7 @@ void timingDefaultsTests() {
         native.execute('DROP TABLE IF EXISTS equipment_revisions');
         native.execute('DROP TABLE IF EXISTS gym_revisions');
         native.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        native.execute('DROP TABLE IF EXISTS imported_sessions');
         native.execute('PRAGMA user_version = 44');
         native.close();
         rejects(
@@ -630,6 +632,7 @@ void timingDefaultsTests() {
       old.execute('DROP TABLE IF EXISTS equipment_revisions');
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      old.execute('DROP TABLE IF EXISTS imported_sessions');
       old.userVersion = 12;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 12);
@@ -685,14 +688,14 @@ void timingDefaultsTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          63,
+          64,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/new.json',
           ))['format'],
-          'bodytmi-logical-export/63',
+          'bodytmi-logical-export/64',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/new.json');
         try {
@@ -743,6 +746,7 @@ void timingDefaultsTests() {
       forged.execute('DROP TABLE IF EXISTS equipment_revisions');
       forged.execute('DROP TABLE IF EXISTS gym_revisions');
       forged.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      forged.execute('DROP TABLE IF EXISTS imported_sessions');
       forged.userVersion = 12;
       forged.close();
       rejects(

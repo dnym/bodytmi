@@ -14,6 +14,7 @@ import 'timing_service.dart';
 import 'execution_service.dart';
 import 'window_checkpoint.dart';
 import 'repeat_checkpoint.dart';
+import 'history_import_service.dart';
 
 /// Full logical representation of the records currently persisted by training.
 /// This is a profile replacement contract, not a neutral external-history import.
@@ -29,6 +30,7 @@ final class TrainingArchive {
     List<ProgramReceipt> programReceipts = const [],
     List<ProgramUpgradeReceipt> programUpgrades = const [],
     List<BodyMassRecord> bodyMass = const [],
+    List<ImportedSessionRecord> importedSessions = const [],
     List<TimingActivity> timers = const [],
     List<WindowCheckpoint> windowCheckpoints = const [],
     List<RepeatCheckpoint> repeatCheckpoints = const [],
@@ -121,6 +123,12 @@ final class TrainingArchive {
        timers = List<TimingActivity>.unmodifiable(
          <TimingActivity>[...timers]..sort((a, b) => a.id.compareTo(b.id)),
        ),
+       importedSessions = List<ImportedSessionRecord>.unmodifiable(
+         <ImportedSessionRecord>[...importedSessions]..sort((a, b) {
+           final ns = a.namespace.compareTo(b.namespace);
+           return ns == 0 ? a.sourceId.compareTo(b.sourceId) : ns;
+         }),
+       ),
        bodyMass = List<BodyMassRecord>.unmodifiable(
          <BodyMassRecord>[...bodyMass]
            ..sort((a, b) => a.measurement.id.compareTo(b.measurement.id)),
@@ -182,6 +190,7 @@ final class TrainingArchive {
       'programReceipts',
       'programUpgrades',
       'bodyMass',
+      'importedSessions',
       'timers',
       'windowCheckpoints',
       'repeatCheckpoints',
@@ -246,6 +255,10 @@ final class TrainingArchive {
         for (final c in optional('windowCheckpoints'))
           WindowCheckpoint.fromJson(c),
       ],
+      importedSessions: [
+        for (final j in optional('importedSessions'))
+          ImportedSessionRecord.fromJson(j),
+      ],
       bodyMass: [
         for (final j in optional('bodyMass')) BodyMassRecord.fromJson(j),
       ],
@@ -304,6 +317,7 @@ final class TrainingArchive {
   final List<WindowCheckpoint> windowCheckpoints;
   final List<RepeatCheckpoint> repeatCheckpoints;
   final List<BodyMassRecord> bodyMass;
+  final List<ImportedSessionRecord> importedSessions;
   final List<WorkoutRevision> revisions;
   final List<TrainingSession> sessions;
   final List<String> finalizations;
@@ -331,6 +345,7 @@ final class TrainingArchive {
     'windowCheckpoints': [for (final c in windowCheckpoints) c.toJson()],
     'repeatCheckpoints': [for (final c in repeatCheckpoints) c.toJson()],
     'bodyMass': [for (final r in bodyMass) r.toJson()],
+    'importedSessions': [for (final r in importedSessions) r.toJson()],
     'revisions': [for (final r in revisions) r.toJson()],
     'sessions': [for (final s in sessions) s.toJson()],
     'finalizations': finalizations,
@@ -359,6 +374,7 @@ final class TrainingArchive {
     'windowCheckpoints': windowCheckpoints.length,
     'repeatCheckpoints': repeatCheckpoints.length,
     'bodyMass': bodyMass.length,
+    'importedSessions': importedSessions.length,
     'revisions': revisions.length,
     'sessions': sessions.length,
     'finalizations': finalizations.length,
@@ -406,6 +422,7 @@ final class TrainingArchive {
     validateExecutionData(executions, sessions, timers);
     if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)
       invalid('Duplicate body-mass observation identity.');
+    validateImportedSessions(importedSessions);
     validateBodyMassInputReferences(sessions, bodyMass);
     validateDerivedPlanReferences(sessions, graphs, {
       for (final b in sessionPrograms) b.sessionId: b.runId,

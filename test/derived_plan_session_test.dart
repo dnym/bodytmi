@@ -127,6 +127,7 @@ void derivedPlanSessionTests() {
       old.execute('DROP TABLE IF EXISTS equipment_revisions');
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      old.execute('DROP TABLE IF EXISTS imported_sessions');
       old.userVersion = 38;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/v38.sqlite'), 38);
@@ -241,7 +242,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/round.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/round.sqlite'), 63);
+      equal(NativeBackup.validateDatabase('$dir/round.sqlite'), 64);
       final oldLabel = sqlite3.open('$dir/round.sqlite');
       oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -255,6 +256,7 @@ void derivedPlanSessionTests() {
       oldLabel.execute('DROP TABLE IF EXISTS equipment_revisions');
       oldLabel.execute('DROP TABLE IF EXISTS gym_revisions');
       oldLabel.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      oldLabel.execute('DROP TABLE IF EXISTS imported_sessions');
       oldLabel.userVersion = 38;
       oldLabel.close();
       rejects(() => NativeBackup.validateDatabase('$dir/round.sqlite'));
@@ -278,6 +280,7 @@ void derivedPlanSessionTests() {
       old.execute('DROP TABLE IF EXISTS equipment_revisions');
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      old.execute('DROP TABLE IF EXISTS imported_sessions');
       old.userVersion = 37;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/v37.sqlite'), 37);
@@ -373,7 +376,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/binary.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/binary.sqlite'), 63);
+      equal(NativeBackup.validateDatabase('$dir/binary.sqlite'), 64);
       final oldLabel = sqlite3.open('$dir/binary.sqlite');
       oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -387,6 +390,7 @@ void derivedPlanSessionTests() {
       oldLabel.execute('DROP TABLE IF EXISTS equipment_revisions');
       oldLabel.execute('DROP TABLE IF EXISTS gym_revisions');
       oldLabel.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      oldLabel.execute('DROP TABLE IF EXISTS imported_sessions');
       oldLabel.userVersion = 37;
       oldLabel.close();
       rejects(() => NativeBackup.validateDatabase('$dir/binary.sqlite'));
@@ -618,7 +622,7 @@ void derivedPlanSessionTests() {
       await store.backup(native);
       final backup = await NativeBackup.prepare(native);
       try {
-        equal(backup.manifest['databaseSchemaVersion'], 63);
+        equal(backup.manifest['databaseSchemaVersion'], 64);
       } finally {
         await backup.close();
       }
@@ -656,6 +660,7 @@ void derivedPlanSessionTests() {
       db.execute('DROP TABLE IF EXISTS equipment_revisions');
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      db.execute('DROP TABLE IF EXISTS imported_sessions');
       db.userVersion = 28;
       db.close();
       rejects(() => NativeBackup.validateDatabase(sqlite));
@@ -1485,7 +1490,7 @@ void derivedPlanSessionTests() {
       );
       final snapshot = '$dir/snapshot.sqlite';
       await store.snapshot(snapshot);
-      equal(NativeBackup.validateDatabase(snapshot), 63);
+      equal(NativeBackup.validateDatabase(snapshot), 64);
       final db = sqlite3.open(snapshot);
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -1499,6 +1504,7 @@ void derivedPlanSessionTests() {
       db.execute('DROP TABLE IF EXISTS equipment_revisions');
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      db.execute('DROP TABLE IF EXISTS imported_sessions');
       db.userVersion = 30;
       db.close();
       rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -1873,7 +1879,7 @@ void derivedPlanSessionTests() {
         throwsA(isA<BodyTmiException>()),
       );
       await store.snapshot('$dir/snapshot.sqlite');
-      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 63);
+      equal(NativeBackup.validateDatabase('$dir/snapshot.sqlite'), 64);
       final db = sqlite3.open('$dir/snapshot.sqlite');
       db.execute('DROP TABLE IF EXISTS repeat_checkpoints');
       db.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -1887,6 +1893,7 @@ void derivedPlanSessionTests() {
       db.execute('DROP TABLE IF EXISTS equipment_revisions');
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      db.execute('DROP TABLE IF EXISTS imported_sessions');
       db.userVersion = 32;
       db.close();
       rejects(() => NativeBackup.validateDatabase('$dir/snapshot.sqlite'));
@@ -1916,6 +1923,7 @@ void derivedPlanSessionTests() {
       db.execute('DROP TABLE IF EXISTS equipment_revisions');
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      db.execute('DROP TABLE IF EXISTS imported_sessions');
       db.userVersion = 32;
       db.close();
       final reopened = await TrainingStore.open('$dir/old.sqlite');
@@ -2000,6 +2008,7 @@ void derivedPlanSessionTests() {
       db.execute('DROP TABLE IF EXISTS equipment_revisions');
       db.execute('DROP TABLE IF EXISTS gym_revisions');
       db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      db.execute('DROP TABLE IF EXISTS imported_sessions');
       db.userVersion = 28;
       db.close();
       equal(NativeBackup.validateDatabase(path), 28);
@@ -2011,7 +2020,7 @@ void derivedPlanSessionTests() {
       }
       final reopened = sqlite3.open(path);
       try {
-        equal(reopened.userVersion, 63);
+        equal(reopened.userVersion, 64);
       } finally {
         reopened.close();
       }

@@ -430,6 +430,7 @@ void storedThresholdTests() {
       old.execute('DROP TABLE IF EXISTS equipment_revisions');
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      old.execute('DROP TABLE IF EXISTS imported_sessions');
       old.userVersion = 13;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 13);
@@ -454,7 +455,7 @@ void storedThresholdTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          63,
+          64,
         );
       } finally {
         await upgraded.close();
@@ -471,14 +472,14 @@ void storedThresholdTests() {
         final expected = canonicalJson((await active.archive()).toJson());
         equal(
           (await active.backup('$dir/native'))['databaseSchemaVersion'],
-          63,
+          64,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/63',
+          'bodytmi-logical-export/64',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {
@@ -528,6 +529,7 @@ void storedThresholdTests() {
       forged.execute('DROP TABLE IF EXISTS equipment_revisions');
       forged.execute('DROP TABLE IF EXISTS gym_revisions');
       forged.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      forged.execute('DROP TABLE IF EXISTS imported_sessions');
       forged.userVersion = 13;
       forged.close();
       rejects(

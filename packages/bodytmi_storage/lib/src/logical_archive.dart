@@ -11,7 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'native_backup.dart';
 import 'schema.dart';
 
-const _format = 'bodytmi-logical-export/63';
+const _format = 'bodytmi-logical-export/64';
 const _maxBytes = 64 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
@@ -124,6 +124,7 @@ final class LogicalArchiveFiles {
       'bodytmi-logical-export/60',
       'bodytmi-logical-export/61',
       'bodytmi-logical-export/62',
+      'bodytmi-logical-export/63',
     }.contains(input['format']))
       invalid('Unsupported logical export format.');
     final version = requiredString(input, 'applicationVersion');
@@ -132,7 +133,9 @@ final class LogicalArchiveFiles {
       invalid('Invalid logical export checksum.');
     final inputData = jsonObject(input['data'], 'logical data');
     final legacy = input['format'] == 'bodytmi-logical-export/1';
-    final arrangementData = input['format'] == _format;
+    final importData = input['format'] == _format;
+    final arrangementData =
+        importData || input['format'] == 'bodytmi-logical-export/63';
     final loadContextData =
         arrangementData || input['format'] == 'bodytmi-logical-export/62';
     final conventionData =
@@ -273,6 +276,12 @@ final class LogicalArchiveFiles {
     final hadEquipment = inputData.containsKey('equipment');
     final hadGyms = inputData.containsKey('gyms');
     final hadInstances = inputData.containsKey('instances');
+    final hadImportedSessions = inputData.containsKey('importedSessions');
+    if (!importData &&
+        inputData['importedSessions'] is List &&
+        (inputData['importedSessions'] as List).isEmpty) {
+      inputData.remove('importedSessions');
+    }
     if (!inventoryData &&
         inputData['equipment'] is List &&
         (inputData['equipment'] as List).isEmpty) {
@@ -363,6 +372,7 @@ final class LogicalArchiveFiles {
       if (inventoryData) 'equipment',
       if (inventoryData) 'gyms',
       if (inventoryData) 'instances',
+      if (importData) 'importedSessions',
     });
     if (!legacy && !inputData.containsKey('progressions'))
       invalid('Logical format requires progression records.');
@@ -402,6 +412,8 @@ final class LogicalArchiveFiles {
       invalid('Logical v59 requires gym revisions.');
     if (inventoryData && !inputData.containsKey('instances'))
       invalid('Logical v59 requires equipment instance revisions.');
+    if (importData && !inputData.containsKey('importedSessions'))
+      invalid('Logical v64 requires imported history sessions.');
     if (!derivedBodyMassData) {
       for (final item in jsonList(inputData, 'sessions')) {
         final session = jsonObject(item, 'session');
@@ -698,6 +710,7 @@ final class LogicalArchiveFiles {
     if (!inventoryData && !hadEquipment) data.remove('equipment');
     if (!inventoryData && !hadGyms) data.remove('gyms');
     if (!inventoryData && !hadInstances) data.remove('instances');
+    if (!importData && !hadImportedSessions) data.remove('importedSessions');
     if (!programData) for (final key in programKeys) data.remove(key);
     if (_checksum({
           'format': input['format'],
@@ -716,11 +729,11 @@ final class LogicalArchiveFiles {
         db.execute('PRAGMA synchronous = FULL');
         db.execute('BEGIN');
         try {
-          for (final ddl in schemaV63.values) {
+          for (final ddl in schemaV64.values) {
             db.execute(ddl);
           }
           db.execute('PRAGMA application_id = 1112821065');
-          db.execute('PRAGMA user_version = 63');
+          db.execute('PRAGMA user_version = 64');
           for (final family in archive.families) {
             db.execute(
               'INSERT INTO family_revisions(family_id,number,snapshot) VALUES (?,?,?)',
@@ -770,6 +783,16 @@ final class LogicalArchiveFiles {
                 instance.instance.id,
                 instance.number,
                 canonicalJson(instance.toJson()),
+              ],
+            );
+          }
+          for (final record in archive.importedSessions) {
+            db.execute(
+              'INSERT INTO imported_sessions(namespace,source_id,snapshot) VALUES (?,?,?)',
+              [
+                record.namespace,
+                record.sourceId,
+                canonicalJson(record.toJson()),
               ],
             );
           }

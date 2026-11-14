@@ -636,7 +636,7 @@ void loadConventionTests() {
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/63');
+      equal(exported['format'], 'bodytmi-logical-export/64');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         check(
@@ -739,6 +739,7 @@ void loadConventionTests() {
       }
 
       final db = sqlite3.open('$dir/native/database.sqlite');
+      db.execute('DROP TABLE IF EXISTS imported_sessions');
       db.userVersion = 60;
       db.close();
       final nativeError = await failure(

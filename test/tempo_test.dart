@@ -181,6 +181,7 @@ void tempoTests() {
         old.execute('DROP TABLE IF EXISTS equipment_revisions');
         old.execute('DROP TABLE IF EXISTS gym_revisions');
         old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        old.execute('DROP TABLE IF EXISTS imported_sessions');
         old.userVersion = 43;
         old.close();
         rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -264,6 +265,7 @@ void tempoTests() {
         legacy.execute('DROP TABLE IF EXISTS equipment_revisions');
         legacy.execute('DROP TABLE IF EXISTS gym_revisions');
         legacy.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        legacy.execute('DROP TABLE IF EXISTS imported_sessions');
         legacy.userVersion = 43;
         legacy.close();
         equal(NativeBackup.validateDatabase('${dir.path}/legacy.sqlite'), 43);
@@ -541,6 +543,7 @@ void tempoTests() {
         old.execute('DROP TABLE IF EXISTS equipment_revisions');
         old.execute('DROP TABLE IF EXISTS gym_revisions');
         old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        old.execute('DROP TABLE IF EXISTS imported_sessions');
         old.userVersion = 43;
         old.close();
         rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -748,6 +751,7 @@ void tempoTests() {
         legacyDb.execute('DROP TABLE IF EXISTS equipment_revisions');
         legacyDb.execute('DROP TABLE IF EXISTS gym_revisions');
         legacyDb.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        legacyDb.execute('DROP TABLE IF EXISTS imported_sessions');
         legacyDb.userVersion = 42;
         legacyDb.close();
         equal(NativeBackup.validateDatabase('${dir.path}/legacy.sqlite'), 42);
@@ -1001,6 +1005,7 @@ void tempoTests() {
         oldDb.execute('DROP TABLE IF EXISTS equipment_revisions');
         oldDb.execute('DROP TABLE IF EXISTS gym_revisions');
         oldDb.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        oldDb.execute('DROP TABLE IF EXISTS imported_sessions');
         oldDb.userVersion = 42;
         oldDb.close();
         rejects(() => NativeBackup.validateDatabase('${dir.path}/old.sqlite'));
@@ -1096,6 +1101,7 @@ void tempoTests() {
       old.execute('DROP TABLE IF EXISTS equipment_revisions');
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      old.execute('DROP TABLE IF EXISTS imported_sessions');
       old.userVersion = 9;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 9);
@@ -1106,7 +1112,7 @@ void tempoTests() {
         equal((await TimingService(migrated).show('clock')).plan.tempo, null);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          63,
+          64,
         );
       } finally {
         await migrated.close();
@@ -1409,13 +1415,13 @@ void tempoTests() {
       t = await timing.resume(t.id, t.version, 'epoch', instant(1));
       await timing.advance(t.id, t.version, 'epoch', 4500, instant(1));
       final expected = canonicalJson((await store.archive()).toJson());
-      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 63);
+      equal((await store.backup('$dir/native'))['databaseSchemaVersion'], 64);
       equal(
         (await LogicalArchiveFiles.export(
           await store.archive(),
           '$dir/logical.json',
         ))['format'],
-        'bodytmi-logical-export/63',
+        'bodytmi-logical-export/64',
       );
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
@@ -1474,6 +1480,7 @@ void tempoTests() {
       old.execute('DROP TABLE IF EXISTS equipment_revisions');
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      old.execute('DROP TABLE IF EXISTS imported_sessions');
       old.userVersion = 9;
       old.close();
       rejects(

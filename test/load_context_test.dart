@@ -630,7 +630,7 @@ void loadContextTests() {
         await store.archive(),
         '$dir/logical.json',
       );
-      equal(exported['format'], 'bodytmi-logical-export/63');
+      equal(exported['format'], 'bodytmi-logical-export/64');
       final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
       try {
         check(
@@ -719,6 +719,7 @@ void loadContextTests() {
       }
 
       final db = sqlite3.open('$dir/native/database.sqlite');
+      db.execute('DROP TABLE IF EXISTS imported_sessions');
       db.userVersion = 61;
       db.close();
       final nativeError = await failure(
@@ -742,6 +743,7 @@ void loadContextTests() {
         await plainStore.close();
       }
       final db = sqlite3.open('$dir/plain-native/database.sqlite');
+      db.execute('DROP TABLE IF EXISTS imported_sessions');
       db.userVersion = 61;
       db.close();
       await NativeBackup.validateDatabase('$dir/plain-native/database.sqlite');

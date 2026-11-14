@@ -396,6 +396,7 @@ void setObservationsTests() {
         old.execute('DROP TABLE IF EXISTS equipment_revisions');
         old.execute('DROP TABLE IF EXISTS gym_revisions');
         old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        old.execute('DROP TABLE IF EXISTS imported_sessions');
         old.userVersion = 20;
         old.close();
         equal(
@@ -406,7 +407,7 @@ void setObservationsTests() {
         equal(canonicalJson((await store.archive()).toJson()), before);
         equal(
           (await store.backup('${dir.path}/upgraded'))['databaseSchemaVersion'],
-          63,
+          64,
         );
         final logical = jsonObject(
           jsonDecode(await File('${dir.path}/legacy.json').readAsString()),
@@ -595,6 +596,7 @@ void setObservationsTests() {
           db.execute('DROP TABLE IF EXISTS equipment_revisions');
           db.execute('DROP TABLE IF EXISTS gym_revisions');
           db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+          db.execute('DROP TABLE IF EXISTS imported_sessions');
           db.userVersion = 20;
           db.close();
           rejects(

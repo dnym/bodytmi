@@ -162,6 +162,7 @@ final class NativeBackup {
           61,
           62,
           63,
+          64,
         }.contains(manifest['databaseSchemaVersion'])) {
       invalid('Unsupported native backup format or database schema.');
     }
@@ -318,6 +319,7 @@ final class NativeBackup {
             61,
             62,
             63,
+            64,
           }.contains(db.userVersion) ||
           db.select('PRAGMA application_id').single.values.single !=
               1112821065 ||
@@ -356,6 +358,7 @@ final class NativeBackup {
         if (db.userVersion >= 59) 'gym_revisions',
         if (db.userVersion >= 59) 'equipment_instance_revisions',
         if (db.userVersion >= 27) 'derived_target_graphs',
+        if (db.userVersion >= 64) 'imported_sessions',
         if (db.userVersion >= 3) ...[
           'program_revisions',
           'program_runs',
@@ -958,6 +961,19 @@ final class NativeBackup {
           for (final row in db.select('SELECT snapshot FROM sessions'))
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ], massRecords);
+      }
+      if (db.userVersion >= 64) {
+        final imported = <ImportedSessionRecord>[];
+        for (final row in db.select('SELECT * FROM imported_sessions')) {
+          final record = ImportedSessionRecord.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (record.namespace != row['namespace'] ||
+              record.sourceId != row['source_id'])
+            invalid('Imported session row identity mismatch.');
+          imported.add(record);
+        }
+        validateImportedSessions(imported);
       }
       if (db.userVersion >= 29) {
         final graphs = [

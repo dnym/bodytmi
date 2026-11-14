@@ -148,6 +148,12 @@ const schemaV63 = {
   // against a session's frozen equipment instance revision.
 };
 
+const schemaV64 = {
+  ...schemaV63,
+  'imported_sessions':
+      'CREATE TABLE "imported_sessions" ("namespace" TEXT NOT NULL, "source_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("namespace", "source_id"))',
+};
+
 Map<String, String> schemaForVersion(int version) => switch (version) {
   1 => schemaV1,
   2 => schemaV2,
@@ -222,6 +228,7 @@ Map<String, String> schemaForVersion(int version) => switch (version) {
   61 => schemaV61, // v61 adds declared load entry conventions.
   62 => schemaV62, // v62 adds session-frozen load inputs.
   63 => schemaV63, // v63 adds per-set plate arrangement payloads.
+  64 => schemaV64, // v64 adds limited source-neutral imported history.
   _ => throw const BodyTmiException(
     'validation',
     'Unsupported database schema.',

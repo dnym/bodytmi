@@ -6541,6 +6541,276 @@ class ProgramUpgradeReceiptsCompanion
   }
 }
 
+class $ImportedSessionsTable extends ImportedSessions
+    with TableInfo<$ImportedSessionsTable, StoredImportedSession> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ImportedSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _namespaceMeta = const VerificationMeta(
+    'namespace',
+  );
+  @override
+  late final GeneratedColumn<String> namespace = GeneratedColumn<String>(
+    'namespace',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [namespace, sourceId, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'imported_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredImportedSession> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('namespace')) {
+      context.handle(
+        _namespaceMeta,
+        namespace.isAcceptableOrUnknown(data['namespace']!, _namespaceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_namespaceMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {namespace, sourceId};
+  @override
+  StoredImportedSession map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredImportedSession(
+      namespace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}namespace'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $ImportedSessionsTable createAlias(String alias) {
+    return $ImportedSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredImportedSession extends DataClass
+    implements Insertable<StoredImportedSession> {
+  final String namespace;
+  final String sourceId;
+  final String snapshot;
+  const StoredImportedSession({
+    required this.namespace,
+    required this.sourceId,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['namespace'] = Variable<String>(namespace);
+    map['source_id'] = Variable<String>(sourceId);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  ImportedSessionsCompanion toCompanion(bool nullToAbsent) {
+    return ImportedSessionsCompanion(
+      namespace: Value(namespace),
+      sourceId: Value(sourceId),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredImportedSession.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredImportedSession(
+      namespace: serializer.fromJson<String>(json['namespace']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'namespace': serializer.toJson<String>(namespace),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredImportedSession copyWith({
+    String? namespace,
+    String? sourceId,
+    String? snapshot,
+  }) => StoredImportedSession(
+    namespace: namespace ?? this.namespace,
+    sourceId: sourceId ?? this.sourceId,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredImportedSession copyWithCompanion(ImportedSessionsCompanion data) {
+    return StoredImportedSession(
+      namespace: data.namespace.present ? data.namespace.value : this.namespace,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredImportedSession(')
+          ..write('namespace: $namespace, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(namespace, sourceId, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredImportedSession &&
+          other.namespace == this.namespace &&
+          other.sourceId == this.sourceId &&
+          other.snapshot == this.snapshot);
+}
+
+class ImportedSessionsCompanion extends UpdateCompanion<StoredImportedSession> {
+  final Value<String> namespace;
+  final Value<String> sourceId;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const ImportedSessionsCompanion({
+    this.namespace = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ImportedSessionsCompanion.insert({
+    required String namespace,
+    required String sourceId,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : namespace = Value(namespace),
+       sourceId = Value(sourceId),
+       snapshot = Value(snapshot);
+  static Insertable<StoredImportedSession> custom({
+    Expression<String>? namespace,
+    Expression<String>? sourceId,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (namespace != null) 'namespace': namespace,
+      if (sourceId != null) 'source_id': sourceId,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ImportedSessionsCompanion copyWith({
+    Value<String>? namespace,
+    Value<String>? sourceId,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return ImportedSessionsCompanion(
+      namespace: namespace ?? this.namespace,
+      sourceId: sourceId ?? this.sourceId,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (namespace.present) {
+      map['namespace'] = Variable<String>(namespace.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ImportedSessionsCompanion(')
+          ..write('namespace: $namespace, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TrainingDatabase extends GeneratedDatabase {
   _$TrainingDatabase(QueryExecutor e) : super(e);
   $TrainingDatabaseManager get managers => $TrainingDatabaseManager(this);
@@ -6595,6 +6865,9 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
       $LinkRetirementAnchorsTable(this);
   late final $ProgramUpgradeReceiptsTable programUpgradeReceipts =
       $ProgramUpgradeReceiptsTable(this);
+  late final $ImportedSessionsTable importedSessions = $ImportedSessionsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6625,6 +6898,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     sharedLeverApplications,
     linkRetirementAnchors,
     programUpgradeReceipts,
+    importedSessions,
   ];
 }
 
@@ -12997,6 +13271,189 @@ typedef $$ProgramUpgradeReceiptsTableProcessedTableManager =
       StoredProgramUpgradeReceipt,
       PrefetchHooks Function()
     >;
+typedef $$ImportedSessionsTableCreateCompanionBuilder =
+    ImportedSessionsCompanion Function({
+      required String namespace,
+      required String sourceId,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$ImportedSessionsTableUpdateCompanionBuilder =
+    ImportedSessionsCompanion Function({
+      Value<String> namespace,
+      Value<String> sourceId,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$ImportedSessionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $ImportedSessionsTable> {
+  $$ImportedSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get namespace => $composableBuilder(
+    column: $table.namespace,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ImportedSessionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $ImportedSessionsTable> {
+  $$ImportedSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get namespace => $composableBuilder(
+    column: $table.namespace,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ImportedSessionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $ImportedSessionsTable> {
+  $$ImportedSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get namespace =>
+      $composableBuilder(column: $table.namespace, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$ImportedSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $ImportedSessionsTable,
+          StoredImportedSession,
+          $$ImportedSessionsTableFilterComposer,
+          $$ImportedSessionsTableOrderingComposer,
+          $$ImportedSessionsTableAnnotationComposer,
+          $$ImportedSessionsTableCreateCompanionBuilder,
+          $$ImportedSessionsTableUpdateCompanionBuilder,
+          (
+            StoredImportedSession,
+            BaseReferences<
+              _$TrainingDatabase,
+              $ImportedSessionsTable,
+              StoredImportedSession
+            >,
+          ),
+          StoredImportedSession,
+          PrefetchHooks Function()
+        > {
+  $$ImportedSessionsTableTableManager(
+    _$TrainingDatabase db,
+    $ImportedSessionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ImportedSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ImportedSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ImportedSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> namespace = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ImportedSessionsCompanion(
+                namespace: namespace,
+                sourceId: sourceId,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String namespace,
+                required String sourceId,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => ImportedSessionsCompanion.insert(
+                namespace: namespace,
+                sourceId: sourceId,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ImportedSessionsTable, StoredImportedSession>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $ImportedSessionsTable,
+                    StoredImportedSession
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ImportedSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $ImportedSessionsTable,
+      StoredImportedSession,
+      $$ImportedSessionsTableFilterComposer,
+      $$ImportedSessionsTableOrderingComposer,
+      $$ImportedSessionsTableAnnotationComposer,
+      $$ImportedSessionsTableCreateCompanionBuilder,
+      $$ImportedSessionsTableUpdateCompanionBuilder,
+      (
+        StoredImportedSession,
+        BaseReferences<
+          _$TrainingDatabase,
+          $ImportedSessionsTable,
+          StoredImportedSession
+        >,
+      ),
+      StoredImportedSession,
+      PrefetchHooks Function()
+    >;
 
 class $TrainingDatabaseManager {
   final _$TrainingDatabase _db;
@@ -13068,4 +13525,6 @@ class $TrainingDatabaseManager {
         _db,
         _db.programUpgradeReceipts,
       );
+  $$ImportedSessionsTableTableManager get importedSessions =>
+      $$ImportedSessionsTableTableManager(_db, _db.importedSessions);
 }

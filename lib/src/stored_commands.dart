@@ -154,6 +154,12 @@ const storedCommandNames = [
   'run upgrades',
   'run pause',
   'run resume',
+  'import preview',
+  'import apply',
+  'import list',
+  'import show',
+  'import delete',
+  'import series',
   'mass record',
   'mass update',
   'mass delete',
@@ -653,6 +659,20 @@ Future<Map<String, Object?>> executeStored(
       'role',
       'expectedVersion',
       'declinedAt',
+    },
+    'import preview' => {'document'},
+    'import apply' => {'document', 'importedAt', 'onChanged', 'confirm'},
+    'import list' => {'namespace'},
+    'import show' => {'namespace', 'sourceId'},
+    'import delete' => {'namespace', 'sourceId', 'expectedVersion', 'confirm'},
+    'import series' => {
+      'metric',
+      'namespace',
+      'exerciseId',
+      'exerciseName',
+      'roles',
+      'from',
+      'until',
     },
     'mass record' => {'measurement'},
     'mass update' => {'measurement', 'expectedVersion'},
@@ -1315,6 +1335,63 @@ Future<Map<String, Object?>> executeStored(
           integer('expectedVersion'),
           runForMilliseconds: limit,
           stream: flag('stream'),
+        );
+      case 'import preview':
+        data = await HistoryImportService(
+          store,
+        ).preview(HistoryImportDocument.fromJson(request['document']));
+      case 'import apply':
+        data = await HistoryImportService(store).apply(
+          HistoryImportDocument.fromJson(request['document']),
+          at: parseInstant(request['importedAt'], 'importedAt'),
+          atText: requiredString(request, 'importedAt'),
+          onChanged: request.containsKey('onChanged')
+              ? requiredString(request, 'onChanged')
+              : 'reject',
+          confirm: flag('confirm'),
+        );
+      case 'import list':
+        data = [
+          for (final r in await HistoryImportService(store).list(
+            namespace: request.containsKey('namespace')
+                ? identifier(request, 'namespace')
+                : null,
+          ))
+            r.summary,
+        ];
+      case 'import show':
+        data = (await HistoryImportService(store).show(
+          identifier(request, 'namespace'),
+          sourceIdentifier(request, 'sourceId'),
+        )).toJson();
+      case 'import delete':
+        data = (await HistoryImportService(store).delete(
+          identifier(request, 'namespace'),
+          sourceIdentifier(request, 'sourceId'),
+          integer('expectedVersion'),
+          confirm: flag('confirm'),
+        )).toJson();
+      case 'import series':
+        Set<String>? roles;
+        if (request.containsKey('roles')) {
+          roles = {};
+          for (final role in jsonList(request, 'roles')) {
+            if (role is! String || !roles.add(role))
+              invalid('roles must be distinct strings.');
+          }
+        }
+        String? optional(String key) =>
+            request.containsKey(key) ? requiredString(request, key) : null;
+        data = await HistoryImportService(store).series(
+          metric: identifier(request, 'metric'),
+          namespace: request.containsKey('namespace')
+              ? identifier(request, 'namespace')
+              : null,
+          exerciseId: optional('exerciseId'),
+          exerciseName: optional('exerciseName'),
+          roles: roles,
+          from: optional('from'),
+          until: optional('until'),
         );
       case 'mass record':
       case 'mass update':

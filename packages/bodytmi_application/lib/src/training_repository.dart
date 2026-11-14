@@ -19,6 +19,7 @@ import 'derived_plan_session.dart';
 import 'window_checkpoint.dart';
 import 'session_window_clock.dart';
 import 'repeat_checkpoint.dart';
+import 'history_import_service.dart';
 
 /// One repository transaction is the durability boundary of each operation.
 abstract interface class TrainingRepository {
@@ -72,6 +73,9 @@ abstract interface class TrainingRepository {
   Future<void> deleteWindowCheckpoint(String id);
   Future<List<BodyMassRecord>> bodyMassRecords();
   Future<void> saveBodyMassRecord(BodyMassRecord record);
+  Future<List<ImportedSessionRecord>> importedSessions();
+  Future<void> saveImportedSession(ImportedSessionRecord record);
+  Future<void> deleteImportedSession(String namespace, String sourceId);
   Future<List<ProgramRun>> programRuns();
   Future<void> saveProgramRun(ProgramRun run);
   Future<List<SessionProgramBinding>> sessionPrograms();
@@ -129,6 +133,7 @@ final class StoredTrainingService {
       progressions: await repository.progressionDecisions(),
       programRevisions: await repository.programRevisions(),
       bodyMass: await repository.bodyMassRecords(),
+      importedSessions: await repository.importedSessions(),
       timers: await repository.timingActivities(),
       windowCheckpoints: await repository.windowCheckpoints(),
       repeatCheckpoints: await repository.repeatCheckpoints(),

@@ -586,6 +586,7 @@ void leverSelectionTests() {
       old.execute('DROP TABLE IF EXISTS equipment_revisions');
       old.execute('DROP TABLE IF EXISTS gym_revisions');
       old.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+      old.execute('DROP TABLE IF EXISTS imported_sessions');
       old.userVersion = 16;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 16);
@@ -594,7 +595,7 @@ void leverSelectionTests() {
         equal(canonicalJson((await upgraded.archive()).toJson()), before);
         equal(
           (await upgraded.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          63,
+          64,
         );
       } finally {
         await upgraded.close();
@@ -685,6 +686,7 @@ void leverSelectionTests() {
         forged.execute('DROP TABLE IF EXISTS equipment_revisions');
         forged.execute('DROP TABLE IF EXISTS gym_revisions');
         forged.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        forged.execute('DROP TABLE IF EXISTS imported_sessions');
         forged.userVersion = 16;
         forged.close();
         rejects(

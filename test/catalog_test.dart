@@ -245,6 +245,7 @@ void catalogTests() {
       old.execute('DROP TABLE equipment_revisions');
       old.execute('DROP TABLE gym_revisions');
       old.execute('DROP TABLE equipment_instance_revisions');
+      old.execute('DROP TABLE IF EXISTS imported_sessions');
       old.userVersion = 57;
       old.close();
       equal(NativeBackup.validateDatabase('$dir/old/database.sqlite'), 57);
@@ -274,7 +275,7 @@ void catalogTests() {
         equal(canonicalJson((await migrated.archive()).toJson()), original);
         equal(
           (await migrated.backup('$dir/upgraded'))['databaseSchemaVersion'],
-          63,
+          64,
         );
         equal((await migrated.exerciseRevisions()).length, 0);
       } finally {
@@ -308,7 +309,7 @@ void catalogTests() {
             await active.archive(),
             '$dir/logical.json',
           ))['format'],
-          'bodytmi-logical-export/63',
+          'bodytmi-logical-export/64',
         );
         final logical = await LogicalArchiveFiles.prepare('$dir/logical.json');
         try {

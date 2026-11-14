@@ -15,6 +15,7 @@ const commandNames = [
   'scale resolve',
   'plate plan',
   'convention validate',
+  'import validate',
   'convention interpret',
   'template validate',
   'template publish',
@@ -727,6 +728,11 @@ final class Commands {
         final loading = LoadingSpec.fromJson(request['loading']);
         final target = Quantity.fromJson(request['target']);
         data = PlatePlan.evaluate(loading, target);
+      case 'import validate':
+        keys({'document'});
+        data = validateHistoryImport(
+          HistoryImportDocument.fromJson(request['document']),
+        );
       case 'convention validate':
         keys({'convention'});
         data = LoadConvention.fromJson(request['convention']).toJson();

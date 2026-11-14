@@ -54,7 +54,7 @@ final class TrainingStore implements TrainingRepository {
             final tables = native.select(
               "SELECT name FROM sqlite_master WHERE type = 'table'",
             );
-            if (native.userVersion > 63) {
+            if (native.userVersion > 64) {
               throw const BodyTmiException(
                 'storage',
                 'Database schema is newer than this application supports.',
@@ -115,7 +115,7 @@ final class TrainingStore implements TrainingRepository {
           'SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL',
         )
         .get();
-    validateSchema(schema.map((row) => row.data), 63);
+    validateSchema(schema.map((row) => row.data), 64);
     final size = await _db.customSelect('''
       SELECT COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sessions), 0)
@@ -136,6 +136,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM equipment_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM gym_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM equipment_instance_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM imported_sessions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM derived_target_graphs), 0) AS bytes
     ''').getSingle();
     if (size.read<int>('bytes') > 64 * 1024 * 1024) {
@@ -855,6 +856,40 @@ final class TrainingStore implements TrainingRepository {
             snapshot: _snapshot(record.toJson()),
           ),
         );
+  }
+
+  @override
+  Future<List<ImportedSessionRecord>> importedSessions() async {
+    final result = <ImportedSessionRecord>[];
+    for (final row in await _db.select(_db.importedSessions).get()) {
+      final record = ImportedSessionRecord.fromJson(jsonDecode(row.snapshot));
+      if (record.namespace != row.namespace || record.sourceId != row.sourceId)
+        invalid('Stored imported session identity is inconsistent.');
+      result.add(record);
+    }
+    validateImportedSessions(result);
+    return result;
+  }
+
+  @override
+  Future<void> saveImportedSession(ImportedSessionRecord record) async {
+    await _db
+        .into(_db.importedSessions)
+        .insertOnConflictUpdate(
+          ImportedSessionsCompanion.insert(
+            namespace: record.namespace,
+            sourceId: record.sourceId,
+            snapshot: _snapshot(record.toJson()),
+          ),
+        );
+  }
+
+  @override
+  Future<void> deleteImportedSession(String namespace, String sourceId) async {
+    await (_db.delete(_db.importedSessions)..where(
+          (t) => t.namespace.equals(namespace) & t.sourceId.equals(sourceId),
+        ))
+        .go();
   }
 
   @override

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "database": "/tmp/bodytmi-example.sqlite",
+  "document": {
+    "format": "bodytmi-history-import/1",
+    "source": {
+      "namespace": "old-log",
+      "app": "example-converter",
+      "version": "1",
+      "exportedAt": "2026-01-20T08:00:00+01:00"
+    },
+    "sessions": [
+      {
+        "sourceId": "history/101",
+        "date": "2026-01-05",
+        "name": "Lower A",
+        "raw": {"dateEncoding": "days-since-epoch", "date": 20458},
+        "exercises": [
+          {
+            "sourceId": "history/101/1",
+            "order": 1,
+            "name": "Squat",
+            "exerciseId": "squat",
+            "implementationId": "barbell-back-squat",
+            "convention": {"massBasis": "assembly-total"},
+            "sets": [
+              {"sourceId": "s1", "ordinal": 1, "role": "warmup", "status": "completed",
+               "actuals": {"load": {"value": "60", "unit": "kg"}, "reps": {"value": "5", "unit": "rep"}}},
+              {"sourceId": "s2", "ordinal": 2, "role": "work", "status": "completed",
+               "actuals": {"load": {"value": "100", "unit": "kg"}, "reps": {"value": "5", "unit": "rep"}},
+               "targets": {"reps": {"value": "5", "unit": "rep"}}},
+              {"sourceId": "s3", "ordinal": 3, "role": "work", "status": "interrupted",
+               "actuals": {"load": {"value": "100", "unit": "kg"}, "reps": {"value": "3", "unit": "rep"}},
+               "targets": {"reps": {"value": "5", "unit": "rep"}},
+               "observations": {"terminationReason": "interrupted", "notes": "Fire alarm"}}
+            ]
+          }
+        ]
+      },
+      {
+        "sourceId": "history/102",
+        "startedAt": "2026-01-12T18:30:00+01:00",
+        "finishedAt": "2026-01-12T19:20:00+01:00",
+        "timezone": "Europe/Stockholm",
+        "name": "Upper A",
+        "exercises": [
+          {
+            "sourceId": "history/102/1",
+            "order": 1,
+            "name": "DB Bench",
+            "convention": {"massBasis": "per-implement", "implements": 2},
+            "sets": [
+              {"sourceId": "s1", "ordinal": 1, "role": "unknown", "status": "completed",
+               "actuals": {"load": {"value": "50", "unit": "lb"}, "reps": {"value": "10", "unit": "rep"}},
+               "observations": {"rpe": {"value": "8", "scale": "0-10"}},
+               "raw": {"type": 0, "rpe": "8.0"}},
+              {"sourceId": "s2", "ordinal": 2, "role": "unknown", "status": "skipped"}
+            ]
+          }
+        ]
+      }
+    ],
+    "measurements": [
+      {"id": "old-log-mass-1", "sourceId": "body/1", "context": "imported-unclassified",
+       "observedAt": "2026-01-05T07:10:00+01:00", "mass": {"value": "82.5", "unit": "kg"}}
+    ]
+  }
+}

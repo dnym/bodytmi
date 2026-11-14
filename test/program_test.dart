@@ -987,6 +987,7 @@ void programTests() {
         oldDb.execute('DROP TABLE IF EXISTS equipment_revisions');
         oldDb.execute('DROP TABLE IF EXISTS gym_revisions');
         oldDb.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        oldDb.execute('DROP TABLE IF EXISTS imported_sessions');
         oldDb.userVersion = 35;
         oldDb.close();
         equal(NativeBackup.validateDatabase(previousProfile), 35);
@@ -1052,7 +1053,7 @@ void programTests() {
         );
         final snapshot = '${dir.path}/manual.sqlite';
         await store.snapshot(snapshot);
-        equal(NativeBackup.validateDatabase(snapshot), 63);
+        equal(NativeBackup.validateDatabase(snapshot), 64);
         final oldLabel = sqlite3.open(snapshot);
         oldLabel.execute('DROP TABLE IF EXISTS repeat_checkpoints');
         oldLabel.execute('DROP TABLE IF EXISTS window_checkpoints');
@@ -1066,6 +1067,7 @@ void programTests() {
         oldLabel.execute('DROP TABLE IF EXISTS equipment_revisions');
         oldLabel.execute('DROP TABLE IF EXISTS gym_revisions');
         oldLabel.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+        oldLabel.execute('DROP TABLE IF EXISTS imported_sessions');
         oldLabel.userVersion = 35;
         oldLabel.close();
         rejects(() => NativeBackup.validateDatabase(snapshot));
@@ -1507,14 +1509,14 @@ void programTests() {
         final original = canonicalJson((await store.archive()).toJson());
         equal(
           (await store.backup('${dir.path}/native'))['databaseSchemaVersion'],
-          63,
+          64,
         );
         equal(
           (await LogicalArchiveFiles.export(
             await store.archive(),
             '${dir.path}/logical.json',
           ))['format'],
-          'bodytmi-logical-export/63',
+          'bodytmi-logical-export/64',
         );
         final prepared = await LogicalArchiveFiles.prepare(
           '${dir.path}/logical.json',
@@ -1999,6 +2001,7 @@ void programTests() {
           db.execute('DROP TABLE IF EXISTS equipment_revisions');
           db.execute('DROP TABLE IF EXISTS gym_revisions');
           db.execute('DROP TABLE IF EXISTS equipment_instance_revisions');
+          db.execute('DROP TABLE IF EXISTS imported_sessions');
           db.execute('PRAGMA user_version = 2');
           db.execute('INSERT INTO revisions VALUES (?,?,?)', [
             rev.definition.id,
