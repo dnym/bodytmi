@@ -84,6 +84,7 @@ const storedCommandNames = [
   'exercise publish',
   'exercise show',
   'exercise list',
+  'catalog search',
   'preset publish',
   'preset show',
   'preset list',
@@ -529,6 +530,7 @@ Future<Map<String, Object?>> executeStored(
     'exercise publish' => {'exercise', 'expectedRevision'},
     'exercise show' => {'exerciseId', 'revision'},
     'exercise list' => <String>{},
+    'catalog search' => {'query', 'locale', 'kinds', 'limit'},
     'preset publish' => {'preset', 'expectedRevision'},
     'preset show' => {'presetId', 'revision'},
     'preset list' => <String>{},
@@ -2195,6 +2197,23 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final p in presets) p.toJson()];
+      case 'catalog search':
+        data = searchCatalog(
+          query: requiredString(request, 'query'),
+          locale: request.containsKey('locale')
+              ? requiredString(request, 'locale')
+              : null,
+          kinds: request.containsKey('kinds')
+              ? [
+                  for (final k in jsonList(request, 'kinds'))
+                    k is String ? k : invalid('kinds must list strings.'),
+                ]
+              : catalogSearchKinds,
+          limit: request.containsKey('limit') ? integer('limit') : 50,
+          exercises: await store.exerciseRevisions(),
+          implementations: await store.implementationRevisions(),
+          equipment: await store.equipmentRevisions(),
+        );
       case 'exercise list':
         final all = await store.exerciseRevisions();
         all.sort((a, b) {

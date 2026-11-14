@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "query": "rodd",
+  "locale": "sv-SE"
+}

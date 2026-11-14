@@ -1,3 +1,4 @@
+import 'catalog_labels.dart';
 import 'errors.dart';
 import 'workout.dart';
 
@@ -5,10 +6,15 @@ import 'workout.dart';
 /// progression or timing semantics, and nothing in the application keys
 /// behaviour off an exercise name.
 final class ExerciseDefinition {
-  ExerciseDefinition._(this.id, this.name, this.notes);
+  ExerciseDefinition._(
+    this.id,
+    this.name,
+    this.notes, [
+    this.labels = CatalogLabels.empty,
+  ]);
   factory ExerciseDefinition.fromJson(Object? input) {
     final j = jsonObject(input, 'exercise definition');
-    checkKeys(j, {'id', 'name', 'notes'});
+    checkKeys(j, {'id', 'name', 'notes', 'labels'});
     final name = j['name'];
     if (name != null &&
         (name is! String || name.trim().isEmpty || name.length > 200)) {
@@ -27,14 +33,19 @@ final class ExerciseDefinition {
       identifier(j, 'id'),
       name as String?,
       notes as String?,
+      j.containsKey('labels')
+          ? CatalogLabels.fromJson(j['labels'])
+          : CatalogLabels.empty,
     );
   }
   final String id;
   final String? name, notes;
+  final CatalogLabels labels;
   Map<String, Object?> toJson() => {
     'id': id,
     if (name != null) 'name': name,
     if (notes != null) 'notes': notes,
+    if (!labels.isEmpty) 'labels': labels.toJson(),
   };
 }
 
@@ -42,10 +53,16 @@ final class ExerciseDefinition {
 /// barbell and dumbbell rows of one row exercise. Implementations are not
 /// automatically comparable loads or records; they only group authored intent.
 final class ExerciseImplementation {
-  ExerciseImplementation._(this.id, this.exerciseId, this.name, this.notes);
+  ExerciseImplementation._(
+    this.id,
+    this.exerciseId,
+    this.name,
+    this.notes, [
+    this.labels = CatalogLabels.empty,
+  ]);
   factory ExerciseImplementation.fromJson(Object? input) {
     final j = jsonObject(input, 'exercise implementation');
-    checkKeys(j, {'id', 'exerciseId', 'name', 'notes'});
+    checkKeys(j, {'id', 'exerciseId', 'name', 'notes', 'labels'});
     final name = j['name'];
     if (name != null &&
         (name is! String || name.trim().isEmpty || name.length > 200)) {
@@ -65,15 +82,20 @@ final class ExerciseImplementation {
       identifier(j, 'exerciseId'),
       name as String?,
       notes as String?,
+      j.containsKey('labels')
+          ? CatalogLabels.fromJson(j['labels'])
+          : CatalogLabels.empty,
     );
   }
   final String id, exerciseId;
   final String? name, notes;
+  final CatalogLabels labels;
   Map<String, Object?> toJson() => {
     'id': id,
     'exerciseId': exerciseId,
     if (name != null) 'name': name,
     if (notes != null) 'notes': notes,
+    if (!labels.isEmpty) 'labels': labels.toJson(),
   };
 }
 

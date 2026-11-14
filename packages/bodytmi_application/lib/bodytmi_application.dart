@@ -36,6 +36,7 @@ export 'src/family_service.dart';
 export 'src/catalog_service.dart';
 export 'src/equipment_service.dart';
 export 'src/preset_service.dart';
+export 'src/catalog_search.dart';
 export 'src/load_arrangement_status.dart';
 export 'src/derived_target_graph_service.dart';
 

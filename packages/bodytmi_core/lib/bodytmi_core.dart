@@ -7,6 +7,7 @@ export 'src/activity.dart';
 export 'src/window_repeat.dart';
 export 'src/workout.dart';
 export 'src/catalog.dart';
+export 'src/catalog_labels.dart';
 export 'src/equipment.dart';
 export 'src/load_arrangement.dart';
 export 'src/load_convention.dart';

@@ -1,3 +1,4 @@
+import 'catalog_labels.dart';
 import 'errors.dart';
 import 'load_convention.dart';
 import 'numeric_scale.dart';
@@ -142,10 +143,15 @@ final class LoadingSpec {
 /// nothing, and a published identity never implies bar mass, plate loading,
 /// channels or any other loading topology.
 final class EquipmentDefinition {
-  EquipmentDefinition._(this.id, this.name, this.notes);
+  EquipmentDefinition._(
+    this.id,
+    this.name,
+    this.notes, [
+    this.labels = CatalogLabels.empty,
+  ]);
   factory EquipmentDefinition.fromJson(Object? input) {
     final j = jsonObject(input, 'equipment definition');
-    checkKeys(j, {'id', 'name', 'notes'});
+    checkKeys(j, {'id', 'name', 'notes', 'labels'});
     final name = j['name'];
     if (name != null &&
         (name is! String || name.trim().isEmpty || name.length > 200)) {
@@ -164,14 +170,19 @@ final class EquipmentDefinition {
       identifier(j, 'id'),
       name as String?,
       notes as String?,
+      j.containsKey('labels')
+          ? CatalogLabels.fromJson(j['labels'])
+          : CatalogLabels.empty,
     );
   }
   final String id;
   final String? name, notes;
+  final CatalogLabels labels;
   Map<String, Object?> toJson() => {
     'id': id,
     if (name != null) 'name': name,
     if (notes != null) 'notes': notes,
+    if (!labels.isEmpty) 'labels': labels.toJson(),
   };
 }
 
