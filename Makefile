@@ -1,6 +1,6 @@
 DART ?= dart
 
-.PHONY: check format test analyze build flutter-check
+.PHONY: check format test analyze build flutter-check android-check
 check: analyze test
 	$(DART) --suppress-analytics format --output=none --set-exit-if-changed bin lib packages test
 
@@ -25,3 +25,14 @@ flutter-check:
 	cd adapters/bodytmi_flutter && $(FLUTTER) --suppress-analytics pub get
 	cd adapters/bodytmi_flutter && $(FLUTTER) --suppress-analytics analyze --fatal-infos
 	cd adapters/bodytmi_flutter && $(FLUTTER) --suppress-analytics test
+
+# Android feasibility probe on a running device or emulator (adb id).
+ANDROID_DEVICE ?= emulator-5554
+PROBE = adapters/bodytmi_android_probe
+android-check:
+	cmp examples/upper-a.json $(PROBE)/assets/upper-a.json
+	cmp examples/history-import.json $(PROBE)/assets/history-import.json
+	cd $(PROBE) && $(FLUTTER) --suppress-analytics pub get
+	cd $(PROBE) && $(FLUTTER) --suppress-analytics analyze --fatal-infos
+	cd $(PROBE) && $(FLUTTER) --suppress-analytics test integration_test/storage_test.dart -d $(ANDROID_DEVICE)
+	cd $(PROBE) && FLUTTER=$(FLUTTER) tool/crash_check.sh $(ANDROID_DEVICE)

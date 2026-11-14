@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "upper-a",
+    "name": "Upper A",
+    "slots": [
+      {
+        "id": "bench-heavy",
+        "exercise": "bench-press",
+        "implementation": "barbell",
+        "equipment": "gym-bar-1",
+        "setupNote": "Flat bench; bar mass included.",
+        "targets": {"mass": {"value": "60", "unit": "kg"}, "reps": {"value": "8", "unit": "rep"}},
+        "prefill": ["mass"]
+      },
+      {
+        "id": "bench-light",
+        "exercise": "bench-press",
+        "implementation": "barbell",
+        "equipment": "gym-bar-1",
+        "targets": {"mass": {"value": "45", "unit": "kg"}, "reps": {"value": "12", "unit": "rep"}},
+        "prefill": ["mass"]
+      }
+    ],
+    "plan": {
+      "id": "workout", "type": "sequence", "children": [
+        {"id": "heavy", "type": "repeat", "count": 3, "restBetweenSeconds": 120,
+         "child": {"id": "heavy-set", "type": "effort", "slot": "bench-heavy"}},
+        {"id": "light", "type": "effort", "slot": "bench-light"}
+      ]
+    }
+  }
+}
