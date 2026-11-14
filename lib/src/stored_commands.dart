@@ -84,6 +84,9 @@ const storedCommandNames = [
   'exercise publish',
   'exercise show',
   'exercise list',
+  'preset publish',
+  'preset show',
+  'preset list',
   'implementation publish',
   'implementation show',
   'implementation list',
@@ -526,6 +529,9 @@ Future<Map<String, Object?>> executeStored(
     'exercise publish' => {'exercise', 'expectedRevision'},
     'exercise show' => {'exerciseId', 'revision'},
     'exercise list' => <String>{},
+    'preset publish' => {'preset', 'expectedRevision'},
+    'preset show' => {'presetId', 'revision'},
+    'preset list' => <String>{},
     'implementation publish' => {'implementation', 'expectedRevision'},
     'implementation show' => {'implementationId', 'revision'},
     'implementation list' => <String>{},
@@ -668,6 +674,7 @@ Future<Map<String, Object?>> executeStored(
       'role',
       'rule',
       'ruleType',
+      'preset',
     },
     'progression track' => {
       'templateId',
@@ -1741,14 +1748,30 @@ Future<Map<String, Object?>> executeStored(
         final role = request.containsKey('role')
             ? requiredString(request, 'role')
             : 'work';
+        // A preset supplies the rule from one explicit published revision.
+        ProgressionPresetRevision? preset;
+        if (command == 'progression propose' && request.containsKey('preset')) {
+          if (request.containsKey('rule') || request.containsKey('ruleType'))
+            invalid('preset replaces rule and ruleType; supply only one.');
+          final reference = jsonObject(request['preset'], 'preset');
+          checkKeys(reference, {'id', 'revision'});
+          final revision = reference['revision'];
+          if (revision is! int || revision < 1)
+            invalid('preset.revision must be a positive integer.');
+          preset = await PresetService(
+            store,
+          ).revision(identifier(reference, 'id'), revision);
+        }
         final decision = switch (command) {
           'progression propose' => await progression.propose(
             sessionId,
             slotId,
-            jsonObject(request['rule'], 'rule'),
-            ruleType: request.containsKey('ruleType')
-                ? requiredString(request, 'ruleType')
-                : 'double',
+            preset?.preset.rule ?? jsonObject(request['rule'], 'rule'),
+            ruleType:
+                preset?.preset.ruleType ??
+                (request.containsKey('ruleType')
+                    ? requiredString(request, 'ruleType')
+                    : 'double'),
             role: role,
           ),
           'progression accept' => await progression.accept(
@@ -1788,6 +1811,12 @@ Future<Map<String, Object?>> executeStored(
           'sequence': decision.sequence,
           'inputsChanged': changed,
           'stale': decision.resolvedAt == null && changed,
+          if (preset != null)
+            'preset': {
+              'id': preset.preset.id,
+              'revision': preset.number,
+              'ruleType': preset.preset.ruleType,
+            },
           ...decision.toJson(),
         };
       case 'archive export':
@@ -2156,6 +2185,23 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'exerciseId'),
           request.containsKey('revision') ? integer('revision') : null,
         )).toJson();
+      case 'preset publish':
+        data = (await PresetService(store).publish(
+          ProgressionPreset.fromJson(request['preset']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'preset show':
+        data = (await PresetService(store).revision(
+          identifier(request, 'presetId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'preset list':
+        final presets = await store.progressionPresetRevisions();
+        presets.sort((a, b) {
+          final id = a.preset.id.compareTo(b.preset.id);
+          return id == 0 ? a.number.compareTo(b.number) : id;
+        });
+        data = [for (final p in presets) p.toJson()];
       case 'exercise list':
         final all = await store.exerciseRevisions();
         all.sort((a, b) {

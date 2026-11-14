@@ -133,6 +133,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM family_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM exercise_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM implementation_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM progression_preset_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM equipment_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM gym_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM equipment_instance_revisions), 0)
@@ -263,6 +264,34 @@ final class TrainingStore implements TrainingRepository {
           ),
         );
   }
+
+  @override
+  Future<List<ProgressionPresetRevision>> progressionPresetRevisions() async {
+    final result = <ProgressionPresetRevision>[];
+    for (final row in await _db.select(_db.progressionPresetRevisions).get()) {
+      final revision = ProgressionPresetRevision.fromJson(
+        jsonDecode(row.snapshot),
+      );
+      if (revision.preset.id != row.presetId || revision.number != row.number)
+        invalid('Stored progression preset revision identity is inconsistent.');
+      result.add(revision);
+    }
+    validateProgressionPresetRevisions(result);
+    return result;
+  }
+
+  @override
+  Future<void> insertProgressionPresetRevision(
+    ProgressionPresetRevision revision,
+  ) => _db
+      .into(_db.progressionPresetRevisions)
+      .insert(
+        ProgressionPresetRevisionsCompanion.insert(
+          presetId: revision.preset.id,
+          number: revision.number,
+          snapshot: _snapshot(revision.toJson()),
+        ),
+      );
 
   @override
   Future<List<EquipmentRevision>> equipmentRevisions() async {

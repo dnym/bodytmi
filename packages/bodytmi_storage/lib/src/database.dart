@@ -39,6 +39,15 @@ class ImplementationRevisions extends Table {
   Set<Column> get primaryKey => {implementationId, number};
 }
 
+@DataClassName('StoredProgressionPresetRevision')
+class ProgressionPresetRevisions extends Table {
+  TextColumn get presetId => text()();
+  IntColumn get number => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {presetId, number};
+}
+
 @DataClassName('StoredEquipmentRevision')
 class EquipmentRevisions extends Table {
   TextColumn get equipmentId => text()();
@@ -249,6 +258,7 @@ class ProgramUpgradeReceipts extends Table {
     FamilyRevisions,
     ExerciseRevisions,
     ImplementationRevisions,
+    ProgressionPresetRevisions,
     EquipmentRevisions,
     GymRevisions,
     EquipmentInstanceRevisions,

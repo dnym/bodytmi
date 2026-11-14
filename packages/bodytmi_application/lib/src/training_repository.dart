@@ -34,6 +34,10 @@ abstract interface class TrainingRepository {
   Future<void> insertExerciseRevision(ExerciseRevision revision);
   Future<List<ImplementationRevision>> implementationRevisions();
   Future<void> insertImplementationRevision(ImplementationRevision revision);
+  Future<List<ProgressionPresetRevision>> progressionPresetRevisions();
+  Future<void> insertProgressionPresetRevision(
+    ProgressionPresetRevision revision,
+  );
   Future<List<EquipmentRevision>> equipmentRevisions();
   Future<void> insertEquipmentRevision(EquipmentRevision revision);
   Future<List<GymRevision>> gymRevisions();
@@ -129,6 +133,7 @@ final class StoredTrainingService {
       families: await repository.familyRevisions(),
       exercises: await repository.exerciseRevisions(),
       implementations: await repository.implementationRevisions(),
+      presets: await repository.progressionPresetRevisions(),
       equipment: await repository.equipmentRevisions(),
       gyms: await repository.gymRevisions(),
       instances: await repository.equipmentInstanceRevisions(),

@@ -46,6 +46,7 @@ final class TrainingArchive {
     List<LinkRetirementAnchor> linkRetirements = const [],
     List<ExerciseRevision> exercises = const [],
     List<ImplementationRevision> implementations = const [],
+    List<ProgressionPresetRevision> presets = const [],
     List<EquipmentRevision> equipment = const [],
     List<GymRevision> gyms = const [],
     List<EquipmentInstanceRevision> instances = const [],
@@ -92,6 +93,12 @@ final class TrainingArchive {
        implementations = List<ImplementationRevision>.unmodifiable(
          <ImplementationRevision>[...implementations]..sort((a, b) {
            final id = a.implementation.id.compareTo(b.implementation.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       presets = List<ProgressionPresetRevision>.unmodifiable(
+         <ProgressionPresetRevision>[...presets]..sort((a, b) {
+           final id = a.preset.id.compareTo(b.preset.id);
            return id == 0 ? a.number.compareTo(b.number) : id;
          }),
        ),
@@ -211,6 +218,7 @@ final class TrainingArchive {
       'graphs',
       'exercises',
       'implementations',
+      'presets',
       'equipment',
       'gyms',
       'instances',
@@ -227,6 +235,10 @@ final class TrainingArchive {
       implementations: [
         for (final i in optional('implementations'))
           ImplementationRevision.fromJson(i),
+      ],
+      presets: [
+        for (final p in optional('presets'))
+          ProgressionPresetRevision.fromJson(p),
       ],
       equipment: [
         for (final e in optional('equipment')) EquipmentRevision.fromJson(e),
@@ -321,6 +333,7 @@ final class TrainingArchive {
   final List<FamilyRevision> families;
   final List<ExerciseRevision> exercises;
   final List<ImplementationRevision> implementations;
+  final List<ProgressionPresetRevision> presets;
   final List<EquipmentRevision> equipment;
   final List<GymRevision> gyms;
   final List<EquipmentInstanceRevision> instances;
@@ -349,6 +362,7 @@ final class TrainingArchive {
     'families': [for (final f in families) f.toJson()],
     'exercises': [for (final e in exercises) e.toJson()],
     'implementations': [for (final i in implementations) i.toJson()],
+    'presets': [for (final p in presets) p.toJson()],
     'equipment': [for (final e in equipment) e.toJson()],
     'gyms': [for (final g in gyms) g.toJson()],
     'instances': [for (final i in instances) i.toJson()],
@@ -379,6 +393,7 @@ final class TrainingArchive {
     'families': families.length,
     'exercises': exercises.length,
     'implementations': implementations.length,
+    'presets': presets.length,
     'equipment': equipment.length,
     'gyms': gyms.length,
     'instances': instances.length,
@@ -418,6 +433,7 @@ final class TrainingArchive {
     validateFamilyRevisions(families);
     validateExerciseRevisions(exercises);
     validateImplementationRevisions(implementations, exercises);
+    validateProgressionPresetRevisions(presets);
     final catalogOwners = implementationOwners(implementations);
     for (final revision in revisions)
       validateCatalogSlotAdoption(revision.definition.slots, catalogOwners);

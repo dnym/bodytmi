@@ -1088,6 +1088,284 @@ class ImplementationRevisionsCompanion
   }
 }
 
+class $ProgressionPresetRevisionsTable extends ProgressionPresetRevisions
+    with
+        TableInfo<
+          $ProgressionPresetRevisionsTable,
+          StoredProgressionPresetRevision
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProgressionPresetRevisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _presetIdMeta = const VerificationMeta(
+    'presetId',
+  );
+  @override
+  late final GeneratedColumn<String> presetId = GeneratedColumn<String>(
+    'preset_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [presetId, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'progression_preset_revisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredProgressionPresetRevision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('preset_id')) {
+      context.handle(
+        _presetIdMeta,
+        presetId.isAcceptableOrUnknown(data['preset_id']!, _presetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_presetIdMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {presetId, number};
+  @override
+  StoredProgressionPresetRevision map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredProgressionPresetRevision(
+      presetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}preset_id'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $ProgressionPresetRevisionsTable createAlias(String alias) {
+    return $ProgressionPresetRevisionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredProgressionPresetRevision extends DataClass
+    implements Insertable<StoredProgressionPresetRevision> {
+  final String presetId;
+  final int number;
+  final String snapshot;
+  const StoredProgressionPresetRevision({
+    required this.presetId,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['preset_id'] = Variable<String>(presetId);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  ProgressionPresetRevisionsCompanion toCompanion(bool nullToAbsent) {
+    return ProgressionPresetRevisionsCompanion(
+      presetId: Value(presetId),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredProgressionPresetRevision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredProgressionPresetRevision(
+      presetId: serializer.fromJson<String>(json['presetId']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'presetId': serializer.toJson<String>(presetId),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredProgressionPresetRevision copyWith({
+    String? presetId,
+    int? number,
+    String? snapshot,
+  }) => StoredProgressionPresetRevision(
+    presetId: presetId ?? this.presetId,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredProgressionPresetRevision copyWithCompanion(
+    ProgressionPresetRevisionsCompanion data,
+  ) {
+    return StoredProgressionPresetRevision(
+      presetId: data.presetId.present ? data.presetId.value : this.presetId,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredProgressionPresetRevision(')
+          ..write('presetId: $presetId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(presetId, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredProgressionPresetRevision &&
+          other.presetId == this.presetId &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class ProgressionPresetRevisionsCompanion
+    extends UpdateCompanion<StoredProgressionPresetRevision> {
+  final Value<String> presetId;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const ProgressionPresetRevisionsCompanion({
+    this.presetId = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProgressionPresetRevisionsCompanion.insert({
+    required String presetId,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : presetId = Value(presetId),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredProgressionPresetRevision> custom({
+    Expression<String>? presetId,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (presetId != null) 'preset_id': presetId,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProgressionPresetRevisionsCompanion copyWith({
+    Value<String>? presetId,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return ProgressionPresetRevisionsCompanion(
+      presetId: presetId ?? this.presetId,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (presetId.present) {
+      map['preset_id'] = Variable<String>(presetId.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProgressionPresetRevisionsCompanion(')
+          ..write('presetId: $presetId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $EquipmentRevisionsTable extends EquipmentRevisions
     with TableInfo<$EquipmentRevisionsTable, StoredEquipmentRevision> {
   @override
@@ -7034,6 +7312,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
       $ExerciseRevisionsTable(this);
   late final $ImplementationRevisionsTable implementationRevisions =
       $ImplementationRevisionsTable(this);
+  late final $ProgressionPresetRevisionsTable progressionPresetRevisions =
+      $ProgressionPresetRevisionsTable(this);
   late final $EquipmentRevisionsTable equipmentRevisions =
       $EquipmentRevisionsTable(this);
   late final $GymRevisionsTable gymRevisions = $GymRevisionsTable(this);
@@ -7091,6 +7371,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     familyRevisions,
     exerciseRevisions,
     implementationRevisions,
+    progressionPresetRevisions,
     equipmentRevisions,
     gymRevisions,
     equipmentInstanceRevisions,
@@ -7851,6 +8132,199 @@ typedef $$ImplementationRevisionsTableProcessedTableManager =
         >,
       ),
       StoredImplementationRevision,
+      PrefetchHooks Function()
+    >;
+typedef $$ProgressionPresetRevisionsTableCreateCompanionBuilder =
+    ProgressionPresetRevisionsCompanion Function({
+      required String presetId,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$ProgressionPresetRevisionsTableUpdateCompanionBuilder =
+    ProgressionPresetRevisionsCompanion Function({
+      Value<String> presetId,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$ProgressionPresetRevisionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $ProgressionPresetRevisionsTable> {
+  $$ProgressionPresetRevisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get presetId => $composableBuilder(
+    column: $table.presetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ProgressionPresetRevisionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $ProgressionPresetRevisionsTable> {
+  $$ProgressionPresetRevisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get presetId => $composableBuilder(
+    column: $table.presetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ProgressionPresetRevisionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $ProgressionPresetRevisionsTable> {
+  $$ProgressionPresetRevisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get presetId =>
+      $composableBuilder(column: $table.presetId, builder: (column) => column);
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$ProgressionPresetRevisionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $ProgressionPresetRevisionsTable,
+          StoredProgressionPresetRevision,
+          $$ProgressionPresetRevisionsTableFilterComposer,
+          $$ProgressionPresetRevisionsTableOrderingComposer,
+          $$ProgressionPresetRevisionsTableAnnotationComposer,
+          $$ProgressionPresetRevisionsTableCreateCompanionBuilder,
+          $$ProgressionPresetRevisionsTableUpdateCompanionBuilder,
+          (
+            StoredProgressionPresetRevision,
+            BaseReferences<
+              _$TrainingDatabase,
+              $ProgressionPresetRevisionsTable,
+              StoredProgressionPresetRevision
+            >,
+          ),
+          StoredProgressionPresetRevision,
+          PrefetchHooks Function()
+        > {
+  $$ProgressionPresetRevisionsTableTableManager(
+    _$TrainingDatabase db,
+    $ProgressionPresetRevisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProgressionPresetRevisionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ProgressionPresetRevisionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ProgressionPresetRevisionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> presetId = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ProgressionPresetRevisionsCompanion(
+                presetId: presetId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String presetId,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => ProgressionPresetRevisionsCompanion.insert(
+                presetId: presetId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ProgressionPresetRevisionsTable,
+                    StoredProgressionPresetRevision
+                  >(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $ProgressionPresetRevisionsTable,
+                    StoredProgressionPresetRevision
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ProgressionPresetRevisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $ProgressionPresetRevisionsTable,
+      StoredProgressionPresetRevision,
+      $$ProgressionPresetRevisionsTableFilterComposer,
+      $$ProgressionPresetRevisionsTableOrderingComposer,
+      $$ProgressionPresetRevisionsTableAnnotationComposer,
+      $$ProgressionPresetRevisionsTableCreateCompanionBuilder,
+      $$ProgressionPresetRevisionsTableUpdateCompanionBuilder,
+      (
+        StoredProgressionPresetRevision,
+        BaseReferences<
+          _$TrainingDatabase,
+          $ProgressionPresetRevisionsTable,
+          StoredProgressionPresetRevision
+        >,
+      ),
+      StoredProgressionPresetRevision,
       PrefetchHooks Function()
     >;
 typedef $$EquipmentRevisionsTableCreateCompanionBuilder =
@@ -13850,6 +14324,12 @@ class $TrainingDatabaseManager {
       $$ImplementationRevisionsTableTableManager(
         _db,
         _db.implementationRevisions,
+      );
+  $$ProgressionPresetRevisionsTableTableManager
+  get progressionPresetRevisions =>
+      $$ProgressionPresetRevisionsTableTableManager(
+        _db,
+        _db.progressionPresetRevisions,
       );
   $$EquipmentRevisionsTableTableManager get equipmentRevisions =>
       $$EquipmentRevisionsTableTableManager(_db, _db.equipmentRevisions);

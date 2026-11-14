@@ -90,6 +90,7 @@ final class LogicalArchiveFiles {
       'graphs',
       'exercises',
       'implementations',
+      'presets',
       'equipment',
       'gyms',
       'instances',
@@ -151,6 +152,12 @@ final class LogicalArchiveFiles {
                 implementation.number,
                 canonicalJson(implementation.toJson()),
               ],
+            );
+          }
+          for (final preset in archive.presets) {
+            db.execute(
+              'INSERT INTO progression_preset_revisions(preset_id,number,snapshot) VALUES (?,?,?)',
+              [preset.preset.id, preset.number, canonicalJson(preset.toJson())],
             );
           }
           for (final equipment in archive.equipment) {

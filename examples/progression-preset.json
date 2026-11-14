@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "preset": {
+    "id": "double-8-12",
+    "name": "Double progression 8-12 reps, +2.5 kg",
+    "ruleType": "double",
+    "rule": {
+      "objective": "reps",
+      "lever": "mass",
+      "lower": {"value": "8", "unit": "rep"},
+      "upper": {"value": "12", "unit": "rep"},
+      "objectiveStep": {"value": "1", "unit": "rep"},
+      "leverStep": {"value": "2.5", "unit": "kg"},
+      "maximumLever": {"value": "120", "unit": "kg"},
+      "deloadAfter": 3,
+      "deloadPercent": "10"
+    }
+  }
+}

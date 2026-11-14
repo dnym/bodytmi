@@ -15,6 +15,7 @@ export 'src/plate_plan.dart';
 export 'src/family.dart';
 export 'src/progression.dart';
 export 'src/ordinal_progression.dart';
+export 'src/progression_preset.dart';
 
 export 'src/instant.dart';
 export 'src/body_mass.dart';

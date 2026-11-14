@@ -224,6 +224,7 @@ final class NativeBackup {
         'family_revisions',
         'exercise_revisions',
         'implementation_revisions',
+        'progression_preset_revisions',
         'equipment_revisions',
         'gym_revisions',
         'equipment_instance_revisions',
@@ -282,6 +283,21 @@ final class NativeBackup {
         }
         validateImplementationRevisions(implementations, exercises);
         catalogOwners.addAll(implementationOwners(implementations));
+      }
+      {
+        final presets = <ProgressionPresetRevision>[];
+        for (final row in db.select(
+          'SELECT * FROM progression_preset_revisions',
+        )) {
+          final preset = ProgressionPresetRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (preset.preset.id != row['preset_id'] ||
+              preset.number != row['number'])
+            invalid('Progression preset revision row identity mismatch.');
+          presets.add(preset);
+        }
+        validateProgressionPresetRevisions(presets);
       }
       {
         final equipment = <EquipmentRevision>[];

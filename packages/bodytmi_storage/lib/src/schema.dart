@@ -33,6 +33,8 @@ const schema = {
       'CREATE TABLE "lever_link_revisions" ("link_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("link_id", "number"))',
   'link_retirement_anchors':
       'CREATE TABLE "link_retirement_anchors" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+  'progression_preset_revisions':
+      'CREATE TABLE "progression_preset_revisions" ("preset_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("preset_id", "number"))',
   'program_receipts':
       'CREATE TABLE "program_receipts" ("run_id" TEXT NOT NULL REFERENCES program_runs (id), "ordinal" INTEGER NOT NULL, "operation_key" TEXT NOT NULL, "session_id" TEXT NULL REFERENCES sessions (id), "snapshot" TEXT NOT NULL, PRIMARY KEY ("run_id", "ordinal"), UNIQUE ("run_id", "operation_key"))',
   'program_revisions':
