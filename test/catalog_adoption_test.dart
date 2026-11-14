@@ -192,6 +192,24 @@ void catalogAdoptionTests() {
         }),
         0,
       );
+      final noEquipment = await failure(
+        () async =>
+            training.publish(_adoptedDefinition(), 1, requireCatalog: true),
+      );
+      equal(noEquipment.code, 'not_found');
+      check(
+        noEquipment.message.contains(
+          'Slot equipment practice-cable is not published',
+        ),
+        noEquipment.message,
+      );
+      equal((await store.revision('catalog-adopt-practice'))!.number, 1);
+      final equipment = EquipmentService(store);
+      for (final id in ['practice-cable', 'practice-dumbbell'])
+        await equipment.publishEquipment(
+          EquipmentDefinition.fromJson({'id': id}),
+          0,
+        );
       final adopted = await training.publish(
         _adoptedDefinition(),
         1,
@@ -421,6 +439,19 @@ void catalogAdoptionTests() {
         'implementation': {'id': 'dumbbell', 'exerciseId': 'row'},
         'expectedRevision': 0,
       });
+      equal(
+        await attempt('store publish', {
+          'definition': definition,
+          'expectedRevision': 1,
+          'requireCatalog': true,
+        }),
+        3,
+      );
+      for (final id in ['practice-cable', 'practice-dumbbell'])
+        await cmd('equipment publish', {
+          'equipment': {'id': id},
+          'expectedRevision': 0,
+        });
       await cmd('store publish', {
         'definition': definition,
         'expectedRevision': 1,

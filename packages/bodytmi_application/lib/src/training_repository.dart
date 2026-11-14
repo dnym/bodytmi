@@ -173,6 +173,10 @@ final class StoredTrainingService {
         for (final revision in await repository.exerciseRevisions())
           revision.exercise.id,
       };
+      final equipment = {
+        for (final revision in await repository.equipmentRevisions())
+          revision.equipment.id,
+      };
       for (final slot in definition.slots) {
         if (!exercises.contains(slot.exerciseId))
           throw BodyTmiException(
@@ -184,6 +188,14 @@ final class StoredTrainingService {
             'not_found',
             'Slot implementation ${slot.implementation} is not a published '
                 'implementation of exercise ${slot.exerciseId}.',
+          );
+      }
+      // Equipment adoption follows exercise/implementation adoption.
+      for (final slot in definition.slots) {
+        if (slot.equipmentId case final id? when !equipment.contains(id))
+          throw BodyTmiException(
+            'not_found',
+            'Slot equipment $id is not published in the catalog.',
           );
       }
     }

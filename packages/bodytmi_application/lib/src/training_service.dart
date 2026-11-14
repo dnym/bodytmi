@@ -109,6 +109,14 @@ final class TrainingService {
                   set.eligibleForPerformance &&
                   !set.maxEffortMetrics.contains(metric) &&
                   set.criteria[metric]?.mode != 'observe' &&
+                  // A phase override (deload, taper...) prescribed this
+                  // result; it stays in its phase rather than seeding
+                  // ordinary history prefill.
+                  !past.prescriptionOverrides.any(
+                    (r) =>
+                        r.metric == metric &&
+                        r.applied.any((a) => a.setId == set.id),
+                  ) &&
                   value != null &&
                   value.dimension == suggested[metric]!.dimension) {
                 suggested[metric] = value;
