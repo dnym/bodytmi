@@ -334,6 +334,65 @@ void setSchemeTests() {
     }();
   });
 
+  test('reconciliation keeps the track\'s scheme and controlled settings', () {
+    return () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-scheme-');
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final training = StoredTrainingService(store);
+        final progression = StoredProgressionService(store);
+        await training.publish(WorkoutDefinition.fromJson(_json()), 0);
+        var s = await training.start('r1', 'squat-schemes', 1, instant(1));
+        s = await _finish(training, s, '3', 1);
+        final p = await progression.propose(
+          'r1',
+          'squat',
+          _ladder,
+          ruleType: 'ordinal',
+        );
+        await progression.accept('r1', 'squat', p.version, instant(2));
+        // A changed rule needs reconciliation; without a session the receipt
+        // adopts the structure a later start would plan (six doubles).
+        final stricter = copyJson(_ladder);
+        jsonObject(stricter['performance'], 'performance')['advancementLimit'] =
+            {'value': '2', 'unit': 'rep'};
+        final receipt = await progression.reconcile(
+          id: 'stricter',
+          templateId: 'squat-schemes',
+          revision: 1,
+          slotId: 'squat',
+          expectedSequence: 1,
+          kinds: ['rule'],
+          reconciledAt: instant(3),
+          confirm: true,
+          rule: stricter,
+          ruleType: 'ordinal',
+        );
+        jsonEqual(receipt.variantSelections, {'scheme': 'doubles'});
+        equal(receipt.sets.length, 6);
+        jsonEqual(receipt.controlledSettings.toList(), ['scheme']);
+        jsonEqual(receipt.nextSettings.first, {'scheme': 'doubles'});
+        jsonEqual(receipt.toJson()['variantSelections'], {'scheme': 'doubles'});
+        // Stored round-trip and the next start keep the progressed scheme.
+        jsonEqual(
+          ReconciliationReceipt.fromJson(receipt.toJson()).toJson(),
+          receipt.toJson(),
+        );
+        final next = await training.start('r2', 'squat-schemes', 1, instant(4));
+        jsonEqual(next.variantSelections, {'scheme': 'doubles'});
+        equal(next.sets.length, 6);
+        // A forged structure or a changed uncontrolled setting is rejected.
+        final forged = copyJson(receipt.toJson())
+          ..['variantSelections'] = {'scheme': 'singles'};
+        rejects(() => ReconciliationReceipt.fromJson(forged));
+        TrainingArchive.fromJson((await training.exportArchive()).toJson());
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    }();
+  });
+
   test('CLI starts select explicit variants and reject unknown levers', () {
     return () async {
       final dir = await Directory.systemTemp.createTemp('bodytmi-scheme-');

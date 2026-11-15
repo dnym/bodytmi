@@ -918,8 +918,24 @@ final class StoredProgressionService {
       revision: prescription,
       slotId: slotId,
       role: role,
+      variantSelections: assessment.candidateSelections,
       sets: [
-        for (final set in _adoptedSets(prescription, slotId, role, session))
+        for (final set in _adoptedSets(
+          prescription,
+          slotId,
+          role,
+          session,
+          assessment.candidateSelections,
+          base,
+          rule == null
+              ? base.controlledSettings
+              : _ruleSettings(effectiveRuleType, rule),
+          // An ordinal level is targets and settings together: keep both,
+          // but only while it is still a level of the adopted rule.
+          effectiveRuleType == 'ordinal'
+              ? OrdinalRule.fromJson(rule ?? base.rule)
+              : null,
+        ))
           TrainingSet(
             id: set.id,
             slotId: set.slotId,
@@ -965,8 +981,64 @@ final class StoredProgressionService {
     String slotId,
     String role,
     TrainingSession? session,
+    Map<String, String> selections,
+    ProgressionAnchor base,
+    Set<String> controlled,
+    OrdinalRule? ordinal,
   ) {
-    if (session == null) return baselineSets(revision, slotId, role);
+    if (session == null) {
+      final keptMetrics = ordinal?.controlledMetrics ?? const <String>{};
+      // The structure a later start would plan, with rule-controlled levers
+      // keeping the track's current values rather than reverting to plan.
+      final planned = baselineSets(revision, slotId, role, selections);
+      final track = resizedSettings(base.nextSettings, planned.length);
+      final targets =
+          base.nextSets.length == planned.length ||
+              !uniformVector(base.nextSets, keptMetrics)
+          ? base.nextSets
+          : List.filled(planned.length, base.nextSets.first);
+      final kept = [
+        for (var i = 0; i < planned.length; i++)
+          TrainingSet(
+            id: planned[i].id,
+            slotId: planned[i].slotId,
+            role: planned[i].role,
+            ordinal: planned[i].ordinal,
+            settings: sortedSettings({
+              ...planned[i].settings,
+              if (i < track.length)
+                for (final e in track[i].entries)
+                  if (controlled.contains(e.key) &&
+                      planned[i].settings.containsKey(e.key))
+                    e.key: e.value,
+            }),
+            actualSettings: const {},
+            suggested: {
+              ...planned[i].suggested,
+              if (targets.length == planned.length)
+                for (final metric in keptMetrics)
+                  if (targets[i][metric] != null &&
+                      planned[i].suggested[metric]?.dimension ==
+                          targets[i][metric]!.dimension)
+                    metric: targets[i][metric]!,
+            },
+            maxEffortMetrics: planned[i].maxEffortMetrics,
+            criteria: planned[i].criteria,
+          ),
+      ];
+      if (ordinal == null) return kept;
+      bool sameLevel(TrainingSet set, OrdinalLevel level) =>
+          level.settings.entries.every((e) => set.settings[e.key] == e.value) &&
+          level.targets.entries.every(
+            (e) =>
+                set.suggested[e.key]?.dimension == e.value.dimension &&
+                set.suggested[e.key]!.compareTo(e.value) == 0,
+          );
+      final stillLevel = ordinal.levels.any(
+        (level) => kept.every((set) => sameLevel(set, level)),
+      );
+      return stillLevel ? kept : planned;
+    }
     final sets = [
       for (final set in session.sets)
         if (set.slotId == slotId && set.role == role) set,
@@ -975,6 +1047,13 @@ final class StoredProgressionService {
       invalid('Candidate session has no sets for this slot and role.');
     return sets;
   }
+
+  Set<String> _ruleSettings(String ruleType, Map<String, Object?> rule) =>
+      ruleType == 'ordinal'
+      ? OrdinalRule.fromJson(rule).controlledSettings
+      : ruleType == 'threshold'
+      ? {?ThresholdRule.fromJson(rule).stages?.lever}
+      : const {};
 
   Never _reconcileRequired(
     TrainingSession session,

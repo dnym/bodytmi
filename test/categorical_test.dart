@@ -437,6 +437,31 @@ void categoricalTests() {
           instant(2).add(const Duration(hours: 2)),
         );
         jsonEqual(declined.nextSettings.first, {'grip': 'neutral'});
+        // Reconciling onto a changed rule keeps the neutral level (grip and
+        // its six-rep targets) instead of reverting to the plan's overhand.
+        final stricter = _ladder();
+        jsonObject(stricter['performance'], 'performance')['failureLimit'] = {
+          'value': '4',
+          'unit': 'rep',
+        };
+        final receipt = await progression.reconcile(
+          id: 'stricter-grips',
+          templateId: 'pull-grips',
+          revision: 1,
+          slotId: 'pull',
+          expectedSequence: declined.sequence,
+          kinds: ['rule'],
+          reconciledAt: instant(2).add(const Duration(hours: 3)),
+          confirm: true,
+          rule: stricter,
+          ruleType: 'ordinal',
+        );
+        jsonEqual(receipt.nextSettings, [
+          {'grip': 'neutral'},
+          {'grip': 'neutral'},
+        ]);
+        for (final set in receipt.sets)
+          equal(set.suggested['reps']!.enteredValue, '6');
         TrainingArchive.fromJson((await store.archive()).toJson());
       } finally {
         await store.close();

@@ -7,6 +7,7 @@ import 'progression_reconciliation.dart';
 import 'shared_lever_application.dart';
 import 'shared_track_view.dart';
 import 'training_service.dart';
+import 'session_codec.dart';
 
 /// An explicit, durable authorization that re-anchors one run/slot/role
 /// progression track onto a different prescription. It adopts that candidate's
@@ -34,8 +35,13 @@ final class ReconciliationReceipt implements ProgressionAnchor {
     this.resetFailures = false,
     this.resetCursor = false,
     this.sourceSessionId,
+    Map<String, String> variantSelections = const {},
   }) : rule = _freeze(rule) as Map<String, Object?>,
        sets = List.unmodifiable(sets),
+       variantSelections = Map.unmodifiable({
+         for (final k in (variantSelections.keys.toList()..sort()))
+           k: variantSelections[k]!,
+       }),
        acknowledgedKinds = List.unmodifiable(acknowledgedKinds) {
     identifier({'id': id}, 'id');
     if (runId != null) identifier({'id': runId}, 'id');
@@ -63,12 +69,33 @@ final class ReconciliationReceipt implements ProgressionAnchor {
     } else {
       OrdinalRule.fromJson(this.rule);
     }
-    final baseline = baselineSets(revision, slotId, role);
+    final baseline = baselineSets(
+      revision,
+      slotId,
+      role,
+      this.variantSelections,
+    );
     if (baseline.length != this.sets.length)
       invalid('Reconciliation sets do not match the pinned prescription.');
     final metrics = controlledMetrics;
+    final levers = revision.definition.slot(slotId).categories;
     for (var i = 0; i < baseline.length; i++) {
       final expected = baseline[i], adopted = this.sets[i];
+      // Settings follow the adopted structure; only levers the rule controls
+      // may hold the track's values instead of the plan's.
+      validateCategoricalSettings(
+        adopted.settings,
+        levers,
+        'Reconciliation set ${adopted.id}',
+      );
+      if (adopted.settings.length != expected.settings.length ||
+          expected.settings.entries.any(
+            (e) =>
+                !adopted.settings.containsKey(e.key) ||
+                (adopted.settings[e.key] != e.value &&
+                    !controlledSettings.contains(e.key)),
+          ))
+        invalid('Reconciliation settings do not match the prescription.');
       if (adopted.id != expected.id ||
           adopted.slotId != slotId ||
           adopted.role != role ||
@@ -128,7 +155,11 @@ final class ReconciliationReceipt implements ProgressionAnchor {
       'resetCursor',
       'sourceSessionId',
       'reconciledAt',
+      'variantSelections',
     });
+    if (json.containsKey('variantSelections') &&
+        jsonObject(json['variantSelections'], 'variantSelections').isEmpty)
+      invalid('Empty variant selections must be omitted.');
     int count(String key, int min) {
       final value = json[key];
       if (value is! int || value < min) invalid('Invalid $key.');
@@ -156,6 +187,9 @@ final class ReconciliationReceipt implements ProgressionAnchor {
     if (resetFailures is! bool || resetCursor is! bool)
       invalid('Invalid reconciliation reset flags.');
     final receipt = ReconciliationReceipt(
+      variantSelections: json.containsKey('variantSelections')
+          ? variantSelectionsFromJson(json['variantSelections'])
+          : const {},
       id: identifier(json, 'id'),
       runId: json['runId'] == null ? null : identifier(json, 'runId'),
       revision: WorkoutRevision.fromJson(json['revision']),
@@ -205,6 +239,9 @@ final class ReconciliationReceipt implements ProgressionAnchor {
   /// reconciliation adopted an existing session rather than only a revision.
   final String? sourceSessionId;
 
+  /// The variant structure (set scheme) whose sets this receipt adopted.
+  final Map<String, String> variantSelections;
+
   @override
   late final Set<String> controlledMetrics = ruleType == 'double'
       ? {
@@ -236,14 +273,22 @@ final class ReconciliationReceipt implements ProgressionAnchor {
   @override
   List<Metrics> get nextSets => [for (final set in sets) set.suggested];
 
-  /// Reconciliation adopts planned targets only; categorical settings keep
-  /// coming from the plan.
+  /// Categorical levers the adopted rule controls (ordinal level settings or
+  /// a staged threshold lever); they keep the track's values.
   @override
-  Set<String> get controlledSettings => const {};
+  late final Set<String> controlledSettings = ruleType == 'ordinal'
+      ? OrdinalRule.fromJson(rule).controlledSettings
+      : ruleType == 'threshold'
+      ? {?ThresholdRule.fromJson(rule).stages?.lever}
+      : const {};
   @override
-  List<Map<String, String>> get nextSettings => [
-    for (final _ in sets) const <String, String>{},
-  ];
+  late final List<Map<String, String>> nextSettings = List.unmodifiable([
+    for (final set in sets)
+      Map<String, String>.unmodifiable({
+        for (final lever in controlledSettings)
+          if (set.settings[lever] != null) lever: set.settings[lever]!,
+      }),
+  ]);
   @override
   String get templateId => revision.definition.id;
   @override
@@ -274,8 +319,10 @@ final class ReconciliationReceipt implements ProgressionAnchor {
           'ordinal': set.ordinal,
           'suggested': metricsToJson(set.suggested),
           if (set.objectivesJson.isNotEmpty) 'objectives': set.objectivesJson,
+          if (set.settings.isNotEmpty) 'settings': set.settings,
         },
     ],
+    if (variantSelections.isNotEmpty) 'variantSelections': variantSelections,
     'rule': rule,
     if (ruleType != 'double') 'ruleType': ruleType,
     if (ruleType == 'threshold') ...{
@@ -298,12 +345,14 @@ final class ReconciliationReceipt implements ProgressionAnchor {
 List<TrainingSet> baselineSets(
   WorkoutRevision revision,
   String slotId,
-  String role,
-) {
+  String role, [
+  Map<String, String>? variantSelections,
+]) {
   final view = const TrainingService().start(
     sessionId: 'reconciliation-baseline',
     revision: revision,
     startedAt: DateTime.utc(1970),
+    variantSelections: variantSelections,
   );
   return List.unmodifiable(
     view.sets.where((set) => set.slotId == slotId && set.role == role),
@@ -322,6 +371,7 @@ List<TrainingSet> _setsFromJson(Object? input) {
       'ordinal',
       'suggested',
       'objectives',
+      'settings',
     });
     final ordinal = row['ordinal'];
     if (ordinal is! int || ordinal < 0) invalid('Invalid set ordinal.');
@@ -343,7 +393,9 @@ List<TrainingSet> _setsFromJson(Object? input) {
         criteria: Map.fromEntries(
           objectives.entries.where((entry) => entry.value.mode != 'maxEffort'),
         ),
-        settings: const {},
+        settings: row.containsKey('settings')
+            ? categoricalSettingsFromJson(row['settings'], 'settings')
+            : const {},
         actualSettings: const {},
       ),
     );
@@ -396,7 +448,9 @@ void validateProgressionReconciliations(
       final session = bySession[source];
       if (session == null ||
           session.definition.id != receipt.revision.definition.id ||
-          session.revision.number != receipt.revision.number)
+          session.revision.number != receipt.revision.number ||
+          canonicalJson(session.variantSelections) !=
+              canonicalJson(receipt.variantSelections))
         invalid('Reconciliation source session is inconsistent.');
     }
     final before = anchors[receipt.previousApplication];
