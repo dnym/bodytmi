@@ -177,6 +177,93 @@ final class ThresholdStages {
   };
 }
 
+/// Explicit retest policy (GZCLP's new 5RM, a training-max test): when the
+/// rule would deload — for failure-driven tiers, on exhausting the last stage —
+/// the outcome is `retest` instead. A later, explicitly named test result
+/// reseeds [metric] at factor × the tested value (optionally floored to
+/// [roundTo]) and restarts at [restartStage]. [stage], when set, is the stage
+/// lever value whose authored branch plans the test in place of the lift.
+final class ThresholdRetest {
+  ThresholdRetest._(
+    this.metric,
+    this.repetitionMetric,
+    this.minimumRepetitions,
+    this.factor,
+    this.roundTo,
+    this.stage,
+    this.restartStage,
+  );
+  factory ThresholdRetest.fromJson(
+    Object? input, {
+    required Metrics increments,
+    ThresholdStages? stages,
+  }) {
+    final j = jsonObject(input, 'retest');
+    checkKeys(j, {
+      'metric',
+      'repetitions',
+      'factor',
+      'roundTo',
+      'stage',
+      'restartStage',
+    });
+    final metric = identifier(j, 'metric');
+    final step = increments[metric];
+    if (step == null) invalid('Retest metric must be an increment metric.');
+    final reps = jsonObject(j['repetitions'], 'retest repetitions');
+    checkKeys(reps, {'metric', 'minimum'});
+    final repMetric = identifier(reps, 'metric');
+    final minimum = Quantity.fromJson(reps['minimum']);
+    if (minimum.dimension != Dimension.count ||
+        minimum.value.compareTo(Decimal.zero) <= 0)
+      invalid('Retest repetitions need a positive count minimum.');
+    final factorText = j['factor'];
+    if (factorText is! String)
+      invalid('Retest factor must be a decimal string.');
+    final factor = Decimal.parse(factorText);
+    if (factor.compareTo(Decimal.zero) <= 0 ||
+        factor.compareTo(Decimal.parse('2')) > 0)
+      invalid('Retest factor must be greater than 0 and at most 2.');
+    final roundTo = j.containsKey('roundTo')
+        ? Quantity.fromJson(j['roundTo'])
+        : null;
+    if (roundTo != null &&
+        (roundTo.dimension != step.dimension ||
+            roundTo.value.compareTo(Decimal.zero) <= 0))
+      invalid('Retest roundTo must be a positive step of the retest metric.');
+    final stage = j.containsKey('stage') ? identifier(j, 'stage') : null;
+    final restart = j.containsKey('restartStage')
+        ? identifier(j, 'restartStage')
+        : null;
+    if ((stage != null || restart != null) && stages == null)
+      invalid('Retest stages need a staged rule.');
+    if (stage != null && stages!.order.any((s) => s.value == stage))
+      invalid('The retest stage cannot also be a progression stage.');
+    if (restart != null) stages!.indexOf(restart);
+    return ThresholdRetest._(
+      metric,
+      repMetric,
+      minimum,
+      factor,
+      roundTo,
+      stage,
+      restart ?? stages?.order.first.value,
+    );
+  }
+  final String metric, repetitionMetric;
+  final Quantity minimumRepetitions;
+  final Decimal factor;
+  final Quantity? roundTo;
+  final String? stage, restartStage;
+
+  /// The reseeded value from a tested [measured] quantity, exactly.
+  Quantity reseed(Quantity measured) {
+    var value = measured.value * factor;
+    if (roundTo != null) value = value.floorToMultiple(roundTo!.value);
+    return Quantity(value.toString(), measured.unit.name);
+  }
+}
+
 /// First numeric threshold rule, reusable for reps, duration, or other dimensions.
 final class ThresholdRule {
   ThresholdRule._(
@@ -206,6 +293,7 @@ final class ThresholdRule {
     this.advancementEffort,
     this.incrementBands, [
     this.stages,
+    this.retest,
   ]);
 
   factory ThresholdRule.fromJson(Object? input) {
@@ -230,6 +318,7 @@ final class ThresholdRule {
       'deloadPercent',
       'deloadMetrics',
       'stages',
+      'retest',
     });
     final performance = json.containsKey('performance')
         ? jsonObject(json['performance'], 'performance predicate')
@@ -366,6 +455,17 @@ final class ThresholdRule {
       if (ticks > 10000) invalid('Rule scale bindings exceed 10000 ticks.');
       scales[entry.key] = binding;
     }
+    final stages = json.containsKey('stages')
+        ? ThresholdStages.fromJson(
+            json['stages'],
+            dimension: min.dimension,
+            direction: performanceDirection,
+            sameScope:
+                (aggregation.mode == 'total') ==
+                (failureAggregation.mode == 'total'),
+            increments: increments,
+          )
+        : null;
     return ThresholdRule._(
       identifier(json, 'metric'),
       min,
@@ -401,15 +501,12 @@ final class ThresholdRule {
               direction: performanceDirection,
             )
           : null,
-      json.containsKey('stages')
-          ? ThresholdStages.fromJson(
-              json['stages'],
-              dimension: min.dimension,
-              direction: performanceDirection,
-              sameScope:
-                  (aggregation.mode == 'total') ==
-                  (failureAggregation.mode == 'total'),
+      stages,
+      json.containsKey('retest')
+          ? ThresholdRetest.fromJson(
+              json['retest'],
               increments: increments,
+              stages: stages,
             )
           : null,
     );
@@ -442,6 +539,9 @@ final class ThresholdRule {
 
   /// Optional failure-driven stages over one categorical slot lever.
   final ThresholdStages? stages;
+
+  /// Optional explicit retest replacing the deload/restart action.
+  final ThresholdRetest? retest;
   Quantity get failureLimit => minimum;
   Quantity get advancementLimit => threshold;
   bool get hasSelectionPolicy => chosenMetric != null || priorityOrder != null;
@@ -673,6 +773,16 @@ final class ThresholdRule {
           failedSessions + 1; // one exposure, regardless of failed set count
       final tiered = stageIndex != null && stages!.advanceOn == 'failure';
       final last = tiered && stageIndex == stages!.order.length - 1;
+      if (retest != null && failures >= deloadAfter && (!tiered || last))
+        return proposal(
+          'retest',
+          'Failed-exposure threshold reached; retest before restarting. '
+              'Record the test and apply it with progression retest.',
+          current,
+          0,
+          cursor,
+          retest!.stage,
+        );
       if (failures >= deloadAfter && tiered && !last) {
         final shifted = stages!.shift(current, stageIndex, stageIndex + 1);
         if (shifted == null)

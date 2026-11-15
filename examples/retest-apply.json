@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "id": "squat-5rm-2026-11",
+  "templateId": "squat-t1",
+  "revision": 1,
+  "slotId": "squat",
+  "sourceSessionId": "squat-retest-001",
+  "sourceSetId": "workout/retest/five-rep-max",
+  "expectedSequence": 3,
+  "reseededAt": "2026-11-20T12:00:00Z",
+  "confirm": true
+}

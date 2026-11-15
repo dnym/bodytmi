@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "sessionId": "squat-singles-001",
+  "slotId": "squat",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "reps",
+    "performance": {
+      "direction": "higher",
+      "failureLimit": {
+        "value": "15",
+        "unit": "rep"
+      },
+      "advancementLimit": {
+        "value": "15",
+        "unit": "rep"
+      }
+    },
+    "aggregation": {
+      "mode": "total"
+    },
+    "failureAggregation": {
+      "mode": "total"
+    },
+    "increments": {
+      "load": {
+        "value": "2.5",
+        "unit": "kg"
+      }
+    },
+    "deloadAfter": 1,
+    "deloadMetrics": [
+      "load"
+    ],
+    "deloadPercent": "15",
+    "stages": {
+      "lever": "scheme",
+      "order": [
+        {
+          "value": "triples",
+          "failureLimit": {
+            "value": "15",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "15",
+            "unit": "rep"
+          }
+        },
+        {
+          "value": "doubles",
+          "failureLimit": {
+            "value": "12",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "12",
+            "unit": "rep"
+          }
+        },
+        {
+          "value": "singles",
+          "failureLimit": {
+            "value": "10",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "10",
+            "unit": "rep"
+          }
+        }
+      ]
+    },
+    "retest": {
+      "metric": "load",
+      "repetitions": {
+        "metric": "reps",
+        "minimum": {
+          "value": "5",
+          "unit": "rep"
+        }
+      },
+      "factor": "0.85",
+      "roundTo": {
+        "value": "2.5",
+        "unit": "kg"
+      },
+      "stage": "retest"
+    }
+  }
+}

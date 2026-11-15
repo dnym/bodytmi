@@ -150,6 +150,7 @@ const storedCommandNames = [
   'progression propose',
   'progression track',
   'progression reconcile',
+  'progression retest',
   'progression reconcile-status',
   'progression reconcile-show',
   'progression reconcile-list',
@@ -708,6 +709,19 @@ Future<Map<String, Object?>> executeStored(
       'ruleType',
       'resetFailures',
       'resetCursor',
+      'confirm',
+    },
+    'progression retest' => {
+      'id',
+      'templateId',
+      'revision',
+      'slotId',
+      'role',
+      'runId',
+      'sourceSessionId',
+      'sourceSetId',
+      'expectedSequence',
+      'reseededAt',
       'confirm',
     },
     'progression reconcile-status' => {
@@ -1734,6 +1748,26 @@ Future<Map<String, Object?>> executeStored(
           );
           data = reconciliationView(receipt);
         }
+      case 'progression retest':
+        data = reconciliationView(
+          await StoredProgressionService(store).retest(
+            id: identifier(request, 'id'),
+            templateId: identifier(request, 'templateId'),
+            revision: integer('revision'),
+            slotId: identifier(request, 'slotId'),
+            sourceSessionId: identifier(request, 'sourceSessionId'),
+            sourceSetId: requiredString(request, 'sourceSetId'),
+            expectedSequence: integer('expectedSequence', min: 0),
+            reseededAt: parseInstant(request['reseededAt'], 'reseededAt'),
+            confirm: request['confirm'] == true,
+            role: request.containsKey('role')
+                ? requiredString(request, 'role')
+                : 'work',
+            runId: request.containsKey('runId')
+                ? identifier(request, 'runId')
+                : null,
+          ),
+        );
       case 'progression reconcile-show':
         data = reconciliationView(
           await StoredProgressionService(

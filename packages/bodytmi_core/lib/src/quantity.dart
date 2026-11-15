@@ -52,6 +52,16 @@ final class Decimal implements Comparable<Decimal> {
 
   bool get isInteger => coefficient % _pow(scale) == BigInt.zero;
 
+  /// The largest multiple of a positive [step] not above this nonnegative
+  /// value, exactly.
+  Decimal floorToMultiple(Decimal step) {
+    if (step.coefficient <= BigInt.zero || coefficient.isNegative)
+      invalid('Rounding needs a positive step and a nonnegative value.');
+    final s = scale > step.scale ? scale : step.scale;
+    final unit = step._at(s);
+    return Decimal._((_at(s) ~/ unit) * unit, s);
+  }
+
   @override
   int compareTo(Decimal other) {
     final targetScale = scale > other.scale ? scale : other.scale;

@@ -9,6 +9,54 @@ import 'shared_track_view.dart';
 import 'training_service.dart';
 import 'session_codec.dart';
 
+/// The explicitly named test result a retest receipt reseeded from. It is
+/// frozen provenance: later corrections to the source set do not rewrite it.
+final class RetestProvenance {
+  RetestProvenance({
+    required this.sourceSessionId,
+    required this.sourceSetId,
+    required this.sourceContentVersion,
+    required this.measured,
+    required this.repetitions,
+    required this.reseeded,
+  }) {
+    identifier({'id': sourceSessionId}, 'id');
+    if (sourceContentVersion < 1) invalid('Invalid retest source version.');
+  }
+  factory RetestProvenance.fromJson(Object? input) {
+    final j = jsonObject(input, 'retest');
+    checkKeys(j, {
+      'sourceSessionId',
+      'sourceSetId',
+      'sourceContentVersion',
+      'measured',
+      'repetitions',
+      'reseeded',
+    });
+    final version = j['sourceContentVersion'];
+    if (version is! int) invalid('Invalid retest source version.');
+    return RetestProvenance(
+      sourceSessionId: identifier(j, 'sourceSessionId'),
+      sourceSetId: requiredString(j, 'sourceSetId'),
+      sourceContentVersion: version,
+      measured: Quantity.fromJson(j['measured']),
+      repetitions: Quantity.fromJson(j['repetitions']),
+      reseeded: Quantity.fromJson(j['reseeded']),
+    );
+  }
+  final String sourceSessionId, sourceSetId;
+  final int sourceContentVersion;
+  final Quantity measured, repetitions, reseeded;
+  Map<String, Object?> toJson() => {
+    'sourceSessionId': sourceSessionId,
+    'sourceSetId': sourceSetId,
+    'sourceContentVersion': sourceContentVersion,
+    'measured': measured.toJson(),
+    'repetitions': repetitions.toJson(),
+    'reseeded': reseeded.toJson(),
+  };
+}
+
 /// An explicit, durable authorization that re-anchors one run/slot/role
 /// progression track onto a different prescription. It adopts that candidate's
 /// planned targets and optionally resets failure and coordinator state. It
@@ -36,6 +84,7 @@ final class ReconciliationReceipt implements ProgressionAnchor {
     this.resetCursor = false,
     this.sourceSessionId,
     Map<String, String> variantSelections = const {},
+    this.retest,
   }) : rule = _freeze(rule) as Map<String, Object?>,
        sets = List.unmodifiable(sets),
        variantSelections = Map.unmodifiable({
@@ -55,7 +104,7 @@ final class ReconciliationReceipt implements ProgressionAnchor {
         previousCursor < 0 ||
         previousApplication == null)
       invalid('Invalid progression reconciliation state.');
-    if (acknowledgedKinds.isEmpty ||
+    if ((acknowledgedKinds.isEmpty && retest == null) ||
         acknowledgedKinds.toSet().length != acknowledgedKinds.length ||
         !reconciliationKinds.containsAll(acknowledgedKinds))
       invalid('Reconciliation must acknowledge every blocker kind once.');
@@ -68,6 +117,33 @@ final class ReconciliationReceipt implements ProgressionAnchor {
       ThresholdRule.fromJson(this.rule);
     } else {
       OrdinalRule.fromJson(this.rule);
+    }
+    if (retest case final provenance?) {
+      // A retest restarts the track: counters reset, every set reseeds the
+      // retest metric from the frozen tested value, at the restart stage.
+      final policy = ruleType == 'threshold'
+          ? ThresholdRule.fromJson(this.rule)
+          : null;
+      final config = policy?.retest;
+      if (config == null)
+        invalid('A retest needs a threshold rule with a retest policy.');
+      if (!resetFailures || !resetCursor)
+        invalid('A retest resets failures and the coordinator position.');
+      if (provenance.measured.dimension !=
+              config.reseed(provenance.measured).dimension ||
+          provenance.reseeded.compareTo(config.reseed(provenance.measured)) !=
+              0 ||
+          provenance.repetitions.dimension != Dimension.count ||
+          provenance.repetitions.compareTo(config.minimumRepetitions) < 0)
+        invalid('Retest reseed does not follow the rule\'s retest policy.');
+      for (final set in this.sets) {
+        final value = set.suggested[config.metric];
+        if (value == null || value.compareTo(provenance.reseeded) != 0)
+          invalid('Retest sets must carry the reseeded value.');
+        if (policy!.stages case final staged?)
+          if (set.settings[staged.lever] != config.restartStage)
+            invalid('Retest sets must plan the restart stage.');
+      }
     }
     final baseline = baselineSets(
       revision,
@@ -156,6 +232,7 @@ final class ReconciliationReceipt implements ProgressionAnchor {
       'sourceSessionId',
       'reconciledAt',
       'variantSelections',
+      'retest',
     });
     if (json.containsKey('variantSelections') &&
         jsonObject(json['variantSelections'], 'variantSelections').isEmpty)
@@ -209,6 +286,9 @@ final class ReconciliationReceipt implements ProgressionAnchor {
       sourceSessionId: json['sourceSessionId'] == null
           ? null
           : identifier(json, 'sourceSessionId'),
+      retest: json.containsKey('retest')
+          ? RetestProvenance.fromJson(json['retest'])
+          : null,
     );
     if (count('failedSessions', 0) != receipt.failedSessions ||
         (kind == 'threshold' && count('cursor', 0) != receipt.cursor))
@@ -241,6 +321,9 @@ final class ReconciliationReceipt implements ProgressionAnchor {
 
   /// The variant structure (set scheme) whose sets this receipt adopted.
   final Map<String, String> variantSelections;
+
+  /// Present when this receipt restarts the track from a named test result.
+  final RetestProvenance? retest;
 
   @override
   late final Set<String> controlledMetrics = ruleType == 'double'
@@ -323,6 +406,7 @@ final class ReconciliationReceipt implements ProgressionAnchor {
         },
     ],
     if (variantSelections.isNotEmpty) 'variantSelections': variantSelections,
+    if (retest != null) 'retest': retest!.toJson(),
     'rule': rule,
     if (ruleType != 'double') 'ruleType': ruleType,
     if (ruleType == 'threshold') ...{
@@ -453,6 +537,24 @@ void validateProgressionReconciliations(
               canonicalJson(receipt.variantSelections))
         invalid('Reconciliation source session is inconsistent.');
     }
+    if (receipt.retest case final provenance?) {
+      final source = bySession[provenance.sourceSessionId];
+      final set = source?.sets
+          .where((s) => s.id == provenance.sourceSetId)
+          .firstOrNull;
+      if (source == null ||
+          set == null ||
+          source.finishedAt == null ||
+          source.finishedAt!.isAfter(receipt.reconciledAt))
+        invalid('Retest source set is missing or not finalized in time.');
+      requireRetestSource(
+        source,
+        set,
+        receipt.slot,
+        ThresholdRule.fromJson(receipt.rule).retest!,
+        frozen: provenance,
+      );
+    }
     final before = anchors[receipt.previousApplication];
     if (before == null ||
         before.resolvedAt == null ||
@@ -504,4 +606,45 @@ Object? _freeze(Object? value) {
   if (value is List<Object?>)
     return List<Object?>.unmodifiable(value.map(_freeze));
   return value;
+}
+
+/// Checks a named test set qualifies to reseed [slot]: completed, eligible,
+/// performed with the same exercise, implementation and equipment, and with
+/// the retest's minimum repetitions. Returns (measured, repetitions). With
+/// [frozen] provenance, an unchanged source must still match it.
+(Quantity, Quantity) requireRetestSource(
+  TrainingSession session,
+  TrainingSet set,
+  ExerciseSlot slot,
+  ThresholdRetest config, {
+  RetestProvenance? frozen,
+}) {
+  final composition = effectiveComposition(
+    session.definition.slot(set.slotId),
+    set,
+  );
+  if (composition.exercise != slot.exerciseId ||
+      composition.implementation != slot.implementation ||
+      composition.equipment != slot.equipmentId)
+    invalid(
+      'Retest source set was performed with another exercise, '
+      'implementation or equipment.',
+    );
+  if (frozen != null && frozen.sourceContentVersion != set.contentVersion)
+    return (frozen.measured, frozen.repetitions);
+  final measured = set.actuals[config.metric];
+  final reps = set.actuals[config.repetitionMetric];
+  if (set.status != SetStatus.completed ||
+      !set.eligibleForPerformance ||
+      measured == null ||
+      reps == null)
+    invalid('Retest source set needs confirmed, uninterrupted actuals.');
+  if (reps.dimension != Dimension.count ||
+      reps.compareTo(config.minimumRepetitions) < 0)
+    invalid('Retest source set does not meet the required repetitions.');
+  if (frozen != null &&
+      (measured.compareTo(frozen.measured) != 0 ||
+          reps.compareTo(frozen.repetitions) != 0))
+    invalid('Retest provenance does not match its unchanged source set.');
+  return (measured, reps);
 }

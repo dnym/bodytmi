@@ -375,6 +375,11 @@ final class StoredProgressionService {
             retirement?.revisionNumber,
         'resolvedAt': latest.resolvedAt!.toUtc().toIso8601String(),
         'status': latest.status,
+        if (decision != null &&
+            decision.acceptedAt != null &&
+            decision.proposal.outcome == 'retest')
+          'retestPending': true,
+        if (receipt?.retest != null) 'retest': receipt!.retest!.toJson(),
         if (receipt != null) ...{
           'acknowledgedKinds': receipt.acknowledgedKinds,
           'supersedes': receipt.previousApplication,
@@ -1047,6 +1052,154 @@ final class StoredProgressionService {
       invalid('Candidate session has no sets for this slot and role.');
     return sets;
   }
+
+  /// Restarts a threshold track from an explicitly named test result: the
+  /// rule's retest policy reseeds its metric at factor × the tested value and
+  /// restarts at the restart stage, resetting failures and cursor. The test
+  /// may come from any session (in place of the lift or a test day) with the
+  /// same exercise, implementation and equipment; nothing counts unless named.
+  Future<ReconciliationReceipt> retest({
+    required String id,
+    required String templateId,
+    required int revision,
+    required String slotId,
+    required String sourceSessionId,
+    required String sourceSetId,
+    required int expectedSequence,
+    required DateTime reseededAt,
+    required bool confirm,
+    String role = 'work',
+    String? runId,
+  }) => repository.transaction(() async {
+    if (!confirm) invalid('Applying a retest requires confirm:true.');
+    identifier({'id': id}, 'id');
+    if (revision < 1 || !effortRoles.contains(role) || expectedSequence < 0)
+      invalid('Invalid retest revision, role or sequence.');
+    final prescription = await StoredTrainingService(
+      repository,
+    ).revision(templateId, revision);
+    final slots = prescription.definition.slots.where((s) => s.id == slotId);
+    if (slots.isEmpty) invalid('Unknown slot: $slotId.');
+    final source = await StoredTrainingService(
+      repository,
+    ).session(sourceSessionId);
+    final set = source.sets.where((s) => s.id == sourceSetId).firstOrNull;
+    if (set == null) invalid('Unknown retest source set: $sourceSetId.');
+    if (source.status != SessionStatus.finalized ||
+        source.finishedAt!.isAfter(reseededAt))
+      invalid('The retest source session must be finalized before reseeding.');
+    final decisions = (await repository.progressionDecisions()).where(
+      (d) =>
+          d.resolvedAt != null &&
+          !d.resolvedAt!.isAfter(reseededAt) &&
+          d.session.startedAt.isBefore(reseededAt),
+    );
+    final receipts = await _reconciliations();
+    final prior = receipts.where((r) => r.id == id).firstOrNull;
+    final base = linkLinkedTrack(
+      await _links(),
+      prior == null
+          ? latestTrack(
+              decisions,
+              <ProgressionAnchor>[...receipts, ...await _retirements()],
+              templateId,
+              slots.single,
+              runId: runId,
+              role: role,
+            )
+          : <String, ProgressionAnchor>{
+              for (final anchor in <ProgressionAnchor>[
+                ...decisions,
+                ...receipts,
+                ...await _retirements(),
+              ])
+                anchor.id: anchor,
+            }[prior.previousApplication],
+      at: reseededAt,
+      sessionStartedAt: reseededAt,
+    );
+    if (base == null || base.resolvedAt == null)
+      invalid('There is no resolved progression track to retest.');
+    if (base is SharedTrackView)
+      invalid('Retire a linked track from its lever link before retesting.');
+    final rule = base.ruleType == 'threshold'
+        ? ThresholdRule.fromJson(base.rule)
+        : null;
+    final config = rule?.retest;
+    if (config == null) invalid('The track rule declares no retest policy.');
+    if (prior == null && base.sequence != expectedSequence)
+      _conflict(
+        'Progression track changed: expected sequence $expectedSequence but '
+        'the current track is ${base.sequence}.',
+      );
+    final (measured, reps) = requireRetestSource(
+      source,
+      set,
+      slots.single,
+      config,
+    );
+    final reseeded = config.reseed(measured);
+    final lever = rule!.stages?.lever;
+    final selections = prescription.definition.variantSelections({
+      if (lever != null &&
+          prescription.definition.variantLevers(slotId).contains(lever))
+        slotId: {lever: config.restartStage!},
+    });
+    final planned = baselineSets(prescription, slotId, role, selections);
+    final next = ReconciliationReceipt(
+      id: id,
+      runId: runId,
+      revision: prescription,
+      slotId: slotId,
+      role: role,
+      variantSelections: selections,
+      sets: [
+        for (final p in planned)
+          TrainingSet(
+            id: p.id,
+            slotId: p.slotId,
+            role: p.role,
+            ordinal: p.ordinal,
+            settings: sortedSettings({
+              ...p.settings,
+              if (lever != null && p.settings.containsKey(lever))
+                lever: config.restartStage!,
+            }),
+            actualSettings: const {},
+            suggested: {...p.suggested, config.metric: reseeded},
+            maxEffortMetrics: p.maxEffortMetrics,
+            criteria: p.criteria,
+          ),
+      ],
+      rule: base.rule,
+      ruleType: base.ruleType,
+      previousApplication: base.id,
+      previousSequence: base.sequence,
+      previousFailures: base.failedSessions,
+      previousCursor: base.cursor,
+      reconciledAt: reseededAt,
+      acknowledgedKinds: const [],
+      resetFailures: true,
+      resetCursor: true,
+      retest: RetestProvenance(
+        sourceSessionId: source.id,
+        sourceSetId: set.id,
+        sourceContentVersion: set.contentVersion,
+        measured: measured,
+        repetitions: reps,
+        reseeded: reseeded,
+      ),
+    );
+    if (prior != null) {
+      if (canonicalJson(prior.toJson()) == canonicalJson(next.toJson()))
+        return prior;
+      _conflict('This retest identity already records a different act.');
+    }
+    if (reseededAt.isBefore(base.resolvedAt!))
+      invalid('A retest cannot precede the application it supersedes.');
+    await repository.saveProgressionReconciliation(next);
+    return next;
+  });
 
   Set<String> _ruleSettings(String ruleType, Map<String, Object?> rule) =>
       ruleType == 'ordinal'

@@ -175,6 +175,7 @@ final class ProgressionDecision implements ProgressionAnchor {
   int get failedSessions =>
       declinedAt != null &&
           (proposal.outcome == 'deload' ||
+              proposal.outcome == 'retest' ||
               (proposal.outcome == 'stage' &&
                   ThresholdRule.fromJson(rule).stages?.advanceOn == 'failure'))
       ? previousFailures + 1

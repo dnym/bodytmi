@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "definition": {
+    "id": "squat-t1",
+    "name": "Squat T1 with retest",
+    "slots": [
+      {
+        "id": "squat",
+        "exercise": "squat",
+        "implementation": "barbell",
+        "targets": {
+          "load": {
+            "value": "60",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "3",
+            "unit": "rep"
+          }
+        },
+        "categories": {
+          "scheme": {
+            "values": [
+              "triples",
+              "doubles",
+              "singles",
+              "retest"
+            ],
+            "default": "triples"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "workout",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "scheme",
+          "type": "variant",
+          "slot": "squat",
+          "lever": "scheme",
+          "branches": {
+            "triples": {
+              "id": "triples",
+              "type": "repeat",
+              "count": 5,
+              "restBetweenSeconds": 120,
+              "child": {
+                "id": "triple",
+                "type": "effort",
+                "slot": "squat",
+                "targets": {
+                  "reps": {
+                    "value": "3",
+                    "unit": "rep"
+                  }
+                }
+              }
+            },
+            "doubles": {
+              "id": "doubles",
+              "type": "repeat",
+              "count": 6,
+              "restBetweenSeconds": 120,
+              "child": {
+                "id": "double",
+                "type": "effort",
+                "slot": "squat",
+                "targets": {
+                  "reps": {
+                    "value": "2",
+                    "unit": "rep"
+                  }
+                }
+              }
+            },
+            "singles": {
+              "id": "singles",
+              "type": "repeat",
+              "count": 10,
+              "restBetweenSeconds": 90,
+              "child": {
+                "id": "single",
+                "type": "effort",
+                "slot": "squat",
+                "targets": {
+                  "reps": {
+                    "value": "1",
+                    "unit": "rep"
+                  }
+                }
+              }
+            },
+            "retest": {
+              "id": "retest",
+              "type": "sequence",
+              "children": [
+                {
+                  "id": "ramp-1",
+                  "type": "effort",
+                  "slot": "squat",
+                  "role": "warmup",
+                  "targets": {
+                    "reps": {
+                      "value": "5",
+                      "unit": "rep"
+                    }
+                  }
+                },
+                {
+                  "id": "ramp-2",
+                  "type": "effort",
+                  "slot": "squat",
+                  "role": "warmup",
+                  "targets": {
+                    "reps": {
+                      "value": "3",
+                      "unit": "rep"
+                    }
+                  }
+                },
+                {
+                  "id": "five-rep-max",
+                  "type": "effort",
+                  "slot": "squat",
+                  "targets": {
+                    "reps": {
+                      "value": "5",
+                      "unit": "rep"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

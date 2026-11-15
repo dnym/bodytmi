@@ -97,6 +97,11 @@ final class ProgressionEvaluation {
           'same value of lever ${staged.lever}.',
         );
       stage = values.single;
+      if (stage == rule.retest?.stage)
+        invalid(
+          'This session planned the retest; apply its result with '
+          'progression retest.',
+        );
     }
     final proposals = rule.evaluateVector(
       currentSets: [for (final s in sets) s.suggested],
