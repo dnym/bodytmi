@@ -165,6 +165,7 @@ const storedCommandNames = [
   'run list',
   'run show',
   'run schedule',
+  'run jump',
   'run start',
   'run skip',
   'run upgrade',
@@ -798,6 +799,14 @@ Future<Map<String, Object?>> executeStored(
     'run list' => {'status'},
     'run show' => {'runId'},
     'run schedule' => {'runId', 'count', 'includeScopes'},
+    'run jump' => {
+      'runId',
+      'expectedVersion',
+      'dayPath',
+      'requestId',
+      'at',
+      'confirm',
+    },
     'run start' => {
       'runId',
       'expectedVersion',
@@ -1688,6 +1697,17 @@ Future<Map<String, Object?>> executeStored(
           'receipt': receipt.toJson(),
           'run': await runView(await programs.run(runId)),
         };
+      case 'run jump':
+        if (!flag('confirm')) invalid('Run jump requires confirm:true.');
+        data = await runView(
+          await programs.jump(
+            identifier(request, 'runId'),
+            integer('expectedVersion'),
+            requiredString(request, 'dayPath'),
+            identifier(request, 'requestId'),
+            parseInstant(request['at'], 'at'),
+          ),
+        );
       case 'run upgrades':
         data = [
           for (final u in await programs.upgrades(identifier(request, 'runId')))

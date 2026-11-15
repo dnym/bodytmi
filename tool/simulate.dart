@@ -2343,22 +2343,23 @@ Future<void> weekOf(int week) async {
       case 2 || 4 || 6:
         if (weekday == 6) await weighIn(week);
         if (c25kDone) continue;
-        if (week == 8) {
-          // Repeat week 6 after the break, outside the run (no rewind).
-          if (weekday == 2) {
-            note(
-              'C25K says to repeat a week after a break, but a run cursor '
-              'cannot be moved back; the repeat week is logged as ad hoc '
-              'sessions outside the run.',
-            );
-          }
-          await c25kSession(
-            week,
-            weekday,
-            adHoc: true,
-            template: c25kTemplate(6, weekday ~/ 2 - 1),
+        if (week == 8 && weekday == 2) {
+          // C25K: repeat the last completed week after a break.
+          final run = await runShow('c25k');
+          final before = run['current']?['path'];
+          final moved = await ok('run jump', {
+            'runId': 'c25k',
+            'expectedVersion': run['contentVersion'],
+            'dayPath': 'nine-weeks/week6/w6-d1',
+            'requestId': 'repeat-week-6',
+            'at': iso(at(week, weekday, 6, 30)),
+            'confirm': true,
+          });
+          log('');
+          log(
+            '  - Back from travel: `run jump` moves Couch to 5K from '
+            '$before back to ${moved['current']['path']} to repeat week 6.',
           );
-          continue;
         }
         await c25kSession(week, weekday, sideStitch: week == 4 && weekday == 4);
         final run = await runShow('c25k');

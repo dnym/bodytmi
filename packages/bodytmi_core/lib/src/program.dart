@@ -429,6 +429,42 @@ final class ProgramUpgradeReceipt {
   };
 }
 
+/// An explicit move of a run's cursor within its program: from occurrence
+/// [ordinal] on, days continue at program position [position] (repeat a
+/// week after a break, or skip ahead). Occurrence ordinals, receipts and
+/// session bindings never change; only which program day an ordinal means.
+final class RunJump {
+  RunJump({
+    required this.ordinal,
+    required this.position,
+    required this.requestId,
+    required this.at,
+  }) {
+    if (ordinal < 0 || position < 0)
+      invalid('A run jump needs a nonnegative ordinal and position.');
+    identifier({'id': requestId}, 'id');
+  }
+  factory RunJump.fromJson(Object? input) {
+    final j = jsonObject(input, 'run jump');
+    checkKeys(j, {'ordinal', 'position', 'requestId', 'at'});
+    return RunJump(
+      ordinal: positiveProgramInt(j, 'ordinal', min: 0),
+      position: positiveProgramInt(j, 'position', min: 0),
+      requestId: identifier(j, 'requestId'),
+      at: parseInstant(j['at'], 'at'),
+    );
+  }
+  final int ordinal, position;
+  final String requestId;
+  final DateTime at;
+  Map<String, Object?> toJson() => {
+    'ordinal': ordinal,
+    'position': position,
+    'requestId': requestId,
+    'at': at.toUtc().toIso8601String(),
+  };
+}
+
 final class ProgramRun {
   ProgramRun({
     required this.id,
@@ -438,14 +474,28 @@ final class ProgramRun {
     this.cursor = 0,
     this.contentVersion = 1,
     this.status = 'active',
-  }) {
+    List<RunJump> jumps = const [],
+  }) : jumps = List.unmodifiable(jumps) {
     identifier({'id': id}, 'id');
+    final days = program.definition.dayCount;
+    final ids = <String>{};
+    for (var i = 0; i < this.jumps.length; i++) {
+      final jump = this.jumps[i];
+      if (jump.ordinal > cursor ||
+          (i > 0 &&
+              (jump.ordinal < this.jumps[i - 1].ordinal ||
+                  jump.at.isBefore(this.jumps[i - 1].at))) ||
+          jump.at.isBefore(startedAt) ||
+          (!loop && jump.position >= days) ||
+          !ids.add(jump.requestId))
+        invalid('Invalid program run jump history.');
+    }
+    final position = positionAt(cursor);
     if (cursor < 0 ||
         contentVersion <= cursor ||
         !{'active', 'paused', 'completed'}.contains(status) ||
-        (!loop && cursor > program.definition.dayCount) ||
-        ((status == 'completed') !=
-            (!loop && cursor == program.definition.dayCount)))
+        (!loop && position > days) ||
+        ((status == 'completed') != (!loop && position == days)))
       invalid('Invalid program run state.');
   }
   factory ProgramRun.fromJson(Object? input) {
@@ -458,9 +508,12 @@ final class ProgramRun {
       'cursor',
       'contentVersion',
       'status',
+      'jumps',
     });
     final loop = j['loop'];
     if (loop is! bool) invalid('Run loop must be boolean.');
+    if (j.containsKey('jumps') && jsonList(j, 'jumps').isEmpty)
+      invalid('Empty run jumps must be omitted.');
     return ProgramRun(
       id: identifier(j, 'id'),
       program: ProgramRevision.fromJson(j['program']),
@@ -469,6 +522,10 @@ final class ProgramRun {
       cursor: positiveProgramInt(j, 'cursor', min: 0),
       contentVersion: positiveProgramInt(j, 'contentVersion'),
       status: requiredString(j, 'status'),
+      jumps: [
+        if (j.containsKey('jumps'))
+          for (final jump in jsonList(j, 'jumps')) RunJump.fromJson(jump),
+      ],
     );
   }
   final String id, status;
@@ -476,8 +533,36 @@ final class ProgramRun {
   final DateTime startedAt;
   final bool loop;
   final int cursor, contentVersion;
+
+  /// Explicit cursor moves, oldest first.
+  final List<RunJump> jumps;
+
+  /// The program position occurrence [ordinal] means: its ordinal, unless a
+  /// jump at or before it moved the run, in which case days continue from
+  /// the latest such jump's position.
+  int positionAt(int ordinal) {
+    RunJump? last;
+    for (final jump in jumps) {
+      if (jump.ordinal <= ordinal) last = jump;
+    }
+    return last == null ? ordinal : last.position + (ordinal - last.ordinal);
+  }
+
+  /// The program day occurrence [ordinal] means under this run's jumps.
+  ProgramDayOccurrence dayAtOrdinal(int ordinal) =>
+      program.definition.dayAt(positionAt(ordinal));
+
   ProgramDayOccurrence? get current =>
-      status == 'completed' ? null : program.definition.dayAt(cursor);
+      status == 'completed' ? null : dayAtOrdinal(cursor);
+
+  /// The completed status a finite run has at [position].
+  String _statusAt(int position, String fallback) =>
+      !loop && position == program.definition.dayCount
+      ? 'completed'
+      : fallback == 'completed'
+      ? 'active'
+      : fallback;
+
   ProgramRun changed({bool advance = false, String? status}) {
     final next = cursor + (advance ? 1 : 0);
     return ProgramRun(
@@ -487,11 +572,38 @@ final class ProgramRun {
       loop: loop,
       cursor: next,
       contentVersion: contentVersion + 1,
-      status: !loop && next == program.definition.dayCount
-          ? 'completed'
-          : status ?? this.status,
+      status: _statusAt(positionAt(next), status ?? this.status),
+      jumps: jumps,
     );
   }
+
+  /// This run moved by [jump] (at the current cursor). Jumping back into a
+  /// finished finite run reopens it.
+  ProgramRun withJump(RunJump jump) {
+    final next = ProgramRun(
+      id: id,
+      program: program,
+      startedAt: startedAt,
+      loop: loop,
+      cursor: cursor,
+      contentVersion: contentVersion + 1,
+      status: _statusAt(jump.position, status),
+      jumps: [...jumps, jump],
+    );
+    return next;
+  }
+
+  /// This run re-pinned to [revision], keeping cursor, status and jumps.
+  ProgramRun repinned(ProgramRevision revision) => ProgramRun(
+    id: id,
+    program: revision,
+    startedAt: startedAt,
+    loop: loop,
+    cursor: cursor,
+    contentVersion: contentVersion + 1,
+    status: status,
+    jumps: jumps,
+  );
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -501,6 +613,7 @@ final class ProgramRun {
     'cursor': cursor,
     'contentVersion': contentVersion,
     'status': status,
+    if (jumps.isNotEmpty) 'jumps': [for (final jump in jumps) jump.toJson()],
   };
 }
 

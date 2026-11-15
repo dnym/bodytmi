@@ -115,13 +115,15 @@ final class ProgramService {
       invalid('Schedule count must be between 1 and 1000.');
     final current = await run(runId);
     final cycle = current.program.definition.plan.occurrences().toList();
-    final available = current.loop ? count : cycle.length - current.cursor;
+    // Positions, not ordinals, name the program days (jumps move them).
+    final start = current.positionAt(current.cursor);
+    final available = current.loop ? count : cycle.length - start;
     final length = available < count ? available : count;
     final scopesByIndex = <int, List<ProgramScope>>{};
     if (includeScopes && length > 0) {
       final needed = {
         for (var offset = 0; offset < length; offset++)
-          (current.cursor + offset) % cycle.length,
+          (start + offset) % cycle.length,
       };
       var index = 0;
       for (final occurrence
@@ -158,14 +160,15 @@ final class ProgramService {
         for (var offset = 0; offset < length; offset++)
           () {
             final ordinal = current.cursor + offset;
-            final occurrence = cycle[ordinal % cycle.length];
+            final position = start + offset;
+            final occurrence = cycle[position % cycle.length];
             final scoped = current.program.definition.hasPrescriptionOverrides
                 ? current.program.definition.effectiveOverrides(occurrence.path)
                 : const <ScopedProgramOverride>[];
             return {
               'ordinal': ordinal,
-              'cycle': ordinal ~/ cycle.length,
-              'index': ordinal % cycle.length,
+              'cycle': position ~/ cycle.length,
+              'index': position % cycle.length,
               ...occurrence.toJson(),
               if (scoped.isNotEmpty)
                 'effectiveOverrides': [
@@ -173,7 +176,7 @@ final class ProgramService {
                 ],
               if (includeScopes)
                 'scopes': [
-                  for (final scope in scopesByIndex[ordinal % cycle.length]!)
+                  for (final scope in scopesByIndex[position % cycle.length]!)
                     scope.toJson(),
                 ],
               if (offset == 0 && currentSession != null)
@@ -263,7 +266,8 @@ final class ProgramService {
     final target = await revision(current.program.definition.id, toRevision);
     if (target.number == current.program.number)
       programConflict('Run already pins this program revision.');
-    if (!current.loop && target.definition.dayCount <= current.cursor)
+    if (!current.loop &&
+        target.definition.dayCount <= current.positionAt(current.cursor))
       programConflict(
         'Program upgrade must publish enough days to hold the run cursor.',
       );
@@ -292,18 +296,64 @@ final class ProgramService {
       requestId: requestId,
     );
     await repository.insertProgramUpgrade(receipt);
-    await repository.saveProgramRun(
-      ProgramRun(
-        id: current.id,
-        program: target,
-        startedAt: current.startedAt,
-        loop: current.loop,
-        cursor: current.cursor,
-        contentVersion: current.contentVersion + 1,
-        status: current.status,
+    await repository.saveProgramRun(current.repinned(target));
+    return receipt;
+  });
+
+  /// Explicitly move a run's cursor to the program day at [dayPath]: back to
+  /// repeat days (a week after a break), or ahead to skip them without
+  /// recording each skip. History, receipts and bindings stay as they are;
+  /// later occurrences simply continue from that day. A looping run stays in
+  /// its current cycle. A finished finite run reopens when moved back. The
+  /// current day must have no session yet. Retrying a request ID returns
+  /// the same run; reusing it with other inputs conflicts.
+  Future<ProgramRun> jump(
+    String runId,
+    int expectedVersion,
+    String dayPath,
+    String requestId,
+    DateTime at,
+  ) => repository.transaction(() async {
+    identifier({'id': requestId}, 'id');
+    final current = await run(runId);
+    final cycle = current.program.definition.plan.occurrences().toList();
+    final index = cycle.indexWhere((o) => o.path == dayPath);
+    if (index < 0)
+      invalid('No day of the pinned program revision has path $dayPath.');
+    final here = current.positionAt(current.cursor);
+    final position = current.loop ? here - here % cycle.length + index : index;
+    final prior = current.jumps
+        .where((j) => j.requestId == requestId)
+        .firstOrNull;
+    if (prior != null) {
+      if (prior.position != position || prior.at != at)
+        programConflict('Jump request identity was reused with other inputs.');
+      return current;
+    }
+    if (current.contentVersion != expectedVersion)
+      programConflict('Run version changed.');
+    if (at.isBefore(current.startedAt) ||
+        (current.jumps.isNotEmpty && at.isBefore(current.jumps.last.at)))
+      invalid('A jump cannot precede its run or an earlier jump.');
+    if (position == here)
+      programConflict('The run is already at this program day.');
+    if ((await repository.sessionPrograms()).any(
+      (b) => b.runId == runId && b.ordinal == current.cursor,
+    ))
+      programConflict(
+        'Current program day already has a session; finish or skip it '
+        'before moving the run.',
+      );
+    final next = current.withJump(
+      RunJump(
+        ordinal: current.cursor,
+        position: position,
+        requestId: requestId,
+        at: at,
       ),
     );
-    return receipt;
+    await repository.saveProgramRun(next);
+    return next;
   });
 
   Future<List<ProgramUpgradeReceipt>> upgrades(String runId) =>
@@ -341,10 +391,7 @@ final class ProgramService {
       final session = await StoredTrainingService(
         repository,
       ).session(sessionId);
-      final pinned = current.program.definition
-          .dayAt(existing.ordinal)
-          .day
-          .derivedPlan;
+      final pinned = current.dayAtOrdinal(existing.ordinal).day.derivedPlan;
       if (pinned != null &&
           derivedPlan != null &&
           canonicalJson(pinned.toJson()) != canonicalJson(derivedPlan.toJson()))
@@ -562,10 +609,11 @@ void validateProgramData({
     if (run == null ||
         session == null ||
         b.ordinal > run.cursor ||
-        (!run.loop && b.ordinal >= run.program.definition.dayCount) ||
+        (!run.loop &&
+            run.positionAt(b.ordinal) >= run.program.definition.dayCount) ||
         session.startedAt.isBefore(run.startedAt))
       invalid('Invalid program session binding.');
-    final day = pinnedAt(run, b.ordinal).dayAt(b.ordinal);
+    final day = pinnedAt(run, b.ordinal).dayAt(run.positionAt(b.ordinal));
     if (day.path != b.path ||
         day.day.templateId != session.definition.id ||
         day.day.revision != session.revision.number ||
@@ -640,7 +688,8 @@ void validateProgramData({
     if (run == null ||
         r.ordinal >= run.cursor ||
         r.occurredAt.isBefore(run.startedAt) ||
-        r.path != pinnedAt(run, r.ordinal).dayAt(r.ordinal).path)
+        r.path !=
+            pinnedAt(run, r.ordinal).dayAt(run.positionAt(r.ordinal)).path)
       invalid('Program receipt path or cursor mismatch.');
     final bound = byBoundOccurrence[key];
     if (r.sessionId == null) {

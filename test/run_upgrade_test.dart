@@ -365,6 +365,193 @@ void runUpgradeTests() {
   );
 
   test(
+    'a finite run repeats days by jumping back, and reopens when finished',
+    () => withStore((store, dir) async {
+      final programs = ProgramService(store);
+      await programs.publish(
+        ProgramDefinition.fromJson(
+          _program([
+            for (final d in ['d1', 'd2', 'd3', 'd4']) _day(d, 'upper-a', 1),
+          ]),
+        ),
+        0,
+      );
+      await programs.create('run-1', 'upgrade-program', 1, _at(1), loop: false);
+      await advance(store, 'run-1', 's1', 1);
+      await advance(store, 'run-1', 's2', 2);
+      var run = await advance(store, 'run-1', 's3', 3);
+      equal(run.current!.path, 'cycle/d4');
+      // Back from travel: repeat from day 2.
+      run = await programs.jump(
+        'run-1',
+        run.contentVersion,
+        'cycle/d2',
+        'repeat-d2',
+        _at(4),
+      );
+      equal(run.cursor, 3);
+      equal(run.current!.path, 'cycle/d2');
+      final schedule = await programs.schedule('run-1');
+      equal(schedule['remaining'], 3);
+      jsonEqual(
+        [
+          for (final d in jsonList(schedule, 'days'))
+            jsonObject(d, 'd')['path'],
+        ],
+        ['cycle/d2', 'cycle/d3', 'cycle/d4'],
+      );
+      // Retry replays; reuse with other inputs, stale versions, the same
+      // day, unknown paths and a bound current day are refused.
+      final replay = await programs.jump(
+        'run-1',
+        run.contentVersion - 1,
+        'cycle/d2',
+        'repeat-d2',
+        _at(4),
+      );
+      equal(canonicalJson(replay.toJson()), canonicalJson(run.toJson()));
+      for (final attempt in [
+        () => programs.jump(
+          'run-1',
+          run.contentVersion,
+          'cycle/d3',
+          'repeat-d2',
+          _at(4),
+        ),
+        () => programs.jump(
+          'run-1',
+          run.contentVersion + 1,
+          'cycle/d3',
+          'other',
+          _at(4),
+        ),
+        () => programs.jump(
+          'run-1',
+          run.contentVersion,
+          'cycle/d2',
+          'same',
+          _at(4),
+        ),
+        () => programs.jump(
+          'run-1',
+          run.contentVersion,
+          'cycle/nope',
+          'unknown',
+          _at(4),
+        ),
+      ]) {
+        await failure(attempt);
+      }
+      run = await advance(store, 'run-1', 's4', 5);
+      equal(run.current!.path, 'cycle/d3');
+      run = await advance(store, 'run-1', 's5', 6);
+      run = await advance(store, 'run-1', 's6', 7);
+      equal(run.status, 'completed');
+      equal(run.cursor, 6);
+      // Repeat the last day after finishing: the run reopens.
+      run = await programs.jump(
+        'run-1',
+        run.contentVersion,
+        'cycle/d4',
+        'one-more',
+        _at(8),
+      );
+      equal(run.status, 'active');
+      final started = await programs.start(
+        'run-1',
+        run.contentVersion,
+        's7',
+        _at(9),
+      );
+      run = await programs.run('run-1');
+      final bound = await failure(
+        () => programs.jump(
+          'run-1',
+          run.contentVersion,
+          'cycle/d1',
+          'while-bound',
+          _at(9),
+        ),
+      );
+      check(bound.message.contains('already has a session'), bound.message);
+      await StoredTrainingService(store).edit('s7', started.contentVersion, (
+        s,
+      ) {
+        for (final set in s.sets) {
+          s = const TrainingService().complete(
+            s,
+            set.id,
+            const {},
+            acceptSuggested: true,
+          );
+        }
+        return s.finish(_at(9).add(const Duration(hours: 1)));
+      });
+      run = await programs.run('run-1');
+      equal(run.status, 'completed');
+      equal(run.cursor, 7);
+      // Sessions keep the day they ran as; archives validate through jumps.
+      final bindings = {
+        for (final b in await store.sessionPrograms()) b.sessionId: b.path,
+      };
+      equal(bindings['s4'], 'cycle/d2');
+      equal(bindings['s7'], 'cycle/d4');
+      final archive = await store.archive();
+      TrainingArchive.fromJson(archive.toJson());
+      await store.backup('$dir/native');
+      await (await NativeBackup.prepare('$dir/native')).close();
+      final forged = archive.toJson();
+      final runJson = jsonObject(
+        (forged['programRuns']! as List).single,
+        'run',
+      );
+      final jumps = runJson['jumps']! as List;
+      jsonObject(jumps.first, 'jump')['position'] = 2;
+      rejects(() => TrainingArchive.fromJson(forged));
+    }),
+  );
+
+  test(
+    'a looping run jumps within its current cycle and upgrades keep jumps',
+    () => withStore((store, _) async {
+      final programs = ProgramService(store);
+      await programs.publish(
+        ProgramDefinition.fromJson(
+          _program([_day('a', 'upper-a', 1), _day('b', 'upper-a', 1)]),
+        ),
+        0,
+      );
+      await programs.create('loop', 'upgrade-program', 1, _at(1), loop: true);
+      var run = await programs.run('loop');
+      for (var i = 0; i < 5; i++) {
+        run = await advance(store, 'loop', 'l$i', i + 1);
+      }
+      equal(run.current!.path, 'cycle/b');
+      run = await programs.jump(
+        'loop',
+        run.contentVersion,
+        'cycle/a',
+        'redo-a',
+        _at(6),
+      );
+      equal(run.positionAt(run.cursor), 4);
+      equal(run.current!.path, 'cycle/a');
+      await programs.publish(
+        ProgramDefinition.fromJson(
+          _program([_day('a', 'upper-a', 1), _day('b2', 'upper-a', 1)]),
+        ),
+        1,
+      );
+      await programs.upgrade('loop', run.contentVersion, 2, 'up', _at(7));
+      run = await programs.run('loop');
+      equal(run.jumps.length, 1);
+      run = await advance(store, 'loop', 'l5', 8);
+      equal(run.current!.path, 'cycle/b2');
+      TrainingArchive.fromJson((await store.archive()).toJson());
+    }),
+  );
+
+  test(
     'finite and looping runs apply their day-count rules differently',
     () => withStore((store, _) async {
       final programs = ProgramService(store);
