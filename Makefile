@@ -1,6 +1,6 @@
 DART ?= dart
 
-.PHONY: check format test analyze build flutter-check android-check
+.PHONY: check format test analyze build simulate flutter-check android-check
 check: analyze test
 	$(DART) --suppress-analytics format --output=none --set-exit-if-changed bin lib packages test
 
@@ -12,6 +12,11 @@ analyze:
 
 test:
 	$(DART) --suppress-analytics test test/all_tests.dart
+
+# Twelve-week usage simulation against the native CLI (about 8 minutes).
+# Writes build/simulation/journal.md, observations.md and calls.ndjson.
+simulate: build
+	$(DART) --suppress-analytics run tool/simulate.dart --out build/simulation
 
 build:
 	mkdir -p build
