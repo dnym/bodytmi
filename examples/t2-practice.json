@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "definition": {
+    "id": "bench-t2",
+    "name": "Bench T2",
+    "slots": [
+      {
+        "id": "bench",
+        "exercise": "bench-press",
+        "implementation": "barbell",
+        "targets": {
+          "load": {
+            "value": "40",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "10",
+            "unit": "rep"
+          }
+        },
+        "categories": {
+          "scheme": {
+            "values": [
+              "tens",
+              "eights",
+              "sixes"
+            ],
+            "default": "tens"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "workout",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "scheme",
+          "type": "variant",
+          "slot": "bench",
+          "lever": "scheme",
+          "branches": {
+            "tens": {
+              "id": "tens",
+              "type": "repeat",
+              "count": 3,
+              "restBetweenSeconds": 120,
+              "child": {
+                "id": "ten",
+                "type": "effort",
+                "slot": "bench",
+                "targets": {
+                  "reps": {
+                    "value": "10",
+                    "unit": "rep"
+                  }
+                }
+              }
+            },
+            "eights": {
+              "id": "eights",
+              "type": "repeat",
+              "count": 3,
+              "restBetweenSeconds": 120,
+              "child": {
+                "id": "eight",
+                "type": "effort",
+                "slot": "bench",
+                "targets": {
+                  "reps": {
+                    "value": "8",
+                    "unit": "rep"
+                  }
+                }
+              }
+            },
+            "sixes": {
+              "id": "sixes",
+              "type": "repeat",
+              "count": 3,
+              "restBetweenSeconds": 120,
+              "child": {
+                "id": "six",
+                "type": "effort",
+                "slot": "bench",
+                "targets": {
+                  "reps": {
+                    "value": "6",
+                    "unit": "rep"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

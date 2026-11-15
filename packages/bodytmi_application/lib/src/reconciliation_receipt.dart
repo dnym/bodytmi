@@ -85,7 +85,11 @@ final class ReconciliationReceipt implements ProgressionAnchor {
     this.sourceSessionId,
     Map<String, String> variantSelections = const {},
     this.retest,
-  }) : rule = _freeze(rule) as Map<String, Object?>,
+    Metrics? previousReference,
+  }) : previousReference = previousReference == null
+           ? null
+           : Map.unmodifiable(previousReference),
+       rule = _freeze(rule) as Map<String, Object?>,
        sets = List.unmodifiable(sets),
        variantSelections = Map.unmodifiable({
          for (final k in (variantSelections.keys.toList()..sort()))
@@ -233,6 +237,7 @@ final class ReconciliationReceipt implements ProgressionAnchor {
       'reconciledAt',
       'variantSelections',
       'retest',
+      'previousReference',
     });
     if (json.containsKey('variantSelections') &&
         jsonObject(json['variantSelections'], 'variantSelections').isEmpty)
@@ -289,6 +294,9 @@ final class ReconciliationReceipt implements ProgressionAnchor {
       retest: json.containsKey('retest')
           ? RetestProvenance.fromJson(json['retest'])
           : null,
+      previousReference: json.containsKey('previousReference')
+          ? metricsFromJson(json['previousReference'])
+          : null,
     );
     if (count('failedSessions', 0) != receipt.failedSessions ||
         (kind == 'threshold' && count('cursor', 0) != receipt.cursor))
@@ -324,6 +332,12 @@ final class ReconciliationReceipt implements ProgressionAnchor {
 
   /// Present when this receipt restarts the track from a named test result.
   final RetestProvenance? retest;
+
+  /// The superseded anchor's cycle reference; kept, except a retest restarts
+  /// the cycle without one.
+  final Metrics? previousReference;
+  @override
+  Metrics? get cycleReference => retest != null ? null : previousReference;
 
   @override
   late final Set<String> controlledMetrics = ruleType == 'double'
@@ -407,6 +421,8 @@ final class ReconciliationReceipt implements ProgressionAnchor {
     ],
     if (variantSelections.isNotEmpty) 'variantSelections': variantSelections,
     if (retest != null) 'retest': retest!.toJson(),
+    if (previousReference != null)
+      'previousReference': metricsToJson(previousReference!),
     'rule': rule,
     if (ruleType != 'double') 'ruleType': ruleType,
     if (ruleType == 'threshold') ...{
@@ -572,7 +588,17 @@ void validateProgressionReconciliations(
           receipt.previousCursor != state.cursor)
         invalid('Linked reconciliation counters differ from the shared track.');
     } else if (receipt.previousFailures != before.failedSessions ||
-        receipt.previousCursor != before.cursor)
+        receipt.previousCursor != before.cursor ||
+        canonicalJson(
+              receipt.previousReference == null
+                  ? null
+                  : metricsToJson(receipt.previousReference!),
+            ) !=
+            canonicalJson(
+              before.cycleReference == null
+                  ? null
+                  : metricsToJson(before.cycleReference!),
+            ))
       invalid('Reconciliation lineage is inconsistent.');
     if (canonicalJson(receipt.rule) != canonicalJson(before.rule) &&
         !receipt.acknowledgedKinds.contains('rule'))

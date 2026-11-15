@@ -993,7 +993,7 @@ final class Commands {
           request['state'] ?? <String, Object?>{},
           'state',
         );
-        checkKeys(state, {'failedSessions', 'cursor'});
+        checkKeys(state, {'failedSessions', 'cursor', 'reference'});
         final failures = state['failedSessions'] ?? 0;
         final cursor = state['cursor'] ?? 0;
         if (failures is! int || cursor is! int)
@@ -1016,6 +1016,9 @@ final class Commands {
               stage: request['stage'] == null
                   ? null
                   : identifier(request, 'stage'),
+              reference: state['reference'] == null
+                  ? null
+                  : metricsFromJson(state['reference']),
             )
             .toJson();
       case 'progression double':

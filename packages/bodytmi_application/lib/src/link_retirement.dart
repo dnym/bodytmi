@@ -158,6 +158,10 @@ final class LinkRetirementAnchor implements ProgressionAnchor {
   ];
   @override
   final int failedSessions;
+
+  /// Links reject staged rules, so retirements carry no cycle reference.
+  @override
+  Metrics? get cycleReference => null;
   final DateTime retiredAt;
 
   @override

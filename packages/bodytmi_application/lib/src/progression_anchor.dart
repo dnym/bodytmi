@@ -36,6 +36,9 @@ abstract interface class ProgressionAnchor {
   int get previousSequence;
   int get previousFailures;
   int get previousCursor;
+
+  /// Cycle-restart reference state (staged threshold rules), or null.
+  Metrics? get cycleReference;
   DateTime? get resolvedAt;
   String get status;
   String get contextKey;

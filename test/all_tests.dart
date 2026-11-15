@@ -77,6 +77,7 @@ import 'wave_test.dart';
 import 'catalog_acceptance_test.dart';
 import 'variant_derived_plan_test.dart';
 import 'retest_test.dart';
+import 'cycle_restart_test.dart';
 import 'quantity_test.dart';
 import 'workflow_test.dart';
 
@@ -149,6 +150,7 @@ Future<void> main() async {
   catalogAcceptanceTests();
   variantDerivedPlanTests();
   retestTests();
+  cycleRestartTests();
   runUpgradeTests();
   programOverrideTests();
   logicalArchiveTests();

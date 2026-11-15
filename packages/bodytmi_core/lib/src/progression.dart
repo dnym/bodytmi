@@ -24,6 +24,7 @@ final class ProgressionProposal {
     this.coordination,
     List<ScaleResolution> scaleResolutions = const [],
     this.nextStage,
+    this.nextReference,
   }) : scaleResolutions = List.unmodifiable(scaleResolutions),
        nextValues = Map.unmodifiable(nextValues);
   final String outcome;
@@ -39,12 +40,20 @@ final class ProgressionProposal {
 
   /// The stage value later sessions plan, for staged rules (null otherwise).
   final String? nextStage;
+
+  /// The cycle reference a cycle-restart rule carries forward (null when the
+  /// rule has no cycle restart or no reference is known yet).
+  final Metrics? nextReference;
   Map<String, Object?> toJson() => {
     'outcome': outcome,
     'reason': reason,
     'nextValues': metricsToJson(nextValues),
     if (nextStage != null) 'nextStage': nextStage,
-    'nextState': {'failedSessions': failedSessions, 'cursor': cursor},
+    'nextState': {
+      'failedSessions': failedSessions,
+      'cursor': cursor,
+      if (nextReference != null) 'reference': metricsToJson(nextReference!),
+    },
     'requiresAcceptance': true,
     if (assessment != null) 'assessment': assessment!.toJson(),
     if (effortAssessment != null)
@@ -87,9 +96,44 @@ final class ThresholdStage {
 /// holds every numeric setting; failing at the last stage applies the
 /// configured deload (if any) and restarts at the first stage. Stage order is
 /// authored; no difficulty is inferred from it.
+/// Restarting a failure-driven tier cycle heavier than a remembered reference
+/// (GZCLP T2: back to 10x3, slightly heavier than previously used). The
+/// reference is explicit track state: [basis] cycleStart remembers the values
+/// a cycle started with, firstStageExit the values at which the first stage
+/// was last left. The restart applies [increments] to that reference.
+final class CycleRestart {
+  CycleRestart._(this.basis, this.increments);
+  factory CycleRestart.fromJson(Object? input, Metrics ruleIncrements) {
+    final j = jsonObject(input, 'cycleRestart');
+    checkKeys(j, {'basis', 'increments'});
+    final basis = requiredString(j, 'basis');
+    if (basis != 'cycleStart' && basis != 'firstStageExit')
+      invalid('cycleRestart basis must be cycleStart or firstStageExit.');
+    final increments = metricsFromJson(j['increments']);
+    if (increments.isEmpty) invalid('cycleRestart needs increments.');
+    for (final e in increments.entries) {
+      if (ruleIncrements[e.key]?.dimension != e.value.dimension)
+        invalid('cycleRestart increments must name increment metrics.');
+    }
+    return CycleRestart._(basis, increments);
+  }
+  final String basis;
+  final Metrics increments;
+  Metrics referenceOf(Metrics values) =>
+      Map.unmodifiable({for (final key in increments.keys) key: values[key]!});
+  Map<String, Object?> toJson() => {
+    'basis': basis,
+    'increments': metricsToJson(increments),
+  };
+}
+
 final class ThresholdStages {
-  ThresholdStages._(this.lever, List<ThresholdStage> order, this.advanceOn)
-    : order = List.unmodifiable(order);
+  ThresholdStages._(
+    this.lever,
+    List<ThresholdStage> order,
+    this.advanceOn, [
+    this.cycleRestart,
+  ]) : order = List.unmodifiable(order);
   factory ThresholdStages.fromJson(
     Object? input, {
     required Dimension dimension,
@@ -98,7 +142,7 @@ final class ThresholdStages {
     Metrics increments = const {},
   }) {
     final json = jsonObject(input, 'stages');
-    checkKeys(json, {'lever', 'order', 'advanceOn'});
+    checkKeys(json, {'lever', 'order', 'advanceOn', 'cycleRestart'});
     final lever = identifier(json, 'lever');
     final advanceOn = json['advanceOn'] ?? 'failure';
     if (advanceOn != 'failure' && advanceOn != 'success')
@@ -141,8 +185,16 @@ final class ThresholdStages {
           !s.offsets.keys.every(keys.contains),
     ))
       invalid('Every stage declares offsets for the same metrics.');
-    return ThresholdStages._(lever, order, advanceOn as String);
+    final restart = json.containsKey('cycleRestart')
+        ? CycleRestart.fromJson(json['cycleRestart'], increments)
+        : null;
+    if (restart != null && advanceOn != 'failure')
+      invalid('cycleRestart applies to failure-driven stages only.');
+    return ThresholdStages._(lever, order, advanceOn as String, restart);
   }
+
+  /// Optional heavier cycle restart replacing the last-stage deload/restart.
+  final CycleRestart? cycleRestart;
   final String lever;
   final List<ThresholdStage> order;
 
@@ -173,6 +225,7 @@ final class ThresholdStages {
   Map<String, Object?> toJson() => {
     'lever': lever,
     if (advanceOn != 'failure') 'advanceOn': advanceOn,
+    if (cycleRestart != null) 'cycleRestart': cycleRestart!.toJson(),
     'order': [for (final s in order) s.toJson()],
   };
 }
@@ -558,6 +611,7 @@ final class ThresholdRule {
     int failedSessions = 0,
     int cursor = 0,
     String? stage,
+    Metrics? reference,
   }) => evaluateVector(
     currentSets: [current],
     results: results,
@@ -565,6 +619,7 @@ final class ThresholdRule {
     failedSessions: failedSessions,
     cursor: cursor,
     stage: stage,
+    reference: reference,
   ).single;
 
   /// Classify once. Chosen/priority advancement selects a whole-vector candidate.
@@ -577,6 +632,73 @@ final class ThresholdRule {
     int failedSessions = 0,
     int cursor = 0,
     String? stage,
+    Metrics? reference,
+  }) {
+    final restart = stages?.cycleRestart;
+    if (reference != null) {
+      if (restart == null)
+        invalid('Only cycle-restart rules carry a cycle reference.');
+      if (reference.length != restart.increments.length ||
+          restart.increments.entries.any(
+            (e) => reference[e.key]?.dimension != e.value.dimension,
+          ))
+        invalid('Cycle reference does not match the restart metrics.');
+    }
+    final proposals = _evaluateStaged(
+      currentSets: currentSets,
+      results: results,
+      observations: observations,
+      failedSessions: failedSessions,
+      cursor: cursor,
+      stage: stage,
+      reference: reference,
+    );
+    if (restart == null) return proposals;
+    final index = stages!.indexOf(stage!);
+    final last = stages!.order.length - 1;
+    return List.unmodifiable([
+      for (var i = 0; i < proposals.length; i++)
+        _withReference(proposals[i], () {
+          final p = proposals[i], current = restart.referenceOf(currentSets[i]);
+          final restarted =
+              p.outcome == 'stage' &&
+              index == last &&
+              p.nextStage == stages!.order.first.value;
+          if (restarted)
+            return restart.basis == 'cycleStart'
+                ? restart.referenceOf(p.nextValues)
+                : reference ?? current;
+          if (restart.basis == 'firstStageExit')
+            return p.outcome == 'stage' && index == 0 ? current : reference;
+          return reference ?? (index == 0 ? current : null);
+        }()),
+    ]);
+  }
+
+  ProgressionProposal _withReference(ProgressionProposal p, Metrics? ref) =>
+      ProgressionProposal(
+        p.outcome,
+        p.reason,
+        p.nextValues,
+        p.failedSessions,
+        p.cursor,
+        assessment: p.assessment,
+        effortAssessment: p.effortAssessment,
+        incrementBandAssessment: p.incrementBandAssessment,
+        coordination: p.coordination,
+        scaleResolutions: p.scaleResolutions,
+        nextStage: p.nextStage,
+        nextReference: ref,
+      );
+
+  List<ProgressionProposal> _evaluateStaged({
+    required List<Metrics> currentSets,
+    required List<Metrics?> results,
+    List<SetObservations?>? observations,
+    int failedSessions = 0,
+    int cursor = 0,
+    String? stage,
+    Metrics? reference,
   }) {
     if ((stages == null) != (stage == null))
       invalid(
@@ -637,6 +759,7 @@ final class ThresholdRule {
           effortAssessment: effortAssessment,
           incrementBandAssessment: incrementBandAssessment,
           stageIndex: stageIndex,
+          reference: reference,
         ),
     ];
     if (!hasSelectionPolicy) return List.unmodifiable(evaluate(null));
@@ -733,6 +856,7 @@ final class ThresholdRule {
     EffortAssessment? effortAssessment,
     IncrementBandAssessment? incrementBandAssessment,
     int? stageIndex,
+    Metrics? reference,
   }) {
     final scaleResolutions = <ScaleResolution>[];
     final currentStage = stageIndex == null
@@ -806,6 +930,36 @@ final class ThresholdRule {
       final restarted = last && failures >= deloadAfter
           ? stages!.shift(current, stageIndex, 0)
           : current;
+      final cycle = stages?.cycleRestart;
+      if (last &&
+          failures >= deloadAfter &&
+          restarted != null &&
+          cycle != null) {
+        // Back to the first stage, heavier than the remembered reference
+        // (or, before any reference is known, than the current values).
+        final next = <String, Quantity>{...restarted};
+        for (final e in cycle.increments.entries) {
+          final base = reference?[e.key] ?? restarted[e.key]!;
+          next[e.key] = base.add(e.value);
+        }
+        if ((hasNumericPolicy || hasScalePolicy) && !_withinBounds(next))
+          return proposal(
+            'blocked',
+            'A lever bound blocks the cycle restart; hold all changes.',
+            current,
+            failures,
+            cursor,
+          );
+        return proposal(
+          'stage',
+          'Last stage exhausted; restart the cycle heavier than its '
+              'reference.',
+          next,
+          0,
+          cursor,
+          stages!.order.first.value,
+        );
+      }
       if (restarted == null)
         return proposal(
           'blocked',

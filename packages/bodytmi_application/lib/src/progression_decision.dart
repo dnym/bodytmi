@@ -25,7 +25,11 @@ final class ProgressionDecision implements ProgressionAnchor {
     this.role = 'work',
     this.selectedLevel,
     this.preset,
-  }) : rule = _freeze(rule) as Map<String, Object?> {
+    Metrics? previousReference,
+  }) : rule = _freeze(rule) as Map<String, Object?>,
+       previousReference = previousReference == null
+           ? null
+           : Map.unmodifiable(previousReference) {
     if (preset case (:final id, :final revision)) {
       identifier({'id': id}, 'id');
       if (revision < 1) invalid('Invalid progression preset reference.');
@@ -84,6 +88,7 @@ final class ProgressionDecision implements ProgressionAnchor {
       'role',
       'selectedLevel',
       'preset',
+      'previousReference',
     });
     int count(String key, int min) {
       final v = j[key];
@@ -124,6 +129,9 @@ final class ProgressionDecision implements ProgressionAnchor {
       preset: j.containsKey('preset')
           ? presetReferenceFromJson(j['preset'])
           : null,
+      previousReference: j.containsKey('previousReference')
+          ? metricsFromJson(j['previousReference'])
+          : null,
     );
     if (canonicalJson(j['proposal']) !=
         canonicalJson(decision.proposal.toJson()))
@@ -146,6 +154,12 @@ final class ProgressionDecision implements ProgressionAnchor {
   final String ruleType;
   final String role;
   final int previousCursor;
+
+  /// The cycle reference this exposure started from (cycle-restart rules).
+  final Metrics? previousReference;
+  @override
+  Metrics? get cycleReference =>
+      declinedAt != null ? previousReference : proposal.nextReference;
 
   /// The declared successor chosen when accepting an ordinal branch choice.
   final String? selectedLevel;
@@ -243,6 +257,7 @@ final class ProgressionDecision implements ProgressionAnchor {
           previousFailures,
           previousCursor,
           withCursor: ruleType == 'threshold',
+          reference: previousReference,
         )
       : _evaluated;
   late final ProgressionEvaluation _evaluated = switch (ruleType) {
@@ -251,6 +266,7 @@ final class ProgressionDecision implements ProgressionAnchor {
       sets,
       previousFailures,
       previousCursor,
+      previousReference,
     ),
     'ordinal' => ProgressionEvaluation.ordinal(
       OrdinalRule.fromJson(rule),
@@ -291,6 +307,7 @@ final class ProgressionDecision implements ProgressionAnchor {
         role: role,
         selectedLevel: selectedLevel,
         preset: preset,
+        previousReference: previousReference,
       );
   ProgressionDecision decline(DateTime at) => ProgressionDecision(
     session: session,
@@ -307,6 +324,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     previousCursor: previousCursor,
     role: role,
     preset: preset,
+    previousReference: previousReference,
   );
   Map<String, Object?> toJson() => {
     'session': session.toJson(),
@@ -323,6 +341,8 @@ final class ProgressionDecision implements ProgressionAnchor {
     if (runId != null) 'runId': runId,
     if (ruleType != 'double') 'ruleType': ruleType,
     if (ruleType == 'threshold') 'previousCursor': previousCursor,
+    if (previousReference != null)
+      'previousReference': metricsToJson(previousReference!),
     if (selectedLevel != null) 'selectedLevel': selectedLevel,
     if (preset case (:final id, :final revision))
       'preset': {'id': id, 'revision': revision},
@@ -450,8 +470,10 @@ void validateProgressionDecisions(
           d.previousSequence != 0 ||
           d.previousFailures != 0)
         invalid('Progression base application is missing.');
-      if (d.previousCursor != 0)
-        invalid('Initial coordinator cursor must be zero.');
+      if (d.previousCursor != 0 || d.previousReference != null)
+        invalid(
+          'Initial coordinator cursor and cycle reference must be empty.',
+        );
     } else {
       final shared = link == null
           ? null
@@ -466,7 +488,9 @@ void validateProgressionDecisions(
         invalid('Progression lineage is inconsistent.');
       if (link == null) {
         if (d.previousFailures != before.failedSessions ||
-            d.previousCursor != before.cursor)
+            d.previousCursor != before.cursor ||
+            canonicalJson(_referenceJson(d.previousReference)) !=
+                canonicalJson(_referenceJson(before.cycleReference)))
           invalid('Progression lineage is inconsistent.');
         if (!matchesProgressionBaseline(d, before))
           invalid('Progression baseline is inconsistent.');
@@ -605,3 +629,6 @@ bool matchesSessionProgressionBaseline(
   }
   return true;
 }
+
+Object? _referenceJson(Metrics? reference) =>
+    reference == null ? null : metricsToJson(reference);

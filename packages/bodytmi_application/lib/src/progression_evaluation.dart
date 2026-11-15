@@ -18,7 +18,11 @@ final class ProgressionEvaluation {
     this._ordinal,
     this._withCursor = true,
     this.nextStage,
+    this.nextReference,
   ]);
+
+  /// The cycle reference a cycle-restart rule carries forward, or null.
+  final Metrics? nextReference;
 
   /// The stage a staged threshold rule plans next (held unless it moved).
   final String? nextStage;
@@ -30,6 +34,7 @@ final class ProgressionEvaluation {
     int failures,
     int cursor, {
     required bool withCursor,
+    Metrics? reference,
   }) => ProgressionEvaluation._(
     'review',
     'Sets were performed with categorical settings that differ from plan; '
@@ -45,6 +50,8 @@ final class ProgressionEvaluation {
     null,
     null,
     withCursor,
+    null,
+    reference,
   );
   final bool _withCursor;
   factory ProgressionEvaluation.double(DoubleProgressionProposal p) =>
@@ -65,8 +72,9 @@ final class ProgressionEvaluation {
     ThresholdRule rule,
     List<TrainingSet> sets,
     int failures,
-    int cursor,
-  ) {
+    int cursor, [
+    Metrics? reference,
+  ]) {
     final controlled = {
       ...rule.increments.keys,
       ...rule.resets.keys,
@@ -113,6 +121,7 @@ final class ProgressionEvaluation {
       failedSessions: failures,
       cursor: cursor,
       stage: stage,
+      reference: reference,
     );
     final first = proposals.first;
     final changed =
@@ -162,6 +171,7 @@ final class ProgressionEvaluation {
       null,
       true,
       hold ? stage : first.nextStage,
+      hold ? reference : first.nextReference,
     );
   }
 
@@ -257,6 +267,7 @@ final class ProgressionEvaluation {
         'nextState': {
           'failedSessions': failedSessions,
           if (_withCursor) 'cursor': cursor,
+          if (nextReference != null) 'reference': metricsToJson(nextReference!),
         },
         if (nextStage != null) 'nextStage': nextStage,
         'requiresAcceptance': true,

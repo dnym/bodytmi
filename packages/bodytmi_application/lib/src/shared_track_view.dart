@@ -71,6 +71,8 @@ final class SharedTrackView implements ProgressionAnchor {
   Set<String> get controlledSettings => local.controlledSettings;
   @override
   List<Map<String, String>> get nextSettings => local.nextSettings;
+  @override
+  Metrics? get cycleReference => local.cycleReference;
 
   /// A shared metric's target wins; all other controlled metrics stay local.
   @override

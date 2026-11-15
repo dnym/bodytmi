@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "sessionId": "bench-sixes-001",
+  "slotId": "bench",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "reps",
+    "performance": {
+      "direction": "higher",
+      "failureLimit": {
+        "value": "30",
+        "unit": "rep"
+      },
+      "advancementLimit": {
+        "value": "30",
+        "unit": "rep"
+      }
+    },
+    "aggregation": {
+      "mode": "total"
+    },
+    "failureAggregation": {
+      "mode": "total"
+    },
+    "increments": {
+      "load": {
+        "value": "2.5",
+        "unit": "kg"
+      }
+    },
+    "deloadAfter": 1,
+    "stages": {
+      "lever": "scheme",
+      "order": [
+        {
+          "value": "tens",
+          "failureLimit": {
+            "value": "30",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "30",
+            "unit": "rep"
+          }
+        },
+        {
+          "value": "eights",
+          "failureLimit": {
+            "value": "24",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "24",
+            "unit": "rep"
+          }
+        },
+        {
+          "value": "sixes",
+          "failureLimit": {
+            "value": "18",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "18",
+            "unit": "rep"
+          }
+        }
+      ],
+      "cycleRestart": {
+        "basis": "cycleStart",
+        "increments": {
+          "load": {
+            "value": "5",
+            "unit": "kg"
+          }
+        }
+      }
+    }
+  }
+}

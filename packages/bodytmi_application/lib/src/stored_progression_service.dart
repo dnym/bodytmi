@@ -570,6 +570,7 @@ final class StoredProgressionService {
       previousCursor: before?.cursor ?? 0,
       role: role,
       preset: preset,
+      previousReference: before?.cycleReference,
     );
     final comparable = next.toJson()
       ..['version'] = existing?.version ?? next.version;
@@ -959,6 +960,7 @@ final class StoredProgressionService {
       previousSequence: base.sequence,
       previousFailures: base.failedSessions,
       previousCursor: base.cursor,
+      previousReference: base.cycleReference,
       reconciledAt: reconciledAt,
       acknowledgedKinds: kinds,
       resetFailures: resetFailures,
@@ -1177,6 +1179,7 @@ final class StoredProgressionService {
       previousSequence: base.sequence,
       previousFailures: base.failedSessions,
       previousCursor: base.cursor,
+      previousReference: base.cycleReference,
       reconciledAt: reseededAt,
       acknowledgedKinds: const [],
       resetFailures: true,
