@@ -61,13 +61,24 @@ final class ProgressionProposal {
 /// lever (typically a variant set scheme) with its own inclusive performance
 /// limits, since each structure has its own success criterion.
 final class ThresholdStage {
-  const ThresholdStage(this.value, this.failureLimit, this.advancementLimit);
+  const ThresholdStage(
+    this.value,
+    this.failureLimit,
+    this.advancementLimit, [
+    this.offsets = const {},
+  ]);
   final String value;
   final Quantity failureLimit, advancementLimit;
+
+  /// Nonnegative amounts this stage adds to the base of each offset metric
+  /// (wave loading: A +0, B +5 kg, C +10 kg). Moving between stages shifts
+  /// the current value by the offset difference.
+  final Metrics offsets;
   Map<String, Object?> toJson() => {
     'value': value,
     'failureLimit': failureLimit.toJson(),
     'advancementLimit': advancementLimit.toJson(),
+    if (offsets.isNotEmpty) 'offsets': metricsToJson(offsets),
   };
 }
 
@@ -77,24 +88,33 @@ final class ThresholdStage {
 /// configured deload (if any) and restarts at the first stage. Stage order is
 /// authored; no difficulty is inferred from it.
 final class ThresholdStages {
-  ThresholdStages._(this.lever, List<ThresholdStage> order)
+  ThresholdStages._(this.lever, List<ThresholdStage> order, this.advanceOn)
     : order = List.unmodifiable(order);
   factory ThresholdStages.fromJson(
     Object? input, {
     required Dimension dimension,
     required String direction,
     required bool sameScope,
+    Metrics increments = const {},
   }) {
     final json = jsonObject(input, 'stages');
-    checkKeys(json, {'lever', 'order'});
+    checkKeys(json, {'lever', 'order', 'advanceOn'});
     final lever = identifier(json, 'lever');
+    final advanceOn = json['advanceOn'] ?? 'failure';
+    if (advanceOn != 'failure' && advanceOn != 'success')
+      invalid('Stages advanceOn must be failure or success.');
     final raw = jsonList(json, 'order');
     if (raw.length < 2 || raw.length > 64)
       invalid('Staged threshold rules need 2–64 stages.');
     final order = <ThresholdStage>[];
     for (final item in raw) {
       final stage = jsonObject(item, 'stage');
-      checkKeys(stage, {'value', 'failureLimit', 'advancementLimit'});
+      checkKeys(stage, {
+        'value',
+        'failureLimit',
+        'advancementLimit',
+        'offsets',
+      });
       final value = identifier(stage, 'value');
       if (order.any((s) => s.value == value))
         invalid('Stage $value occurs more than once.');
@@ -105,12 +125,45 @@ final class ThresholdStages {
       final c = failure.compareTo(advancement);
       if (sameScope && (direction == 'higher' ? c > 0 : c < 0))
         invalid('Stage $value limits contradict the performance direction.');
-      order.add(ThresholdStage(value, failure, advancement));
+      final offsets = stage.containsKey('offsets')
+          ? metricsFromJson(stage['offsets'])
+          : const <String, Quantity>{};
+      for (final e in offsets.entries) {
+        if (increments[e.key]?.dimension != e.value.dimension)
+          invalid('Stage offsets must name increment metrics.');
+      }
+      order.add(ThresholdStage(value, failure, advancement, offsets));
     }
-    return ThresholdStages._(lever, order);
+    final keys = order.first.offsets.keys.toSet();
+    if (order.any(
+      (s) =>
+          s.offsets.length != keys.length ||
+          !s.offsets.keys.every(keys.contains),
+    ))
+      invalid('Every stage declares offsets for the same metrics.');
+    return ThresholdStages._(lever, order, advanceOn as String);
   }
   final String lever;
   final List<ThresholdStage> order;
+
+  /// failure: move on reaching deloadAfter failed exposures (tiers).
+  /// success: move on advancement; the wrap applies increments (waves).
+  final String advanceOn;
+
+  /// [values] moved from stage [from] to [to] by the offset difference, or
+  /// null when a value would become negative.
+  Metrics? shift(Metrics values, int from, int to) {
+    final next = <String, Quantity>{...values};
+    for (final e in order[from].offsets.entries) {
+      final current = values[e.key]!;
+      final shifted =
+          current.value - e.value.value + order[to].offsets[e.key]!.value;
+      if (shifted.compareTo(Decimal.zero) < 0) return null;
+      next[e.key] = Quantity(shifted.toString(), current.unit.name);
+    }
+    return next;
+  }
+
   int indexOf(String value) {
     final i = order.indexWhere((s) => s.value == value);
     if (i < 0) invalid('Current stage $value is not declared by the rule.');
@@ -119,6 +172,7 @@ final class ThresholdStages {
 
   Map<String, Object?> toJson() => {
     'lever': lever,
+    if (advanceOn != 'failure') 'advanceOn': advanceOn,
     'order': [for (final s in order) s.toJson()],
   };
 }
@@ -355,6 +409,7 @@ final class ThresholdRule {
               sameScope:
                   (aggregation.mode == 'total') ==
                   (failureAggregation.mode == 'total'),
+              increments: increments,
             )
           : null,
     );
@@ -616,31 +671,53 @@ final class ThresholdRule {
     if (assessment.failed) {
       final failures =
           failedSessions + 1; // one exposure, regardless of failed set count
-      final last = stageIndex != null && stageIndex == stages!.order.length - 1;
-      if (failures >= deloadAfter && stageIndex != null && !last)
+      final tiered = stageIndex != null && stages!.advanceOn == 'failure';
+      final last = tiered && stageIndex == stages!.order.length - 1;
+      if (failures >= deloadAfter && tiered && !last) {
+        final shifted = stages!.shift(current, stageIndex, stageIndex + 1);
+        if (shifted == null)
+          return proposal(
+            'blocked',
+            'A stage offset would make a setting negative; hold all changes.',
+            current,
+            failures,
+            cursor,
+          );
         return proposal(
           'stage',
           'Failed-exposure threshold reached; move to the next stage and '
-              'hold every numeric setting.',
-          current,
+              'hold every numeric setting apart from stage offsets.',
+          shifted,
           0,
           cursor,
           stages!.order[stageIndex + 1].value,
+        );
+      }
+      final restarted = last && failures >= deloadAfter
+          ? stages!.shift(current, stageIndex, 0)
+          : current;
+      if (restarted == null)
+        return proposal(
+          'blocked',
+          'A stage offset would make a setting negative; hold all changes.',
+          current,
+          failures,
+          cursor,
         );
       if (failures >= deloadAfter && last && deloadMetrics.isEmpty)
         return proposal(
           'stage',
           'Failed-exposure threshold reached at the last stage; restart at '
               'the first stage without a configured deload.',
-          current,
+          restarted,
           0,
           cursor,
           stages!.order.first.value,
         );
       if (failures >= deloadAfter && deloadMetrics.isNotEmpty) {
-        final next = <String, Quantity>{...current};
+        final next = <String, Quantity>{...restarted};
         for (final key in deloadMetrics) {
-          final value = current[key]!;
+          final value = restarted[key]!;
           var target = Quantity(
             (value.value *
                     (decreases(key)
@@ -724,14 +801,43 @@ final class ThresholdRule {
         cursor,
       );
     }
+    // Waves: success moves to the next stage by its offsets; only the wrap
+    // from the last stage to the first applies the rule's increments.
+    var base = current;
+    if (stageIndex != null && stages!.advanceOn == 'success') {
+      final wraps = stageIndex == stages!.order.length - 1;
+      final target = wraps ? 0 : stageIndex + 1;
+      final shifted = stages!.shift(current, stageIndex, target);
+      if (shifted == null)
+        return proposal(
+          'blocked',
+          'A stage offset would make a setting negative; hold all changes.',
+          current,
+          0,
+          cursor,
+        );
+      if (!wraps)
+        return proposal(
+          'stage',
+          'Advancement reached; move to the next stage by its offsets.',
+          shifted,
+          0,
+          cursor,
+          stages!.order[target].value,
+        );
+      base = shifted;
+    }
+    final wrapStage = stageIndex != null && stages!.advanceOn == 'success'
+        ? stages!.order.first.value
+        : null;
     final selected = selectedMetric != null
         ? [selectedMetric]
         : sequence == null
         ? increments.keys.toList()
         : [sequence![cursor]];
-    final next = <String, Quantity>{...current};
+    final next = <String, Quantity>{...base};
     for (final key in selected) {
-      final prior = current[key]!;
+      final prior = base[key]!;
       final step = (incrementBandAssessment?.increments ?? increments)[key]!;
       if (prior.dimension != step.dimension)
         invalid('Increment dimension mismatch.');
@@ -809,6 +915,7 @@ final class ThresholdRule {
       next,
       0,
       sequence == null ? cursor : (cursor + 1) % sequence!.length,
+      wrapStage,
     );
   }
 }

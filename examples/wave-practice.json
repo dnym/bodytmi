@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "definition": {
+    "id": "squat-wave",
+    "name": "Squat wave",
+    "slots": [
+      {
+        "id": "squat",
+        "exercise": "squat",
+        "implementation": "barbell",
+        "targets": {
+          "load": {
+            "value": "70",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "8",
+            "unit": "rep"
+          }
+        },
+        "categories": {
+          "wave": {
+            "values": [
+              "eights",
+              "sixes",
+              "fours"
+            ],
+            "default": "eights"
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "workout",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "wave",
+          "type": "variant",
+          "slot": "squat",
+          "lever": "wave",
+          "branches": {
+            "eights": {
+              "id": "eights",
+              "type": "repeat",
+              "count": 3,
+              "restBetweenSeconds": 120,
+              "child": {
+                "id": "eights-set",
+                "type": "effort",
+                "slot": "squat",
+                "targets": {
+                  "reps": {
+                    "value": "8",
+                    "unit": "rep"
+                  }
+                }
+              }
+            },
+            "sixes": {
+              "id": "sixes",
+              "type": "repeat",
+              "count": 3,
+              "restBetweenSeconds": 120,
+              "child": {
+                "id": "sixes-set",
+                "type": "effort",
+                "slot": "squat",
+                "targets": {
+                  "reps": {
+                    "value": "6",
+                    "unit": "rep"
+                  }
+                }
+              }
+            },
+            "fours": {
+              "id": "fours",
+              "type": "repeat",
+              "count": 3,
+              "restBetweenSeconds": 120,
+              "child": {
+                "id": "fours-set",
+                "type": "effort",
+                "slot": "squat",
+                "targets": {
+                  "reps": {
+                    "value": "4",
+                    "unit": "rep"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

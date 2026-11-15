@@ -173,7 +173,10 @@ final class ProgressionDecision implements ProgressionAnchor {
   /// Decline holds targets, but the confirmed exposure's classification still
   /// resolves exactly once. Declining a deload never grants its counter reset.
   int get failedSessions =>
-      declinedAt != null && const {'deload', 'stage'}.contains(proposal.outcome)
+      declinedAt != null &&
+          (proposal.outcome == 'deload' ||
+              (proposal.outcome == 'stage' &&
+                  ThresholdRule.fromJson(rule).stages?.advanceOn == 'failure'))
       ? previousFailures + 1
       : proposal.failedSessions;
   List<Metrics> get nextSets => selectedLevel != null

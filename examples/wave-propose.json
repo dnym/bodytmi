@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "sessionId": "wave-001",
+  "slotId": "squat",
+  "ruleType": "threshold",
+  "rule": {
+    "metric": "reps",
+    "performance": {
+      "direction": "higher",
+      "failureLimit": {
+        "value": "8",
+        "unit": "rep"
+      },
+      "advancementLimit": {
+        "value": "8",
+        "unit": "rep"
+      }
+    },
+    "increments": {
+      "load": {
+        "value": "2.5",
+        "unit": "kg"
+      }
+    },
+    "stages": {
+      "lever": "wave",
+      "advanceOn": "success",
+      "order": [
+        {
+          "value": "eights",
+          "failureLimit": {
+            "value": "8",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "8",
+            "unit": "rep"
+          },
+          "offsets": {
+            "load": {
+              "value": "0",
+              "unit": "kg"
+            }
+          }
+        },
+        {
+          "value": "sixes",
+          "failureLimit": {
+            "value": "6",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "6",
+            "unit": "rep"
+          },
+          "offsets": {
+            "load": {
+              "value": "5",
+              "unit": "kg"
+            }
+          }
+        },
+        {
+          "value": "fours",
+          "failureLimit": {
+            "value": "4",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "4",
+            "unit": "rep"
+          },
+          "offsets": {
+            "load": {
+              "value": "10",
+              "unit": "kg"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
