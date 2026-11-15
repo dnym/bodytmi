@@ -160,6 +160,7 @@ const storedCommandNames = [
   'progression show',
   'progression accept',
   'progression decline',
+  'progression reopen',
   'program publish',
   'program show',
   'program list',
@@ -775,6 +776,13 @@ Future<Map<String, Object?>> executeStored(
       'role',
       'expectedVersion',
       'declinedAt',
+    },
+    'progression reopen' => {
+      'sessionId',
+      'slotId',
+      'role',
+      'expectedVersion',
+      'confirm',
     },
     'import preview' => {'document'},
     'import apply' => {'document', 'importedAt', 'onChanged', 'confirm'},
@@ -1839,6 +1847,7 @@ Future<Map<String, Object?>> executeStored(
       case 'progression show':
       case 'progression accept':
       case 'progression decline':
+      case 'progression reopen':
         final progression = StoredProgressionService(store);
         final sessionId = identifier(request, 'sessionId');
         final slotId = identifier(request, 'slotId');
@@ -1888,6 +1897,13 @@ Future<Map<String, Object?>> executeStored(
               integer('expectedVersion'),
               parseInstant(request['declinedAt'], 'declinedAt'),
               role: role,
+            ),
+            'progression reopen' => await progression.reopen(
+              sessionId,
+              slotId,
+              integer('expectedVersion'),
+              role: role,
+              confirm: flag('confirm'),
             ),
             _ => await progression.decision(sessionId, slotId, role: role),
           };

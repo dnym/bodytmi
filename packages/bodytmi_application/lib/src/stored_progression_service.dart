@@ -810,6 +810,104 @@ final class StoredProgressionService {
     return declined;
   });
 
+  /// Reopens a resolved exposure whose source session was corrected after the
+  /// decision: the decision becomes pending again, re-evaluated from the
+  /// current results against the same prior track state (previous anchor,
+  /// sequence, counter, cursor and reference), for an explicit new accept or
+  /// decline. Only the head of an unlinked track whose template/run has no
+  /// later session can reopen, because nothing else has consumed the old
+  /// result yet; otherwise reconcile instead.
+  Future<ProgressionDecision> reopen(
+    String sessionId,
+    String slotId,
+    int expectedVersion, {
+    String role = 'work',
+    required bool confirm,
+  }) => repository.transaction(() async {
+    if (!confirm)
+      invalid('Reopening a resolved decision requires confirm:true.');
+    final resolved = await decision(sessionId, slotId, role: role);
+    if (resolved.version != expectedVersion)
+      _conflict('Progression decision version changed.');
+    if (resolved.resolvedAt == null)
+      _conflict('This exposure is still pending; propose again instead.');
+    final session = await StoredTrainingService(repository).session(sessionId);
+    if (canonicalJson(session.toJson()) ==
+        canonicalJson(resolved.session.toJson()))
+      _conflict(
+        'The source session is unchanged since this decision; there is '
+        'nothing to re-decide.',
+      );
+    final bindings = await repository.sessionPrograms();
+    final runId = bindings
+        .where((b) => b.sessionId == sessionId)
+        .firstOrNull
+        ?.runId;
+    if (runId != resolved.runId)
+      _conflict('The source session moved to another run.');
+    final latest = latestTrack(
+      await trackDecisions(
+        repository,
+        resolved.session.definition.id,
+        resolved.slot,
+        runId: runId,
+        role: role,
+      ),
+      <ProgressionAnchor>[...await _reconciliations(), ...await _retirements()],
+      resolved.session.definition.id,
+      resolved.slot,
+      runId: runId,
+      role: role,
+    );
+    if (latest?.id != resolved.id)
+      _conflict(
+        'A later decision, reconciliation or retirement already continues '
+        'this track; reconcile instead.',
+      );
+    final runBySession = {for (final b in bindings) b.sessionId: b.runId};
+    final later =
+        (await repository.sessions(
+          templateId: resolved.session.definition.id,
+        )).where(
+          (s) =>
+              s.id != sessionId &&
+              runBySession[s.id] == runId &&
+              s.startedAt.isAfter(resolved.session.startedAt),
+        );
+    if (later.isNotEmpty)
+      _conflict(
+        'Session ${later.first.id} started after this exposure and may have '
+        'used its result; reconcile instead.',
+      );
+    if (linkedContextFor(
+          await _links(),
+          resolved,
+          resolved.session.startedAt,
+        ) !=
+        null)
+      _conflict(
+        'Shared lever tracks cannot reopen a resolved exposure; reconcile '
+        'or retire instead.',
+      );
+    final reopened = ProgressionDecision(
+      session: session,
+      slotId: slotId,
+      rule: resolved.rule,
+      previousApplication: resolved.previousApplication,
+      previousSequence: resolved.previousSequence,
+      previousFailures: resolved.previousFailures,
+      version: resolved.version + 1,
+      runId: runId,
+      ruleType: resolved.ruleType,
+      previousCursor: resolved.previousCursor,
+      role: role,
+      preset: resolved.preset,
+      previousReference: resolved.previousReference,
+    );
+    await repository.saveProgressionDecision(reopened, reopening: true);
+    return reopened;
+  });
+
   /// Enforcement stays with the predicates above; this only explains them with
   /// the same comparison that `progression reconcile-status` reports.
   /// One stored reconciliation by identity.

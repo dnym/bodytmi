@@ -526,7 +526,10 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<void> saveProgressionDecision(ProgressionDecision decision) async {
+  Future<void> saveProgressionDecision(
+    ProgressionDecision decision, {
+    bool reopening = false,
+  }) async {
     final snapshot = canonicalJson(decision.toJson());
     if (utf8.encode(snapshot).length > 8 * 1024 * 1024)
       invalid('Progression decision exceeds the 8 MiB resource limit.');
@@ -539,7 +542,18 @@ final class TrainingStore implements TrainingRepository {
             .getSingleOrNull();
     if (old != null) {
       final previous = ProgressionDecision.fromJson(jsonDecode(old.snapshot));
+      final reopens =
+          reopening &&
+          decision.resolvedAt == null &&
+          decision.version == previous.version + 1 &&
+          decision.ruleType == previous.ruleType &&
+          canonicalJson(decision.rule) == canonicalJson(previous.rule) &&
+          decision.previousApplication == previous.previousApplication &&
+          decision.previousSequence == previous.previousSequence &&
+          decision.previousFailures == previous.previousFailures &&
+          decision.previousCursor == previous.previousCursor;
       if (previous.resolvedAt != null &&
+          !reopens &&
           canonicalJson(previous.toJson()) !=
               canonicalJson(decision.toJson())) {
         throw const BodyTmiException(

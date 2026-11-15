@@ -69,7 +69,13 @@ abstract interface class TrainingRepository {
     String? runId,
     bool Function(ProgressionDecision) where,
   );
-  Future<void> saveProgressionDecision(ProgressionDecision decision);
+
+  /// Resolved decisions are immutable, except that [reopening] may replace
+  /// one with the next pending version of the same exposure and prior state.
+  Future<void> saveProgressionDecision(
+    ProgressionDecision decision, {
+    bool reopening = false,
+  });
   Future<List<ReconciliationReceipt>> progressionReconciliations();
   Future<void> saveProgressionReconciliation(ReconciliationReceipt receipt);
   Future<List<LeverLinkRevision>> leverLinkRevisions();
