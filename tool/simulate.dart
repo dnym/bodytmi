@@ -2171,6 +2171,17 @@ Future<void> main(List<String> args) async {
   out = Directory(outPath)..createSync(recursive: true);
   db = '${out.absolute.path}/profile.sqlite';
   if (finalOnly) {
+    for (final name in [
+      'archive.json',
+      'restored.sqlite',
+      'recovery',
+      'backup',
+    ]) {
+      final entity = File('${out.path}/$name').existsSync()
+          ? File('${out.path}/$name') as FileSystemEntity
+          : Directory('${out.path}/$name');
+      if (entity.existsSync()) entity.deleteSync(recursive: true);
+    }
     calls = File('${out.path}/final-calls.ndjson').openWrite();
     try {
       await finalChecks();
@@ -2181,7 +2192,7 @@ Future<void> main(List<String> args) async {
     return;
   }
   for (final f in out.listSync()) {
-    if (f is File) f.deleteSync();
+    f.deleteSync(recursive: true);
   }
   calls = File('${out.path}/calls.ndjson').openWrite();
   final status = await simulate().then(
