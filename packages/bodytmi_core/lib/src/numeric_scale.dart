@@ -49,6 +49,25 @@ final class FixedScaleRange {
 
 final class NumericScale {
   NumericScale._(this.id, this.unit, this.ticks, this.range);
+
+  /// A scale of derived positions, such as every weight a bar's declared
+  /// plates can make. It is computed from frozen data, never authored or
+  /// stored, so the 1000-tick authoring limit does not apply (100000 does).
+  factory NumericScale.derived(String id, Unit unit, List<Quantity> ascending) {
+    identifier({'id': id}, 'id');
+    if (ascending.isEmpty || ascending.length > 100000)
+      invalid('A derived scale needs 1 to 100000 positions.');
+    final ticks = <ScaleTick>[];
+    for (var i = 0; i < ascending.length; i++) {
+      final quantity = ascending[i];
+      if (quantity.dimension != unit.dimension)
+        invalid('Derived scale positions must match the scale unit.');
+      if (ticks.isNotEmpty && ticks.last.quantity.compareTo(quantity) >= 0)
+        invalid('Derived scale positions must strictly increase.');
+      ticks.add(ScaleTick._('$id-$i', quantity, const {}));
+    }
+    return NumericScale._(id, unit, List.unmodifiable(ticks), null);
+  }
   factory NumericScale.fromJson(Object? input) {
     final j = jsonObject(input, 'numeric scale');
     checkKeys(j, {'id', 'unit', 'ticks', 'range'});
@@ -253,19 +272,42 @@ final class ScaleResolution {
 
 /// Frozen rule binding, independent of a mutable inventory/catalog lookup.
 final class ScaleBinding {
-  ScaleBinding._(this.scale, this.rounding, this.deloadRounding);
+  ScaleBinding._(this._scale, this.rounding, this.deloadRounding);
+
+  /// Either an authored `scale`, or `instance: true`: the positions of the
+  /// equipment instance an exposure was performed on (every total its
+  /// declared plates can make, or its selector markings), bound by the
+  /// stored progression from the frozen session before evaluation.
   factory ScaleBinding.fromJson(Object? input) {
     final j = jsonObject(input, 'scale binding');
-    checkKeys(j, {'scale', 'rounding', 'deloadRounding'});
+    checkKeys(j, {'scale', 'instance', 'rounding', 'deloadRounding'});
+    if (j.containsKey('scale') == j.containsKey('instance'))
+      invalid('A scale binding names exactly one of scale or instance.');
+    if (j.containsKey('instance') && j['instance'] != true)
+      invalid('An instance scale binding is written instance: true.');
     final rounding = NumericScale.roundingPolicy(j['rounding']);
     return ScaleBinding._(
-      NumericScale.fromJson(j['scale']),
+      j.containsKey('scale') ? NumericScale.fromJson(j['scale']) : null,
       rounding,
       j.containsKey('deloadRounding')
           ? NumericScale.roundingPolicy(j['deloadRounding'])
           : rounding,
     );
   }
-  final NumericScale scale;
+  final NumericScale? _scale;
   final String rounding, deloadRounding;
+
+  /// Whether this binding takes its positions from the instance used.
+  bool get fromInstance => _scale == null;
+  NumericScale get scale =>
+      _scale ??
+      invalid(
+        'This rule rounds to the equipment instance used; evaluate it from a '
+        'stored session whose sets have an instance with declared loading '
+        'or a selector scale.',
+      );
+
+  /// This binding with the instance's positions in place.
+  ScaleBinding bound(NumericScale positions) =>
+      ScaleBinding._(positions, rounding, deloadRounding);
 }

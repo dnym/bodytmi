@@ -90,3 +90,30 @@ List<TrainingSet> asFollowed(
         set,
   ];
 }
+
+/// [rule] with its instance-bound scales (`instance: true`) replaced by the
+/// positions of the instance next targets will be loaded on: the session's
+/// binding for the slot (a machine borrowed for one day via performedOn does
+/// not move the track), else the one instance all [sets] were performed on.
+/// The declared full stock counts, since missing plates are back next time.
+ThresholdRule boundToInstance(
+  ThresholdRule rule,
+  TrainingSession session,
+  List<TrainingSet> sets,
+) {
+  final metrics = rule.instanceScaleMetrics;
+  if (metrics.isEmpty) return rule;
+  var instance = session.loadInputs[sets.first.slotId]?.instance;
+  if (instance == null) {
+    final used = {for (final set in sets) set.performedOn?.instanceId};
+    if (used.length != 1 || used.single == null)
+      invalid(
+        'This rule rounds to the equipment instance used; bind one for the '
+        'slot at session start, or record one instance for every working '
+        'set with store perform-on.',
+      );
+    instance = sets.first.performedOn!;
+  }
+  final positions = instancePositions(instance.snapshot);
+  return rule.bindInstanceScales({for (final m in metrics) m: positions});
+}

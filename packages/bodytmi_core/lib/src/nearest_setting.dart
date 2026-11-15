@@ -1,5 +1,6 @@
 import 'equipment.dart';
 import 'errors.dart';
+import 'numeric_scale.dart';
 import 'plate_plan.dart';
 import 'quantity.dart';
 
@@ -92,4 +93,27 @@ void requireSameEquipment(EquipmentInstance instance, String? equipmentId) {
       'Instance ${instance.id} is ${instance.equipmentId}, not the slot '
       'equipment ${equipmentId ?? '(none)'}.',
     );
+}
+
+/// The positions [instance] offers, as a scale progression can round to:
+/// its selector markings, or every total its declared plates can make.
+/// Declaring neither (or both) leaves nothing unambiguous to round to.
+NumericScale instancePositions(EquipmentInstance instance) {
+  final scale = instance.scale, loading = instance.loading;
+  if (scale != null && loading != null)
+    invalid(
+      'Instance ${instance.id} declares both a selector scale and plate '
+      'loading; bind an explicit rule scale instead.',
+    );
+  if (scale != null) return scale;
+  if (loading != null)
+    return NumericScale.derived(
+      '${instance.id}-loadable',
+      Unit.parse('kg'),
+      PlatePlan.loadableTotals(loading),
+    );
+  invalid(
+    'Instance ${instance.id} declares neither plate loading nor a selector '
+    'scale to round to.',
+  );
 }

@@ -230,6 +230,68 @@ final class PlatePlan {
     return order;
   }
 
+  /// Every total mass [loading] can make exactly with its declared stock, in
+  /// ascending order (the tare alone included). A symmetric channel carries
+  /// each plate on every side; an independent channel pools all plates.
+  /// Exact decimal arithmetic in units of the plates' common divisor; more
+  /// than 100000 distinct steps is a validation error, never a truncation.
+  static List<Quantity> loadableTotals(LoadingSpec loading) {
+    final channel = loading.channel;
+    final tare = loading.tareMass;
+    var scale = tare.scale;
+    for (final plate in loading.plates)
+      if (plate.mass.value.scale > scale) scale = plate.mass.value.scale;
+    BigInt at(Decimal value) =>
+        value.coefficient * BigInt.from(10).pow(scale - value.scale);
+    var unit = BigInt.zero;
+    for (final plate in loading.plates) {
+      final value = at(plate.mass.value);
+      unit = unit == BigInt.zero ? value : _gcd(unit, value);
+    }
+    final sides = BigInt.from(channel.sides);
+    final steps = [
+      for (final plate in loading.plates)
+        (at(plate.mass.value) ~/ unit).toInt(),
+    ];
+    final available = [
+      for (final plate in loading.plates)
+        channel.symmetric ? plate.count ~/ channel.sides : plate.count,
+    ];
+    var maxSteps = 0;
+    for (var i = 0; i < steps.length; i++) maxSteps += steps[i] * available[i];
+    if (maxSteps > 100000)
+      invalid('The declared loading has more than 100000 loadable steps.');
+    final reachable = List<bool>.filled(maxSteps + 1, false)..[0] = true;
+    var reach = 0;
+    for (var i = 0; i < steps.length; i++) {
+      for (var copy = 0; copy < available[i]; copy++) {
+        for (var k = reach; k >= 0; k--) {
+          if (reachable[k]) reachable[k + steps[i]] = true;
+        }
+        reach += steps[i];
+      }
+    }
+    final perStep = (channel.symmetric ? sides : BigInt.one) * unit;
+    final tareScaled = at(tare);
+    return [
+      for (var k = 0; k <= maxSteps; k++)
+        if (reachable[k])
+          Quantity(
+            _trimmed(
+              _decimalString(tareScaled + BigInt.from(k) * perStep, scale),
+            ),
+            'kg',
+          ),
+    ];
+  }
+
+  /// '47.50' → '47.5', '20.00' → '20': targets read as they are written.
+  static String _trimmed(String decimal) => decimal.contains('.')
+      ? decimal
+            .replaceFirst(RegExp(r'0+$'), '')
+            .replaceFirst(RegExp(r'\.$'), '')
+      : decimal;
+
   static BigInt _gcd(BigInt a, BigInt b) =>
       b == BigInt.zero ? a : _gcd(b, a % b);
 

@@ -520,6 +520,9 @@ final class ThresholdRule {
       if (!controlled.contains(entry.key))
         invalid('Scale bindings must name increment or deload metrics.');
       final binding = ScaleBinding.fromJson(entry.value);
+      scales[entry.key] = binding;
+      // Instance positions are bound per exposure; checked when bound.
+      if (binding.fromInstance) continue;
       if (increments[entry.key] case final Quantity step) {
         if (step.dimension != binding.scale.unit.dimension)
           invalid('Scale and increment dimensions differ.');
@@ -604,6 +607,61 @@ final class ThresholdRule {
   final String? chosenMetric;
   final List<String>? priorityOrder;
   final Map<String, ScaleBinding> scales;
+
+  /// Metrics whose scale is the instance an exposure was performed on.
+  Set<String> get instanceScaleMetrics => {
+    for (final e in scales.entries)
+      if (e.value.fromInstance) e.key,
+  };
+
+  /// This rule with each instance-bound scale replaced by [positions] (the
+  /// instance's derived scale for that metric). Dimensions are checked here.
+  ThresholdRule bindInstanceScales(Map<String, NumericScale> positions) {
+    final bound = <String, ScaleBinding>{};
+    for (final e in scales.entries) {
+      if (!e.value.fromInstance) {
+        bound[e.key] = e.value;
+        continue;
+      }
+      final scale =
+          positions[e.key] ??
+          invalid('No instance positions bound for ${e.key}.');
+      if (increments[e.key] case final Quantity step
+          when step.dimension != scale.unit.dimension)
+        invalid('The instance positions and increment dimensions differ.');
+      bound[e.key] = e.value.bound(scale);
+    }
+    return ThresholdRule._(
+      metric,
+      minimum,
+      threshold,
+      increments,
+      resets,
+      maximums,
+      sequence,
+      deloadAfter,
+      deloadFactor,
+      deloadMetrics,
+      aggregation,
+      failureAggregation,
+      hasExplicitAggregation,
+      minimums,
+      directions,
+      hasNumericPolicy,
+      coordinationMode,
+      chosenMetric,
+      priorityOrder,
+      Map.unmodifiable(bound),
+      hasScalePolicy,
+      performanceDirection,
+      hasPerformancePolicy,
+      advancementEffort,
+      incrementBands,
+      stages,
+      retest,
+    );
+  }
+
   final bool hasScalePolicy;
   final String performanceDirection;
   final bool hasPerformancePolicy;

@@ -448,6 +448,190 @@ void performedOnTests() {
     },
   );
 
+  test('a rule can round to the weights the bar can load', () async {
+    Map<String, Object?> bar() => {
+      'id': 'main-bar',
+      'equipmentId': 'barbell',
+      'loading': {
+        'components': [
+          {'id': 'bar', 'kind': 'bar', 'mass': _q('20', 'kg')},
+        ],
+        'channel': {'id': 'barbell', 'sides': 2, 'symmetry': 'required'},
+        'plates': [
+          {'mass': _q('10', 'kg'), 'count': 4},
+          {'mass': _q('2.5', 'kg'), 'count': 4},
+          {'mass': _q('1.25', 'kg'), 'count': 4},
+          {'mass': _q('0.5', 'kg'), 'count': 4},
+        ],
+      },
+    };
+    final totals = PlatePlan.loadableTotals(
+      EquipmentInstance.fromJson(bar()).loading!,
+    );
+    bool has(String kg) =>
+        totals.any((t) => t.compareTo(Quantity.fromJson(_q(kg, 'kg'))) == 0);
+    check(has('20') && has('47') && has('47.5') && has('48.5'), 'loadable');
+    check(!has('48'), '48 kg needs 14 kg a side, which these plates miss');
+    equal(totals.first.enteredValue, '20');
+    check(
+      [
+        for (var i = 1; i < totals.length; i++)
+          totals[i].compareTo(totals[i - 1]) > 0,
+      ].every((ascending) => ascending),
+      'ascending and distinct',
+    );
+    // Independent channels pool plates: one 0.5 kg plate makes 20.5 kg.
+    final pooled = jsonObject(copyJson(bar())['loading'], 'loading');
+    pooled['channel'] = {'id': 'horns', 'sides': 2, 'symmetry': 'independent'};
+    check(
+      PlatePlan.loadableTotals(
+        LoadingSpec.fromJson(pooled),
+      ).any((t) => t.compareTo(Quantity.fromJson(_q('20.5', 'kg'))) == 0),
+      'pooled',
+    );
+
+    Map<String, Object?> rule({Object? binding}) => {
+      'metric': 'reps',
+      'minimum': _q('15', 'rep'),
+      'threshold': _q('15', 'rep'),
+      'aggregation': {'mode': 'total'},
+      'failureAggregation': {'mode': 'total'},
+      'increments': {'load': _q('1', 'kg')},
+      'deloadAfter': 1,
+      'deloadMetrics': ['load'],
+      'deloadPercent': '10',
+      'scales': {
+        'load':
+            binding ??
+            {
+              'instance': true,
+              'rounding': 'nearest',
+              'deloadRounding': 'atMost',
+            },
+      },
+    };
+    for (final bad in [
+      {'instance': false, 'rounding': 'nearest'},
+      {
+        'instance': true,
+        'scale': {
+          'id': 's',
+          'unit': 'kg',
+          'ticks': [
+            {'id': 't', 'value': '20'},
+          ],
+        },
+        'rounding': 'nearest',
+      },
+    ]) {
+      rejects(() => ThresholdRule.fromJson(rule(binding: bad)));
+    }
+    final unbound = ThresholdRule.fromJson(rule());
+    final pure = await _failure(
+      () async => unbound.evaluate(
+        current: {'load': Quantity.fromJson(_q('47', 'kg'))},
+        results: [
+          {'reps': Quantity.fromJson(_q('15', 'rep'))},
+        ],
+      ),
+    );
+    check(pure.message.contains('rounds to the equipment instance'), '');
+
+    final dir = await Directory.systemTemp.createTemp('bodytmi-loadable-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    try {
+      final equipment = EquipmentService(store);
+      await equipment.publishEquipment(
+        EquipmentDefinition.fromJson({'id': 'barbell'}),
+        0,
+      );
+      await equipment.publishInstance(EquipmentInstance.fromJson(bar()), 0);
+      final training = StoredTrainingService(store);
+      final progression = StoredProgressionService(store);
+      await training.publish(
+        WorkoutDefinition.fromJson({
+          'id': 'bench',
+          'name': 'Bench',
+          'slots': [
+            {
+              'id': 'bench',
+              'exercise': 'bench-press',
+              'implementation': 'barbell',
+              'equipment': 'barbell',
+              'targets': {'load': _q('47', 'kg'), 'reps': _q('5', 'rep')},
+            },
+          ],
+          'plan': {
+            'id': 'w',
+            'type': 'repeat',
+            'count': 3,
+            'child': {'id': 'set', 'type': 'effort', 'slot': 'bench'},
+          },
+        }),
+        0,
+      );
+      Future<ProgressionDecision> day(
+        String id,
+        int n, {
+        required String reps,
+        bool bind = true,
+      }) async {
+        var s = await training.start(
+          id,
+          'bench',
+          1,
+          instant(n),
+          loadBindings: bind ? {'bench': 'main-bar'} : const {},
+        );
+        s = await training.edit(id, s.contentVersion, (s) {
+          for (final set in s.sets) {
+            s = const TrainingService().complete(s, set.id, {
+              'reps': Quantity.fromJson(_q(reps, 'rep')),
+            }, acceptSuggested: true);
+          }
+          return s.finish(instant(n).add(const Duration(hours: 1)));
+        });
+        return progression.propose(id, 'bench', rule(), ruleType: 'threshold');
+      }
+
+      // 47 + 1 = 48 kg is not loadable; the nearest harder totals are
+      // 47.5 and 48.5 kg, equally close, and the tie goes harder.
+      final up = await day('up', 1, reps: '5');
+      equal(up.proposal.outcome, 'advance');
+      equal(up.nextSets.first['load']!.enteredValue, '48.5');
+      await progression.accept(
+        'up',
+        'bench',
+        up.version,
+        instant(1).add(const Duration(hours: 2)),
+      );
+      // A failed exposure deloads 10 % (43.65 kg) to the loadable total at
+      // most that: 43.5 kg.
+      final down = await day('down', 2, reps: '3');
+      equal(down.proposal.outcome, 'deload');
+      equal(down.nextSets.first['load']!.enteredValue, '43.5');
+      check(
+        totals.any((t) => t.compareTo(down.nextSets.first['load']!) == 0),
+        'loadable',
+      );
+      await progression.accept(
+        'down',
+        'bench',
+        down.version,
+        instant(2).add(const Duration(hours: 2)),
+      );
+      TrainingArchive.fromJson((await training.exportArchive()).toJson());
+      // Without an instance there is nothing to round to.
+      final error = await _failure(
+        () => day('unbound', 3, reps: '5', bind: false),
+      );
+      check(error.message.contains('bind one for the slot'), error.message);
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
+
   test('CLI store perform-on reports the settings to use', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-performed-cli-');
     final db = '${dir.path}/db.sqlite';

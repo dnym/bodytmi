@@ -329,13 +329,10 @@ Map<String, Object?> barRule(String lift) {
         },
       ],
     },
+    // Round to the totals the bound bar's declared plates can make.
     'scales': {
       'load': {
-        'scale': {
-          'id': 'barbell-1kg',
-          'unit': 'kg',
-          'range': {'start': '20', 'step': '1', 'count': 300},
-        },
+        'instance': true,
         'rounding': 'nearest',
         'deloadRounding': 'atMost',
       },
@@ -368,13 +365,10 @@ Map<String, Object?> chinRule() => {
       },
     ],
   },
+  // Round to the bound machine's selector markings.
   'scales': {
     'assistance': {
-      'scale': {
-        'id': 'assist-stack-lb',
-        'unit': 'lb',
-        'range': {'start': '10', 'step': '5', 'count': 19},
-      },
+      'instance': true,
       'rounding': 'nearest',
       'deloadRounding': 'nearest',
     },
@@ -762,7 +756,9 @@ Future<void> finish(String sessionId, DateTime t) async {
         : (outcome: 'advance', next: next);
   }
   if (total < 15) {
-    final next = (current * 0.9).floorToDouble();
+    // The largest total the bar can load (0.5 kg steps with the micro
+    // plates) at or below 90 %.
+    final next = (current * 0.9 / 0.5).floorToDouble() * 0.5;
     // A deload that cannot move (0 kg added load) holds as blocked.
     return next == current
         ? (outcome: 'blocked', next: current)

@@ -271,7 +271,7 @@ final class ProgressionDecision implements ProgressionAnchor {
   late final List<TrainingSet> _evaluatedSets = asFollowed(sets, followed);
   late final ProgressionEvaluation _evaluated = switch (ruleType) {
     'threshold' => ProgressionEvaluation.threshold(
-      ThresholdRule.fromJson(rule),
+      boundToInstance(ThresholdRule.fromJson(rule), session, sets),
       _evaluatedSets,
       previousFailures,
       previousCursor,

@@ -40,7 +40,7 @@ final class RoleProgressionPreview {
     final ProgressionEvaluation proposal;
     if (ruleType == 'threshold') {
       proposal = ProgressionEvaluation.threshold(
-        ThresholdRule.fromJson(rule),
+        boundToInstance(ThresholdRule.fromJson(rule), session, framed),
         sets,
         failedSessions,
         cursor,
