@@ -228,9 +228,10 @@ final class ProgramService {
         return next;
       });
 
-  /// Explicitly re-pin one run onto a newer published revision of the same
-  /// program. Completed occurrences must retain their exact pinned day, the
-  /// current day must be resolved first, and no cursor state changes.
+  /// Explicitly re-pin one run onto another published revision of the same
+  /// program. The receipt records the cursor, so completed days stay bound
+  /// to the revision they ran under (see [programRevisionAt]); the current
+  /// day must be resolved first, and no cursor state changes.
   Future<ProgramUpgradeReceipt> upgrade(
     String runId,
     int expectedVersion,
@@ -266,25 +267,14 @@ final class ProgramService {
       programConflict(
         'Program upgrade must publish enough days to hold the run cursor.',
       );
-    if (current.cursor > 0) {
-      final previous = current.program.definition.plan.occurrences().toList();
-      final next = target.definition.plan.occurrences().toList();
-      if (previous.length != next.length)
-        programConflict(
-          'Program upgrade cannot change cycle length after a run has advanced.',
-        );
-      final covered = current.cursor < previous.length
-          ? current.cursor
-          : previous.length;
-      for (var index = 0; index < covered; index++) {
-        if (canonicalJson(previous[index].toJson()) !=
-            canonicalJson(next[index].toJson())) {
-          programConflict(
-            'Completed program days must retain their pinned prescription.',
-          );
-        }
-      }
-    }
+    // Completed days may differ in the new revision: they stay bound to the
+    // revision recorded for their ordinal. The cycle length must hold so
+    // that the cursor keeps its place in the cycle.
+    if (current.cursor > 0 &&
+        current.program.definition.dayCount != target.definition.dayCount)
+      programConflict(
+        'Program upgrade cannot change cycle length after a run has advanced.',
+      );
     if ((await repository.sessionPrograms()).any(
       (b) => b.runId == runId && b.ordinal == current.cursor,
     ))
@@ -297,6 +287,7 @@ final class ProgramService {
       programId: current.program.definition.id,
       fromRevision: current.program.number,
       toRevision: target.number,
+      cursor: current.cursor,
       occurredAt: at,
       requestId: requestId,
     );
@@ -480,9 +471,35 @@ final class ProgramService {
 Never programConflict(String message) =>
     throw BodyTmiException('conflict', message);
 
+/// The upgrade chain of one run, oldest first.
+List<ProgramUpgradeReceipt> upgradeChain(
+  List<ProgramUpgradeReceipt> upgrades,
+  String runId,
+) => upgrades.where((u) => u.runId == runId).toList()
+  ..sort((a, b) {
+    final time = a.occurredAt.compareTo(b.occurredAt);
+    return time == 0 ? a.requestId.compareTo(b.requestId) : time;
+  });
+
+/// The program revision number a run pinned for the day at [ordinal]:
+/// the creation pin, replaced by each upgrade made at or before it.
+int programRevisionAt(
+  ProgramRun run,
+  List<ProgramUpgradeReceipt> chain,
+  int ordinal,
+) {
+  if (chain.isEmpty) return run.program.number;
+  var number = chain.first.fromRevision;
+  for (final u in chain) {
+    if (ordinal >= u.cursor) number = u.toRevision;
+  }
+  return number;
+}
+
 void validateProgramData({
   required List<ProgramRevision> programs,
   required List<ProgramRun> runs,
+  required List<ProgramUpgradeReceipt> upgrades,
   required List<SessionProgramBinding> bindings,
   required List<ProgramReceipt> receipts,
   required List<WorkoutRevision> revisions,
@@ -519,6 +536,17 @@ void validateProgramData({
         canonicalJson(program.toJson()) != canonicalJson(run.program.toJson()))
       invalid('Run program snapshot is inconsistent.');
   }
+  final chains = {
+    for (final run in runs) run.id: upgradeChain(upgrades, run.id),
+  };
+  ProgramDefinition pinnedAt(ProgramRun run, int ordinal) {
+    final number = programRevisionAt(run, chains[run.id]!, ordinal);
+    final program = programMap['${run.program.definition.id}/$number'];
+    if (program == null)
+      invalid('Program upgrade refers to a missing run or revision.');
+    return program.definition;
+  }
+
   final sessionMap = {for (final s in sessions) s.id: s};
   final bySession = <String, SessionProgramBinding>{};
   final byBoundOccurrence = <String, SessionProgramBinding>{};
@@ -537,7 +565,7 @@ void validateProgramData({
         (!run.loop && b.ordinal >= run.program.definition.dayCount) ||
         session.startedAt.isBefore(run.startedAt))
       invalid('Invalid program session binding.');
-    final day = run.program.definition.dayAt(b.ordinal);
+    final day = pinnedAt(run, b.ordinal).dayAt(b.ordinal);
     if (day.path != b.path ||
         day.day.templateId != session.definition.id ||
         day.day.revision != session.revision.number ||
@@ -612,7 +640,7 @@ void validateProgramData({
     if (run == null ||
         r.ordinal >= run.cursor ||
         r.occurredAt.isBefore(run.startedAt) ||
-        r.path != run.program.definition.dayAt(r.ordinal).path)
+        r.path != pinnedAt(run, r.ordinal).dayAt(r.ordinal).path)
       invalid('Program receipt path or cursor mismatch.');
     final bound = byBoundOccurrence[key];
     if (r.sessionId == null) {
@@ -687,10 +715,13 @@ void validateProgramUpgrades(
       });
     for (var i = 1; i < rows.length; i++) {
       if (!rows[i].occurredAt.isAfter(rows[i - 1].occurredAt) ||
-          rows[i].fromRevision != rows[i - 1].toRevision) {
+          rows[i].fromRevision != rows[i - 1].toRevision ||
+          rows[i].cursor < rows[i - 1].cursor) {
         invalid('Program upgrade chain is inconsistent.');
       }
     }
+    if (rows.last.cursor > runMap[entry.key]!.cursor)
+      invalid('Program upgrade cursor is ahead of its run.');
     if (rows.last.toRevision != runMap[entry.key]!.program.number)
       invalid('Program run pin does not match its upgrade chain.');
   }

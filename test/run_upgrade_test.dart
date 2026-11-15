@@ -170,7 +170,7 @@ void runUpgradeTests() {
   );
 
   test(
-    'upgrade guards reject completed prefixes, current sessions and stale versions',
+    'upgrade guards reject cycle changes, current sessions and stale versions',
     () => withStore((store, _) async {
       final programs = ProgramService(store);
       await programs.publish(
@@ -182,25 +182,13 @@ void runUpgradeTests() {
       await programs.create('run-1', 'upgrade-program', 1, _at(1));
       final run = await advance(store, 'run-1', 'session-a', 1);
 
-      // Changing the completed day's prescription is rejected.
+      // Changing a completed day is allowed (covered by the looping-cycle
+      // test); revision 2 only keeps the revision numbering below.
       await programs.publish(
         ProgramDefinition.fromJson(
           _program([_day('x', 'upper-a', 1), _day('b', 'upper-a', 1)]),
         ),
         1,
-      );
-      var error = await failure(
-        () => programs.upgrade(
-          'run-1',
-          run.contentVersion,
-          2,
-          'upgrade-1',
-          _at(2),
-        ),
-      );
-      check(
-        error.message.contains('retain their pinned prescription'),
-        'completed days are protected',
       );
 
       // Changing cycle length after advancement is rejected.
@@ -208,7 +196,7 @@ void runUpgradeTests() {
         ProgramDefinition.fromJson(_program([_day('a', 'upper-a', 1)])),
         2,
       );
-      error = await failure(
+      var error = await failure(
         () => programs.upgrade(
           'run-1',
           run.contentVersion,
@@ -308,6 +296,65 @@ void runUpgradeTests() {
       equal(receipt.fromRevision, 4);
       equal(receipt.toRevision, 5);
       equal((await programs.run('paused-run')).status, 'paused');
+    }),
+  );
+
+  test(
+    'a looping run re-pins a completed day after a full cycle',
+    () => withStore((store, dir) async {
+      final programs = ProgramService(store);
+      final training = StoredTrainingService(store);
+      final lighter = definition().toJson();
+      lighter['name'] = 'Upper A, lighter';
+      await training.publish(WorkoutDefinition.fromJson(lighter), 1);
+      await programs.publish(
+        ProgramDefinition.fromJson(
+          _program([_day('a', 'upper-a', 1), _day('b', 'upper-a', 1)]),
+        ),
+        0,
+      );
+      await programs.create('run-1', 'upgrade-program', 1, _at(1));
+      // One full cycle and the next day A: every day has run at least once.
+      await advance(store, 'run-1', 'a-1', 1);
+      await advance(store, 'run-1', 'b-1', 2);
+      var run = await advance(store, 'run-1', 'a-2', 3);
+      equal(run.cursor, 3);
+
+      // Day B (already completed in cycle one) moves to workout revision 2.
+      await programs.publish(
+        ProgramDefinition.fromJson(
+          _program([_day('a', 'upper-a', 1), _day('b', 'upper-a', 2)]),
+        ),
+        1,
+      );
+      final receipt = await programs.upgrade(
+        'run-1',
+        run.contentVersion,
+        2,
+        'lighter-b',
+        _at(4),
+      );
+      equal(receipt.cursor, 3);
+      run = await advance(store, 'run-1', 'b-2', 5);
+      equal((await training.session('b-2')).revision.number, 2);
+      equal((await training.session('b-1')).revision.number, 1);
+      equal(run.cursor, 4);
+
+      // Both archives still validate the cycle-one day B under revision 1.
+      final archive = await store.archive();
+      TrainingArchive.fromJson(archive.toJson());
+      await store.backup('$dir/native');
+      await (await NativeBackup.prepare('$dir/native')).close();
+
+      // A receipt claiming the pin changed before day B of cycle one would
+      // put that session under revision 2: rejected.
+      final forged = archive.toJson();
+      final rows = forged['programUpgrades'] as List;
+      (rows.single as Map<String, Object?>)['cursor'] = 1;
+      rejects(() => TrainingArchive.fromJson(forged));
+      // A cursor ahead of the run is rejected too.
+      (rows.single as Map<String, Object?>)['cursor'] = 9;
+      rejects(() => TrainingArchive.fromJson(forged));
     }),
   );
 
@@ -500,6 +547,7 @@ void runUpgradeTests() {
           'programId': 'upgrade-program',
           'fromRevision': 1,
           'toRevision': 1,
+          'cursor': 1,
           'occurredAt': _at(2).toUtc().toIso8601String(),
           'requestId': 'upgrade-forged',
         },

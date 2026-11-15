@@ -469,6 +469,7 @@ final class TrainingArchive {
     validateProgramData(
       programs: programRevisions,
       runs: programRuns,
+      upgrades: programUpgrades,
       bindings: sessionPrograms,
       receipts: programReceipts,
       revisions: revisions,

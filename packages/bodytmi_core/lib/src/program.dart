@@ -372,6 +372,7 @@ final class ProgramUpgradeReceipt {
     required this.programId,
     required this.fromRevision,
     required this.toRevision,
+    required this.cursor,
     required this.occurredAt,
     required this.requestId,
   }) {
@@ -380,6 +381,7 @@ final class ProgramUpgradeReceipt {
     identifier({'id': requestId}, 'id');
     if (fromRevision < 1 || toRevision < 1 || fromRevision == toRevision)
       invalid('Program upgrade revisions must be distinct positive integers.');
+    if (cursor < 0) invalid('Program upgrade cursor cannot be negative.');
   }
   factory ProgramUpgradeReceipt.fromJson(Object? input) {
     final j = jsonObject(input, 'program upgrade receipt');
@@ -389,6 +391,7 @@ final class ProgramUpgradeReceipt {
       'programId',
       'fromRevision',
       'toRevision',
+      'cursor',
       'occurredAt',
       'requestId',
     });
@@ -399,12 +402,20 @@ final class ProgramUpgradeReceipt {
       programId: identifier(j, 'programId'),
       fromRevision: positiveProgramInt(j, 'fromRevision'),
       toRevision: positiveProgramInt(j, 'toRevision'),
+      cursor: switch (j['cursor']) {
+        final int value when value >= 0 => value,
+        _ => invalid('cursor must be a nonnegative integer.'),
+      },
       occurredAt: parseInstant(j['occurredAt'], 'occurredAt'),
       requestId: identifier(j, 'requestId'),
     );
   }
   final String runId, programId, requestId;
   final int fromRevision, toRevision;
+
+  /// The run cursor when the pin changed: program days at earlier ordinals
+  /// ran under [fromRevision] (or earlier), later ones under [toRevision].
+  final int cursor;
   final DateTime occurredAt;
   Map<String, Object?> toJson() => {
     'schemaVersion': 1,
@@ -412,6 +423,7 @@ final class ProgramUpgradeReceipt {
     'programId': programId,
     'fromRevision': fromRevision,
     'toRevision': toRevision,
+    'cursor': cursor,
     'occurredAt': occurredAt.toUtc().toIso8601String(),
     'requestId': requestId,
   };

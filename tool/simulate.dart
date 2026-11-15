@@ -192,7 +192,7 @@ class Person {
     'squat': 1.6,
     'ohp': 0.45,
     'deadlift': 2.3,
-    'chinup': 0.9,
+    'chinup': 1.6,
   };
 
   /// Reps the person reaches on set [index] (0-based) of a 3×5+ lift.
@@ -755,7 +755,11 @@ Future<void> finish(String sessionId, DateTime t) async {
         : (outcome: 'advance', next: next);
   }
   if (total < 15) {
-    return (outcome: 'deload', next: (current * 0.9).floorToDouble());
+    final next = (current * 0.9).floorToDouble();
+    // A deload that cannot move (0 kg added load) holds as blocked.
+    return next == current
+        ? (outcome: 'blocked', next: current)
+        : (outcome: 'deload', next: next);
   }
   final lower = !upper.contains(lift) && lift != 'chinup';
   final step = reps.last >= 11 ? (lower ? 4 : 2) : (lower ? 2 : 1);
@@ -1857,7 +1861,16 @@ Future<void> graduateChin(DateTime t) async {
     );
     return;
   }
-  final kinds = status.data['blockerKinds'];
+  final kinds = status.data['blockerKinds'] as List;
+  if (kinds.isEmpty) {
+    log(
+      '  - reconcile-status: nothing to reconcile; bodyweight chin-ups are '
+      'a new implementation, so they start their own track.',
+    );
+    chinGraduated = true;
+    ruleOverride['chinup'] = rule;
+    return;
+  }
   final sequence = status.data['track']?['sequence'];
   final reconciled = await call('progression reconcile', {
     'id': 'chin-to-bodyweight',

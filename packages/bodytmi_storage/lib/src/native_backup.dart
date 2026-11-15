@@ -556,6 +556,7 @@ final class NativeBackup {
           validateProgramData(
             programs: programs,
             runs: runs,
+            upgrades: upgrades,
             bindings: bindings,
             receipts: receipts,
             revisions: allRevisions,
