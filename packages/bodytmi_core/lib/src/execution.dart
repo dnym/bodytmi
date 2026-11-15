@@ -54,6 +54,7 @@ final class WorkoutExecution {
         'resultStatus',
         'timerId',
         'checkpointId',
+        'restElapsedMilliseconds',
       });
       if (r['ordinal'] != i ||
           !{'effort', 'rest', 'amrap'}.contains(r['kind']) ||
@@ -79,6 +80,15 @@ final class WorkoutExecution {
       } else if (r.containsKey('checkpointId'))
         invalid('Only AMRAP placements reference a repeat checkpoint.');
       if (r.containsKey('timerId')) identifier(r, 'timerId');
+      if (r.containsKey('restElapsedMilliseconds')) {
+        final taken = r['restElapsedMilliseconds'];
+        if (r['kind'] != 'rest' ||
+            !r.containsKey('timerId') ||
+            taken is! int ||
+            taken < 0 ||
+            taken > 86400000)
+          invalid('Only a timed rest receipt records the rest taken.');
+      }
       receipts.add(_freeze(r) as Map<String, Object?>);
     }
     return WorkoutExecution._(

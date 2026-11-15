@@ -85,6 +85,8 @@ final class TimingService {
       'restOnly': true,
       'effortMilliseconds': 0,
       'restMilliseconds': rest.durationSeconds! * 1000,
+      if (rest.maxDurationSeconds != null)
+        'restMaximumMilliseconds': rest.maxDurationSeconds! * 1000,
     });
     final existing = await repository.timingActivity(id);
     if (existing != null) {

@@ -26,6 +26,7 @@ final class TimingPlan {
     this.tempo,
     this.unplannedDuration,
     this.openEnded,
+    this.restMaximumMilliseconds,
   );
   factory TimingPlan.fromJson(Object? input) {
     final j = jsonObject(input, 'timing plan');
@@ -39,6 +40,7 @@ final class TimingPlan {
       'tempo',
       'unplannedDuration',
       'openEnded',
+      'restMaximumMilliseconds',
     });
     if (j.containsKey('unplannedDuration') && j['unplannedDuration'] != true)
       invalid('unplannedDuration must be true when specified.');
@@ -93,6 +95,11 @@ final class TimingPlan {
             tempo != null ||
             unplannedDuration))
       invalid('A rest-only plan needs only a positive rest duration.');
+    final maximum = j.containsKey('restMaximumMilliseconds')
+        ? timingInt(j, 'restMaximumMilliseconds', min: rest + 1, max: 86400000)
+        : null;
+    if (maximum != null && !restOnly)
+      invalid('Only a rest-only plan can declare a rest range.');
     return TimingPlan._(
       prep,
       effort,
@@ -103,6 +110,7 @@ final class TimingPlan {
       tempo,
       unplannedDuration,
       openEnded,
+      maximum,
     );
   }
   factory TimingPlan.fromDuration(Quantity duration) => TimingPlan.fromJson({
@@ -115,6 +123,14 @@ final class TimingPlan {
   final String overrun;
   final int? nearEndMilliseconds;
   final TempoPlan? tempo;
+
+  /// The end of a rest range: the rest phase reaches [restMilliseconds]
+  /// ("ready", cue `rest-ready`) and keeps running until this maximum or an
+  /// explicit stop, so the measured rest is the rest actually taken.
+  final int? restMaximumMilliseconds;
+
+  /// Where the rest phase ends on its own.
+  int get restLimitMilliseconds => restMaximumMilliseconds ?? restMilliseconds;
   Map<String, Object?> toJson() => {
     'preparationMilliseconds': preparationMilliseconds,
     if (!openEnded) 'effortMilliseconds': effortMilliseconds,
@@ -125,6 +141,8 @@ final class TimingPlan {
     if (tempo != null) 'tempo': tempo!.toJson(),
     if (unplannedDuration) 'unplannedDuration': true,
     if (openEnded) 'openEnded': true,
+    if (restMaximumMilliseconds != null)
+      'restMaximumMilliseconds': restMaximumMilliseconds,
   };
 }
 
@@ -358,7 +376,7 @@ final class TimingActivity {
                 j['termination'] != null ||
                 (p.overrun == 'stop' && effort >= p.effortMilliseconds))) ||
         (j['phase'] == 'rest' &&
-            (phase >= p.restMilliseconds ||
+            (phase >= p.restLimitMilliseconds ||
                 total != p.preparationMilliseconds + effort + phase ||
                 j['termination'] == null)) ||
         (!active &&
@@ -367,7 +385,9 @@ final class TimingActivity {
                 total < effort ||
                 (effort > 0 && total < p.preparationMilliseconds + effort) ||
                 total >
-                    p.preparationMilliseconds + effort + p.restMilliseconds)) ||
+                    p.preparationMilliseconds +
+                        effort +
+                        p.restLimitMilliseconds)) ||
         ((j['termination'] == 'no-effort') !=
             (j['termination'] != null && effort == 0 && !p.restOnly)) ||
         (p.openEnded &&
@@ -543,7 +563,7 @@ final class TimingActivity {
       final limit = switch (currentPhase) {
         'preparation' => p.preparationMilliseconds,
         'effort' => p.effortMilliseconds,
-        _ => p.restMilliseconds,
+        _ => p.restLimitMilliseconds,
       };
       final step = delta < limit - phaseElapsed ? delta : limit - phaseElapsed;
       final before = phaseElapsed;
@@ -551,6 +571,12 @@ final class TimingActivity {
       total += step;
       delta -= step;
       if (currentPhase == 'effort') effort += step;
+      if (currentPhase == 'rest' &&
+          p.restMaximumMilliseconds != null &&
+          before < p.restMilliseconds &&
+          phaseElapsed >= p.restMilliseconds &&
+          phaseElapsed < limit)
+        cue('rest-ready');
       if (phaseElapsed == limit) {
         currentPhase = switch (currentPhase) {
           'preparation' => 'effort',

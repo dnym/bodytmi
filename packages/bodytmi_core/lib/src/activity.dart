@@ -96,14 +96,27 @@ sealed class Activity {
                 side as String?,
               );
       case 'rest':
-        checkKeys(json, {'id', 'type', 'durationSeconds', 'manual'});
+        checkKeys(json, {
+          'id',
+          'type',
+          'durationSeconds',
+          'maxDurationSeconds',
+          'manual',
+        });
         if (json.containsKey('manual')) {
-          if (json['manual'] != true || json.containsKey('durationSeconds')) {
+          if (json['manual'] != true ||
+              json.containsKey('durationSeconds') ||
+              json.containsKey('maxDurationSeconds')) {
             invalid('Manual rest requires manual:true and no duration.');
           }
           return Rest.manual(id);
         }
-        return Rest(id, _positiveInt(json, 'durationSeconds'));
+        final minimum = _positiveInt(json, 'durationSeconds');
+        return Rest(
+          id,
+          minimum,
+          _restMaximum(json, 'maxDurationSeconds', minimum),
+        );
       case 'sequence':
         checkKeys(json, {'id', 'type', 'children', 'bout'});
         final children = jsonList(json, 'children');
@@ -118,17 +131,25 @@ sealed class Activity {
           'count',
           'child',
           'restBetweenSeconds',
+          'restBetweenMaxSeconds',
           'bout',
         });
         final rest = json['restBetweenSeconds'] ?? 0;
         if (rest is! int || rest < 0)
           invalid('Rest between rounds must be nonnegative.');
+        if (rest == 0 && json.containsKey('restBetweenMaxSeconds'))
+          invalid('A rest range needs a positive restBetweenSeconds minimum.');
         return Repeat.withBout(
           id,
           _positiveInt(json, 'count'),
           fromJson(json['child'], depth + 1),
           rest,
           bout: _bout(json),
+          restBetweenMaxSeconds: _restMaximum(
+            json,
+            'restBetweenMaxSeconds',
+            rest,
+          ),
         );
       case 'window':
         checkKeys(json, {'id', 'type', 'durationSeconds', 'child'});
@@ -168,6 +189,14 @@ sealed class Activity {
     return true;
   }
 
+  /// The optional end of a rest range: strictly longer than its minimum.
+  static int? _restMaximum(Map<String, Object?> json, String key, int minimum) {
+    if (!json.containsKey(key)) return null;
+    final value = _positiveInt(json, key);
+    if (value <= minimum) invalid('$key must be longer than the minimum rest.');
+    return value;
+  }
+
   static int _positiveInt(Map<String, Object?> json, String key) {
     final value = json[key];
     if (value is! int || value <= 0 || value > 1000000) {
@@ -196,13 +225,18 @@ sealed class Activity {
         for (final child in items) {
           yield* child.occurrences(path);
         }
-      case Repeat(:final count, :final child, :final restBetweenSeconds):
+      case Repeat(
+        :final count,
+        :final child,
+        :final restBetweenSeconds,
+        :final restBetweenMaxSeconds,
+      ):
         for (var i = 0; i < count; i++) {
           yield* child.occurrences('$path[$i]');
           if (i + 1 < count && restBetweenSeconds > 0) {
             yield ActivityOccurrence(
               '$path[$i]/between',
-              Rest('between', restBetweenSeconds),
+              Rest('between', restBetweenSeconds, restBetweenMaxSeconds),
             );
           }
         }
@@ -242,14 +276,19 @@ imposedOccurrences(
     case Sequence(:final items):
       for (final child in items)
         yield* imposedOccurrences(child, path, imposed);
-    case Repeat(:final count, :final child, :final restBetweenSeconds):
+    case Repeat(
+      :final count,
+      :final child,
+      :final restBetweenSeconds,
+      :final restBetweenMaxSeconds,
+    ):
       for (var i = 0; i < count; i++) {
         yield* imposedOccurrences(child, '$path[$i]', imposed);
         if (i + 1 < count && restBetweenSeconds > 0)
           yield (
             ActivityOccurrence(
               '$path[$i]/between',
-              Rest('between', restBetweenSeconds),
+              Rest('between', restBetweenSeconds, restBetweenMaxSeconds),
             ),
             imposed,
           );
@@ -364,6 +403,7 @@ Activity resolveVariantActivity(
         walk(child),
         restBetweenSeconds,
         bout: node.bout,
+        restBetweenMaxSeconds: node.restBetweenMaxSeconds,
       );
     case TimeWindow(:final durationSeconds, :final child):
       return TimeWindow(node.id, durationSeconds, walk(child));
@@ -519,17 +559,26 @@ final class Effort extends Activity {
 }
 
 final class Rest extends Activity {
-  const Rest(super.id, int durationSeconds)
+  const Rest(super.id, int durationSeconds, [this.maxDurationSeconds])
     : durationSeconds = durationSeconds,
       isManual = false;
-  const Rest.manual(super.id) : durationSeconds = null, isManual = true;
+  const Rest.manual(super.id)
+    : durationSeconds = null,
+      maxDurationSeconds = null,
+      isManual = true;
+
+  /// The authored rest, or the minimum of a rest range.
   final int? durationSeconds;
+
+  /// The end of an authored rest range ("2–3 minutes"), when declared.
+  final int? maxDurationSeconds;
   final bool isManual;
   @override
   Map<String, Object?> toJson() => {
     'type': 'rest',
     'id': id,
     if (isManual) 'manual': true else 'durationSeconds': durationSeconds,
+    if (maxDurationSeconds != null) 'maxDurationSeconds': maxDurationSeconds,
   };
 }
 
@@ -554,17 +603,22 @@ final class Sequence extends Activity {
 
 final class Repeat extends Activity {
   const Repeat(super.id, this.count, this.child, [this.restBetweenSeconds = 0])
-    : bout = false;
+    : bout = false,
+      restBetweenMaxSeconds = null;
   const Repeat.withBout(
     super.id,
     this.count,
     this.child,
     this.restBetweenSeconds, {
     required this.bout,
+    this.restBetweenMaxSeconds,
   });
   final int count;
   final Activity child;
   final int restBetweenSeconds;
+
+  /// The end of a between-round rest range, when declared.
+  final int? restBetweenMaxSeconds;
 
   /// The whole repeat (every iteration) is one parent bout, e.g. a cluster.
   final bool bout;
@@ -578,6 +632,8 @@ final class Repeat extends Activity {
     'count': count,
     'child': child.toJson(),
     'restBetweenSeconds': restBetweenSeconds,
+    if (restBetweenMaxSeconds != null)
+      'restBetweenMaxSeconds': restBetweenMaxSeconds,
   };
 }
 

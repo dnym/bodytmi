@@ -220,6 +220,7 @@ final class ExecutionService {
     final kind = occurrenceKind(occurrence.activity);
     String? sourceTimer;
     String? checkpointId;
+    int? restTaken;
     // A set logged ahead of the cursor (e.g. squats while the bench was
     // busy) is acknowledged, never silently replaced or turned into a skip.
     if (kind == 'effort' &&
@@ -265,10 +266,25 @@ final class ExecutionService {
       if (action != 'advance')
         invalid('Rest does not contain effort results to complete.');
       if (!(occurrence.activity as Rest).isManual) {
-        final clock = await repository.timingActivity(e.clockId('rest'));
+        var clock = await repository.timingActivity(e.clockId('rest'));
+        // A rest range ends whenever the user is ready after its minimum.
+        if (clock != null &&
+            clock.status == 'paused' &&
+            clock.plan.restMaximumMilliseconds != null &&
+            clock.elapsedMilliseconds >= clock.plan.restMilliseconds)
+          clock = await TimingService(
+            repository,
+          ).stop(clock.id, clock.version, at, confirm: true);
         if (clock?.status != 'completed')
-          invalid('Run the rest clock to its boundary or explicitly skip it.');
+          invalid(
+            clock?.plan.restMaximumMilliseconds != null &&
+                    clock!.status == 'running'
+                ? 'Pause the running rest clock before ending its rest range.'
+                : 'Run the rest clock to its boundary (the minimum of a rest '
+                      'range) or explicitly skip it.',
+          );
         sourceTimer = clock!.id;
+        restTaken = clock.elapsedMilliseconds;
       }
     } else {
       if (action == 'complete')
@@ -313,6 +329,7 @@ final class ExecutionService {
       if (kind == 'effort') 'resultStatus': s.set(occurrence.id).status.name,
       if (sourceTimer != null) 'timerId': sourceTimer,
       if (checkpointId != null) 'checkpointId': checkpointId,
+      if (restTaken != null) 'restElapsedMilliseconds': restTaken,
     });
     await repository.saveExecution(e);
     await _prepareRest(e, s, at);
@@ -670,6 +687,11 @@ void validateExecutionData(
                       ? timer.status != 'completed'
                       : timer.active)))
           invalid('Rest advancement lacks a completed clock.');
+        if (r['restElapsedMilliseconds'] !=
+            (action == 'advance' && timer != null
+                ? timer.elapsedMilliseconds
+                : null))
+          invalid('Rest receipt does not record the rest its clock measured.');
       } else {
         final set = s.set(o.id);
         if (set.status == SetStatus.planned ||

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "rest-range-practice",
+    "name": "Rows resting two to three minutes",
+    "slots": [
+      {
+        "id": "rows",
+        "exercise": "row",
+        "implementation": "dumbbell",
+        "targets": {
+          "mass": {"value": "24", "unit": "kg"},
+          "reps": {"value": "10", "unit": "rep"}
+        }
+      }
+    ],
+    "plan": {
+      "id": "workout",
+      "type": "sequence",
+      "children": [
+        {"id": "sets", "type": "repeat", "count": 2,
+         "restBetweenSeconds": 120, "restBetweenMaxSeconds": 180,
+         "child": {"id": "row", "type": "effort", "slot": "rows"}},
+        {"id": "cooldown", "type": "rest", "durationSeconds": 60},
+        {"id": "last", "type": "effort", "slot": "rows"}
+      ]
+    }
+  }
+}
