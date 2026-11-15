@@ -1161,18 +1161,38 @@ final class StoredTrainingService {
 
   /// Guards shared by substitution and its revert: no guided traversal,
   /// effort clock or reserved scoped clock may own the session.
-  Future<void> _guardSubstitution(String id) async {
-    if ((await repository.executions()).any(
-      (e) => e.sessionId == id && !e.complete,
-    ))
-      invalid('Substitute before or after guided traversal, not during it.');
-    if ((await repository.timingActivities()).any(
+  /// A substitution may happen mid-workout (the benches are all taken when
+  /// you reach them), but only for sets still ahead: never behind a guided
+  /// traversal's cursor and never a set whose effort clock is running or
+  /// awaiting review. Rest clocks and other sets are unaffected.
+  Future<void> _guardSubstitution(
+    TrainingSession current,
+    TrainingSession next,
+  ) async {
+    final id = current.id;
+    final changed = {
+      for (final set in next.sets)
+        if (canonicalJson(set.toJson()) !=
+            canonicalJson(current.set(set.id).toJson()))
+          set.id,
+    };
+    if ((await repository.timingActivities(sessionId: id)).any(
       (t) =>
-          t.sessionId == id && (t.active || t.status == 'awaitingConfirmation'),
+          !t.plan.restOnly &&
+          changed.contains(t.setId) &&
+          (t.active || t.status == 'awaitingConfirmation'),
     ))
       invalid(
-        'Stop and review or discard the session clock before substituting.',
+        'Stop and review or discard the effort clock of a set before '
+        'substituting it.',
       );
+    for (final execution in await repository.executions(sessionId: id)) {
+      if (execution.complete) continue;
+      if (executionPlan(current)
+          .take(execution.cursor)
+          .any((occurrence) => changed.contains(occurrence.id)))
+        invalid('Sets behind the traversal cursor cannot be substituted.');
+    }
     if ((await repository.windowCheckpoints()).any(
       (c) => c.sessionId == id && c.reserved,
     ))
@@ -1190,7 +1210,6 @@ final class StoredTrainingService {
   }) => repository.transaction(() async {
     final current = await session(id);
     if (current.contentVersion != expectedVersion) _conflict();
-    await _guardSubstitution(id);
     final owner = implementationOwners(
       await repository.implementationRevisions(),
     )[composition.implementation];
@@ -1201,21 +1220,19 @@ final class StoredTrainingService {
       );
     // Substitution history only searches this workout template.
     final history = await repository.sessions(
-      templateId: (await session(id)).definition.id,
+      templateId: current.definition.id,
     );
-    return edit(
-      id,
-      expectedVersion,
-      (s) => const TrainingService().substitute(
-        s,
-        slotId: slotId,
-        scope: scope,
-        setId: setId,
-        composition: composition,
-        targets: targets,
-        history: history,
-      ),
+    final next = const TrainingService().substitute(
+      current,
+      slotId: slotId,
+      scope: scope,
+      setId: setId,
+      composition: composition,
+      targets: targets,
+      history: history,
     );
+    await _guardSubstitution(current, next);
+    return edit(id, expectedVersion, (_) => next);
   });
 
   Future<TrainingSession> revertSubstitution(
@@ -1227,17 +1244,14 @@ final class StoredTrainingService {
   }) => repository.transaction(() async {
     final current = await session(id);
     if (current.contentVersion != expectedVersion) _conflict();
-    await _guardSubstitution(id);
-    return edit(
-      id,
-      expectedVersion,
-      (s) => const TrainingService().revertSubstitution(
-        s,
-        slotId: slotId,
-        scope: scope,
-        setId: setId,
-      ),
+    final next = const TrainingService().revertSubstitution(
+      current,
+      slotId: slotId,
+      scope: scope,
+      setId: setId,
     );
+    await _guardSubstitution(current, next);
+    return edit(id, expectedVersion, (_) => next);
   });
 
   Future<TrainingSession> edit(

@@ -955,30 +955,6 @@ Future<void> bbrSession(LiftDay d) async {
     person.strength[slot] = person.strength[slot]! * d.decay;
   }
 
-  if (d.benchBusy) {
-    final s = await ok('store show', {'id': id});
-    final sub = await call('store substitute', {
-      'id': id,
-      'expectedVersion': s['contentVersion'],
-      'slotId': 'bench',
-      'scope': 'remaining',
-      'composition': {
-        'exercise': 'bench-press',
-        'implementation': 'dumbbell',
-        'equipment': 'dumbbells',
-      },
-      'targets': {
-        'load': {'source': 'explicit', 'value': q('60', 'lb')},
-        'reps': {'source': 'keep'},
-      },
-    });
-    log(
-      '  - Substituted dumbbell bench (2 × 30 lb, entered as 60 lb) for '
-      'the bench sets before starting traversal: rc ${sub.code}'
-      '${sub.ok ? '' : ' (${sub.error})'}.',
-    );
-    if (sub.ok) benchSubstituted = true;
-  }
   final ex = Walk('ex-$id', id);
   await ex.begin(t);
   final done = <String, List<int>>{};
@@ -1152,6 +1128,33 @@ Future<void> bbrSession(LiftDay d) async {
       );
       await ex.runClock(timerId, 50000, owner: 'app-2');
       ex.view = await ok('execution advance', ex.request());
+    }
+    if (d.benchBusy && cid.endsWith('/bench-1') && !benchSubstituted) {
+      final s = await ok('store show', {'id': id});
+      final sub = await call('store substitute', {
+        'id': id,
+        'expectedVersion': s['contentVersion'],
+        'slotId': 'bench',
+        'scope': 'remaining',
+        'composition': {
+          'exercise': 'bench-press',
+          'implementation': 'dumbbell',
+          'equipment': 'dumbbells',
+        },
+        'targets': {
+          'load': {'source': 'explicit', 'value': q('60', 'lb')},
+          'reps': {'source': 'keep'},
+        },
+      });
+      log(
+        '  - Substituted dumbbell bench (2 × 30 lb, entered as 60 lb) for '
+        'the remaining bench sets mid-workout: rc ${sub.code}'
+        '${sub.ok ? '' : ' (${sub.error})'}.',
+      );
+      if (sub.ok) {
+        benchSubstituted = true;
+        await ex.refresh();
+      }
     }
     if (d.rackBusy && cid.endsWith('/bench-1') && ex.view['cursor'] != null) {
       // The squat rack is free while the bench is busy: try squats first.

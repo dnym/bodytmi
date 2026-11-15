@@ -71,6 +71,100 @@ Future<TrainingSession> _finishAll(
 }
 
 void substitutionTests() {
+  test(
+    'substitution works mid-workout for the sets still ahead',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      await training.publish(definition(), 0);
+      var s = await training.start('s', definition().id, 1, instant(1));
+      final executions = ExecutionService(store);
+      var e = await executions.start('ex', 's', instant(1));
+      Future<void> step(String request, String action) async {
+        final now = (await store.session('s'))!;
+        e = await executions.step(
+          e.id,
+          e.version,
+          now.contentVersion,
+          request,
+          instant(1),
+          action: action,
+          acceptSuggested: action == 'complete',
+          confirm: action == 'skip',
+        );
+      }
+
+      await step('first', 'complete');
+      // Rest clock prepared and paused; the benches are taken now.
+      final heavy = _heavy((await store.session('s'))!);
+      s = await training.substitute(
+        's',
+        (await store.session('s'))!.contentVersion,
+        slotId: 'bench-heavy',
+        scope: 'remaining',
+        composition: _dumbbell,
+        targets: {
+          'mass': {'source': 'explicit', 'value': _kg('22')},
+          'reps': {'source': 'keep'},
+        },
+      );
+      final after = _heavy(s);
+      check(after.first.substitution == null, 'the done set is untouched');
+      check(
+        after.skip(1).every((set) => set.substitution != null),
+        'the sets ahead are substituted',
+      );
+      final behind = await _failure(
+        () => training.substitute(
+          's',
+          s.contentVersion,
+          slotId: 'bench-heavy',
+          scope: 'occurrence',
+          setId: heavy.first.id,
+          composition: _dumbbell,
+          targets: {
+            'mass': {'source': 'explicit', 'value': _kg('22')},
+            'reps': {'source': 'keep'},
+          },
+        ),
+      );
+      check(behind.message.contains('Only a planned set'), behind.message);
+      // Reverting mid-workout works too, and so does substituting again.
+      s = await training.revertSubstitution(
+        's',
+        s.contentVersion,
+        slotId: 'bench-heavy',
+        scope: 'remaining',
+      );
+      check(_heavy(s).every((set) => set.substitution == null), 'reverted');
+      s = await training.substitute(
+        's',
+        s.contentVersion,
+        slotId: 'bench-heavy',
+        scope: 'remaining',
+        composition: _dumbbell,
+        targets: {
+          'mass': {'source': 'explicit', 'value': _kg('22')},
+          'reps': {'source': 'keep'},
+        },
+      );
+      while (!e.complete) {
+        final current = executionPlan((await store.session('s'))!)[e.cursor];
+        await step(
+          'r${e.cursor}',
+          current.activity is Rest ? 'skip' : 'complete',
+        );
+      }
+      s = (await store.session('s'))!;
+      equal(_heavy(s)[1].actuals['mass']!.enteredValue, '22');
+      await training.edit(
+        's',
+        s.contentVersion,
+        (s) => s.finish(instant(1).add(const Duration(hours: 1))),
+      );
+      TrainingArchive.fromJson((await training.exportArchive()).toJson());
+    }),
+  );
+
   test('substitution never inherits an original lever value silently', () {
     final session = start();
     final original = canonicalJson(session.toJson());
