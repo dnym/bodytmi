@@ -2200,6 +2200,17 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _templateIdMeta = const VerificationMeta(
+    'templateId',
+  );
+  @override
+  late final GeneratedColumn<String> templateId = GeneratedColumn<String>(
+    'template_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _snapshotMeta = const VerificationMeta(
     'snapshot',
   );
@@ -2212,7 +2223,7 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     requiredDuringInsert: true,
   );
   @override
-  List<GeneratedColumn> get $columns => [id, snapshot];
+  List<GeneratedColumn> get $columns => [id, templateId, snapshot];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -2229,6 +2240,14 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('template_id')) {
+      context.handle(
+        _templateIdMeta,
+        templateId.isAcceptableOrUnknown(data['template_id']!, _templateIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_templateIdMeta);
     }
     if (data.containsKey('snapshot')) {
       context.handle(
@@ -2251,6 +2270,10 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      templateId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}template_id'],
+      )!,
       snapshot: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}snapshot'],
@@ -2266,18 +2289,28 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
 
 class Session extends DataClass implements Insertable<Session> {
   final String id;
+  final String templateId;
   final String snapshot;
-  const Session({required this.id, required this.snapshot});
+  const Session({
+    required this.id,
+    required this.templateId,
+    required this.snapshot,
+  });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['template_id'] = Variable<String>(templateId);
     map['snapshot'] = Variable<String>(snapshot);
     return map;
   }
 
   SessionsCompanion toCompanion(bool nullToAbsent) {
-    return SessionsCompanion(id: Value(id), snapshot: Value(snapshot));
+    return SessionsCompanion(
+      id: Value(id),
+      templateId: Value(templateId),
+      snapshot: Value(snapshot),
+    );
   }
 
   factory Session.fromJson(
@@ -2287,6 +2320,7 @@ class Session extends DataClass implements Insertable<Session> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Session(
       id: serializer.fromJson<String>(json['id']),
+      templateId: serializer.fromJson<String>(json['templateId']),
       snapshot: serializer.fromJson<String>(json['snapshot']),
     );
   }
@@ -2295,15 +2329,23 @@ class Session extends DataClass implements Insertable<Session> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'templateId': serializer.toJson<String>(templateId),
       'snapshot': serializer.toJson<String>(snapshot),
     };
   }
 
-  Session copyWith({String? id, String? snapshot}) =>
-      Session(id: id ?? this.id, snapshot: snapshot ?? this.snapshot);
+  Session copyWith({String? id, String? templateId, String? snapshot}) =>
+      Session(
+        id: id ?? this.id,
+        templateId: templateId ?? this.templateId,
+        snapshot: snapshot ?? this.snapshot,
+      );
   Session copyWithCompanion(SessionsCompanion data) {
     return Session(
       id: data.id.present ? data.id.value : this.id,
+      templateId: data.templateId.present
+          ? data.templateId.value
+          : this.templateId,
       snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
     );
   }
@@ -2312,43 +2354,51 @@ class Session extends DataClass implements Insertable<Session> {
   String toString() {
     return (StringBuffer('Session(')
           ..write('id: $id, ')
+          ..write('templateId: $templateId, ')
           ..write('snapshot: $snapshot')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, snapshot);
+  int get hashCode => Object.hash(id, templateId, snapshot);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Session &&
           other.id == this.id &&
+          other.templateId == this.templateId &&
           other.snapshot == this.snapshot);
 }
 
 class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<String> id;
+  final Value<String> templateId;
   final Value<String> snapshot;
   final Value<int> rowid;
   const SessionsCompanion({
     this.id = const Value.absent(),
+    this.templateId = const Value.absent(),
     this.snapshot = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   SessionsCompanion.insert({
     required String id,
+    required String templateId,
     required String snapshot,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
+       templateId = Value(templateId),
        snapshot = Value(snapshot);
   static Insertable<Session> custom({
     Expression<String>? id,
+    Expression<String>? templateId,
     Expression<String>? snapshot,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (templateId != null) 'template_id': templateId,
       if (snapshot != null) 'snapshot': snapshot,
       if (rowid != null) 'rowid': rowid,
     });
@@ -2356,11 +2406,13 @@ class SessionsCompanion extends UpdateCompanion<Session> {
 
   SessionsCompanion copyWith({
     Value<String>? id,
+    Value<String>? templateId,
     Value<String>? snapshot,
     Value<int>? rowid,
   }) {
     return SessionsCompanion(
       id: id ?? this.id,
+      templateId: templateId ?? this.templateId,
       snapshot: snapshot ?? this.snapshot,
       rowid: rowid ?? this.rowid,
     );
@@ -2371,6 +2423,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (templateId.present) {
+      map['template_id'] = Variable<String>(templateId.value);
     }
     if (snapshot.present) {
       map['snapshot'] = Variable<String>(snapshot.value);
@@ -2385,6 +2440,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   String toString() {
     return (StringBuffer('SessionsCompanion(')
           ..write('id: $id, ')
+          ..write('templateId: $templateId, ')
           ..write('snapshot: $snapshot, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -2591,6 +2647,37 @@ class $ProgressionDecisionsTable extends ProgressionDecisions
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _templateIdMeta = const VerificationMeta(
+    'templateId',
+  );
+  @override
+  late final GeneratedColumn<String> templateId = GeneratedColumn<String>(
+    'template_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sequenceMeta = const VerificationMeta(
+    'sequence',
+  );
+  @override
+  late final GeneratedColumn<int> sequence = GeneratedColumn<int>(
+    'sequence',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _snapshotMeta = const VerificationMeta(
     'snapshot',
   );
@@ -2603,7 +2690,14 @@ class $ProgressionDecisionsTable extends ProgressionDecisions
     requiredDuringInsert: true,
   );
   @override
-  List<GeneratedColumn> get $columns => [sessionId, slotId, snapshot];
+  List<GeneratedColumn> get $columns => [
+    sessionId,
+    slotId,
+    templateId,
+    runId,
+    sequence,
+    snapshot,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -2632,6 +2726,28 @@ class $ProgressionDecisionsTable extends ProgressionDecisions
     } else if (isInserting) {
       context.missing(_slotIdMeta);
     }
+    if (data.containsKey('template_id')) {
+      context.handle(
+        _templateIdMeta,
+        templateId.isAcceptableOrUnknown(data['template_id']!, _templateIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_templateIdMeta);
+    }
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    }
+    if (data.containsKey('sequence')) {
+      context.handle(
+        _sequenceMeta,
+        sequence.isAcceptableOrUnknown(data['sequence']!, _sequenceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sequenceMeta);
+    }
     if (data.containsKey('snapshot')) {
       context.handle(
         _snapshotMeta,
@@ -2657,6 +2773,18 @@ class $ProgressionDecisionsTable extends ProgressionDecisions
         DriftSqlType.string,
         data['${effectivePrefix}slot_id'],
       )!,
+      templateId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}template_id'],
+      )!,
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      ),
+      sequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequence'],
+      )!,
       snapshot: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}snapshot'],
@@ -2674,10 +2802,16 @@ class ProgressionDecision extends DataClass
     implements Insertable<ProgressionDecision> {
   final String sessionId;
   final String slotId;
+  final String templateId;
+  final String? runId;
+  final int sequence;
   final String snapshot;
   const ProgressionDecision({
     required this.sessionId,
     required this.slotId,
+    required this.templateId,
+    this.runId,
+    required this.sequence,
     required this.snapshot,
   });
   @override
@@ -2685,6 +2819,11 @@ class ProgressionDecision extends DataClass
     final map = <String, Expression>{};
     map['session_id'] = Variable<String>(sessionId);
     map['slot_id'] = Variable<String>(slotId);
+    map['template_id'] = Variable<String>(templateId);
+    if (!nullToAbsent || runId != null) {
+      map['run_id'] = Variable<String>(runId);
+    }
+    map['sequence'] = Variable<int>(sequence);
     map['snapshot'] = Variable<String>(snapshot);
     return map;
   }
@@ -2693,6 +2832,11 @@ class ProgressionDecision extends DataClass
     return ProgressionDecisionsCompanion(
       sessionId: Value(sessionId),
       slotId: Value(slotId),
+      templateId: Value(templateId),
+      runId: runId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runId),
+      sequence: Value(sequence),
       snapshot: Value(snapshot),
     );
   }
@@ -2705,6 +2849,9 @@ class ProgressionDecision extends DataClass
     return ProgressionDecision(
       sessionId: serializer.fromJson<String>(json['sessionId']),
       slotId: serializer.fromJson<String>(json['slotId']),
+      templateId: serializer.fromJson<String>(json['templateId']),
+      runId: serializer.fromJson<String?>(json['runId']),
+      sequence: serializer.fromJson<int>(json['sequence']),
       snapshot: serializer.fromJson<String>(json['snapshot']),
     );
   }
@@ -2714,6 +2861,9 @@ class ProgressionDecision extends DataClass
     return <String, dynamic>{
       'sessionId': serializer.toJson<String>(sessionId),
       'slotId': serializer.toJson<String>(slotId),
+      'templateId': serializer.toJson<String>(templateId),
+      'runId': serializer.toJson<String?>(runId),
+      'sequence': serializer.toJson<int>(sequence),
       'snapshot': serializer.toJson<String>(snapshot),
     };
   }
@@ -2721,16 +2871,27 @@ class ProgressionDecision extends DataClass
   ProgressionDecision copyWith({
     String? sessionId,
     String? slotId,
+    String? templateId,
+    Value<String?> runId = const Value.absent(),
+    int? sequence,
     String? snapshot,
   }) => ProgressionDecision(
     sessionId: sessionId ?? this.sessionId,
     slotId: slotId ?? this.slotId,
+    templateId: templateId ?? this.templateId,
+    runId: runId.present ? runId.value : this.runId,
+    sequence: sequence ?? this.sequence,
     snapshot: snapshot ?? this.snapshot,
   );
   ProgressionDecision copyWithCompanion(ProgressionDecisionsCompanion data) {
     return ProgressionDecision(
       sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
       slotId: data.slotId.present ? data.slotId.value : this.slotId,
+      templateId: data.templateId.present
+          ? data.templateId.value
+          : this.templateId,
+      runId: data.runId.present ? data.runId.value : this.runId,
+      sequence: data.sequence.present ? data.sequence.value : this.sequence,
       snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
     );
   }
@@ -2740,19 +2901,26 @@ class ProgressionDecision extends DataClass
     return (StringBuffer('ProgressionDecision(')
           ..write('sessionId: $sessionId, ')
           ..write('slotId: $slotId, ')
+          ..write('templateId: $templateId, ')
+          ..write('runId: $runId, ')
+          ..write('sequence: $sequence, ')
           ..write('snapshot: $snapshot')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(sessionId, slotId, snapshot);
+  int get hashCode =>
+      Object.hash(sessionId, slotId, templateId, runId, sequence, snapshot);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ProgressionDecision &&
           other.sessionId == this.sessionId &&
           other.slotId == this.slotId &&
+          other.templateId == this.templateId &&
+          other.runId == this.runId &&
+          other.sequence == this.sequence &&
           other.snapshot == this.snapshot);
 }
 
@@ -2760,31 +2928,48 @@ class ProgressionDecisionsCompanion
     extends UpdateCompanion<ProgressionDecision> {
   final Value<String> sessionId;
   final Value<String> slotId;
+  final Value<String> templateId;
+  final Value<String?> runId;
+  final Value<int> sequence;
   final Value<String> snapshot;
   final Value<int> rowid;
   const ProgressionDecisionsCompanion({
     this.sessionId = const Value.absent(),
     this.slotId = const Value.absent(),
+    this.templateId = const Value.absent(),
+    this.runId = const Value.absent(),
+    this.sequence = const Value.absent(),
     this.snapshot = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ProgressionDecisionsCompanion.insert({
     required String sessionId,
     required String slotId,
+    required String templateId,
+    this.runId = const Value.absent(),
+    required int sequence,
     required String snapshot,
     this.rowid = const Value.absent(),
   }) : sessionId = Value(sessionId),
        slotId = Value(slotId),
+       templateId = Value(templateId),
+       sequence = Value(sequence),
        snapshot = Value(snapshot);
   static Insertable<ProgressionDecision> custom({
     Expression<String>? sessionId,
     Expression<String>? slotId,
+    Expression<String>? templateId,
+    Expression<String>? runId,
+    Expression<int>? sequence,
     Expression<String>? snapshot,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (sessionId != null) 'session_id': sessionId,
       if (slotId != null) 'slot_id': slotId,
+      if (templateId != null) 'template_id': templateId,
+      if (runId != null) 'run_id': runId,
+      if (sequence != null) 'sequence': sequence,
       if (snapshot != null) 'snapshot': snapshot,
       if (rowid != null) 'rowid': rowid,
     });
@@ -2793,12 +2978,18 @@ class ProgressionDecisionsCompanion
   ProgressionDecisionsCompanion copyWith({
     Value<String>? sessionId,
     Value<String>? slotId,
+    Value<String>? templateId,
+    Value<String?>? runId,
+    Value<int>? sequence,
     Value<String>? snapshot,
     Value<int>? rowid,
   }) {
     return ProgressionDecisionsCompanion(
       sessionId: sessionId ?? this.sessionId,
       slotId: slotId ?? this.slotId,
+      templateId: templateId ?? this.templateId,
+      runId: runId ?? this.runId,
+      sequence: sequence ?? this.sequence,
       snapshot: snapshot ?? this.snapshot,
       rowid: rowid ?? this.rowid,
     );
@@ -2812,6 +3003,15 @@ class ProgressionDecisionsCompanion
     }
     if (slotId.present) {
       map['slot_id'] = Variable<String>(slotId.value);
+    }
+    if (templateId.present) {
+      map['template_id'] = Variable<String>(templateId.value);
+    }
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (sequence.present) {
+      map['sequence'] = Variable<int>(sequence.value);
     }
     if (snapshot.present) {
       map['snapshot'] = Variable<String>(snapshot.value);
@@ -2827,6 +3027,9 @@ class ProgressionDecisionsCompanion
     return (StringBuffer('ProgressionDecisionsCompanion(')
           ..write('sessionId: $sessionId, ')
           ..write('slotId: $slotId, ')
+          ..write('templateId: $templateId, ')
+          ..write('runId: $runId, ')
+          ..write('sequence: $sequence, ')
           ..write('snapshot: $snapshot, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -7362,6 +7565,14 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
   );
   late final $BlockProgressionsTable blockProgressions =
       $BlockProgressionsTable(this);
+  late final Index sessionsTemplate = Index(
+    'sessions_template',
+    'CREATE INDEX sessions_template ON sessions (template_id)',
+  );
+  late final Index progressionDecisionsTrack = Index(
+    'progression_decisions_track',
+    'CREATE INDEX progression_decisions_track ON progression_decisions (template_id, slot_id, run_id, sequence)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7395,6 +7606,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     programUpgradeReceipts,
     importedSessions,
     blockProgressions,
+    sessionsTemplate,
+    progressionDecisionsTrack,
   ];
 }
 
@@ -8895,12 +9108,14 @@ typedef $$EquipmentInstanceRevisionsTableProcessedTableManager =
 typedef $$SessionsTableCreateCompanionBuilder =
     SessionsCompanion Function({
       required String id,
+      required String templateId,
       required String snapshot,
       Value<int> rowid,
     });
 typedef $$SessionsTableUpdateCompanionBuilder =
     SessionsCompanion Function({
       Value<String> id,
+      Value<String> templateId,
       Value<String> snapshot,
       Value<int> rowid,
     });
@@ -9073,6 +9288,11 @@ class $$SessionsTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get templateId => $composableBuilder(
+    column: $table.templateId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9271,6 +9491,11 @@ class $$SessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get templateId => $composableBuilder(
+    column: $table.templateId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get snapshot => $composableBuilder(
     column: $table.snapshot,
     builder: (column) => ColumnOrderings(column),
@@ -9288,6 +9513,11 @@ class $$SessionsTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get templateId => $composableBuilder(
+    column: $table.templateId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get snapshot =>
       $composableBuilder(column: $table.snapshot, builder: (column) => column);
@@ -9508,16 +9738,24 @@ class $$SessionsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> templateId = const Value.absent(),
                 Value<String> snapshot = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => SessionsCompanion(id: id, snapshot: snapshot, rowid: rowid),
+              }) => SessionsCompanion(
+                id: id,
+                templateId: templateId,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
           createCompanionCallback:
               ({
                 required String id,
+                required String templateId,
                 required String snapshot,
                 Value<int> rowid = const Value.absent(),
               }) => SessionsCompanion.insert(
                 id: id,
+                templateId: templateId,
                 snapshot: snapshot,
                 rowid: rowid,
               ),
@@ -9972,6 +10210,9 @@ typedef $$ProgressionDecisionsTableCreateCompanionBuilder =
     ProgressionDecisionsCompanion Function({
       required String sessionId,
       required String slotId,
+      required String templateId,
+      Value<String?> runId,
+      required int sequence,
       required String snapshot,
       Value<int> rowid,
     });
@@ -9979,6 +10220,9 @@ typedef $$ProgressionDecisionsTableUpdateCompanionBuilder =
     ProgressionDecisionsCompanion Function({
       Value<String> sessionId,
       Value<String> slotId,
+      Value<String> templateId,
+      Value<String?> runId,
+      Value<int> sequence,
       Value<String> snapshot,
       Value<int> rowid,
     });
@@ -10028,6 +10272,21 @@ class $$ProgressionDecisionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get templateId => $composableBuilder(
+    column: $table.templateId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get snapshot => $composableBuilder(
     column: $table.snapshot,
     builder: (column) => ColumnFilters(column),
@@ -10071,6 +10330,21 @@ class $$ProgressionDecisionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get templateId => $composableBuilder(
+    column: $table.templateId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get snapshot => $composableBuilder(
     column: $table.snapshot,
     builder: (column) => ColumnOrderings(column),
@@ -10111,6 +10385,17 @@ class $$ProgressionDecisionsTableAnnotationComposer
   });
   GeneratedColumn<String> get slotId =>
       $composableBuilder(column: $table.slotId, builder: (column) => column);
+
+  GeneratedColumn<String> get templateId => $composableBuilder(
+    column: $table.templateId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get runId =>
+      $composableBuilder(column: $table.runId, builder: (column) => column);
+
+  GeneratedColumn<int> get sequence =>
+      $composableBuilder(column: $table.sequence, builder: (column) => column);
 
   GeneratedColumn<String> get snapshot =>
       $composableBuilder(column: $table.snapshot, builder: (column) => column);
@@ -10177,11 +10462,17 @@ class $$ProgressionDecisionsTableTableManager
               ({
                 Value<String> sessionId = const Value.absent(),
                 Value<String> slotId = const Value.absent(),
+                Value<String> templateId = const Value.absent(),
+                Value<String?> runId = const Value.absent(),
+                Value<int> sequence = const Value.absent(),
                 Value<String> snapshot = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProgressionDecisionsCompanion(
                 sessionId: sessionId,
                 slotId: slotId,
+                templateId: templateId,
+                runId: runId,
+                sequence: sequence,
                 snapshot: snapshot,
                 rowid: rowid,
               ),
@@ -10189,11 +10480,17 @@ class $$ProgressionDecisionsTableTableManager
               ({
                 required String sessionId,
                 required String slotId,
+                required String templateId,
+                Value<String?> runId = const Value.absent(),
+                required int sequence,
                 required String snapshot,
                 Value<int> rowid = const Value.absent(),
               }) => ProgressionDecisionsCompanion.insert(
                 sessionId: sessionId,
                 slotId: slotId,
+                templateId: templateId,
+                runId: runId,
+                sequence: sequence,
                 snapshot: snapshot,
                 rowid: rowid,
               ),

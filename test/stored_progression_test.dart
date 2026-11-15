@@ -40,9 +40,128 @@ Future<TrainingSession> _finished(
   });
 }
 
+Future<BodyTmiException> _failure(
+  Future<Object?> Function() action, {
+  Future<Object?> Function()? orElse,
+}) async {
+  try {
+    await action();
+  } on BodyTmiException catch (error) {
+    return error;
+  }
+  if (orElse != null) return _failure(orElse);
+  throw StateError('Expected a BodyTmiException.');
+}
+
 DateTime _approval(int day) => instant(day).add(const Duration(hours: 2));
 
 void storedProgressionTests() {
+  test(
+    'indexed history reads the right track and verifies its mirror columns',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-indexed-');
+      final path = '${dir.path}/db.sqlite';
+      var store = await TrainingStore.open(path);
+      try {
+        final training = StoredTrainingService(store);
+        final progression = StoredProgressionService(store);
+        await training.publish(definition(), 0);
+        var s = await _finished(store, 'first', 1);
+        var p = await progression.propose(s.id, _slot, _rule());
+        await progression.accept(s.id, _slot, p.version, _approval(1));
+        // A newer decision in another context (changed setup note) shares
+        // the template and slot ID; it must not hide the real latest track.
+        final moved = definition().toJson();
+        final slots = moved['slots']! as List<Object?>;
+        (slots.first! as Map<String, Object?>)['setupNote'] = 'Incline bench.';
+        await training.publish(WorkoutDefinition.fromJson(moved), 1);
+        for (final (id, day) in [('other', 2), ('other-2', 3)]) {
+          final other = await training.start(id, 'upper-a', 2, instant(day));
+          await training.edit(other.id, other.contentVersion, (s) {
+            for (final set in s.sets) {
+              s = const TrainingService().complete(
+                s,
+                set.id,
+                const {},
+                acceptSuggested: true,
+              );
+            }
+            return s.finish(instant(day).add(const Duration(hours: 1)));
+          });
+          p = await progression.propose(id, _slot, _rule());
+          await progression.accept(id, _slot, p.version, _approval(day));
+        }
+        // The other context is now at sequence 2, above the real track.
+        equal((await progression.decision('other-2', _slot)).sequence, 2);
+        final track = await progression.track(
+          templateId: 'upper-a',
+          revision: 1,
+          slotId: _slot,
+          asOf: instant(4),
+        );
+        equal(track['decisionId'], 'first/$_slot');
+        s = await training.start('third', 'upper-a', 1, instant(4));
+        final first = await progression.decision('first', _slot);
+        equal(
+          canonicalJson(
+            s.sets
+                .firstWhere((x) => x.slotId == _slot)
+                .suggested['reps']!
+                .toJson(),
+          ),
+          canonicalJson(first.nextSets.first['reps']!.toJson()),
+        );
+        await store.backup('${dir.path}/native');
+      } finally {
+        await store.close();
+      }
+      // A mirror column that disagrees with its snapshot is rejected, by
+      // the live store and by native backup validation alike.
+      for (final (table, column, value) in [
+        ('progression_decisions', 'sequence', 99),
+        ('sessions', 'template_id', 'elsewhere'),
+      ]) {
+        for (final file in [path, '${dir.path}/native/database.sqlite']) {
+          final db = sqlite3.open(file);
+          final original = db.select('SELECT rowid, $column FROM $table');
+          db.execute('UPDATE $table SET $column = ?', [value]);
+          db.close();
+          if (file == path) {
+            store = await TrainingStore.open(path);
+            try {
+              final error = await _failure(
+                () => StoredTrainingService(store).session('first'),
+                orElse: () =>
+                    StoredProgressionService(store).decision('first', _slot),
+              );
+              check(error.message.contains('inconsistent'), error.message);
+            } finally {
+              await store.close();
+            }
+          } else {
+            final error = await _failure(
+              () => NativeBackup.prepare('${dir.path}/native'),
+            );
+            check(
+              error.message.contains('mismatch') ||
+                  error.message.contains('inconsistent'),
+              error.message,
+            );
+          }
+          final restore = sqlite3.open(file);
+          for (final row in original) {
+            restore.execute('UPDATE $table SET $column = ? WHERE rowid = ?', [
+              row[column],
+              row['rowid'],
+            ]);
+          }
+          restore.close();
+        }
+      }
+      await dir.delete(recursive: true);
+    },
+  );
+
   test(
     'warmups stay outside progression, changed loads require review and revision target edits require reconciliation',
     () async {

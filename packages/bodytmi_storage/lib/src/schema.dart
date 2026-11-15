@@ -44,7 +44,10 @@ const schema = {
   'program_upgrade_receipts':
       'CREATE TABLE "program_upgrade_receipts" ("run_id" TEXT NOT NULL, "request_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("run_id", "request_id"))',
   'progression_decisions':
-      'CREATE TABLE "progression_decisions" ("session_id" TEXT NOT NULL REFERENCES sessions (id), "slot_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("session_id", "slot_id"))',
+      'CREATE TABLE "progression_decisions" ("session_id" TEXT NOT NULL REFERENCES sessions (id), "slot_id" TEXT NOT NULL, "template_id" TEXT NOT NULL, "run_id" TEXT NULL, "sequence" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("session_id", "slot_id"))',
+  // Indexes follow their table: the staged restore runs these in order.
+  'progression_decisions_track':
+      'CREATE INDEX progression_decisions_track ON progression_decisions (template_id, slot_id, run_id, sequence)',
   'progression_reconciliations':
       'CREATE TABLE "progression_reconciliations" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'repeat_checkpoints':
@@ -54,7 +57,9 @@ const schema = {
   'session_programs':
       'CREATE TABLE "session_programs" ("session_id" TEXT NOT NULL REFERENCES sessions (id), "run_id" TEXT NOT NULL REFERENCES program_runs (id), "ordinal" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("session_id"), UNIQUE ("run_id", "ordinal"))',
   'sessions':
-      'CREATE TABLE "sessions" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+      'CREATE TABLE "sessions" ("id" TEXT NOT NULL, "template_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+  'sessions_template':
+      'CREATE INDEX sessions_template ON sessions (template_id)',
   'shared_lever_applications':
       'CREATE TABLE "shared_lever_applications" ("link_id" TEXT NOT NULL, "sequence" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("link_id", "sequence"))',
   'timing_activities':

@@ -14,6 +14,7 @@ import 'database.dart'
         BodyMassRecord,
         TimingActivity,
         WorkoutExecution;
+import 'database.dart' as rows show ProgressionDecision, Session;
 import 'native_backup.dart';
 import 'read_cache.dart';
 import 'schema.dart';
@@ -464,20 +465,65 @@ final class TrainingStore implements TrainingRepository {
     for (final row in await _db.select(_db.finalizations).get()) row.sessionId,
   ];
   @override
-  Future<List<ProgressionDecision>> progressionDecisions() => _cache.list(
-    'progressionDecisions',
-    () async {
-      final result = <ProgressionDecision>[];
-      for (final row in await _db.select(_db.progressionDecisions).get()) {
-        final decision = ProgressionDecision.fromJson(jsonDecode(row.snapshot));
-        if (decision.session.id != row.sessionId ||
-            decision.storageSlotKey != row.slotId)
-          invalid('Stored progression identity is inconsistent.');
-        result.add(decision);
-      }
-      return result;
-    },
-  );
+  Future<List<ProgressionDecision>> progressionDecisions() =>
+      _cache.list('progressionDecisions', () async {
+        final result = <ProgressionDecision>[];
+        for (final row in await _db.select(_db.progressionDecisions).get()) {
+          result.add(_decision(row));
+        }
+        return result;
+      });
+
+  ProgressionDecision _decision(rows.ProgressionDecision row) {
+    final decision = ProgressionDecision.fromJson(jsonDecode(row.snapshot));
+    if (decision.session.id != row.sessionId ||
+        decision.storageSlotKey != row.slotId ||
+        decision.templateId != row.templateId ||
+        decision.runId != row.runId ||
+        decision.sequence != row.sequence)
+      invalid('Stored progression identity is inconsistent.');
+    return decision;
+  }
+
+  @override
+  Future<ProgressionDecision?> progressionDecision(
+    String sessionId,
+    String slotKey,
+  ) async {
+    final row =
+        await (_db.select(_db.progressionDecisions)..where(
+              (r) => r.sessionId.equals(sessionId) & r.slotId.equals(slotKey),
+            ))
+            .getSingleOrNull();
+    return row == null ? null : _decision(row);
+  }
+
+  @override
+  Future<List<ProgressionDecision>> latestTrackDecisions(
+    String templateId,
+    String slotKey,
+    String? runId,
+    bool Function(ProgressionDecision) where,
+  ) async {
+    final query = _db.select(_db.progressionDecisions)
+      ..where(
+        (r) =>
+            r.templateId.equals(templateId) &
+            r.slotId.equals(slotKey) &
+            (runId == null ? r.runId.isNull() : r.runId.equals(runId)),
+      )
+      ..orderBy([(r) => OrderingTerm.desc(r.sequence)]);
+    final found = <ProgressionDecision>[];
+    int? top;
+    for (final row in await query.get()) {
+      if (top != null && row.sequence < top) break;
+      final decision = _decision(row);
+      if (!where(decision)) continue;
+      top = row.sequence;
+      found.add(decision);
+    }
+    return found;
+  }
 
   @override
   Future<void> saveProgressionDecision(ProgressionDecision decision) async {
@@ -508,6 +554,9 @@ final class TrainingStore implements TrainingRepository {
           ProgressionDecisionsCompanion.insert(
             sessionId: decision.session.id,
             slotId: decision.storageSlotKey,
+            templateId: decision.templateId,
+            runId: Value(decision.runId),
+            sequence: decision.sequence,
             snapshot: snapshot,
           ),
         );
@@ -1113,22 +1162,28 @@ final class TrainingStore implements TrainingRepository {
     final row = await (_db.select(
       _db.sessions,
     )..where((s) => s.id.equals(id))).getSingleOrNull();
-    return row == null ? null : sessionFromJson(jsonDecode(row.snapshot));
+    return row == null ? null : _session(row);
+  }
+
+  TrainingSession _session(rows.Session row) {
+    final session = sessionFromJson(jsonDecode(row.snapshot));
+    if (session.id != row.id || session.definition.id != row.templateId)
+      invalid('Stored session identity is inconsistent.');
+    return session;
   }
 
   @override
-  Future<List<TrainingSession>> sessions() => _cache.list('sessions', () async {
-    final result = <TrainingSession>[];
-    for (final row in await (_db.select(
-      _db.sessions,
-    )..orderBy([(s) => OrderingTerm.asc(s.id)])).get()) {
-      final session = sessionFromJson(jsonDecode(row.snapshot));
-      if (session.id != row.id)
-        invalid('Stored session identity is inconsistent.');
-      result.add(session);
-    }
-    return result;
-  });
+  Future<List<TrainingSession>> sessions({String? templateId}) =>
+      templateId == null
+      ? _cache.list('sessions', () => _sessions(null))
+      : _cache.list('sessions/$templateId', () => _sessions(templateId));
+
+  Future<List<TrainingSession>> _sessions(String? templateId) async {
+    final query = _db.select(_db.sessions)
+      ..orderBy([(s) => OrderingTerm.asc(s.id)]);
+    if (templateId != null) query.where((s) => s.templateId.equals(templateId));
+    return [for (final row in await query.get()) _session(row)];
+  }
 
   @override
   Future<void> insertSession(TrainingSession session) async {
@@ -1137,6 +1192,7 @@ final class TrainingStore implements TrainingRepository {
         .insert(
           SessionsCompanion.insert(
             id: session.id,
+            templateId: session.definition.id,
             snapshot: _snapshot(session.toJson()),
           ),
         );
@@ -1144,8 +1200,14 @@ final class TrainingStore implements TrainingRepository {
 
   @override
   Future<void> updateSession(TrainingSession session) async {
-    await (_db.update(_db.sessions)..where((s) => s.id.equals(session.id)))
-        .write(SessionsCompanion(snapshot: Value(_snapshot(session.toJson()))));
+    await (_db.update(
+      _db.sessions,
+    )..where((s) => s.id.equals(session.id))).write(
+      SessionsCompanion(
+        templateId: Value(session.definition.id),
+        snapshot: Value(_snapshot(session.toJson())),
+      ),
+    );
   }
 
   @override

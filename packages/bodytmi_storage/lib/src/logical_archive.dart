@@ -219,10 +219,14 @@ final class LogicalArchiveFiles {
             );
           }
           for (final session in archive.sessions) {
-            db.execute('INSERT INTO sessions (id, snapshot) VALUES (?, ?)', [
-              session.id,
-              canonicalJson(session.toJson()),
-            ]);
+            db.execute(
+              'INSERT INTO sessions (id, template_id, snapshot) VALUES (?, ?, ?)',
+              [
+                session.id,
+                session.definition.id,
+                canonicalJson(session.toJson()),
+              ],
+            );
           }
           for (final id in archive.finalizations) {
             db.execute('INSERT INTO finalizations (session_id) VALUES (?)', [
@@ -231,10 +235,13 @@ final class LogicalArchiveFiles {
           }
           for (final decision in archive.progressions) {
             db.execute(
-              'INSERT INTO progression_decisions(session_id,slot_id,snapshot) VALUES (?,?,?)',
+              'INSERT INTO progression_decisions(session_id,slot_id,template_id,run_id,sequence,snapshot) VALUES (?,?,?,?,?,?)',
               [
                 decision.session.id,
                 decision.storageSlotKey,
+                decision.templateId,
+                decision.runId,
+                decision.sequence,
                 canonicalJson(decision.toJson()),
               ],
             );

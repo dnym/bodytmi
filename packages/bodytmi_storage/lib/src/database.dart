@@ -75,8 +75,12 @@ class EquipmentInstanceRevisions extends Table {
   Set<Column> get primaryKey => {instanceId, number};
 }
 
+/// [templateId] mirrors the snapshot so history for one workout template is
+/// read without decoding every session; reads verify it matches.
+@TableIndex(name: 'sessions_template', columns: {#templateId})
 class Sessions extends Table {
   TextColumn get id => text()();
+  TextColumn get templateId => text()();
   TextColumn get snapshot => text()();
   @override
   Set<Column> get primaryKey => {id};
@@ -89,9 +93,19 @@ class Finalizations extends Table {
   Set<Column> get primaryKey => {sessionId};
 }
 
+/// [templateId], [runId] and [sequence] mirror the snapshot so a track's
+/// newest decisions are read first without decoding the rest of history;
+/// reads verify they match.
+@TableIndex(
+  name: 'progression_decisions_track',
+  columns: {#templateId, #slotId, #runId, #sequence},
+)
 class ProgressionDecisions extends Table {
   TextColumn get sessionId => text().references(Sessions, #id)();
   TextColumn get slotId => text()();
+  TextColumn get templateId => text()();
+  TextColumn get runId => text().nullable()();
+  IntColumn get sequence => integer()();
   TextColumn get snapshot => text()();
   @override
   Set<Column> get primaryKey => {sessionId, slotId};

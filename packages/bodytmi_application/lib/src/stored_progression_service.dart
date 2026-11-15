@@ -128,19 +128,22 @@ final class StoredProgressionService {
         .where((b) => b.sessionId == sessionId)
         .firstOrNull
         ?.runId;
-    final all = await repository.progressionDecisions();
-    final existing = all
-        .where(
-          (d) =>
-              d.session.id == sessionId && d.slotId == slotId && d.role == role,
-        )
-        .firstOrNull;
+    final existing = await repository.progressionDecision(
+      sessionId,
+      _slotKey(slotId, role),
+    );
     if (existing?.resolvedAt != null)
       _conflict('This exposure is already resolved; use progression show.');
     final before = linkLinkedTrack(
       await _links(),
       latestTrack(
-        all,
+        await trackDecisions(
+          repository,
+          session.definition.id,
+          candidates.single,
+          runId: runId,
+          role: role,
+        ),
         <ProgressionAnchor>[
           ...await _reconciliations(),
           ...await _retirements(),
@@ -243,11 +246,13 @@ final class StoredProgressionService {
       if (runId != null && runId != sessionRunId)
         invalid('Candidate session belongs to another program run.');
     }
-    final decisions = (await repository.progressionDecisions()).where(
-      (d) =>
-          d.resolvedAt != null &&
-          !d.resolvedAt!.isAfter(asOf) &&
-          d.session.startedAt.isBefore(asOf),
+    final decisions = await trackDecisions(
+      repository,
+      templateId,
+      slots.single,
+      runId: runId,
+      role: role,
+      where: (d) => _before(d, asOf),
     );
     final wrapAt = session?.startedAt ?? asOf;
     final latest = linkLinkedTrack(
@@ -323,11 +328,13 @@ final class StoredProgressionService {
     ).revision(templateId, revision);
     final slots = prescription.definition.slots.where((s) => s.id == slotId);
     if (slots.isEmpty) invalid('Unknown progression slot.');
-    final decisions = (await repository.progressionDecisions()).where(
-      (d) =>
-          d.resolvedAt != null &&
-          !d.resolvedAt!.isAfter(asOf) &&
-          d.session.startedAt.isBefore(asOf),
+    final decisions = await trackDecisions(
+      repository,
+      templateId,
+      slots.single,
+      runId: runId,
+      role: role,
+      where: (d) => _before(d, asOf),
     );
     final raw = latestTrack(
       decisions,
@@ -457,13 +464,10 @@ final class StoredProgressionService {
     } else {
       invalid('Unknown stored progression rule type.');
     }
-    final all = await repository.progressionDecisions();
-    final existing = all
-        .where(
-          (d) =>
-              d.session.id == sessionId && d.slotId == slotId && d.role == role,
-        )
-        .firstOrNull;
+    final existing = await repository.progressionDecision(
+      sessionId,
+      _slotKey(slotId, role),
+    );
     if (existing?.resolvedAt != null) {
       if (existing!.ruleType != ruleType ||
           canonicalJson(existing.rule) != canonicalJson(rule))
@@ -499,7 +503,13 @@ final class StoredProgressionService {
     final before = linkLinkedTrack(
       links,
       latestTrack(
-        all,
+        await trackDecisions(
+          repository,
+          session.definition.id,
+          candidates.single,
+          runId: runId,
+          role: role,
+        ),
         <ProgressionAnchor>[
           ...await _reconciliations(),
           ...await _retirements(),
@@ -581,6 +591,13 @@ final class StoredProgressionService {
     return next;
   });
 
+  static String _slotKey(String slotId, String role) =>
+      role == 'work' ? slotId : '$slotId/$role';
+
+  /// Resolved by [cutoff] and from a session that started before it.
+  static bool _before(ProgressionDecision d, DateTime cutoff) =>
+      !d.resolvedAt!.isAfter(cutoff) && d.session.startedAt.isBefore(cutoff);
+
   Future<ProgressionDecision> decision(
     String sessionId,
     String slotId, {
@@ -588,15 +605,10 @@ final class StoredProgressionService {
   }) async {
     if (!{'work', 'warmup', 'backoff', 'drop'}.contains(role))
       invalid('Unknown progression role.');
-    final rows = await repository.progressionDecisions();
-    return rows
-            .where(
-              (d) =>
-                  d.session.id == sessionId &&
-                  d.slotId == slotId &&
-                  d.role == role,
-            )
-            .firstOrNull ??
+    return await repository.progressionDecision(
+          sessionId,
+          _slotKey(slotId, role),
+        ) ??
         (throw const BodyTmiException(
           'not_found',
           'Progression decision not found.',
@@ -667,7 +679,13 @@ final class StoredProgressionService {
       return true;
     if (decision.resolvedAt != null) return false;
     final latest = latestTrack(
-      await repository.progressionDecisions(),
+      await trackDecisions(
+        repository,
+        decision.session.definition.id,
+        decision.slot,
+        runId: runId,
+        role: decision.role,
+      ),
       <ProgressionAnchor>[...await _reconciliations(), ...await _retirements()],
       decision.session.definition.id,
       decision.slot,
@@ -687,12 +705,30 @@ final class StoredProgressionService {
     return false;
   }
 
+  /// [_base], restricted like a track lookup at [cutoff]: a decision only
+  /// counts once resolved by then and from a session that started before.
+  Future<ProgressionAnchor?> _baseBefore(
+    String? previousApplication,
+    DateTime cutoff,
+  ) async {
+    final base = await _base(previousApplication);
+    if (base is ProgressionDecision &&
+        (base.resolvedAt == null || !_before(base, cutoff)))
+      return null;
+    return base;
+  }
+
   /// The application or reconciliation a pending exposure continues from.
   Future<ProgressionAnchor?> _base(String? previousApplication) async {
     if (previousApplication == null) return null;
-    return (await repository.progressionDecisions())
-            .where((d) => d.id == previousApplication)
-            .firstOrNull ??
+    // Decision IDs are '<sessionId>/<slot key>'; session IDs have no '/'.
+    final slash = previousApplication.indexOf('/');
+    return (slash < 0
+            ? null
+            : await repository.progressionDecision(
+                previousApplication.substring(0, slash),
+                previousApplication.substring(slash + 1),
+              )) ??
         (await repository.progressionReconciliations())
             .where((r) => r.id == previousApplication)
             .firstOrNull ??
@@ -854,11 +890,13 @@ final class StoredProgressionService {
       if (session.startedAt.isAfter(reconciledAt))
         invalid('Reconciliation cannot adopt a session that starts later.');
     }
-    final decisions = (await repository.progressionDecisions()).where(
-      (d) =>
-          d.resolvedAt != null &&
-          !d.resolvedAt!.isAfter(reconciledAt) &&
-          d.session.startedAt.isBefore(reconciledAt),
+    final decisions = await trackDecisions(
+      repository,
+      templateId,
+      slots.single,
+      runId: runId,
+      role: role,
+      where: (d) => _before(d, reconciledAt),
     );
     final receipts = await _reconciliations();
     final retirements = await _retirements();
@@ -874,14 +912,7 @@ final class StoredProgressionService {
               runId: runId,
               role: role,
             )
-          : <String, ProgressionAnchor>{
-              for (final anchor in <ProgressionAnchor>[
-                ...decisions,
-                ...receipts,
-                ...retirements,
-              ])
-                anchor.id: anchor,
-            }[prior.previousApplication],
+          : await _baseBefore(prior.previousApplication, reconciledAt),
       at: reconciledAt,
       sessionStartedAt: reconciledAt,
     );
@@ -1090,11 +1121,13 @@ final class StoredProgressionService {
     if (source.status != SessionStatus.finalized ||
         source.finishedAt!.isAfter(reseededAt))
       invalid('The retest source session must be finalized before reseeding.');
-    final decisions = (await repository.progressionDecisions()).where(
-      (d) =>
-          d.resolvedAt != null &&
-          !d.resolvedAt!.isAfter(reseededAt) &&
-          d.session.startedAt.isBefore(reseededAt),
+    final decisions = await trackDecisions(
+      repository,
+      templateId,
+      slots.single,
+      runId: runId,
+      role: role,
+      where: (d) => _before(d, reseededAt),
     );
     final receipts = await _reconciliations();
     final prior = receipts.where((r) => r.id == id).firstOrNull;
@@ -1109,14 +1142,7 @@ final class StoredProgressionService {
               runId: runId,
               role: role,
             )
-          : <String, ProgressionAnchor>{
-              for (final anchor in <ProgressionAnchor>[
-                ...decisions,
-                ...receipts,
-                ...await _retirements(),
-              ])
-                anchor.id: anchor,
-            }[prior.previousApplication],
+          : await _baseBefore(prior.previousApplication, reseededAt),
       at: reseededAt,
       sessionStartedAt: reseededAt,
     );

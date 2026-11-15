@@ -53,6 +53,22 @@ abstract interface class TrainingRepository {
   );
   Future<List<String>> finalizationIds();
   Future<List<ProgressionDecision>> progressionDecisions();
+
+  /// One exposure's decision by its identity (session and storage slot key).
+  Future<ProgressionDecision?> progressionDecision(
+    String sessionId,
+    String slotKey,
+  );
+
+  /// The decisions at the highest sequence satisfying [where] among one
+  /// template/slot key/run track, read newest first so older history is not
+  /// decoded. Usually one decision; ties are kept for the caller's order.
+  Future<List<ProgressionDecision>> latestTrackDecisions(
+    String templateId,
+    String slotKey,
+    String? runId,
+    bool Function(ProgressionDecision) where,
+  );
   Future<void> saveProgressionDecision(ProgressionDecision decision);
   Future<List<ReconciliationReceipt>> progressionReconciliations();
   Future<void> saveProgressionReconciliation(ReconciliationReceipt receipt);
@@ -108,22 +124,52 @@ abstract interface class TrainingRepository {
   Future<void> insertProgramUpgrade(ProgramUpgradeReceipt receipt);
   Future<void> insertRevision(WorkoutRevision revision);
   Future<TrainingSession?> session(String id);
-  Future<List<TrainingSession>> sessions();
+
+  /// All sessions, or only those of one workout template.
+  Future<List<TrainingSession>> sessions({String? templateId});
   Future<void> insertSession(TrainingSession session);
   Future<void> updateSession(TrainingSession session);
   Future<void> recordFinalization(String sessionId);
 }
+
+/// The resolved decisions that can be the latest anchor of one track
+/// (template, slot, run, role), read newest first through the repository's
+/// track index instead of decoding every stored decision. [where] narrows
+/// further (e.g. resolved before a session start). Feed the result to
+/// [latestTrack] together with the track's other anchors.
+Future<List<ProgressionDecision>> trackDecisions(
+  TrainingRepository repository,
+  String templateId,
+  ExerciseSlot slot, {
+  String? runId,
+  String role = 'work',
+  bool Function(ProgressionDecision)? where,
+}) => repository.latestTrackDecisions(
+  templateId,
+  role == 'work' ? slot.id : '${slot.id}/$role',
+  runId,
+  (d) =>
+      d.resolvedAt != null &&
+      d.role == role &&
+      d.matches(templateId, slot) &&
+      (where?.call(d) ?? true),
+);
 
 /// Read-only join of published lever links, durable shared chains,
 /// retirements and resolved anchors inside one repository transaction.
 Future<SharedLinkIndex> buildSharedLinkIndex(
   TrainingRepository repository,
 ) async {
-  final decisions = await repository.progressionDecisions();
+  final revisions = await repository.leverLinkRevisions();
   final receipts = await repository.progressionReconciliations();
   final retirements = await repository.linkRetirements();
+  // Without any published link there is nothing to join, so the decision
+  // history need not be decoded.
+  final decisions = revisions.isEmpty
+      ? const <ProgressionDecision>[]
+      : await repository.progressionDecisions();
   return SharedLinkIndex(
-    revisions: await repository.leverLinkRevisions(),
+    revisions: revisions,
     applications: await repository.sharedLeverApplications(),
     retirements: retirements,
     anchors: {
@@ -286,13 +332,10 @@ final class StoredTrainingService {
         invalid('Session precedes program occurrence history.');
       dayPath = day.path;
     }
-    final decisions = (await repository.progressionDecisions()).where(
-      (d) =>
-          d.runId == runId &&
-          d.resolvedAt != null &&
-          !d.resolvedAt!.isAfter(startedAt) &&
-          d.session.startedAt.isBefore(startedAt),
-    );
+    // Backdated sessions never use later decisions or later sources.
+    bool before(ProgressionDecision d) =>
+        !d.resolvedAt!.isAfter(startedAt) &&
+        d.session.startedAt.isBefore(startedAt);
     final receipts = (await repository.progressionReconciliations()).where(
       (r) => r.runId == runId && !r.reconciledAt.isAfter(startedAt),
     );
@@ -307,7 +350,14 @@ final class StoredTrainingService {
           (slot.id, role): linkLinkedTrack(
             links,
             latestTrack(
-              decisions,
+              await trackDecisions(
+                repository,
+                prescription.definition.id,
+                slot,
+                runId: runId,
+                role: role,
+                where: before,
+              ),
               <ProgressionAnchor>[...receipts, ...retirements],
               prescription.definition.id,
               slot,
@@ -414,9 +464,15 @@ final class StoredTrainingService {
         await repository.equipmentInstanceRevisions(),
       ),
       loadConventions: loadConventions,
-      history: (await repository.sessions())
-          .where((s) => runBySession[s.id] == runId)
-          .toList(),
+      // Prefill is opt-in per slot and scoped to this workout template, so
+      // other templates' sessions (and all history, when nothing prefills)
+      // are never decoded.
+      history:
+          prescription.definition.slots.any((s) => s.prefillMetrics.isNotEmpty)
+          ? (await repository.sessions(
+              templateId: prescription.definition.id,
+            )).where((s) => runBySession[s.id] == runId).toList()
+          : const [],
       progressedSettings: progressedSettings,
       variantSelections: selections,
     );
@@ -816,13 +872,9 @@ final class StoredTrainingService {
         binding.sessionId: binding.runId,
     };
     final runId = runBySession[id];
-    final decisions = (await repository.progressionDecisions()).where(
-      (d) =>
-          d.runId == runId &&
-          d.resolvedAt != null &&
-          !d.resolvedAt!.isAfter(current.startedAt) &&
-          d.session.startedAt.isBefore(current.startedAt),
-    );
+    bool before(ProgressionDecision d) =>
+        !d.resolvedAt!.isAfter(current.startedAt) &&
+        d.session.startedAt.isBefore(current.startedAt);
     final receipts = (await repository.progressionReconciliations()).where(
       (r) => r.runId == runId && !r.reconciledAt.isAfter(current.startedAt),
     );
@@ -835,7 +887,14 @@ final class StoredTrainingService {
           (slot.id, role): linkLinkedTrack(
             await buildSharedLinkIndex(repository),
             latestTrack(
-              decisions,
+              await trackDecisions(
+                repository,
+                current.definition.id,
+                slot,
+                runId: runId,
+                role: role,
+                where: before,
+              ),
               <ProgressionAnchor>[...receipts, ...refreshRetirements],
               current.definition.id,
               slot,
@@ -1140,7 +1199,10 @@ final class StoredTrainingService {
         'Implementation ${composition.implementation} belongs to exercise '
         '$owner, not ${composition.exerciseId}.',
       );
-    final history = await repository.sessions();
+    // Substitution history only searches this workout template.
+    final history = await repository.sessions(
+      templateId: (await session(id)).definition.id,
+    );
     return edit(
       id,
       expectedVersion,

@@ -400,7 +400,9 @@ final class NativeBackup {
       } finally {
         revisions.close();
       }
-      final sessions = db.prepare('SELECT id, snapshot FROM sessions');
+      final sessions = db.prepare(
+        'SELECT id, template_id, snapshot FROM sessions',
+      );
       try {
         final cursor = sessions.selectCursor();
         while (cursor.moveNext()) {
@@ -417,6 +419,7 @@ final class NativeBackup {
             [session.definition.id, session.revision.number],
           );
           if (session.id != row['id'] ||
+              session.definition.id != row['template_id'] ||
               revision.length != 1 ||
               canonicalJson(
                     WorkoutRevision.fromJson(
@@ -471,14 +474,18 @@ final class NativeBackup {
       {
         final decisions = <ProgressionDecision>[];
         for (final row in db.select(
-          'SELECT session_id,slot_id,snapshot FROM progression_decisions',
+          'SELECT session_id,slot_id,template_id,run_id,sequence,snapshot '
+          'FROM progression_decisions',
         )) {
           final d = ProgressionDecision.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
 
           if (d.session.id != row['session_id'] ||
-              d.storageSlotKey != row['slot_id'])
+              d.storageSlotKey != row['slot_id'] ||
+              d.templateId != row['template_id'] ||
+              d.runId != row['run_id'] ||
+              d.sequence != row['sequence'])
             invalid('Progression receipt identity mismatch.');
           decisions.add(d);
         }
