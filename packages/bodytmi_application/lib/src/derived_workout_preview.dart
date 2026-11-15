@@ -2,6 +2,7 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 
 import 'derived_target_graph_service.dart';
 import 'canonical_json.dart';
+import 'session_codec.dart';
 import 'training_repository.dart';
 
 /// Read-only projection of explicit graph nodes onto authored effort targets.
@@ -18,14 +19,13 @@ final class DerivedWorkoutPreview {
     required Object? bindings,
     String? runId,
     bool strictHistoryStart = false,
+    Map<String, String>? variantSelections,
   }) => repository.transaction(() async {
     identifier({'templateId': templateId}, 'templateId');
     identifier({'graphId': graphId}, 'graphId');
     if (revision < 1 || graphRevision < 1)
       invalid('Revisions must be positive.');
-    if (bindings is! List<Object?> ||
-        bindings.isEmpty ||
-        bindings.length > 10000) {
+    if (bindings is! List<Object?> || bindings.length > 10000) {
       invalid('bindings must contain 1–10000 entries.');
     }
     final workout = await repository.revision(templateId, revision);
@@ -34,7 +34,7 @@ final class DerivedWorkoutPreview {
     final graph = await DerivedTargetGraphService(
       repository,
     ).resolve(graphId, graphRevision, asOf, runId, false, strictHistoryStart);
-    return projectCaptured(workout, graph, bindings);
+    return projectCaptured(workout, graph, bindings, variantSelections);
   });
 
   /// Compares a stored session's frozen plan with inputs in its original scope.
@@ -65,6 +65,7 @@ final class DerivedWorkoutPreview {
     required DateTime asOf,
     String? runId,
     bool strictHistoryStart = false,
+    Map<String, String>? variantSelections,
   }) => repository.transaction(() async {
     identifier({'planId': planId}, 'planId');
     if (graphRevision < 1) invalid('Graph revision must be positive.');
@@ -87,6 +88,7 @@ final class DerivedWorkoutPreview {
       runId: runId,
       bindings: plan.bindings,
       strictHistoryStart: strictHistoryStart,
+      variantSelections: variantSelections,
     );
     return {
       'policy': 'bodytmi-derived-workout-plan-preview/1',
@@ -130,7 +132,14 @@ final class DerivedWorkoutPreview {
       invalid('Plan preview does not match a published workout plan.');
     }
     plan.validate(workout, published.graph.nodes);
-    if (canonicalJson(projectCaptured(workout, resolution, plan.bindings)) !=
+    if (canonicalJson(
+          projectCaptured(
+            workout,
+            resolution,
+            plan.bindings,
+            _capturedSelections(preview),
+          ),
+        ) !=
         canonicalJson(preview)) {
       invalid('Workout preview does not match the published plan.');
     }
@@ -162,6 +171,7 @@ final class DerivedWorkoutPreview {
       'workout',
       'graphResolution',
       'occurrences',
+      'variantSelections',
     });
     if (captured['policy'] != 'bodytmi-derived-workout-preview/1') {
       invalid('Unsupported workout preview policy.');
@@ -202,12 +212,14 @@ final class DerivedWorkoutPreview {
         }
       }
     }
-    if (bindings.isEmpty || bindings.length > 10000)
+    final selections = _capturedSelections(captured);
+    if ((bindings.isEmpty && !workout.definition.hasVariants) ||
+        bindings.length > 10000)
       invalid('Invalid preview bindings.');
     final graphStatus = await DerivedTargetGraphService(
       repository,
     ).status(graph, strictHistoryStart: strictHistoryStart);
-    final expected = projectCaptured(workout, graph, bindings);
+    final expected = projectCaptured(workout, graph, bindings, selections);
     if (canonicalJson(expected) != canonicalJson(captured)) {
       invalid(
         'Workout preview does not match the pinned workout and graph resolution.',
@@ -222,6 +234,7 @@ final class DerivedWorkoutPreview {
       runId: runId,
       bindings: bindings,
       strictHistoryStart: strictHistoryStart,
+      variantSelections: selections,
     );
     final capturedRows = {
       for (final row in jsonList(captured, 'occurrences'))
@@ -268,17 +281,31 @@ final class DerivedWorkoutPreview {
     };
   });
 
+  /// Projects graph nodes onto the efforts of [workout]. A variant workout
+  /// lists only the occurrences of [variantSelections] (default: each lever's
+  /// default) and records them; bindings into other branches are validated
+  /// but inactive.
   static Map<String, Object?> projectCaptured(
     WorkoutRevision workout,
     Map<String, Object?> graph,
-    Object? bindings,
-  ) {
+    Object? bindings, [
+    Map<String, String>? variantSelections,
+  ]) {
+    final authored = workout.definition;
     if (bindings is! List<Object?> ||
-        bindings.isEmpty ||
+        (bindings.isEmpty && !authored.hasVariants) ||
         bindings.length > 10000) {
       invalid('bindings must contain 1–10000 entries.');
     }
-    final definition = workout.definition;
+    final selections = authored.hasVariants
+        ? (variantSelections ?? authored.variantSelections())
+        : const <String, String>{};
+    final definition = authored.resolveVariants(selections);
+    final structural = {
+      for (final occurrence in authored.plan.structuralOccurrences())
+        if (occurrence.activity is Effort)
+          occurrence.id: occurrence.activity as Effort,
+    };
     final efforts = {
       for (final occurrence in definition.plan.occurrences())
         if (occurrence.activity is Effort)
@@ -292,13 +319,14 @@ final class DerivedWorkoutPreview {
         identifier(jsonObject(item, 'node'), 'id'): jsonObject(item, 'node'),
     };
     final selected = <String, Map<String, String>>{};
+    final inactive = <String>{};
     for (final raw in bindings) {
       final binding = jsonObject(raw, 'preview binding');
       checkKeys(binding, {'occurrenceId', 'metric', 'nodeId'});
       final occurrenceId = requiredString(binding, 'occurrenceId');
       final metric = identifier(binding, 'metric');
       final nodeId = identifier(binding, 'nodeId');
-      final effort = efforts[occurrenceId];
+      final effort = structural[occurrenceId];
       if (effort == null) invalid('Unknown effort occurrence: $occurrenceId.');
       final node = graphNodes[nodeId];
       if (node == null) invalid('Unknown graph node: $nodeId.');
@@ -318,6 +346,12 @@ final class DerivedWorkoutPreview {
       if (Unit.parse(requiredString(node, 'unit')).dimension != expected) {
         invalid('Graph node dimension does not match effort metric: $metric.');
       }
+      if (!efforts.containsKey(occurrenceId)) {
+        // Another branch: validated above, inactive in this structure.
+        if (!inactive.add('$occurrenceId\u0000$metric'))
+          invalid('Duplicate effort metric binding.');
+        continue;
+      }
       final mapping = selected.putIfAbsent(
         occurrenceId,
         () => <String, String>{},
@@ -329,6 +363,7 @@ final class DerivedWorkoutPreview {
     return {
       'policy': 'bodytmi-derived-workout-preview/1',
       'workout': {'id': workout.definition.id, 'revision': workout.number},
+      if (selections.isNotEmpty) 'variantSelections': selections,
       'graphResolution': graph,
       'occurrences': [
         for (final entry in efforts.entries)
@@ -373,3 +408,8 @@ final class DerivedWorkoutPreview {
     };
   }
 }
+
+Map<String, String>? _capturedSelections(Map<String, Object?> preview) =>
+    preview.containsKey('variantSelections')
+    ? variantSelectionsFromJson(preview['variantSelections'])
+    : null;

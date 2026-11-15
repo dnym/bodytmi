@@ -653,6 +653,7 @@ final class StoredTrainingService {
       asOf: startedAt,
       runId: runId,
       strictHistoryStart: true,
+      variantSelections: session.variantSelections,
     );
     if (reviewedPreview != null &&
         canonicalJson(reviewedPreview) != canonicalJson(resolved['preview'])) {
@@ -704,6 +705,8 @@ final class StoredTrainingService {
     for (final binding in plan.bindings) {
       final occurrenceId = binding['occurrenceId']! as String;
       final metric = binding['metric']! as String;
+      // Bindings into unselected variant branches are inactive here.
+      if (!rows.containsKey(occurrenceId)) continue;
       final set = sets.firstWhere((item) => item.id == occurrenceId);
       final applied = bySlot[(set.slotId, set.role)];
       if (applied != null && applied.controlledMetrics.contains(metric)) {

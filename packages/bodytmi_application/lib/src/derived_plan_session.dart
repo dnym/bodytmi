@@ -127,6 +127,7 @@ void validateDerivedPlanSession(
           session.revision,
           graph,
           plan.bindings,
+          session.variantSelections,
         ),
       ) !=
       canonicalJson(preview)) {
@@ -140,6 +141,8 @@ void validateDerivedPlanSession(
       ),
   };
   for (final binding in plan.bindings) {
+    // Bindings into unselected variant branches are inactive.
+    if (!rows.containsKey(binding['occurrenceId'])) continue;
     final set = session.set(binding['occurrenceId']! as String);
     final metric = binding['metric']! as String;
     final target = jsonObject(

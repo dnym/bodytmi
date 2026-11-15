@@ -69,8 +69,10 @@ final class DerivedWorkoutPlan {
     if (workout.definition.id != templateId || workout.number != revision) {
       invalid('Derived workout plan references a different workout revision.');
     }
+    // Bindings may target efforts of any variant branch; a session expands
+    // only its selected branches, so other bindings are inactive there.
     final efforts = {
-      for (final occurrence in workout.definition.plan.occurrences())
+      for (final occurrence in workout.definition.plan.structuralOccurrences())
         if (occurrence.activity is Effort)
           occurrence.id: occurrence.activity as Effort,
     };

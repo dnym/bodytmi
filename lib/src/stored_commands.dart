@@ -590,6 +590,7 @@ Future<Map<String, Object?>> executeStored(
       'planId',
       'asOf',
       'runId',
+      'variants',
     },
     'graph preview' => {
       'templateId',
@@ -599,6 +600,7 @@ Future<Map<String, Object?>> executeStored(
       'asOf',
       'runId',
       'bindings',
+      'variants',
     },
     'store mass-status' => {'id'},
     'store mass-refresh' => {'id', 'expectedVersion', 'confirm'},
@@ -2433,6 +2435,9 @@ Future<Map<String, Object?>> executeStored(
           runId: request.containsKey('runId')
               ? identifier(request, 'runId')
               : null,
+          variantSelections: request.containsKey('variants')
+              ? variantSelectionsFromJson(request['variants'])
+              : null,
         );
       case 'graph preview':
         data = await DerivedWorkoutPreview(store).preview(
@@ -2445,6 +2450,9 @@ Future<Map<String, Object?>> executeStored(
               ? identifier(request, 'runId')
               : null,
           bindings: request['bindings'],
+          variantSelections: request.containsKey('variants')
+              ? variantSelectionsFromJson(request['variants'])
+              : null,
         );
       case 'graph preview-status':
         data = await DerivedWorkoutPreview(store).status(request['preview']);

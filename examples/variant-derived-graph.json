@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "graph": {
+    "id": "squat-tm",
+    "name": "Squat training max by scheme",
+    "nodes": [
+      {
+        "id": "tm",
+        "kind": "source",
+        "unit": "kg",
+        "sourceId": "squat_tm"
+      },
+      {
+        "id": "triples-load",
+        "kind": "scale",
+        "unit": "kg",
+        "input": "tm",
+        "factor": "0.8"
+      },
+      {
+        "id": "doubles-load",
+        "kind": "scale",
+        "unit": "kg",
+        "input": "tm",
+        "factor": "0.85"
+      },
+      {
+        "id": "singles-load",
+        "kind": "scale",
+        "unit": "kg",
+        "input": "tm",
+        "factor": "0.9"
+      }
+    ],
+    "bindings": {
+      "squat_tm": {
+        "kind": "manual",
+        "version": 1,
+        "value": {
+          "value": "100",
+          "unit": "kg"
+        }
+      }
+    },
+    "plans": [
+      {
+        "id": "by-scheme",
+        "templateId": "squat-schemes",
+        "revision": 1,
+        "bindings": [
+          {
+            "occurrenceId": "workout/triples[0]/triple",
+            "metric": "load",
+            "nodeId": "triples-load"
+          },
+          {
+            "occurrenceId": "workout/triples[1]/triple",
+            "metric": "load",
+            "nodeId": "triples-load"
+          },
+          {
+            "occurrenceId": "workout/triples[2]/triple",
+            "metric": "load",
+            "nodeId": "triples-load"
+          },
+          {
+            "occurrenceId": "workout/triples[3]/triple",
+            "metric": "load",
+            "nodeId": "triples-load"
+          },
+          {
+            "occurrenceId": "workout/triples[4]/triple",
+            "metric": "load",
+            "nodeId": "triples-load"
+          },
+          {
+            "occurrenceId": "workout/doubles[0]/double",
+            "metric": "load",
+            "nodeId": "doubles-load"
+          },
+          {
+            "occurrenceId": "workout/doubles[1]/double",
+            "metric": "load",
+            "nodeId": "doubles-load"
+          },
+          {
+            "occurrenceId": "workout/doubles[2]/double",
+            "metric": "load",
+            "nodeId": "doubles-load"
+          },
+          {
+            "occurrenceId": "workout/doubles[3]/double",
+            "metric": "load",
+            "nodeId": "doubles-load"
+          },
+          {
+            "occurrenceId": "workout/doubles[4]/double",
+            "metric": "load",
+            "nodeId": "doubles-load"
+          },
+          {
+            "occurrenceId": "workout/doubles[5]/double",
+            "metric": "load",
+            "nodeId": "doubles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[0]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[1]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[2]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[3]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[4]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[5]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[6]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[7]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[8]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          },
+          {
+            "occurrenceId": "workout/singles[9]/single",
+            "metric": "load",
+            "nodeId": "singles-load"
+          }
+        ]
+      }
+    ]
+  }
+}
