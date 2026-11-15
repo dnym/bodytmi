@@ -397,6 +397,39 @@ final class TrainingService {
 
   /// Records or clears the exact plate stack one completed set used. The
   /// arrangement must reference the session's frozen instance binding and is
+  /// Records that [setId] (and with [applyToRemaining], the later untouched
+  /// sets of its slot and role) is performed on [instance] instead of the
+  /// session's bound equipment, e.g. the kilogram machine because the pound
+  /// one is taken. Targets keep their own unit; progression counts the
+  /// instance's nearest setting to a target as following it. Null clears
+  /// the record, which needs [confirm].
+  TrainingSession performOn(
+    TrainingSession session,
+    String setId,
+    LoadInstanceReference? instance, {
+    bool applyToRemaining = false,
+    bool confirm = false,
+  }) {
+    final set = session.set(setId);
+    if (instance == null && set.performedOn != null && !confirm)
+      invalid('Confirm before clearing the instance a set was performed on.');
+    if (instance == null && applyToRemaining)
+      invalid('Clear the instance one set at a time.');
+    final index = session.sets.indexOf(set);
+    final replaced = <String, TrainingSet>{set.id: set.performOn(instance)};
+    if (applyToRemaining) {
+      for (final later in session.sets.skip(index + 1)) {
+        if (later.slotId == set.slotId &&
+            later.role == set.role &&
+            later.status == SetStatus.planned &&
+            later.substitution == null) {
+          replaced[later.id] = later.performOn(instance);
+        }
+      }
+    }
+    return _withSets(session, replaced);
+  }
+
   /// validated against that pinned revision's declared loading before it is
   /// stored; later instance revisions never invalidate the recorded stack.
   TrainingSession arrange(
@@ -410,7 +443,7 @@ final class TrainingService {
         !confirm)
       invalid('Confirm before clearing a recorded plate arrangement.');
     if (arrangement != null) {
-      final instance = session.loadInputs[session.set(setId).slotId]?.instance;
+      final instance = session.instanceOf(session.set(setId));
       if (instance == null)
         invalid('A plate arrangement requires a frozen session load binding.');
       if (arrangement.instanceId != instance.instanceId)

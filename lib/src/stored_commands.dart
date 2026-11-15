@@ -130,6 +130,7 @@ const storedCommandNames = [
   'store annotate',
   'store set-settings',
   'store arrange',
+  'store perform-on',
   'store arrange-status',
   'store skip',
   'store skip-remaining',
@@ -639,6 +640,14 @@ Future<Map<String, Object?>> executeStored(
       'expectedVersion',
       'setId',
       'arrangement',
+      'confirm',
+    },
+    'store perform-on' => {
+      'id',
+      'expectedVersion',
+      'setId',
+      'instanceId',
+      'applyToRemaining',
       'confirm',
     },
     'store skip' => {'id', 'expectedVersion', 'setId', 'confirm'},
@@ -1861,6 +1870,8 @@ Future<Map<String, Object?>> executeStored(
                   ],
                 },
           'sequence': decision.sequence,
+          if (decision.followed.isNotEmpty)
+            'followedSettings': [for (final f in decision.followed) f.toJson()],
           'inputsChanged': changed,
           'stale': decision.resolvedAt == null && changed,
           ...decision.toJson(),
@@ -2564,6 +2575,54 @@ Future<Map<String, Object?>> executeStored(
             confirm: flag('confirm'),
           ),
         )).toJson();
+      case 'store perform-on':
+        final setId = requiredString(request, 'setId');
+        if (!request.containsKey('instanceId'))
+          invalid('instanceId is required (null clears it).');
+        data = await store.transaction(() async {
+          // The latest published revision is frozen on the set.
+          final instance = request['instanceId'] == null
+              ? null
+              : await EquipmentService(
+                  store,
+                ).instanceRevision(identifier(request, 'instanceId'));
+          final reference = instance == null
+              ? null
+              : LoadInstanceReference(
+                  instance.instance.id,
+                  instance.instance,
+                  instance.number,
+                );
+          final session = await service.edit(
+            identifier(request, 'id'),
+            integer('expectedVersion'),
+            (s) => const TrainingService().performOn(
+              s,
+              setId,
+              reference,
+              applyToRemaining: flag('applyToRemaining'),
+              confirm: flag('confirm'),
+            ),
+          );
+          return {
+            'session': session.toJson(),
+            // What to set on that instance to follow each target.
+            if (reference != null)
+              'settings': [
+                for (final set in session.sets)
+                  if (set.performedOn?.instanceId == reference.instanceId)
+                    for (final entry in set.suggested.entries)
+                      if (nearestSettings(reference.snapshot, entry.value)
+                          case final settings when settings.isNotEmpty)
+                        {
+                          'setId': set.id,
+                          'metric': entry.key,
+                          'target': entry.value.toJson(),
+                          'settings': [for (final q in settings) q.toJson()],
+                        },
+              ],
+          };
+        });
       case 'store arrange-status':
         data = await EquipmentService(
           store,

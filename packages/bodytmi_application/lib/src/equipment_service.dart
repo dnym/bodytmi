@@ -49,10 +49,10 @@ final class EquipmentService {
         final current = <String, LoadInstanceReference>{};
         for (final entry in session.sets) {
           if (entry.loadArrangement == null) continue;
-          final frozen = session.loadInputs[entry.slotId]?.instance;
+          final frozen = session.instanceOf(entry);
           if (frozen == null) continue;
           final latest = await instanceRevision(frozen.instanceId);
-          current[entry.slotId] = LoadInstanceReference(
+          current[frozen.instanceId] = LoadInstanceReference(
             latest.instance.id,
             latest.instance,
             latest.number,

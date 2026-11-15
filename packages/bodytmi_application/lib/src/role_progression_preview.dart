@@ -1,4 +1,6 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'followed_settings.dart';
+import 'progression_decision.dart';
 import 'progression_evaluation.dart';
 
 /// Evaluates one role without creating a decision or finalizing the session.
@@ -24,11 +26,17 @@ final class RoleProgressionPreview {
         (ruleType != 'threshold' && cursor != 0)) {
       invalid('Invalid progression preview state or rule type.');
     }
-    final sets = session.sets
+    final framed = session.sets
         .where((s) => s.slotId == slotId && s.role == role)
         .toList();
-    if (sets.isEmpty)
+    if (framed.isEmpty)
       invalid('Progression preview needs sets in the selected slot and role.');
+    final followed = followedSettings(
+      session,
+      framed,
+      leverMetrics(ruleType, rule),
+    );
+    final sets = asFollowed(framed, followed);
     final ProgressionEvaluation proposal;
     if (ruleType == 'threshold') {
       proposal = ProgressionEvaluation.threshold(
@@ -68,6 +76,8 @@ final class RoleProgressionPreview {
       'slotId': slotId,
       'role': role,
       'setIds': [for (final set in sets) set.id],
+      if (followed.isNotEmpty)
+        'followedSettings': [for (final f in followed) f.toJson()],
       'ruleType': ruleType,
       'rule': rule,
       'state': {

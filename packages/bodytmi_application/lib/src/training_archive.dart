@@ -590,8 +590,10 @@ void validateLoadInputReferences(
     for (final r in instances) '${r.instance.id}\u0000${r.number}': r,
   };
   for (final session in sessions) {
-    for (final entry in session.loadInputs.entries) {
-      final reference = entry.value.instance;
+    for (final reference in [
+      for (final entry in session.loadInputs.entries) entry.value.instance,
+      for (final set in session.sets) set.performedOn,
+    ]) {
       if (reference == null) continue;
       final row =
           published['${reference.instanceId}\u0000${reference.revision}'];

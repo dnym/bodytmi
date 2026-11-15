@@ -194,6 +194,7 @@ TrainingSession _sessionFromJson(Object? input) {
       'timing',
       'observations',
       'loadArrangement',
+      'performedOn',
       'objectives',
       'substitution',
       'settings',
@@ -338,6 +339,9 @@ TrainingSession _sessionFromJson(Object? input) {
         loadArrangement: row['loadArrangement'] == null
             ? null
             : LoadArrangement.fromJson(row['loadArrangement']),
+        performedOn: row['performedOn'] == null
+            ? null
+            : LoadInstanceReference.fromJson(row['performedOn']),
         status: setStatus,
         substitution: substitution,
         settings: settings,

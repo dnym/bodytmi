@@ -10,6 +10,7 @@ export 'src/body_mass_service.dart';
 export 'src/training_repository.dart';
 export 'src/training_archive.dart';
 export 'src/progression_decision.dart';
+export 'src/followed_settings.dart';
 export 'src/progression_anchor.dart';
 export 'src/progression_evaluation.dart';
 export 'src/role_progression_preview.dart';

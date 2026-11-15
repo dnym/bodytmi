@@ -6,6 +6,7 @@ import 'tempo.dart';
 import 'errors.dart';
 import 'effective_mass.dart';
 import 'load_context.dart';
+import 'nearest_setting.dart';
 import 'load_arrangement.dart';
 import 'load_convention.dart';
 import 'quantity.dart';
@@ -575,6 +576,7 @@ final class TrainingSet {
     this.timing,
     SetObservations? observations,
     this.loadArrangement,
+    this.performedOn,
     Set<String> maxEffortMetrics = const {},
     Map<String, NumericObjective> criteria = const {},
     this.substitution,
@@ -624,6 +626,8 @@ final class TrainingSet {
         invalid('A substituted set keeps no original-context history sources.');
       if (loadArrangement != null)
         invalid('A substituted set cannot record the slot plate arrangement.');
+      if (performedOn != null)
+        invalid('A substituted set names its own equipment, not an instance.');
       for (final metric in this.suggested.keys) {
         if (!swap.targets.containsKey(metric))
           invalid('Substituted suggestion $metric has no target source.');
@@ -678,6 +682,12 @@ final class TrainingSet {
   final TimedResult? timing;
   final SetObservations? observations;
   final LoadArrangement? loadArrangement;
+
+  /// The equipment instance this set was (or will be) performed on when it
+  /// differs from the session's binding, e.g. the kilogram machine because
+  /// the pound one was taken. Frozen at the published revision; progression
+  /// treats the instance's nearest setting to the target as following it.
+  final LoadInstanceReference? performedOn;
   final Set<String> maxEffortMetrics;
   final Map<String, NumericObjective> criteria;
 
@@ -717,6 +727,7 @@ final class TrainingSet {
       timing: timing,
       observations: observations,
       loadArrangement: loadArrangement,
+      performedOn: performedOn,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
@@ -789,6 +800,7 @@ final class TrainingSet {
       status: SetStatus.completed,
       observations: this.observations,
       loadArrangement: loadArrangement,
+      performedOn: performedOn,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
@@ -840,6 +852,40 @@ final class TrainingSet {
       timing: timing,
       observations: replacement,
       loadArrangement: loadArrangement,
+      performedOn: performedOn,
+      maxEffortMetrics: maxEffortMetrics,
+      criteria: criteria,
+      substitution: substitution,
+      settings: settings,
+      actualSettings: actualSettings,
+      contentVersion: contentVersion + 1,
+    );
+  }
+
+  /// Records (or with null clears) the instance this set is performed on.
+  /// A recorded plate arrangement belongs to the previous instance, so a
+  /// change requires clearing it first.
+  TrainingSet performOn(LoadInstanceReference? instance) {
+    if (substitution != null)
+      invalid('A substituted set names its own equipment, not an instance.');
+    if (loadArrangement != null &&
+        loadArrangement!.instanceId != instance?.instanceId)
+      invalid('Clear the recorded plate arrangement before changing instance.');
+    return TrainingSet(
+      id: id,
+      slotId: slotId,
+      role: role,
+      ordinal: ordinal,
+      suggested: suggested,
+      sources: sources,
+      manualTargets: manualTargets,
+      carriedTargets: carriedTargets,
+      status: status,
+      actuals: actuals,
+      timing: timing,
+      observations: observations,
+      loadArrangement: loadArrangement,
+      performedOn: instance,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
@@ -868,6 +914,7 @@ final class TrainingSet {
       timing: timing,
       observations: observations,
       loadArrangement: replacement,
+      performedOn: performedOn,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
@@ -895,6 +942,7 @@ final class TrainingSet {
     if (timing != null) 'timing': timing!.toJson(),
     if (observations != null) 'observations': observations!.toJson(),
     if (loadArrangement != null) 'loadArrangement': loadArrangement!.toJson(),
+    if (performedOn != null) 'performedOn': performedOn!.toJson(),
     if (maxEffortMetrics.isNotEmpty || criteria.isNotEmpty)
       'objectives': objectivesJson,
     if (substitution != null) 'substitution': substitution!.toJson(),
@@ -973,9 +1021,15 @@ final class TrainingSession {
       );
     }
     for (final set in sets) {
+      if (set.performedOn case final used?) {
+        requireSameEquipment(
+          used.snapshot,
+          revision.definition.slot(set.slotId).equipmentId,
+        );
+      }
       final arrangement = set.loadArrangement;
       if (arrangement == null) continue;
-      final instance = loadInputs[set.slotId]?.instance;
+      final instance = instanceOf(set);
       if (instance == null)
         invalid('A plate arrangement requires a frozen session load binding.');
       if (arrangement.instanceId != instance.instanceId)
@@ -987,6 +1041,11 @@ final class TrainingSession {
       arrangement.validateAgainst(instance.snapshot.loading!);
     }
   }
+
+  /// The instance [set] is performed on: its own [TrainingSet.performedOn],
+  /// else the session's frozen binding for its slot, if any.
+  LoadInstanceReference? instanceOf(TrainingSet set) =>
+      set.performedOn ?? loadInputs[set.slotId]?.instance;
   final String id;
   final WorkoutRevision revision;
 

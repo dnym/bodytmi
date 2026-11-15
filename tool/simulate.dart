@@ -930,6 +930,7 @@ Future<void> bbrSession(LiftDay d) async {
     if (edited.ok) session = edited.data['session'] ?? edited.data;
   }
   var benchSubstituted = false;
+  dynamic kgSetting;
   final planned = <String, String>{};
   for (final s in session['sets'] as List) {
     final m = metricOf(s['slot'] as String);
@@ -1024,26 +1025,28 @@ Future<void> bbrSession(LiftDay d) async {
       }
     }
     if (d.lbMachineBusy && slot == 'chinup') {
-      final target = set['suggested']['assistance']['entered'];
-      final resolved = await ok('scale resolve', {
-        'scale': {
-          'id': 'assist-kg-stack',
-          'unit': 'kg',
-          'range': {'start': '5', 'step': '2.5', 'count': 24},
-        },
-        'target': {'value': target['value'], 'unit': target['unit']},
-        'rounding': 'nearest',
-      });
-      final setting = resolved['resolution']['quantity'];
       if (ordinal == 0) {
+        // At the machine: record that the chin-ups happen on the kg one.
+        final shown = await ok('store show', {'id': id});
+        final marked = await ok('store perform-on', {
+          'id': id,
+          'expectedVersion': shown['contentVersion'],
+          'setId': set['id'],
+          'instanceId': 'assist-kg',
+          'applyToRemaining': true,
+        });
+        kgSetting = (marked['settings'] as List).firstWhere(
+          (x) => x['metric'] == 'assistance',
+        )['settings'][0];
         log(
-          '  - ${target['value']} ${target['unit']} on the kg stack: '
-          '`scale resolve` picks ${entered(setting)} (exact: '
-          '${resolved['resolution']['exact']}).',
+          '  - `store perform-on assist-kg` for the chin-up sets: follow '
+          '${entered(set['suggested']['assistance'])} with '
+          '${entered(kgSetting)} on the kg stack.',
         );
+        await ex.refresh();
       }
-      actualControlled = setting;
-      load = person.bodyMass - kg(setting);
+      actualControlled = kgSetting;
+      load = person.bodyMass - kg(kgSetting);
     }
     if (benchSubstituted && slot == 'bench') {
       // Dumbbells: two 30 lb bells, entered as the pair total.
@@ -1328,9 +1331,15 @@ Future<void> resolveProgression(
       final current = double.parse(planned[slot]!.split(' ').first);
       final o = bbrOracle(slot, current, reps);
       if (d.lbMachineBusy && slot == 'chinup') {
+        // The kg setting follows the lb target, so the normal rule applies.
+        final o = bbrOracle(
+          slot,
+          double.parse(planned[slot]!.split(' ').first),
+          reps,
+        );
         expect(
-          outcome == 'review',
-          '$id chinup on the kg machine: app $outcome',
+          outcome == o.outcome,
+          '$id chinup on the kg machine: oracle ${o.outcome}, app $outcome',
         );
       } else if (!(d.typoSquat && slot == 'squat')) {
         expect(
@@ -1434,6 +1443,13 @@ Future<void> resolveProgression(
         '${status.ok ? 'required ${status.data['reconciliationRequired']}' : status.error}.',
       );
       pendingEvents.add('typoFix');
+    }
+    final followedOn = res.data['followedSettings'] as List?;
+    if (followedOn != null && followedOn.isNotEmpty) {
+      log(
+        '  - ${followedOn.length} $slot set(s) counted as following the '
+        'target on ${followedOn.first['instanceId']}.',
+      );
     }
     final band = proposal['incrementBandAssessment']?['status'];
     final failed = decision['failedSessions'] ?? proposal['failedSessions'];

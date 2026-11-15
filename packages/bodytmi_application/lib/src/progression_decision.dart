@@ -1,4 +1,5 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'followed_settings.dart';
 import 'session_codec.dart';
 import 'canonical_json.dart';
 import 'lever_link.dart';
@@ -260,24 +261,33 @@ final class ProgressionDecision implements ProgressionAnchor {
           reference: previousReference,
         )
       : _evaluated;
+
+  /// Controlled actuals that followed their target on the instance used.
+  late final List<FollowedSetting> followed = followedSettings(
+    session,
+    sets,
+    leverMetrics(ruleType, rule),
+  );
+  late final List<TrainingSet> _evaluatedSets = asFollowed(sets, followed);
   late final ProgressionEvaluation _evaluated = switch (ruleType) {
     'threshold' => ProgressionEvaluation.threshold(
       ThresholdRule.fromJson(rule),
-      sets,
+      _evaluatedSets,
       previousFailures,
       previousCursor,
       previousReference,
     ),
     'ordinal' => ProgressionEvaluation.ordinal(
       OrdinalRule.fromJson(rule),
-      sets,
+      _evaluatedSets,
       previousFailures,
     ),
     _ => ProgressionEvaluation.double(
       DoubleProgressionRule.fromJson(rule).evaluate(
-        currentSets: [for (final s in sets) s.suggested],
+        currentSets: [for (final s in _evaluatedSets) s.suggested],
         results: [
-          for (final s in sets) s.eligibleForPerformance ? s.actuals : null,
+          for (final s in _evaluatedSets)
+            s.eligibleForPerformance ? s.actuals : null,
         ],
         failedSessions: previousFailures,
       ),
@@ -392,6 +402,22 @@ ProgressionDecision? latestApplication(
 
 /// The current baseline for a context across resolved decisions and explicit
 /// reconciliations. Sequences are unique per context in a valid store.
+/// The metrics a rule moves as levers (not its performance metric): only
+/// these can follow their target on another instance's nearest setting.
+Set<String> leverMetrics(String ruleType, Map<String, Object?> rule) =>
+    switch (ruleType) {
+      'threshold' => () {
+        final r = ThresholdRule.fromJson(rule);
+        return {...r.increments.keys, ...r.resets.keys, ...r.deloadMetrics}
+          ..remove(r.metric);
+      }(),
+      'ordinal' => () {
+        final r = OrdinalRule.fromJson(rule);
+        return {...r.controlledMetrics}..remove(r.metric);
+      }(),
+      _ => {DoubleProgressionRule.fromJson(rule).lever},
+    };
+
 ProgressionAnchor? latestTrack(
   Iterable<ProgressionDecision> decisions,
   Iterable<ProgressionAnchor> anchors,

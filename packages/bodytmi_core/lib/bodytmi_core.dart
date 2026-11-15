@@ -14,6 +14,7 @@ export 'src/load_arrangement.dart';
 export 'src/load_convention.dart';
 export 'src/load_context.dart';
 export 'src/plate_plan.dart';
+export 'src/nearest_setting.dart';
 export 'src/family.dart';
 export 'src/progression.dart';
 export 'src/ordinal_progression.dart';

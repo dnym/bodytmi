@@ -16,14 +16,14 @@ Map<String, Object?> arrangementStatus(
   for (final set in session.sets) {
     final arrangement = set.loadArrangement;
     if (arrangement == null) continue;
-    final frozen = session.loadInputs[set.slotId]!.instance!;
+    final frozen = session.instanceOf(set)!;
     if (frozen.instanceId != arrangement.instanceId ||
         frozen.snapshot.loading == null)
       invalid('Recorded arrangement provenance is inconsistent.');
     arrangement.validateAgainst(frozen.snapshot.loading!);
     final channelMass = arrangement.channelMass;
     final totalMass = channelMass + frozen.snapshot.loading!.tareMass;
-    final current = currentInstances[set.slotId];
+    final current = currentInstances[frozen.instanceId];
     final headLoading = current?.snapshot.loading;
     final masses = {
       'channelMass': Quantity(channelMass.toString(), 'kg').toJson(),
@@ -56,11 +56,11 @@ Map<String, Object?> arrangementStatus(
     // Only a capture whose effective convention came from the instance
     // default can be moved by a later instance revision; session and slot
     // overrides stay frozen exactly like the rest of the session context.
-    final input = session.loadInputs[set.slotId]!;
-    final frozenConvention = input.convention == null
+    final input = session.loadInputs[set.slotId];
+    final frozenConvention = input?.convention == null
         ? null
-        : canonicalJson(input.convention!.toJson());
-    final currentEffectiveConvention = input.source == 'instance'
+        : canonicalJson(input!.convention!.toJson());
+    final currentEffectiveConvention = input?.source == 'instance'
         ? (current?.snapshot.convention == null
               ? null
               : canonicalJson(current!.snapshot.convention!.toJson()))
@@ -154,7 +154,7 @@ Map<String, Object?> _massRelation(
       'status': 'unknown',
       'reason': 'The set has no mass actual to compare.',
     };
-  final convention = session.loadInputs[set.slotId]!.convention;
+  final convention = session.loadInputs[set.slotId]?.convention;
   if (convention == null)
     return {
       'status': 'unknown',
@@ -163,7 +163,7 @@ Map<String, Object?> _massRelation(
   final interpretation = LoadInterpretation.interpret(
     convention,
     entered,
-    loading: session.loadInputs[set.slotId]!.instance!.snapshot.loading,
+    loading: session.instanceOf(set)!.snapshot.loading,
   );
   final assembly = jsonObject(
     jsonObject(

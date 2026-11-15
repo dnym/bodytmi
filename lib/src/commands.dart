@@ -888,7 +888,14 @@ final class Commands {
         keys({'session', 'instances'});
         data = arrangementStatus(
           sessionFromJson(request['session']),
-          currentInstances: loadInstancesFromJson(request['instances']),
+          // Requests key current instances by slot; status looks them up
+          // by instance, since one slot's sets may use different instances.
+          currentInstances: {
+            for (final instance in loadInstancesFromJson(
+              request['instances'],
+            ).values)
+              instance.instanceId: instance,
+          },
         );
       case 'session edit-target':
         keys({'session', 'setId', 'metric', 'value', 'applyToRemaining'});
