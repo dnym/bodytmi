@@ -365,6 +365,7 @@ void analyticsTests() {
         for (var i = 0; i < 3334; i++)
           TrainingSession(
             id: 's$i',
+            extraSets: const [],
             revision: session.revision,
             variantSelections: session.variantSelections,
             startedAt: session.startedAt,

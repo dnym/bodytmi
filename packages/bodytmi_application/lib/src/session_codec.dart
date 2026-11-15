@@ -131,6 +131,7 @@ TrainingSession _sessionFromJson(Object? input) {
     'derivedPlanInput',
     'prescriptionOverrides',
     'variantSelections',
+    'extraSets',
   });
   if (json['schemaVersion'] != 1)
     invalid('Unsupported session schema version.');
@@ -436,12 +437,18 @@ TrainingSession _sessionFromJson(Object? input) {
       }
     }
   }
+  if (json.containsKey('extraSets') && jsonList(json, 'extraSets').isEmpty)
+    invalid('Empty unplanned sets must be omitted.');
   final session = TrainingSession(
     id: id,
     revision: revision,
     variantSelections: variantSelections,
     startedAt: startedAt,
     sets: sets,
+    extraSets: [
+      if (json.containsKey('extraSets'))
+        for (final item in jsonList(json, 'extraSets')) _extraSet(item),
+    ],
     bodyMassInputs: {
       for (final e in jsonObject(
         json['bodyMassInputs'] ?? <String, Object?>{},
@@ -467,4 +474,46 @@ TrainingSession _sessionFromJson(Object? input) {
   );
   validateDerivedPlanSession(session);
   return session;
+}
+
+/// An unplanned set: identity, slot, role, ordinal, completed actuals and
+/// optional settings/observations. The session validates the rest.
+TrainingSet _extraSet(Object? input) {
+  final row = jsonObject(input, 'unplanned set');
+  checkKeys(row, {
+    'id',
+    'slot',
+    'role',
+    'ordinal',
+    'suggested',
+    'sources',
+    'status',
+    'actuals',
+    'observations',
+    'settings',
+    'contentVersion',
+  });
+  if (jsonObject(row['suggested'], 'suggested').isNotEmpty ||
+      jsonObject(row['sources'], 'sources').isNotEmpty ||
+      row['status'] != 'completed')
+    invalid('An unplanned set records completed actuals only.');
+  final ordinal = row['ordinal'];
+  if (ordinal is! int || ordinal < 0) invalid('Invalid unplanned ordinal.');
+  return TrainingSet(
+    id: requiredString(row, 'id'),
+    slotId: identifier(row, 'slot'),
+    role: requiredString(row, 'role'),
+    ordinal: ordinal,
+    suggested: const {},
+    status: SetStatus.completed,
+    actuals: metricsFromJson(row['actuals']),
+    observations: row.containsKey('observations')
+        ? SetObservations.fromJson(row['observations'])
+        : null,
+    settings: row.containsKey('settings')
+        ? categoricalSettingsFromJson(row['settings'], 'settings')
+        : const {},
+    actualSettings: const {},
+    contentVersion: _positive(row, 'contentVersion'),
+  );
 }

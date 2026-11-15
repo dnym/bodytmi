@@ -918,6 +918,7 @@ final class WindowCheckpointService {
     }
     final updated = TrainingSession(
       id: session.id,
+      extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
       startedAt: session.startedAt,

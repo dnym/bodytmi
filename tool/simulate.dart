@@ -897,9 +897,27 @@ Future<void> bbrSession(LiftDay d) async {
       });
       session = edited['session'] ?? edited;
     }
+    // The FAQ ramp: empty bar, then halfway, logged as unplanned warm-ups.
+    var ramp = 0;
+    for (final slot in slots) {
+      if (slot == 'chinup') continue;
+      final start = double.parse(startingLoads[slot]!);
+      for (final load in [20.0, (20 + start) / 2]) {
+        final added = await ok('store add-set', {
+          'id': id,
+          'expectedVersion': session['contentVersion'],
+          'slotId': slot,
+          'role': 'warmup',
+          'actuals': {'load': q(fmt(load), 'kg'), 'reps': q('5', 'rep')},
+        });
+        session = added;
+        ramp++;
+      }
+    }
     log(
-      '  - Ramped up from the empty bar to find starting weights and edited '
-      'the planned work sets (${[for (final s in slots)
+      '  - Ramped up from the empty bar to find starting weights ($ramp '
+      'unplanned warm-up sets logged with `store add-set`) and edited the '
+      'planned work sets (${[for (final s in slots)
         if (s != 'chinup') '$s ${startingLoads[s]} kg'].join(', ')}).',
     );
   }

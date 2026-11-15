@@ -17,7 +17,8 @@ final class TrainingAnalytics {
     bool included(TrainingSet set) =>
         selectedRoles?.contains(set.role) ??
         (includeWarmups || set.role != 'warmup');
-    final sets = session.sets.where(included).toList();
+    // Unplanned sets count like any other result of their slot and role.
+    final sets = session.allSets.where(included).toList();
     final totals = <String, _MetricTotal>{};
     for (final set in sets) {
       for (final metric in metrics) {
@@ -112,11 +113,11 @@ final class TrainingAnalytics {
             ).toJson(),
       'counts': {
         'included': sets.length,
-        'excludedWarmups': session.sets
+        'excludedWarmups': session.allSets
             .where((s) => s.role == 'warmup' && !included(s))
             .length,
         if (selectedRoles != null)
-          'excludedRoles': session.sets
+          'excludedRoles': session.allSets
               .where((s) => s.role != 'warmup' && !included(s))
               .length,
         for (final status in SetStatus.values)
@@ -139,6 +140,7 @@ final class TrainingAnalytics {
             'id': set.id,
             'slot': set.slotId,
             'role': set.role,
+            if (session.extraSets.contains(set)) 'unplanned': true,
             if (session.definition.effortSide(set.id) case final side?)
               'side': side,
             if (set.settings.isNotEmpty) 'settings': set.settings,
@@ -241,7 +243,7 @@ final class TrainingAnalytics {
           (from != null && session.startedAt.isBefore(from)) ||
           (until != null && !session.startedAt.isBefore(until)))
         continue;
-      final sets = [...session.sets]
+      final sets = [...session.allSets]
         ..sort((a, b) {
           final ordinal = a.ordinal.compareTo(b.ordinal);
           return ordinal == 0 ? a.id.compareTo(b.id) : ordinal;

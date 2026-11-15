@@ -376,7 +376,7 @@ typedef _Selection = (Quantity, int, String, String, DateTime, int);
         binding['templateId'] != definition.id) {
       continue;
     }
-    for (final set in session.sets) {
+    for (final set in session.allSets) {
       if (!includeWarmups && set.role == 'warmup') continue;
       if (set.status != SetStatus.completed) continue;
       if (set.observations?.interrupted ?? false) continue;

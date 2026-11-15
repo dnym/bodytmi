@@ -263,7 +263,7 @@ void validateDerivedPlanReferences(
               prior.contentVersion < (row['sessionVersion'] as int) ||
               runs[prior.id] != row['runId'])
             invalid('Invalid captured history session reference.');
-          final matches = prior.sets.where((s) => s.id == row['setId']);
+          final matches = prior.allSets.where((s) => s.id == row['setId']);
           if (matches.length != 1) invalid('Captured history set is missing.');
           final set = matches.single;
           final slot = prior.definition.slot(set.slotId);

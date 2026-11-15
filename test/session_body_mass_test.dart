@@ -1184,6 +1184,7 @@ void sessionBodyMassTests() {
           s.contentVersion,
           (s) => TrainingSession(
             id: s.id,
+            extraSets: s.extraSets,
             revision: s.revision,
             variantSelections: s.variantSelections,
             startedAt: s.startedAt,

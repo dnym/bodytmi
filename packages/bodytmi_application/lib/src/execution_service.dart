@@ -407,6 +407,7 @@ final class ExecutionService {
         s.contentVersion,
         (current) => TrainingSession(
           id: current.id,
+          extraSets: current.extraSets,
           revision: current.revision,
           variantSelections: current.variantSelections,
           startedAt: current.startedAt,

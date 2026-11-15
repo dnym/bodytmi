@@ -1311,6 +1311,7 @@ void programTests() {
             session.contentVersion,
             (s) => TrainingSession(
               id: 'replacement',
+              extraSets: const [],
               revision: s.revision,
               variantSelections: s.variantSelections,
               startedAt: s.startedAt,

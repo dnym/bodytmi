@@ -131,6 +131,8 @@ const storedCommandNames = [
   'store set-settings',
   'store arrange',
   'store perform-on',
+  'store add-set',
+  'store remove-set',
   'store arrange-status',
   'store skip',
   'store skip-remaining',
@@ -643,6 +645,16 @@ Future<Map<String, Object?>> executeStored(
       'arrangement',
       'confirm',
     },
+    'store add-set' => {
+      'id',
+      'expectedVersion',
+      'slotId',
+      'role',
+      'actuals',
+      'observations',
+      'settings',
+    },
+    'store remove-set' => {'id', 'expectedVersion', 'setId', 'confirm'},
     'store perform-on' => {
       'id',
       'expectedVersion',
@@ -2593,6 +2605,35 @@ Future<Map<String, Object?>> executeStored(
             request['arrangement'] == null
                 ? null
                 : LoadArrangement.fromJson(request['arrangement']),
+            confirm: flag('confirm'),
+          ),
+        )).toJson();
+      case 'store add-set':
+        data = (await service.edit(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          (s) => const TrainingService().addSet(
+            s,
+            identifier(request, 'slotId'),
+            role: request.containsKey('role')
+                ? requiredString(request, 'role')
+                : 'warmup',
+            actuals: metricsFromJson(request['actuals']),
+            observations: request['observations'] == null
+                ? null
+                : SetObservations.fromJson(request['observations']),
+            settings: request['settings'] == null
+                ? const {}
+                : categoricalSettingsFromJson(request['settings'], 'settings'),
+          ),
+        )).toJson();
+      case 'store remove-set':
+        data = (await service.edit(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          (s) => const TrainingService().removeSet(
+            s,
+            requiredString(request, 'setId'),
             confirm: flag('confirm'),
           ),
         )).toJson();

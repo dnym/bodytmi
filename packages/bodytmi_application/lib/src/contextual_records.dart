@@ -37,7 +37,8 @@ final class ContextualRecords {
     );
     final sources = {for (final s in sessions) s.id: s};
     final setSources = {
-      for (final s in sessions) s.id: {for (final set in s.sets) set.id: set},
+      for (final s in sessions)
+        s.id: {for (final set in s.allSets) set.id: set},
     };
     final groups = <String, _Records>{};
     final excluded = <Map<String, Object?>>[];

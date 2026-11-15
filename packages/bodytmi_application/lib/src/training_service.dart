@@ -169,6 +169,7 @@ final class TrainingService {
     }
     return TrainingSession(
       id: sessionId,
+      extraSets: const [],
       revision: revision,
       startedAt: startedAt,
       sets: sets,
@@ -212,6 +213,7 @@ final class TrainingService {
       return session;
     return TrainingSession(
       id: session.id,
+      extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
       startedAt: session.startedAt,
@@ -278,6 +280,7 @@ final class TrainingService {
       return session;
     return TrainingSession(
       id: session.id,
+      extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
       startedAt: session.startedAt,
@@ -397,6 +400,79 @@ final class TrainingService {
 
   /// Records or clears the exact plate stack one completed set used. The
   /// arrangement must reference the session's frozen instance binding and is
+  /// Logs a set that was not in the plan (a starting-weight ramp set, an
+  /// extra back-off set) as a completed result of [slotId] in [role]. It
+  /// counts in summaries, series and records but never in progression,
+  /// prefill or traversal. Settings default to the slot's defaults.
+  TrainingSession addSet(
+    TrainingSession session,
+    String slotId, {
+    String role = 'warmup',
+    required Metrics actuals,
+    SetObservations? observations,
+    Map<String, String> settings = const {},
+  }) {
+    final slot = session.definition.slots
+        .where((s) => s.id == slotId)
+        .firstOrNull;
+    if (slot == null) invalid('Unknown slot for an unplanned set: $slotId.');
+    if (actuals.isEmpty) invalid('An unplanned set needs actuals.');
+    final last = session.extraSets.isEmpty
+        ? 0
+        : int.parse(session.extraSets.last.id.replaceFirst('extra-', ''));
+    final set = TrainingSet(
+      id: 'extra-${last + 1}',
+      slotId: slotId,
+      role: role,
+      ordinal: session.allSets
+          .where((s) => s.slotId == slotId && s.role == role)
+          .length,
+      suggested: const {},
+      status: SetStatus.completed,
+      actuals: actuals,
+      observations: observations,
+      settings: {...slot.defaultSettings, ...settings},
+      actualSettings: const {},
+      contentVersion: 1,
+    );
+    return _withExtras(session, [...session.extraSets, set]);
+  }
+
+  /// Removes an unplanned set; planned sets are skipped, never removed.
+  TrainingSession removeSet(
+    TrainingSession session,
+    String setId, {
+    bool confirm = false,
+  }) {
+    if (!session.extraSets.any((s) => s.id == setId))
+      invalid('Only unplanned sets can be removed; skip planned sets.');
+    if (!confirm) invalid('Confirm before removing an unplanned set.');
+    return _withExtras(session, [
+      for (final set in session.extraSets)
+        if (set.id != setId) set,
+    ]);
+  }
+
+  TrainingSession _withExtras(
+    TrainingSession session,
+    List<TrainingSet> extras,
+  ) => TrainingSession(
+    id: session.id,
+    revision: session.revision,
+    variantSelections: session.variantSelections,
+    startedAt: session.startedAt,
+    sets: session.sets,
+    extraSets: extras,
+    status: session.status,
+    finishedAt: session.finishedAt,
+    contentVersion: session.contentVersion + 1,
+    bodyMassInputs: session.bodyMassInputs,
+    loadInputs: session.loadInputs,
+    initialBodyMassOverrides: session.initialBodyMassOverrides,
+    derivedPlanInput: session.derivedPlanInput,
+    prescriptionOverrides: session.prescriptionOverrides,
+  );
+
   /// Records that [setId] (and with [applyToRemaining], the later untouched
   /// sets of its slot and role) is performed on [instance] instead of the
   /// session's bound equipment, e.g. the kilogram machine because the pound
@@ -610,6 +686,7 @@ final class TrainingService {
     if (!changed) return session;
     return TrainingSession(
       id: session.id,
+      extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
       startedAt: session.startedAt,
@@ -682,6 +759,7 @@ final class TrainingService {
       return session;
     return TrainingSession(
       id: session.id,
+      extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
       startedAt: session.startedAt,
@@ -938,6 +1016,7 @@ final class TrainingService {
     Map<String, TrainingSet> replaced,
   ) => TrainingSession(
     id: session.id,
+    extraSets: [for (final set in session.extraSets) replaced[set.id] ?? set],
     revision: session.revision,
     variantSelections: session.variantSelections,
     startedAt: session.startedAt,

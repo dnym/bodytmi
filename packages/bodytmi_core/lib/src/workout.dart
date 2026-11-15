@@ -991,6 +991,7 @@ final class TrainingSession {
     required this.revision,
     required this.startedAt,
     required List<TrainingSet> sets,
+    required List<TrainingSet> extraSets,
     this.status = SessionStatus.active,
     this.finishedAt,
     this.contentVersion = 1,
@@ -1001,6 +1002,7 @@ final class TrainingSession {
     Map<String, LoadInputSnapshot> loadInputs = const {},
     required Map<String, String> variantSelections,
   }) : sets = List.unmodifiable(sets),
+       extraSets = List.unmodifiable(extraSets),
        variantSelections = Map.unmodifiable({
          for (final k in (variantSelections.keys.toList()..sort()))
            k: variantSelections[k]!,
@@ -1021,6 +1023,10 @@ final class TrainingSession {
           for (var i = 0; i < expected.length; i++) expected[i] == sets[i].id,
         ].contains(false))
       invalid('Session sets do not match its resolved plan.');
+    var lastExtra = 0;
+    for (final extra in this.extraSets) {
+      lastExtra = _validateExtra(extra, lastExtra);
+    }
     if (this.initialBodyMassOverrides != null && contentVersion < 2)
       invalid('Rebound body-mass inputs require a later session version.');
     if (this.initialBodyMassOverrides?.keys.any(
@@ -1094,6 +1100,59 @@ final class TrainingSession {
   final DateTime startedAt;
   final DateTime? finishedAt;
   final List<TrainingSet> sets;
+
+  /// Sets logged outside the plan (a starting-weight ramp, an extra
+  /// back-off set), in the order they were added. They count in summaries,
+  /// series and records, but never in progression, prefill or traversal,
+  /// which read [sets] only.
+  final List<TrainingSet> extraSets;
+
+  /// Planned sets followed by unplanned ones.
+  List<TrainingSet> get allSets => [...sets, ...extraSets];
+
+  /// An unplanned set is a completed result of one slot: ID `extra-<n>`
+  /// with n strictly increasing (removed sets leave gaps), actuals only, no
+  /// plan-derived state. Returns n.
+  int _validateExtra(TrainingSet set, int previous) {
+    final n = int.tryParse(set.id.replaceFirst('extra-', ''));
+    if (!set.id.startsWith('extra-') ||
+        n == null ||
+        n <= previous ||
+        set.id != 'extra-$n')
+      invalid('Unplanned sets are numbered extra-1, extra-2, ... in order.');
+    final slot = definition.slots.where((s) => s.id == set.slotId).firstOrNull;
+    if (slot == null) invalid('Unplanned set ${set.id} names an unknown slot.');
+    if (!const {'work', 'warmup', 'backoff', 'drop'}.contains(set.role))
+      invalid('Unknown role for unplanned set ${set.id}.');
+    if (set.status != SetStatus.completed || set.actuals.isEmpty)
+      invalid('An unplanned set records completed actuals.');
+    if (set.suggested.isNotEmpty ||
+        set.sources.isNotEmpty ||
+        set.manualTargets.isNotEmpty ||
+        set.timing != null ||
+        set.loadArrangement != null ||
+        set.performedOn != null ||
+        set.substitution != null ||
+        set.criteria.isNotEmpty ||
+        set.maxEffortMetrics.isNotEmpty ||
+        set.actualSettings.isNotEmpty)
+      invalid(
+        'An unplanned set carries only actuals, settings and observations.',
+      );
+    for (final entry in set.actuals.entries) {
+      final target = slot.targets[entry.key];
+      if (target != null && target.dimension != entry.value.dimension)
+        invalid('Unplanned ${entry.key} has another dimension than its slot.');
+    }
+    if (set.settings.isNotEmpty || slot.categories.isNotEmpty)
+      validateCategoricalSettings(
+        set.settings,
+        slot.categories,
+        'Unplanned set ${set.id}',
+      );
+    return n;
+  }
+
   final Map<String, BodyMassInputSnapshot> bodyMassInputs;
 
   /// Frozen load entry contexts captured at start: the entry convention
@@ -1111,13 +1170,16 @@ final class TrainingSession {
   final int contentVersion;
 
   TrainingSession replaceSet(TrainingSet updated) {
-    if (!sets.any((s) => s.id == updated.id))
+    if (!allSets.any((s) => s.id == updated.id))
       throw BodyTmiException('not_found', 'Unknown set: ${updated.id}.');
     return TrainingSession(
       id: id,
       revision: revision,
       startedAt: startedAt,
       sets: [for (final set in sets) set.id == updated.id ? updated : set],
+      extraSets: [
+        for (final set in extraSets) set.id == updated.id ? updated : set,
+      ],
       status: status,
       finishedAt: finishedAt,
       contentVersion: contentVersion + 1,
@@ -1141,6 +1203,7 @@ final class TrainingSession {
       revision: revision,
       startedAt: startedAt,
       sets: sets,
+      extraSets: extraSets,
       bodyMassInputs: bodyMassInputs,
       loadInputs: loadInputs,
       initialBodyMassOverrides: initialBodyMassOverrides,
@@ -1154,7 +1217,7 @@ final class TrainingSession {
   }
 
   TrainingSet set(String id) {
-    for (final set in sets) {
+    for (final set in allSets) {
       if (set.id == id) return set;
     }
     throw BodyTmiException('not_found', 'Unknown set: $id.');
@@ -1170,6 +1233,8 @@ final class TrainingSession {
     'contentVersion': contentVersion,
     if (variantSelections.isNotEmpty) 'variantSelections': variantSelections,
     'sets': [for (final set in sets) set.toJson()],
+    if (extraSets.isNotEmpty)
+      'extraSets': [for (final set in extraSets) set.toJson()],
     if (derivedPlanInput != null)
       'derivedPlanInput': derivedPlanInput!.toJson(),
     if (initialBodyMassOverrides != null)

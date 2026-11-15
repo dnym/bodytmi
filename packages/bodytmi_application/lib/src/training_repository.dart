@@ -667,6 +667,7 @@ final class StoredTrainingService {
     }
     next = TrainingSession(
       id: next.id,
+      extraSets: next.extraSets,
       revision: next.revision,
       variantSelections: next.variantSelections,
       startedAt: next.startedAt,
@@ -921,6 +922,7 @@ final class StoredTrainingService {
       return current;
     final next = TrainingSession(
       id: current.id,
+      extraSets: current.extraSets,
       revision: current.revision,
       variantSelections: current.variantSelections,
       startedAt: current.startedAt,
