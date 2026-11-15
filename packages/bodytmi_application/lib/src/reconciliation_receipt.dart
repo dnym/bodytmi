@@ -395,7 +395,7 @@ void validateProgressionReconciliations(
     if (source != null) {
       final session = bySession[source];
       if (session == null ||
-          session.revision.definition.id != receipt.revision.definition.id ||
+          session.definition.id != receipt.revision.definition.id ||
           session.revision.number != receipt.revision.number)
         invalid('Reconciliation source session is inconsistent.');
     }

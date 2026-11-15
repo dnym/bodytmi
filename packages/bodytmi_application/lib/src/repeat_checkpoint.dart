@@ -161,7 +161,7 @@ void validateRepeatSessionBindings(
       invalid('A finalized session requires finished repeat checkpoints.');
     final amrapId = checkpoint.amrapId;
     if (amrapId == null) continue;
-    final authored = session.revision.definition.amrap(amrapId);
+    final authored = session.definition.amrap(amrapId);
     if (authored == null)
       invalid('Repeat checkpoint names an AMRAP block its session lacks.');
     if (canonicalJson(
@@ -180,7 +180,7 @@ void validateRepeatSessionBindings(
   }
   for (final session in sessions) {
     if (session.status != SessionStatus.finalized) continue;
-    for (final amrap in session.revision.definition.amraps) {
+    for (final amrap in session.definition.amraps) {
       if (!blocks.contains('${session.id}\u0000${amrap.id}'))
         invalid(
           'A finalized session needs a finished checkpoint for AMRAP block '
@@ -195,7 +195,7 @@ List<String> missingAmrapBlocks(
   TrainingSession session,
   List<RepeatCheckpoint> checkpoints,
 ) => [
-  for (final amrap in session.revision.definition.amraps)
+  for (final amrap in session.definition.amraps)
     if (!checkpoints.any(
       (c) => c.sessionId == session.id && c.amrapId == amrap.id,
     ))
@@ -312,7 +312,7 @@ final class RepeatCheckpointService {
         await repository.session(sessionId) ??
         (throw const BodyTmiException('not_found', 'Session not found.'));
     final authored =
-        session.revision.definition.amrap(amrapId) ??
+        session.definition.amrap(amrapId) ??
         (throw const BodyTmiException(
           'not_found',
           'The session workout revision has no such AMRAP block.',
@@ -326,7 +326,7 @@ final class RepeatCheckpointService {
     for (final slot in authored.roundDefinition.slots) {
       final latest = latestBlockDecision(
         decisions,
-        blockTrackKey(runId, session.revision.definition.id, amrapId, slot.id),
+        blockTrackKey(runId, session.definition.id, amrapId, slot.id),
         asOf: session.startedAt,
       );
       if (latest != null)
@@ -369,15 +369,14 @@ final class RepeatCheckpointService {
     if (session.status != SessionStatus.active)
       invalid('An AMRAP block can only start in an active session.');
     // A placed block starts in plan order once traversal has reached it.
-    final placement = session.revision.definition.amrapPlacement(amrapId);
+    final placement = session.definition.amrapPlacement(amrapId);
     if (placement != null) {
       final traversal = (await repository.executions())
           .where((e) => e.sessionId == sessionId)
           .firstOrNull;
-      final index = session.revision.definition.plan
-          .occurrences()
-          .toList()
-          .indexWhere((o) => o.id == placement);
+      final index = session.definition.plan.occurrences().toList().indexWhere(
+        (o) => o.id == placement,
+      );
       if (traversal != null && traversal.cursor < index)
         invalid(
           'AMRAP block $amrapId is placed at $placement; advance the '

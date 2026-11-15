@@ -339,6 +339,7 @@ final class ProgramService {
     DerivedPlanRef? derivedPlan,
     Map<String, String> loadBindings = const {},
     Map<String, LoadConvention> loadConventions = const {},
+    Map<String, Map<String, String>> variantSettings = const {},
   }) => repository.transaction(() async {
     final current = await run(runId);
     final bindings = await repository.sessionPrograms();
@@ -400,6 +401,7 @@ final class ProgramService {
       derivedPlan: pinned ?? derivedPlan,
       loadBindings: loadBindings,
       loadConventions: loadConventions,
+      variantSettings: variantSettings,
     );
   });
   Future<ProgramReceipt> skip(
@@ -537,7 +539,7 @@ void validateProgramData({
       invalid('Invalid program session binding.');
     final day = run.program.definition.dayAt(b.ordinal);
     if (day.path != b.path ||
-        day.day.templateId != session.revision.definition.id ||
+        day.day.templateId != session.definition.id ||
         day.day.revision != session.revision.number ||
         (day.day.derivedPlan != null &&
             canonicalJson(day.day.derivedPlan!.toJson()) !=
@@ -557,8 +559,7 @@ void validateProgramData({
             p.number != run.program.number)
           p,
     ];
-    final pinned =
-        workoutMap['${s.revision.definition.id}/${s.revision.number}'];
+    final pinned = workoutMap['${s.definition.id}/${s.revision.number}'];
     if (pinned == null)
       invalid('Program session prescription overrides lack their revision.');
     final pure = const TrainingService().start(

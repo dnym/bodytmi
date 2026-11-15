@@ -72,7 +72,7 @@ final class TimingService {
     DateTime at,
   ) => repository.transaction(() async {
     final s = await StoredTrainingService(repository).session(sessionId);
-    final occurrence = s.revision.definition.plan
+    final occurrence = s.definition.plan
         .occurrences()
         .where((o) => o.id == occurrenceId)
         .firstOrNull;
@@ -267,7 +267,7 @@ final class TimingService {
 String timingMetricFor(TrainingSession session, String setId, String? metric) {
   if (metric != null) return metric;
   final set = session.set(setId);
-  final declared = session.revision.definition.slot(set.slotId).timing?.metric;
+  final declared = session.definition.slot(set.slotId).timing?.metric;
   if (declared != null) return declared;
   final durationMetrics = set.suggested.entries
       .where((entry) => entry.value.dimension == Dimension.duration)
@@ -282,7 +282,7 @@ String timingMetricFor(TrainingSession session, String setId, String? metric) {
 
 TimingPlan timingPlanFor(TrainingSession session, String setId, String metric) {
   final set = session.set(setId);
-  final defaults = session.revision.definition.slot(set.slotId).timing;
+  final defaults = session.definition.slot(set.slotId).timing;
   if (defaults?.metric == metric) return defaults!.resolve(set.suggested);
   final duration = set.suggested[metric];
   if (duration == null) invalid('Timing metric is not configured.');
@@ -302,7 +302,7 @@ void validateTimingData(
     final s = bySession[t.sessionId];
     if (s == null) invalid('Timing session is missing.');
     if (t.plan.restOnly) {
-      final occurrences = s.revision.definition.plan.occurrences().where(
+      final occurrences = s.definition.plan.occurrences().where(
         (o) => o.id == t.setId,
       );
       if (occurrences.length != 1 ||

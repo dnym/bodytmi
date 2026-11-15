@@ -6,7 +6,7 @@ final class RoundProgress {
 
   Map<String, Object?> evaluate(TrainingSession session, String groupPath) {
     if (groupPath.trim().isEmpty) invalid('groupPath must be nonempty.');
-    final definition = session.revision.definition;
+    final definition = session.definition;
     final groups = activityGroups(definition.plan);
     final expression = RegExp(
       '^${RegExp.escape(groupPath)}\\[([0-9]+)\\]' + r'$',

@@ -62,7 +62,7 @@ final class TrainingAnalytics {
       'source': {
         'sessionId': session.id,
         'sessionContentVersion': session.contentVersion,
-        'templateId': session.revision.definition.id,
+        'templateId': session.definition.id,
         'revision': session.revision.number,
       },
       'status': session.status.name,
@@ -100,7 +100,7 @@ final class TrainingAnalytics {
             'id': set.id,
             'slot': set.slotId,
             'role': set.role,
-            if (session.revision.definition.effortSide(set.id) case final side?)
+            if (session.definition.effortSide(set.id) case final side?)
               'side': side,
             if (set.settings.isNotEmpty) 'settings': set.settings,
             if (set.actualSettings.isNotEmpty)
@@ -197,20 +197,20 @@ final class TrainingAnalytics {
             !(selectedRoles?.contains(set.role) ??
                 (includeWarmups || set.role != 'warmup')))
           continue;
-        final slot = session.revision.definition.slot(set.slotId);
+        final slot = session.definition.slot(set.slotId);
         // Substituted sets stay in their own slot + replacement context.
         final performed = effectiveComposition(slot, set);
         if (members != null && !members.contains(performed.exercise)) continue;
         final sourceContext = <String, Object?>{
           'runId': runBySession[session.id],
-          'templateId': session.revision.definition.id,
+          'templateId': session.definition.id,
           'slotId': slot.id,
           'exercise': performed.exercise,
           'implementation': performed.implementation,
           'equipment': performed.equipment,
           'setupNote': performed.setupNote,
           'role': set.role,
-          if (session.revision.definition.effortSide(set.id) case final side?)
+          if (session.definition.effortSide(set.id) case final side?)
             'side': side,
           if (set.performedSettings.isNotEmpty)
             'settings': set.performedSettings,

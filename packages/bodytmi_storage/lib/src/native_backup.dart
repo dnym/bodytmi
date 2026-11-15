@@ -414,7 +414,7 @@ final class NativeBackup {
 
           final revision = db.select(
             'SELECT snapshot FROM revisions WHERE template_id = ? AND number = ?',
-            [session.revision.definition.id, session.revision.number],
+            [session.definition.id, session.revision.number],
           );
           if (session.id != row['id'] ||
               revision.length != 1 ||
@@ -426,10 +426,7 @@ final class NativeBackup {
                   canonicalJson(session.revision.toJson())) {
             invalid('Backup session prescription or identity is inconsistent.');
           }
-          validateCatalogSlotAdoption(
-            session.revision.definition.slots,
-            catalogOwners,
-          );
+          validateCatalogSlotAdoption(session.definition.slots, catalogOwners);
           if (session.status == SessionStatus.finalized &&
               db.select('SELECT 1 FROM finalizations WHERE session_id = ?', [
                 session.id,

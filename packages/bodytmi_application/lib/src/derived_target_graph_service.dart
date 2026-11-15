@@ -371,7 +371,7 @@ typedef _Selection = (Quantity, int, String, String, DateTime, int);
       continue;
     if (from != null && session.startedAt.isBefore(from)) continue;
     if (until != null && !session.startedAt.isBefore(until)) continue;
-    final definition = session.revision.definition;
+    final definition = session.definition;
     if (binding['templateId'] != null &&
         binding['templateId'] != definition.id) {
       continue;

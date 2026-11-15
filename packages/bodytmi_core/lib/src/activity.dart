@@ -132,6 +132,23 @@ sealed class Activity {
       case 'amrap':
         checkKeys(json, {'id', 'type', 'amrapId'});
         return AmrapPlacement(id, identifier(json, 'amrapId'));
+      case 'variant':
+        checkKeys(json, {'id', 'type', 'slot', 'lever', 'branches'});
+        final branches = jsonObject(json['branches'], 'variant branches');
+        if (branches.length < 2 || branches.length > 64)
+          invalid('Variant $id needs 2–64 branches.');
+        return Variant(
+          id,
+          identifier(json, 'slot'),
+          identifier(json, 'lever'),
+          {
+            for (final key in (branches.keys.toList()..sort()))
+              identifier({'value': key}, 'value'): fromJson(
+                branches[key],
+                depth + 1,
+              ),
+          },
+        );
       default:
         invalid('Unsupported activity type: ${json['type']}.');
     }
@@ -177,7 +194,121 @@ sealed class Activity {
         }
       case TimeWindow(:final child):
         yield* child.occurrences(path);
+      case Variant():
+        throw unresolvedVariant();
     }
+  }
+
+  /// Every occurrence any variant resolution can produce, with the same paths
+  /// a resolved plan yields (a variant contributes no path segment).
+  Iterable<ActivityOccurrence> structuralOccurrences() =>
+      imposedOccurrences(this).map((e) => e.$1);
+}
+
+/// Structural occurrences with the slot settings imposed by enclosing
+/// variant branches (slot → lever → value).
+Iterable<(ActivityOccurrence, Map<String, Map<String, String>>)>
+imposedOccurrences(
+  Activity node, [
+  String prefix = '',
+  Map<String, Map<String, String>> imposed = const {},
+]) sync* {
+  if (node case Variant(:final slotId, :final lever, :final branches)) {
+    for (final e in branches.entries)
+      yield* imposedOccurrences(e.value, prefix, {
+        ...imposed,
+        slotId: {...?imposed[slotId], lever: e.key},
+      });
+    return;
+  }
+  final path = prefix.isEmpty ? node.id : '$prefix/${node.id}';
+  switch (node) {
+    case Effort() || Rest() || AmrapPlacement():
+      yield (ActivityOccurrence(path, node), imposed);
+    case Sequence(:final items):
+      for (final child in items)
+        yield* imposedOccurrences(child, path, imposed);
+    case Repeat(:final count, :final child, :final restBetweenSeconds):
+      for (var i = 0; i < count; i++) {
+        yield* imposedOccurrences(child, '$path[$i]', imposed);
+        if (i + 1 < count && restBetweenSeconds > 0)
+          yield (
+            ActivityOccurrence(
+              '$path[$i]/between',
+              Rest('between', restBetweenSeconds),
+            ),
+            imposed,
+          );
+      }
+    case TimeWindow(:final child):
+      yield* imposedOccurrences(child, path, imposed);
+    case Variant():
+      break;
+  }
+}
+
+BodyTmiException unresolvedVariant() => BodyTmiException(
+  'validation',
+  'Resolve workout variants before expanding plan occurrences.',
+);
+
+/// An authored structural choice selected by one categorical lever of a slot,
+/// such as a set scheme (5x3, 6x2, 10x1). Each branch is a complete activity
+/// subtree; a session freezes one selection and expands only that branch.
+/// Branch values have no implied difficulty order.
+final class Variant extends Activity {
+  Variant(super.id, this.slotId, this.lever, Map<String, Activity> branches)
+    : branches = Map.unmodifiable(branches);
+  final String slotId;
+  final String lever;
+  final Map<String, Activity> branches;
+  @override
+  Iterable<Activity> get children => branches.values;
+  @override
+  Map<String, Object?> toJson() => {
+    'type': 'variant',
+    'id': id,
+    'slot': slotId,
+    'lever': lever,
+    'branches': {for (final e in branches.entries) e.key: e.value.toJson()},
+  };
+}
+
+/// Replaces every reached variant with its selected branch, baking the branch
+/// value into that slot's efforts as an authored categorical setting.
+/// [reached] collects the selected variant IDs.
+Activity resolveVariantActivity(
+  Activity node,
+  Map<String, String> selections,
+  Set<String> reached, [
+  Map<String, Map<String, String>> imposed = const {},
+]) {
+  Activity walk(Activity n) =>
+      resolveVariantActivity(n, selections, reached, imposed);
+  switch (node) {
+    case Variant(:final slotId, :final lever, :final branches):
+      final value = selections[node.id];
+      if (value == null)
+        invalid('Variant ${node.id} needs an explicit selection.');
+      final branch = branches[value];
+      if (branch == null) invalid('Variant ${node.id} has no branch $value.');
+      reached.add(node.id);
+      return resolveVariantActivity(branch, selections, reached, {
+        ...imposed,
+        slotId: {...?imposed[slotId], lever: value},
+      });
+    case Effort():
+      final extra = imposed[node.slotId];
+      if (extra == null) return node;
+      return node.withSettings({...node.settings, ...extra});
+    case Rest() || AmrapPlacement():
+      return node;
+    case Sequence(:final items):
+      return Sequence(node.id, [for (final c in items) walk(c)]);
+    case Repeat(:final count, :final child, :final restBetweenSeconds):
+      return Repeat(node.id, count, walk(child), restBetweenSeconds);
+    case TimeWindow(:final durationSeconds, :final child):
+      return TimeWindow(node.id, durationSeconds, walk(child));
   }
 }
 
@@ -486,6 +617,8 @@ List<ActivityGroupOccurrence> activityGroups(
         walk(child, path);
         add(path, start, cursor, windowDurationSeconds: durationSeconds);
         return;
+      case Variant():
+        throw unresolvedVariant();
     }
     add(path, start, cursor);
   }

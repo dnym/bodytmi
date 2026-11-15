@@ -454,11 +454,11 @@ final class LeverLinkService {
     };
     bool inContext(TrainingSession session) {
       if (runBySession[session.id] != member.runId ||
-          session.revision.definition.id != member.templateId)
+          session.definition.id != member.templateId)
         return false;
       final ExerciseSlot slot;
       try {
-        slot = session.revision.definition.slot(member.slot.id);
+        slot = session.definition.slot(member.slot.id);
       } on BodyTmiException {
         return false;
       }

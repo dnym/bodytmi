@@ -39,7 +39,7 @@ final class SessionWindowReview {
     final wrapped = jsonObject(wrapper, 'session window clock');
     final clock = jsonObject(wrapped['clock'], 'window clock');
     final occurrence = clock['occurrence'];
-    final plan = session.revision.definition.plan.occurrences().toList();
+    final plan = session.definition.plan.occurrences().toList();
     if (occurrence is! int ||
         occurrence < 0 ||
         occurrence >= plan.length ||

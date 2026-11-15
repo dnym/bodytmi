@@ -76,7 +76,7 @@ final class ExecutionService {
       'sessionContentVersion': s.contentVersion,
       'groups': [
         for (final group in activityGroups(
-          s.revision.definition.plan,
+          s.definition.plan,
           containing: e.cursor,
         ))
           group.toJson(),
@@ -345,7 +345,7 @@ final class ExecutionService {
     final training = StoredTrainingService(repository);
     var s = await training.session(e.sessionId);
     final group = activityGroups(
-      s.revision.definition.plan,
+      s.definition.plan,
       paths: {groupPath},
     ).where((g) => g.path == groupPath).firstOrNull;
     if (group == null) invalid('Unknown structural group occurrence.');
@@ -406,6 +406,7 @@ final class ExecutionService {
         (current) => TrainingSession(
           id: current.id,
           revision: current.revision,
+          variantSelections: current.variantSelections,
           startedAt: current.startedAt,
           sets: [
             for (final set in current.sets)
@@ -480,9 +481,9 @@ void _validateManagedClocks(
 }
 
 List<ActivityOccurrence> executionPlan(TrainingSession s) {
-  if (s.revision.definition.plan.nodes.any((n) => n is TimeWindow))
+  if (s.definition.plan.nodes.any((n) => n is TimeWindow))
     invalid('Scoped window traversal is not implemented yet.');
-  final plan = s.revision.definition.plan.occurrences().toList();
+  final plan = s.definition.plan.occurrences().toList();
   if (plan.length > 10000 ||
       plan.map((o) => o.id).toSet().length != plan.length)
     invalid(
@@ -512,7 +513,7 @@ void validateExecutionData(
     _validateManagedClocks(e, s, timers);
     final groups = {
       for (final g in activityGroups(
-        s.revision.definition.plan,
+        s.definition.plan,
         paths: {
           for (final r in e.receipts)
             if (jsonObject(r['request'], 'execution request')['action'] ==
@@ -618,7 +619,7 @@ void validateExecutionData(
           invalid(
             'AMRAP placement advancement lacks its finished block checkpoint.',
           );
-        if (s.revision.definition.amrap(amrapId) == null)
+        if (s.definition.amrap(amrapId) == null)
           invalid('AMRAP placement names an undeclared block.');
       } else if (rest) {
         if (action != 'skip' && action != 'advance' && !groupSkip)
@@ -720,7 +721,7 @@ void validatePlacementCheckpoints(
     for (final r in e.receipts) {
       if (r['kind'] != 'amrap' || !r.containsKey('checkpointId')) continue;
       final c = byId[r['checkpointId']];
-      final placed = sessionById[e.sessionId]?.revision.definition.plan
+      final placed = sessionById[e.sessionId]?.definition.plan
           .occurrences()
           .where((o) => o.id == r['path'])
           .firstOrNull

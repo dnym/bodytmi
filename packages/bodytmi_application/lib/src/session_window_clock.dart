@@ -9,7 +9,7 @@ final class SessionWindowClock {
   Map<String, Object?> start(TrainingSession session) {
     if (session.status != SessionStatus.active)
       invalid('A window clock requires an active session.');
-    return _wrap(session, _clock.start(session.revision.definition));
+    return _wrap(session, _clock.start(session.definition));
   }
 
   Map<String, Object?> apply(
@@ -28,7 +28,7 @@ final class SessionWindowClock {
     final clock = jsonObject(wrapper['clock'], 'window clock');
     if (action == 'move' && toOccurrence != null) {
       final occurrence = clock['occurrence'];
-      final plan = session.revision.definition.plan.occurrences().toList();
+      final plan = session.definition.plan.occurrences().toList();
       if (occurrence is! int ||
           occurrence < 0 ||
           occurrence >= plan.length ||
@@ -44,7 +44,7 @@ final class SessionWindowClock {
       }
     }
     final next = _clock.apply(
-      session.revision.definition,
+      session.definition,
       clock,
       expectedVersion: expectedVersion,
       action: action,
@@ -81,12 +81,9 @@ final class SessionWindowClock {
         sourceVersion < 1 ||
         sourceVersion > session.contentVersion)
       invalid('Window clock requires a current or newer session snapshot.');
-    final clock = _clock.validate(
-      session.revision.definition,
-      wrapper['clock'],
-    );
+    final clock = _clock.validate(session.definition, wrapper['clock']);
     final cursor = clock['occurrence'] as int;
-    final plan = session.revision.definition.plan.occurrences().toList();
+    final plan = session.definition.plan.occurrences().toList();
     for (var i = 0; i < cursor; i++) {
       if (plan[i].activity is Effort &&
           session.set(plan[i].id).status == SetStatus.planned)

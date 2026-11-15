@@ -1,5 +1,6 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'training_service.dart';
+import 'session_codec.dart';
 import 'training_archive.dart';
 import 'progression_decision.dart';
 import 'progression_anchor.dart';
@@ -225,6 +226,7 @@ final class StoredTrainingService {
     DerivedPlanRef? derivedPlan,
     Map<String, String> loadBindings = const {},
     Map<String, LoadConvention> loadConventions = const {},
+    Map<String, Map<String, String>> variantSettings = const {},
   }) => repository.transaction(() async {
     final runId = programRun?.id;
     final prescription = await revision(templateId, number);
@@ -233,11 +235,12 @@ final class StoredTrainingService {
     final runBySession = {for (final b in bindings) b.sessionId: b.runId};
     if (existing != null) {
       if (runBySession[id] != runId ||
-          existing.revision.definition.id != templateId ||
+          existing.definition.id != templateId ||
           existing.revision.number != number ||
           existing.startedAt != startedAt ||
           !sameBodyMassOverrides(existing, bodyMassOverrides) ||
           !sameLoadInputs(existing, loadBindings, loadConventions) ||
+          !sameVariantRequest(existing, variantSettings) ||
           canonicalJson(existing.derivedPlanInput?.reference.toJson()) !=
               canonicalJson(derivedPlan?.toJson()))
         _conflict();
@@ -302,19 +305,84 @@ final class StoredTrainingService {
             sessionStartedAt: startedAt,
           ),
     };
-    // Ordinal tracks with categorical levels supply those levers' settings.
+    // Variant structures (set schemes): a progression-controlled slot lever
+    // selects its branch; explicit request settings choose uncontrolled
+    // variant levers; each lever's default applies otherwise.
+    final slotSettings = <String, Map<String, String>>{};
+    for (final entry in bySlot.entries) {
+      final anchor = entry.value;
+      if (anchor == null) continue;
+      final slotId = entry.key.$1;
+      for (final lever
+          in prescription.definition
+              .variantLevers(slotId)
+              .intersection(anchor.controlledSettings)) {
+        final values = {
+          for (final settings in anchor.nextSettings) settings[lever],
+        };
+        if (values.length != 1 || values.single == null)
+          _startReconciliationRequired(
+            prescription,
+            slotId,
+            entry.key.$2,
+            anchor,
+            startedAt,
+            runId,
+          );
+        final previous = slotSettings[slotId]?[lever];
+        if (previous != null && previous != values.single)
+          throw BodyTmiException(
+            'conflict',
+            'Progression tracks of slot $slotId select different variant '
+                'values for lever $lever.',
+          );
+        (slotSettings[slotId] ??= {})[lever] = values.single!;
+      }
+    }
+    for (final requested in variantSettings.entries) {
+      for (final setting in requested.value.entries) {
+        if (!prescription.definition
+            .variantLevers(requested.key)
+            .contains(setting.key))
+          invalid(
+            'Variant request names lever ${setting.key} of slot '
+            '${requested.key}, which selects no variant.',
+          );
+        final progressed = slotSettings[requested.key]?[setting.key];
+        if (progressed != null && progressed != setting.value)
+          throw BodyTmiException(
+            'conflict',
+            'Variant lever ${setting.key} of slot ${requested.key} is '
+                'progression-controlled; reconcile the track first.',
+          );
+        (slotSettings[requested.key] ??= {})[setting.key] = setting.value;
+      }
+    }
+    final selections = prescription.definition.variantSelections(slotSettings);
+    final resolved = prescription.definition.resolveVariants(selections);
+    final plannedCounts = <(String, String), int>{};
+    for (final occurrence in resolved.plan.occurrences()) {
+      if (occurrence.activity case Effort(:final slotId, :final role))
+        plannedCounts.update((slotId, role), (n) => n + 1, ifAbsent: () => 1);
+    }
+    // Ordinal tracks with categorical levels supply those levers' settings;
+    // a uniform level resizes with a structural change.
     final progressedSettings = <String, Map<String, String>>{};
     {
       final ordinals = <(String, String), int>{};
-      for (final occurrence in prescription.definition.plan.occurrences()) {
+      for (final occurrence in resolved.plan.occurrences()) {
         final effort = occurrence.activity;
         if (effort is! Effort) continue;
         final key = (effort.slotId, effort.role);
         final ordinal = ordinals.update(key, (v) => v + 1, ifAbsent: () => 0);
         final anchor = bySlot[key];
         if (anchor == null || anchor.controlledSettings.isEmpty) continue;
-        if (ordinal >= anchor.nextSettings.length) continue;
-        final settings = anchor.nextSettings[ordinal];
+        final vector = resizedSettings(
+          anchor.nextSettings,
+          plannedCounts[key]!,
+        );
+        if (ordinal >= vector.length) continue;
+        final settings = vector[ordinal];
         if (settings.isNotEmpty) progressedSettings[occurrence.id] = settings;
       }
     }
@@ -337,6 +405,7 @@ final class StoredTrainingService {
           .where((s) => runBySession[s.id] == runId)
           .toList(),
       progressedSettings: progressedSettings,
+      variantSelections: selections,
     );
     final scopedOverrides = programRun == null || dayPath == null
         ? const <ScopedProgramOverride>[]
@@ -362,7 +431,7 @@ final class StoredTrainingService {
       }
     }
     final overridden = applyPrescriptionOverrides(
-      prescription.definition,
+      resolved,
       next.sets,
       scopedOverrides,
     );
@@ -377,18 +446,21 @@ final class StoredTrainingService {
     final authored = {
       for (final entry in bySlot.entries)
         if (entry.value != null)
-          entry.key: prescription.definition.roleTargets(
-            entry.key.$1,
-            entry.key.$2,
+          entry.key: resolved.roleTargets(entry.key.$1, entry.key.$2),
+    };
+    // The anchor's revision resolved under this session's structure; null
+    // when it cannot express it (reconciliation required).
+    final previousResolved = {
+      for (final entry in bySlot.entries)
+        if (entry.value != null)
+          entry.key: resolveAlike(
+            entry.value!.pinnedRevision.definition,
+            selections,
           ),
     };
     final previousAuthored = {
-      for (final entry in bySlot.entries)
-        if (entry.value != null)
-          entry.key: entry.value!.pinnedRevision.definition.roleTargets(
-            entry.key.$1,
-            entry.key.$2,
-          ),
+      for (final entry in previousResolved.entries)
+        entry.key: entry.value?.roleTargets(entry.key.$1, entry.key.$2),
     };
     for (final set in overridden.sets) {
       final applied = bySlot[(set.slotId, set.role)];
@@ -397,9 +469,21 @@ final class StoredTrainingService {
         continue;
       }
       final vector = applied.nextSets;
-      final count = workingCounts[(set.slotId, set.role)];
-      if (vector.length != count ||
-          previousAuthored[(set.slotId, set.role)]!.length != count)
+      final count = workingCounts[(set.slotId, set.role)]!;
+      // A structural change (another variant branch) may resize a uniform
+      // controlled vector; objectives then compare with the anchor revision
+      // resolved under this session's structure.
+      final broadcast = broadcastsVector(
+        applied,
+        prescription.definition,
+        set.slotId,
+        set.settings,
+        count,
+      );
+      final prior = previousAuthored[(set.slotId, set.role)];
+      if ((vector.length != count && !broadcast) ||
+          prior == null ||
+          prior.length != count)
         _startReconciliationRequired(
           prescription,
           set.slotId,
@@ -408,11 +492,22 @@ final class StoredTrainingService {
           startedAt,
           runId,
         );
-      final oldObjectives = applied.sets[set.ordinal].maxEffortMetrics;
+      final priorEffort = broadcast
+          ? previousResolved[(set.slotId, set.role)]!.roleEfforts(
+              set.slotId,
+              set.role,
+            )[set.ordinal]
+          : null;
+      final oldObjectives =
+          priorEffort?.maxEffortMetrics ??
+          applied.sets[set.ordinal].maxEffortMetrics;
+      final oldCriteria =
+          priorEffort?.criteria ?? applied.sets[set.ordinal].criteria;
+      final consumed = broadcast ? vector.first : vector[set.ordinal];
       if (oldObjectives.length != set.maxEffortMetrics.length ||
           !oldObjectives.containsAll(set.maxEffortMetrics) ||
           canonicalJson({
-                for (final e in applied.sets[set.ordinal].criteria.entries)
+                for (final e in oldCriteria.entries)
                   e.key: e.value.semanticJson(),
               }) !=
               canonicalJson({
@@ -429,8 +524,7 @@ final class StoredTrainingService {
         );
       final slot = prescription.definition.slot(set.slotId);
       for (final metric in applied.controlledMetrics) {
-        if (set.suggested[metric]?.dimension !=
-            vector[set.ordinal][metric]!.dimension)
+        if (set.suggested[metric]?.dimension != consumed[metric]!.dimension)
           _startReconciliationRequired(
             prescription,
             set.slotId,
@@ -453,7 +547,7 @@ final class StoredTrainingService {
             runId,
           );
         if (authored[(set.slotId, set.role)]![set.ordinal][metric]!.compareTo(
-              previousAuthored[(set.slotId, set.role)]![set.ordinal][metric]!,
+              prior[set.ordinal][metric]!,
             ) !=
             0)
           _startReconciliationRequired(
@@ -468,7 +562,7 @@ final class StoredTrainingService {
       final suggested = {
         ...set.suggested,
         for (final metric in applied.controlledMetrics)
-          metric: vector[set.ordinal][metric]!,
+          metric: consumed[metric]!,
       };
       sets.add(
         TrainingSet(
@@ -505,6 +599,7 @@ final class StoredTrainingService {
     next = TrainingSession(
       id: next.id,
       revision: next.revision,
+      variantSelections: next.variantSelections,
       startedAt: next.startedAt,
       sets: finalSets,
       bodyMassInputs: next.bodyMassInputs,
@@ -719,14 +814,14 @@ final class StoredTrainingService {
       (r) => r.runId == runId && !r.retiredAt.isAfter(current.startedAt),
     );
     final bySlot = <(String, String), ProgressionAnchor?>{
-      for (final slot in current.revision.definition.slots)
+      for (final slot in current.definition.slots)
         for (final role in ['work', 'warmup', 'backoff', 'drop'])
           (slot.id, role): linkLinkedTrack(
             await buildSharedLinkIndex(repository),
             latestTrack(
               decisions,
               <ProgressionAnchor>[...receipts, ...refreshRetirements],
-              current.revision.definition.id,
+              current.definition.id,
               slot,
               runId: runId,
               role: role,
@@ -752,6 +847,7 @@ final class StoredTrainingService {
     final next = TrainingSession(
       id: current.id,
       revision: current.revision,
+      variantSelections: current.variantSelections,
       startedAt: current.startedAt,
       sets: result.$1,
       bodyMassInputs: current.bodyMassInputs,
@@ -889,7 +985,7 @@ final class StoredTrainingService {
       final clock = jsonObject(wrapper['clock'], 'window clock');
       if (clock['status'] == 'running') {
         final occurrence = clock['occurrence'] as int;
-        final plan = current.revision.definition.plan.occurrences().toList();
+        final plan = current.definition.plan.occurrences().toList();
         if (plan[occurrence].activity is Effort &&
             canonicalJson(current.set(plan[occurrence].id).toJson()) !=
                 canonicalJson(next.set(plan[occurrence].id).toJson()))
@@ -1262,7 +1358,7 @@ void requireFrozenPrescriptionOverrides(
     startedAt: session.startedAt,
   );
   final expected = applyPrescriptionOverrides(
-    session.revision.definition,
+    session.definition,
     pure.sets,
     definition.effectiveOverrides(path),
   ).records;

@@ -1296,6 +1296,7 @@ void programTests() {
             (s) => TrainingSession(
               id: 'replacement',
               revision: s.revision,
+              variantSelections: s.variantSelections,
               startedAt: s.startedAt,
               sets: s.sets,
             ),

@@ -541,7 +541,7 @@ final class TrainingArchive {
         invalid('Duplicate logical session identity.');
       bySession[session.id] = session;
       final revision =
-          byRevision['${session.revision.definition.id}:${session.revision.number}'];
+          byRevision['${session.definition.id}:${session.revision.number}'];
       if (revision == null ||
           canonicalJson(revision.toJson()) !=
               canonicalJson(session.revision.toJson())) {

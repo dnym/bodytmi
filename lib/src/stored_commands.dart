@@ -293,6 +293,7 @@ Future<Map<String, Object?>> executeStored(
       'derivedPlan',
       'loadBindings',
       'loadConventions',
+      'variants',
     },
     'store show' => {'id'},
     'store load-status' => {'id'},
@@ -780,6 +781,7 @@ Future<Map<String, Object?>> executeStored(
       'derivedPlan',
       'loadBindings',
       'loadConventions',
+      'variants',
     },
     'run skip' => {'runId', 'expectedVersion', 'requestId', 'skippedAt'},
     'run upgrade' => {
@@ -1627,6 +1629,7 @@ Future<Map<String, Object?>> executeStored(
               : DerivedPlanRef.fromJson(request['derivedPlan']),
           loadBindings: loadBindingsFromJson(request['loadBindings']),
           loadConventions: loadConventionsFromJson(request['loadConventions']),
+          variantSettings: variantSettingsFromJson(request['variants']),
         )).toJson();
       case 'run skip':
         final runId = identifier(request, 'runId');
@@ -1850,6 +1853,7 @@ Future<Map<String, Object?>> executeStored(
               : DerivedPlanRef.fromJson(request['derivedPlan']),
           loadBindings: loadBindingsFromJson(request['loadBindings']),
           loadConventions: loadConventionsFromJson(request['loadConventions']),
+          variantSettings: variantSettingsFromJson(request['variants']),
         )).toJson();
       case 'store load-status':
         data = await store.transaction(() async {
@@ -1864,7 +1868,7 @@ Future<Map<String, Object?>> executeStored(
           return loadStatus(
             session.loadInputs,
             slotConventions: {
-              for (final slot in session.revision.definition.slots)
+              for (final slot in session.definition.slots)
                 slot.id: slot.convention,
             },
             instances: {

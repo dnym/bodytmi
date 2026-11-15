@@ -197,15 +197,15 @@ final class Commands {
               : WorkoutRevision.fromJson(request['previous']),
         ).toJson();
       case 'activity expand':
-        keys({'definition'});
-        final definition = WorkoutDefinition.fromJson(request['definition']);
+        keys({'definition', 'variants'});
+        final definition = _resolvedDefinition(request);
         data = [
           for (final occurrence in definition.plan.occurrences())
             {'id': occurrence.id, 'activity': occurrence.activity.toJson()},
         ];
       case 'activity groups':
-        keys({'definition', 'containing'});
-        final definition = WorkoutDefinition.fromJson(request['definition']);
+        keys({'definition', 'containing', 'variants'});
+        final definition = _resolvedDefinition(request);
         final containing = request['containing'];
         if (request.containsKey('containing') &&
             (containing is! int || containing < 0))
@@ -504,14 +504,29 @@ final class Commands {
           'bodyMassOverrides',
           'loadInstances',
           'loadConventions',
+          'variants',
         });
         final history = request['history'] ?? <Object?>[];
+        final startRevision = WorkoutRevision.fromJson(request['revision']);
+        final requestedVariants = variantSettingsFromJson(request['variants']);
+        for (final slot in requestedVariants.entries)
+          for (final lever in slot.value.keys)
+            if (!startRevision.definition
+                .variantLevers(slot.key)
+                .contains(lever))
+              invalid(
+                'Variant request names lever $lever of slot ${slot.key}, '
+                'which selects no variant.',
+              );
         if (history is! List<Object?>) invalid('history must be an array.');
         data = const TrainingService()
             .start(
               sessionId: identifier(request, 'id'),
-              revision: WorkoutRevision.fromJson(request['revision']),
+              revision: startRevision,
               startedAt: parseInstant(request['startedAt'], 'startedAt'),
+              variantSelections: startRevision.definition.variantSelections(
+                requestedVariants,
+              ),
               history: [for (final item in history) sessionFromJson(item)],
               bodyMassMeasurements: [
                 for (final m
@@ -535,7 +550,7 @@ final class Commands {
         data = loadStatus(
           session.loadInputs,
           slotConventions: {
-            for (final slot in session.revision.definition.slots)
+            for (final slot in session.definition.slots)
               slot.id: slot.convention,
           },
           instances: loadInstancesFromJson(request['instances']),
@@ -1098,4 +1113,15 @@ final class Commands {
     if (value is! bool) invalid('$key must be a boolean.');
     return value;
   }
+}
+
+/// A pure command's definition resolved under explicit `variants`
+/// (variantId → branch value), else each variant lever's default.
+WorkoutDefinition _resolvedDefinition(Map<String, Object?> request) {
+  final definition = WorkoutDefinition.fromJson(request['definition']);
+  return definition.resolveVariants(
+    request.containsKey('variants')
+        ? variantSelectionsFromJson(request['variants'])
+        : definition.variantSelections(),
+  );
 }

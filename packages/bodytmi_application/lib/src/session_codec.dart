@@ -50,6 +50,46 @@ Map<String, String> loadBindingsFromJson(Object? input) => {
     }, 'instanceId'),
 };
 
+/// Parses a start request's `variants` as slot → lever → value (possibly
+/// empty): explicit choices for variant levers no progression controls.
+Map<String, Map<String, String>> variantSettingsFromJson(Object? input) => {
+  for (final e in jsonObject(input ?? <String, Object?>{}, 'variants').entries)
+    identifier({'slot': e.key}, 'slot'): categoricalSettingsFromJson(
+      e.value,
+      'variants.${e.key}',
+    ),
+};
+
+/// Whether an existing session's frozen variant selections agree with a
+/// retried start's explicit variant settings.
+bool sameVariantRequest(
+  TrainingSession existing,
+  Map<String, Map<String, String>> requested,
+) {
+  for (final slot in requested.entries) {
+    for (final setting in slot.value.entries) {
+      for (final v in existing.revision.definition.variants) {
+        final selected = existing.variantSelections[v.id];
+        if (v.slotId == slot.key &&
+            v.lever == setting.key &&
+            selected != null &&
+            selected != setting.value)
+          return false;
+      }
+    }
+  }
+  return true;
+}
+
+/// Parses `{variantId: branchValue}` selections (possibly empty).
+Map<String, String> variantSelectionsFromJson(Object? input) {
+  final j = jsonObject(input ?? <String, Object?>{}, 'variantSelections');
+  return {
+    for (final key in (j.keys.toList()..sort()))
+      identifier({'variant': key}, 'variant'): identifier(j, key),
+  };
+}
+
 TrainingSession sessionFromJson(Object? input) {
   final json = jsonObject(input, 'session');
   checkKeys(json, {
@@ -66,6 +106,7 @@ TrainingSession sessionFromJson(Object? input) {
     'initialBodyMassOverrides',
     'derivedPlanInput',
     'prescriptionOverrides',
+    'variantSelections',
   });
   if (json['schemaVersion'] != 1)
     invalid('Unsupported session schema version.');
@@ -86,10 +127,16 @@ TrainingSession sessionFromJson(Object? input) {
   if ((status == SessionStatus.finalized) != (finishedAt != null) ||
       (finishedAt?.isBefore(startedAt) ?? false))
     invalid('Inconsistent session finish state/time.');
+  final variantSelections = json.containsKey('variantSelections')
+      ? variantSelectionsFromJson(json['variantSelections'])
+      : const <String, String>{};
+  if (json.containsKey('variantSelections') && variantSelections.isEmpty)
+    invalid('Empty variant selections must be omitted.');
   final baseline = const TrainingService().start(
     sessionId: id,
     revision: revision,
     startedAt: startedAt,
+    variantSelections: variantSelections,
   );
   final derivedInput = json['derivedPlanInput'] == null
       ? null
@@ -318,7 +365,7 @@ TrainingSession sessionFromJson(Object? input) {
         'Sessions cannot combine derived plans and prescription overrides.',
       );
     final recomputed =
-        applyPrescriptionOverrides(revision.definition, baseline.sets, [
+        applyPrescriptionOverrides(baseline.definition, baseline.sets, [
           for (final record in prescriptionOverrides)
             ScopedProgramOverride(record.path, record.override),
         ]).records;
@@ -357,6 +404,7 @@ TrainingSession sessionFromJson(Object? input) {
   final session = TrainingSession(
     id: id,
     revision: revision,
+    variantSelections: variantSelections,
     startedAt: startedAt,
     sets: sets,
     bodyMassInputs: {

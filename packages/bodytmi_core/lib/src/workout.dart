@@ -183,6 +183,58 @@ final class WorkoutDefinition {
           );
       }
     }
+    // Variants: a slot categorical lever selects one complete branch. Branches
+    // cover exactly the lever's values; branch values are imposed on that
+    // slot's efforts, so an effort cannot contradict its enclosing branch.
+    void checkVariants(
+      Activity node,
+      Map<String, Map<String, String>> imposed,
+    ) {
+      if (node is Variant) {
+        final slot = slots.where((s) => s.id == node.slotId).firstOrNull;
+        if (slot == null) invalid('Unknown slot: ${node.slotId}.');
+        final lever = slot.categories[node.lever];
+        if (lever == null)
+          invalid(
+            'Variant ${node.id} names undeclared categorical lever '
+            '${node.lever} of slot ${slot.id}.',
+          );
+        final values = node.branches.keys.toSet();
+        if (values.length != lever.values.length ||
+            !values.containsAll(lever.values))
+          invalid(
+            'Variant ${node.id} branches must cover exactly the values of '
+            'lever ${node.lever}.',
+          );
+        if (imposed[node.slotId]?.containsKey(node.lever) ?? false)
+          invalid(
+            'Variant ${node.id} repeats lever ${node.lever} of an enclosing '
+            'variant.',
+          );
+        for (final e in node.branches.entries) {
+          if (!e.value.nodes.any((n) => n is Effort))
+            invalid('Variant ${node.id} branch ${e.key} needs an effort.');
+          checkVariants(e.value, {
+            ...imposed,
+            node.slotId: {...?imposed[node.slotId], node.lever: e.key},
+          });
+        }
+        return;
+      }
+      if (node is Effort) {
+        for (final e in (imposed[node.slotId] ?? const {}).entries) {
+          final own = node.settings[e.key];
+          if (own != null && own != e.value)
+            invalid(
+              'Effort ${node.id} sets ${e.key} to $own inside variant '
+              'branch ${e.value}.',
+            );
+        }
+      }
+      for (final child in node.children) checkVariants(child, imposed);
+    }
+
+    checkVariants(plan, const {});
     for (final slot in slots) {
       if (slot.targets.isEmpty &&
           !plan.nodes.whereType<Effort>().any(
@@ -194,7 +246,7 @@ final class WorkoutDefinition {
     }
     var count = 0;
     var efforts = 0;
-    for (final occurrence in plan.occurrences()) {
+    for (final occurrence in plan.structuralOccurrences()) {
       if (++count > 10000)
         invalid('Plan exceeds the current 10000-occurrence resource limit.');
       if (occurrence.activity is Effort) efforts++;
@@ -219,7 +271,7 @@ final class WorkoutDefinition {
     }
     // Placements put a declared block at one unique point of the finite plan.
     final placed = <String>{};
-    void place(Activity node, bool repeated) {
+    void place(Activity node, bool repeated, [bool inVariant = false]) {
       if (node case AmrapPlacement(:final amrapId)) {
         if (!amraps.any((a) => a.id == amrapId))
           invalid('AMRAP placement names an undeclared block: $amrapId.');
@@ -228,11 +280,17 @@ final class WorkoutDefinition {
             'An AMRAP placement cannot sit inside a repeat or window; '
             'it must occur exactly once.',
           );
+        if (inVariant)
+          invalid('An AMRAP placement cannot sit inside a variant branch.');
         if (!placed.add(amrapId))
           invalid('AMRAP block $amrapId is placed more than once.');
       }
       for (final child in node.children)
-        place(child, repeated || node is Repeat || node is TimeWindow);
+        place(
+          child,
+          repeated || node is Repeat || node is TimeWindow,
+          inVariant || node is Variant,
+        );
     }
 
     place(plan, false);
@@ -247,7 +305,81 @@ final class WorkoutDefinition {
   final String id;
   final String name;
   final List<ExerciseSlot> slots;
+
+  /// The authored plan. With variants it cannot be expanded directly: use
+  /// [resolveVariants] (sessions expose their frozen resolution).
   final Activity plan;
+
+  late final List<Variant> variants = List.unmodifiable(
+    plan.nodes.whereType<Variant>(),
+  );
+  bool get hasVariants => variants.isNotEmpty;
+
+  /// The categorical levers that select variants enclosing [slotId] efforts.
+  Set<String> variantLevers(String slotId) => {
+    for (final v in variants)
+      if (v.slotId == slotId) v.lever,
+  };
+
+  /// A variant-free definition expanding only the selected branches. Every
+  /// reached variant needs a selection, and no other selection is accepted.
+  /// Variants of the same slot lever must agree.
+  WorkoutDefinition resolveVariants(Map<String, String> selections) {
+    if (!hasVariants) {
+      if (selections.isNotEmpty)
+        invalid('Workout $id declares no variants to select.');
+      return this;
+    }
+    final key = [
+      for (final k in (selections.keys.toList()..sort())) '$k=${selections[k]}',
+    ].join('\u0000');
+    return _resolved[key] ??= () {
+      final reached = <String>{};
+      final resolved = resolveVariantActivity(plan, selections, reached);
+      if (reached.length != selections.length)
+        invalid('Variant selections name a variant the plan does not reach.');
+      final chosen = <String, String>{};
+      for (final v in variants.where((v) => reached.contains(v.id))) {
+        final previous = chosen['${v.slotId}\u0000${v.lever}'];
+        if (previous != null && previous != selections[v.id])
+          invalid(
+            'Variants of slot ${v.slotId} lever ${v.lever} must select the '
+            'same value.',
+          );
+        chosen['${v.slotId}\u0000${v.lever}'] = selections[v.id]!;
+      }
+      return WorkoutDefinition._(id, name, slots, resolved, amraps);
+    }();
+  }
+
+  final Map<String, WorkoutDefinition> _resolved = {};
+
+  /// Selections for every variant reached when each slot lever takes
+  /// [slotSettings] (slot → lever → value), else the lever's default.
+  Map<String, String> variantSelections([
+    Map<String, Map<String, String>> slotSettings = const {},
+  ]) {
+    final out = <String, String>{};
+    void walk(Activity node) {
+      if (node is Variant) {
+        final value =
+            slotSettings[node.slotId]?[node.lever] ??
+            slot(node.slotId).categories[node.lever]!.defaultValue;
+        out[node.id] = value;
+        final branch = node.branches[value];
+        if (branch == null) invalid('Variant ${node.id} has no branch $value.');
+        walk(branch);
+        return;
+      }
+      for (final child in node.children) walk(child);
+    }
+
+    walk(plan);
+    return Map.unmodifiable({
+      for (final k in (out.keys.toList()..sort())) k: out[k]!,
+    });
+  }
+
   final List<WindowRepeatSpec> amraps;
   bool get hasAmraps => amraps.isNotEmpty;
   WindowRepeatSpec? amrap(String id) =>
@@ -255,7 +387,7 @@ final class WorkoutDefinition {
 
   /// The plan occurrence path placing [amrapId], or null when unplaced.
   String? amrapPlacement(String amrapId) => [
-    for (final o in plan.occurrences())
+    for (final o in plan.structuralOccurrences())
       if (o.activity case AmrapPlacement(amrapId: final id) when id == amrapId)
         o.id,
   ].firstOrNull;
@@ -269,16 +401,17 @@ final class WorkoutDefinition {
       plan.nodes.whereType<Effort>().any((e) => e.side != null);
 
   late final Map<String, String> _sides = Map.unmodifiable({
-    for (final occurrence in plan.occurrences())
+    for (final occurrence in plan.structuralOccurrences())
       if (occurrence.activity case Effort(:final side?)) occurrence.id: side,
   });
 
   late final Map<String, Map<String, String>> _settings = Map.unmodifiable({
-    for (final occurrence in plan.occurrences())
+    for (final (occurrence, imposed) in imposedOccurrences(plan))
       if (occurrence.activity case final Effort effort)
         occurrence.id: sortedSettings({
           ...slot(effort.slotId).defaultSettings,
           ...effort.settings,
+          ...?imposed[effort.slotId],
         }),
   });
 
@@ -293,6 +426,15 @@ final class WorkoutDefinition {
   bool get hasExtendedEffortRoles => plan.nodes.whereType<Effort>().any(
     (e) => e.role == 'backoff' || e.role == 'drop',
   );
+
+  /// Authored efforts of a slot/role in session ordinal order.
+  List<Effort> roleEfforts(String slotId, String selectedRole) =>
+      List.unmodifiable([
+        for (final occurrence in plan.occurrences())
+          if (occurrence.activity case final Effort effort
+              when effort.slotId == slotId && effort.role == selectedRole)
+            effort,
+      ]);
 
   /// Published working targets in the same slot/role ordinal order as sessions.
   List<Metrics> workingTargets(String slotId) => roleTargets(slotId, 'work');
@@ -736,13 +878,28 @@ final class TrainingSession {
     this.derivedPlanInput,
     List<PrescriptionOverrideRecord> prescriptionOverrides = const [],
     Map<String, LoadInputSnapshot> loadInputs = const {},
+    required Map<String, String> variantSelections,
   }) : sets = List.unmodifiable(sets),
+       variantSelections = Map.unmodifiable({
+         for (final k in (variantSelections.keys.toList()..sort()))
+           k: variantSelections[k]!,
+       }),
        prescriptionOverrides = List.unmodifiable(prescriptionOverrides),
        bodyMassInputs = Map.unmodifiable(bodyMassInputs),
        loadInputs = Map.unmodifiable(loadInputs),
        initialBodyMassOverrides = initialBodyMassOverrides == null
            ? null
            : Map.unmodifiable(initialBodyMassOverrides) {
+    definition = revision.definition.resolveVariants(this.variantSelections);
+    final expected = [
+      for (final o in definition.plan.occurrences())
+        if (o.activity is Effort) o.id,
+    ];
+    if (expected.length != sets.length ||
+        [
+          for (var i = 0; i < expected.length; i++) expected[i] == sets[i].id,
+        ].contains(false))
+      invalid('Session sets do not match its resolved plan.');
     if (this.initialBodyMassOverrides != null && contentVersion < 2)
       invalid('Rebound body-mass inputs require a later session version.');
     if (this.initialBodyMassOverrides?.keys.any(
@@ -792,6 +949,14 @@ final class TrainingSession {
   }
   final String id;
   final WorkoutRevision revision;
+
+  /// Frozen variant selections (variant ID → branch value) chosen at start.
+  final Map<String, String> variantSelections;
+
+  /// The pinned revision's definition resolved under [variantSelections]:
+  /// the plan this session actually expands. Equal to the revision's own
+  /// definition when the workout declares no variants.
+  late final WorkoutDefinition definition;
   final DateTime startedAt;
   final DateTime? finishedAt;
   final List<TrainingSet> sets;
@@ -827,6 +992,7 @@ final class TrainingSession {
       initialBodyMassOverrides: initialBodyMassOverrides,
       derivedPlanInput: derivedPlanInput,
       prescriptionOverrides: prescriptionOverrides,
+      variantSelections: variantSelections,
     );
   }
 
@@ -849,6 +1015,7 @@ final class TrainingSession {
       status: SessionStatus.finalized,
       finishedAt: at,
       contentVersion: contentVersion + 1,
+      variantSelections: variantSelections,
     );
   }
 
@@ -867,6 +1034,7 @@ final class TrainingSession {
     if (finishedAt != null) 'finishedAt': finishedAt!.toUtc().toIso8601String(),
     'status': status.name,
     'contentVersion': contentVersion,
+    if (variantSelections.isNotEmpty) 'variantSelections': variantSelections,
     'sets': [for (final set in sets) set.toJson()],
     if (derivedPlanInput != null)
       'derivedPlanInput': derivedPlanInput!.toJson(),

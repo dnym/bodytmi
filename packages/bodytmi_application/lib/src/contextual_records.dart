@@ -49,7 +49,7 @@ final class ContextualRecords {
         final sessionId = requiredString(point, 'sessionId');
         final session = sources[sessionId]!;
         final set = setSources[sessionId]![requiredString(point, 'setId')]!;
-        final slot = session.revision.definition.slot(set.slotId);
+        final slot = session.definition.slot(set.slotId);
         final missing =
             slot.targets.keys
                 .where((key) => !set.actuals.containsKey(key))

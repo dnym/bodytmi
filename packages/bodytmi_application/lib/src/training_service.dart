@@ -14,8 +14,13 @@ final class TrainingService {
     Map<String, LoadInstanceReference> loadInstances = const {},
     Map<String, LoadConvention> loadConventions = const {},
     Map<String, Map<String, String>> progressedSettings = const {},
+    Map<String, String>? variantSelections,
   }) {
     identifier({'id': sessionId}, 'id');
+    // Variants resolve once: explicit selections, else each lever's default.
+    final selections =
+        variantSelections ?? revision.definition.variantSelections();
+    final definition = revision.definition.resolveVariants(selections);
     if (bodyMassOverrides.keys.any(
       (id) => !revision.definition.slots.any(
         (s) => s.id == id && s.bodyMass != null,
@@ -62,7 +67,7 @@ final class TrainingService {
             .where(
               (s) =>
                   s.status == SessionStatus.finalized &&
-                  s.revision.definition.id == revision.definition.id &&
+                  s.definition.id == revision.definition.id &&
                   s.startedAt.isBefore(startedAt) &&
                   s.finishedAt != null &&
                   !s.finishedAt!.isAfter(startedAt),
@@ -74,10 +79,10 @@ final class TrainingService {
           });
     final ordinals = <String, int>{};
     final sets = <TrainingSet>[];
-    for (final occurrence in revision.definition.plan.occurrences()) {
+    for (final occurrence in definition.plan.occurrences()) {
       final effort = occurrence.activity;
       if (effort is! Effort) continue;
-      final slot = revision.definition.slot(effort.slotId);
+      final slot = definition.slot(effort.slotId);
       final ordinalKey = '${slot.id}:${effort.role}';
       final ordinal = ordinals.update(
         ordinalKey,
@@ -90,7 +95,7 @@ final class TrainingService {
       // Progressed categorical levels replace their levers' planned values,
       // before prefill, so history only seeds the settings actually planned.
       final planned = sortedSettings({
-        ...revision.definition.plannedSettings(occurrence.id),
+        ...definition.plannedSettings(occurrence.id),
         ...?progressedSettings[occurrence.id],
       });
       validateCategoricalSettings(
@@ -107,7 +112,7 @@ final class TrainingService {
             continue;
           search:
           for (final past in compatibleHistory) {
-            final oldSlots = past.revision.definition.slots.where(
+            final oldSlots = past.definition.slots.where(
               (s) => slot.compatibleWith(s),
             );
             if (oldSlots.isEmpty) continue;
@@ -116,7 +121,7 @@ final class TrainingService {
               if (set.slotId == slot.id &&
                   set.substitution == null &&
                   set.role == effort.role &&
-                  past.revision.definition.effortSide(set.id) == effort.side &&
+                  past.definition.effortSide(set.id) == effort.side &&
                   // Categorical settings (grip, hand count...) are separate
                   // contexts: only results performed the same way prefill.
                   canonicalJson(set.performedSettings) ==
@@ -169,6 +174,7 @@ final class TrainingService {
       sets: sets,
       bodyMassInputs: massInputs,
       loadInputs: loadInputs,
+      variantSelections: selections,
     );
   }
 
@@ -207,6 +213,7 @@ final class TrainingService {
     return TrainingSession(
       id: session.id,
       revision: session.revision,
+      variantSelections: session.variantSelections,
       startedAt: session.startedAt,
       sets: session.sets,
       status: session.status,
@@ -272,6 +279,7 @@ final class TrainingService {
     return TrainingSession(
       id: session.id,
       revision: session.revision,
+      variantSelections: session.variantSelections,
       startedAt: session.startedAt,
       sets: session.sets,
       status: session.status,
@@ -311,7 +319,7 @@ final class TrainingService {
       'source': {
         'sessionId': session.id,
         'sessionContentVersion': session.contentVersion,
-        'templateId': session.revision.definition.id,
+        'templateId': session.definition.id,
         'revision': session.revision.number,
         'setId': set.id,
         'setContentVersion': set.contentVersion,
@@ -381,7 +389,7 @@ final class TrainingService {
       invalid('Actual categorical settings record only for completed sets.');
     validateCategoricalSettings(
       performed,
-      session.revision.definition.slot(set.slotId).categories,
+      session.definition.slot(set.slotId).categories,
       'Set $setId',
     );
     return session.replaceSet(set.withActualSettings(performed));
@@ -482,7 +490,7 @@ final class TrainingService {
     required bool applyToRemaining,
   }) {
     final occurrences = {
-      for (final occurrence in session.revision.definition.plan.occurrences())
+      for (final occurrence in session.definition.plan.occurrences())
         if (occurrence.activity is Effort)
           occurrence.id: occurrence.activity as Effort,
     };
@@ -525,7 +533,7 @@ final class TrainingService {
         continue;
       }
       final suggested = {...set.suggested, metric: value};
-      session.revision.definition.slot(set.slotId).timing?.resolve(suggested);
+      session.definition.slot(set.slotId).timing?.resolve(suggested);
       sets.add(
         TrainingSet(
           id: set.id,
@@ -562,6 +570,7 @@ final class TrainingService {
     return TrainingSession(
       id: session.id,
       revision: session.revision,
+      variantSelections: session.variantSelections,
       startedAt: session.startedAt,
       sets: sets,
       status: session.status,
@@ -605,7 +614,7 @@ final class TrainingService {
     required bool confirm,
   }) {
     identifier({'slotId': slotId}, 'slotId');
-    if (!session.revision.definition.slots.any((slot) => slot.id == slotId)) {
+    if (!session.definition.slots.any((slot) => slot.id == slotId)) {
       invalid('Unknown workout slot: $slotId.');
     }
     if (role != null && !effortRoles.contains(role)) {
@@ -633,6 +642,7 @@ final class TrainingService {
     return TrainingSession(
       id: session.id,
       revision: session.revision,
+      variantSelections: session.variantSelections,
       startedAt: session.startedAt,
       sets: [
         for (final set in session.sets)
@@ -666,7 +676,7 @@ final class TrainingService {
     String? setId,
   ) {
     identifier({'slotId': slotId}, 'slotId');
-    if (!session.revision.definition.slots.any((s) => s.id == slotId))
+    if (!session.definition.slots.any((s) => s.id == slotId))
       invalid('Unknown workout slot: $slotId.');
     if (session.status != SessionStatus.active)
       invalid('Substitution needs an active session.');
@@ -706,7 +716,7 @@ final class TrainingService {
     Map<String, Map<String, Object?>> targets = const {},
     List<TrainingSession> history = const [],
   }) {
-    final slot = session.revision.definition.slot(slotId);
+    final slot = session.definition.slot(slotId);
     if (composition.sameAs(
       exerciseId: slot.exerciseId,
       implementation: slot.implementation,
@@ -732,7 +742,7 @@ final class TrainingService {
               (h) =>
                   h.status == SessionStatus.finalized &&
                   h.id != session.id &&
-                  h.revision.definition.id == session.revision.definition.id &&
+                  h.definition.id == session.definition.id &&
                   h.startedAt.isBefore(session.startedAt),
             )
             .toList()
@@ -888,6 +898,7 @@ final class TrainingService {
   ) => TrainingSession(
     id: session.id,
     revision: session.revision,
+    variantSelections: session.variantSelections,
     startedAt: session.startedAt,
     sets: [for (final set in session.sets) replaced[set.id] ?? set],
     bodyMassInputs: session.bodyMassInputs,

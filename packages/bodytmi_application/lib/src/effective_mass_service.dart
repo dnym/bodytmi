@@ -9,8 +9,7 @@ final class EffectiveMassService {
     'contentVersion': session.contentVersion,
     'estimates': [
       for (final set in session.sets)
-        if (session.revision.definition.slot(set.slotId).effectiveMass
-            case final model?)
+        if (session.definition.slot(set.slotId).effectiveMass case final model?)
           {
             'setId': set.id,
             'slotId': set.slotId,

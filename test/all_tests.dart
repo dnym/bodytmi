@@ -69,6 +69,7 @@ import 'catalog_labels_test.dart';
 import 'amrap_placement_test.dart';
 import 'save_back_test.dart';
 import 'categorical_test.dart';
+import 'set_scheme_test.dart';
 import 'quantity_test.dart';
 import 'workflow_test.dart';
 
@@ -133,6 +134,7 @@ Future<void> main() async {
   amrapPlacementTests();
   saveBackTests();
   categoricalTests();
+  setSchemeTests();
   runUpgradeTests();
   programOverrideTests();
   logicalArchiveTests();

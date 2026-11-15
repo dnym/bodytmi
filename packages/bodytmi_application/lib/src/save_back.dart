@@ -117,7 +117,7 @@ saveBackPlan(
   TrainingSession session, {
   bool Function(String slotId, String role, String metric)? controlled,
 }) {
-  final definition = session.revision.definition;
+  final definition = session.definition;
   final occurrences = [
     for (final o in definition.plan.occurrences())
       if (o.activity is Effort) o,

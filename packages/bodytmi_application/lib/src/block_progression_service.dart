@@ -93,7 +93,7 @@ final class BlockProgressionService {
       'version': (existing?.version ?? 0) + 1,
       'sessionId': sessionId,
       'runId': runId,
-      'templateId': session.revision.definition.id,
+      'templateId': session.definition.id,
       'revision': session.revision.number,
       'amrapId': amrapId,
       'roundSlotId': roundSlotId,
@@ -244,9 +244,9 @@ void validateBlockProgressions(
     final session = sessionsById[d.sessionId];
     if (session == null || session.status != SessionStatus.finalized)
       invalid('A block decision needs its finished session.');
-    if (session.revision.definition.id != d.templateId ||
+    if (session.definition.id != d.templateId ||
         runs[d.sessionId] != d.runId ||
-        session.revision.definition.amrap(d.amrapId) == null)
+        session.definition.amrap(d.amrapId) == null)
       invalid('A block decision does not match its session.');
     if (!checkpoints.any(
       (c) =>
@@ -278,7 +278,7 @@ void validateBlockProgressions(
           d.trackKey !=
               blockTrackKey(
                 runs[session.id],
-                session.revision.definition.id,
+                session.definition.id,
                 c.amrapId!,
                 entry.key,
               ) ||

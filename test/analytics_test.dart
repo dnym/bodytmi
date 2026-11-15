@@ -366,6 +366,7 @@ void analyticsTests() {
           TrainingSession(
             id: 's$i',
             revision: session.revision,
+            variantSelections: session.variantSelections,
             startedAt: session.startedAt,
             sets: session.sets,
             status: session.status,

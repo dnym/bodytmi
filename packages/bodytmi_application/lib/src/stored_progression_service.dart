@@ -122,9 +122,7 @@ final class StoredProgressionService {
       invalid('Unknown stored progression rule type.');
     }
     final session = await StoredTrainingService(repository).session(sessionId);
-    final candidates = session.revision.definition.slots.where(
-      (s) => s.id == slotId,
-    );
+    final candidates = session.definition.slots.where((s) => s.id == slotId);
     if (candidates.isEmpty) invalid('Unknown progression slot.');
     final runId = (await repository.sessionPrograms())
         .where((b) => b.sessionId == sessionId)
@@ -147,7 +145,7 @@ final class StoredProgressionService {
           ...await _reconciliations(),
           ...await _retirements(),
         ],
-        session.revision.definition.id,
+        session.definition.id,
         candidates.single,
         runId: runId,
         role: role,
@@ -472,9 +470,7 @@ final class StoredProgressionService {
         .where((b) => b.sessionId == sessionId)
         .firstOrNull
         ?.runId;
-    final candidates = session.revision.definition.slots.where(
-      (s) => s.id == slotId,
-    );
+    final candidates = session.definition.slots.where((s) => s.id == slotId);
     if (candidates.isEmpty) invalid('Unknown progression slot.');
     if (ruleType == 'ordinal') {
       for (final level in OrdinalRule.fromJson(rule).levels)
@@ -503,7 +499,7 @@ final class StoredProgressionService {
           ...await _reconciliations(),
           ...await _retirements(),
         ],
-        session.revision.definition.id,
+        session.definition.id,
         candidates.single,
         runId: runId,
         role: role,
@@ -620,7 +616,7 @@ final class StoredProgressionService {
       if (sourceSessionId == null) return false;
       final session = await repository.session(sourceSessionId);
       if (session == null ||
-          session.revision.definition.id != revision.definition.id ||
+          session.definition.id != revision.definition.id ||
           session.revision.number != revision.number)
         return true;
       final bound = (await repository.sessionPrograms())
@@ -667,7 +663,7 @@ final class StoredProgressionService {
     final latest = latestTrack(
       await repository.progressionDecisions(),
       <ProgressionAnchor>[...await _reconciliations(), ...await _retirements()],
-      decision.session.revision.definition.id,
+      decision.session.definition.id,
       decision.slot,
       runId: runId,
       role: decision.role,
@@ -990,7 +986,7 @@ final class StoredProgressionService {
   ) {
     final assessment = assessProgressionReconciliation(
       prescription: session.revision,
-      templateId: session.revision.definition.id,
+      templateId: session.definition.id,
       revision: session.revision.number,
       slotId: slotId,
       role: role,

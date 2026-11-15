@@ -1185,6 +1185,7 @@ void sessionBodyMassTests() {
           (s) => TrainingSession(
             id: s.id,
             revision: s.revision,
+            variantSelections: s.variantSelections,
             startedAt: s.startedAt,
             sets: s.sets,
             bodyMassInputs: current.bodyMassInputs,

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "id": "squat-doubles-001",
+  "templateId": "squat-schemes",
+  "revision": 1,
+  "startedAt": "2026-11-15T09:00:00+01:00",
+  "variants": {
+    "squat": {
+      "scheme": "doubles"
+    }
+  }
+}

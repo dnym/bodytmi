@@ -71,10 +71,35 @@ final class ProgressionReconciliation {
 
   bool get required => blockers.isNotEmpty;
   ExerciseSlot get slot => prescription.definition.slot(slotId);
+
+  /// The candidate's variant structure: the session's frozen selections, else
+  /// the selections a later start would make from the track's progressed
+  /// variant levers and lever defaults.
+  late final Map<String, String> candidateSelections =
+      session?.variantSelections ??
+      prescription.definition.variantSelections({
+        if (track != null)
+          for (final s in [
+            {
+              for (final lever
+                  in prescription.definition
+                      .variantLevers(slotId)
+                      .intersection(track!.controlledSettings))
+                if ({for (final n in track!.nextSettings) n[lever]}.length ==
+                        1 &&
+                    track!.nextSettings.first[lever] != null)
+                  lever: track!.nextSettings.first[lever]!,
+            },
+          ])
+            if (s.isNotEmpty) slotId: s,
+      });
+  late final WorkoutDefinition candidateDefinition =
+      session?.definition ??
+      prescription.definition.resolveVariants(candidateSelections);
   List<Metrics> get candidateTargets =>
-      prescription.definition.roleTargets(slotId, role);
+      candidateDefinition.roleTargets(slotId, role);
   List<Effort> get candidateEfforts => [
-    for (final occurrence in prescription.definition.plan.occurrences())
+    for (final occurrence in candidateDefinition.plan.occurrences())
       if (occurrence.activity case Effort(
         slotId: final effortSlot,
         role: final effortRole,
@@ -153,7 +178,7 @@ ProgressionReconciliation assessProgressionReconciliation({
 }) {
   if (session != null &&
       (session.revision.number != revision ||
-          session.revision.definition.id != templateId))
+          session.definition.id != templateId))
     invalid('Candidate session does not use the compared prescription.');
   final base = ProgressionReconciliation(
     templateId: templateId,
@@ -195,21 +220,63 @@ List<ReconciliationBlocker> _reconciliationBlockers(
   ProgressionAnchor track,
 ) {
   final metrics = track.controlledMetrics, blockers = <ReconciliationBlocker>[];
-  final priorCount = track.nextSets.length;
-  final priorAuthored = track.pinnedRevision.definition.roleTargets(
-    track.slotId,
-    track.role,
-  );
   final proposedAuthored = candidate.candidateTargets;
+  // Mirrors the start/propose rule: the track's revision is compared under
+  // the candidate's variant structure, and a uniform vector may resize when
+  // the structure moved to another branch.
+  final priorDefinition = resolveAlike(
+    track.pinnedRevision.definition,
+    candidate.candidateSelections,
+  );
+  final candidateEffortSets = [
+    for (final occurrence in candidate.candidateDefinition.plan.occurrences())
+      if (occurrence.activity case Effort(
+        slotId: final effortSlot,
+        role: final effortRole,
+      ) when effortSlot == candidate.slotId && effortRole == candidate.role)
+        occurrence.id,
+  ];
+  final plannedSettings = candidate.candidateSets.isNotEmpty
+      ? candidate.candidateSets.first.settings
+      : candidateEffortSets.isEmpty
+      ? const <String, String>{}
+      : candidate.candidateDefinition.plannedSettings(
+          candidateEffortSets.first,
+        );
+  final broadcast = broadcastsVector(
+    track,
+    candidate.prescription.definition,
+    candidate.slotId,
+    plannedSettings,
+    proposedAuthored.length,
+  );
+  final priorCount = broadcast
+      ? proposedAuthored.length
+      : track.nextSets.length;
+  final priorAuthored =
+      priorDefinition?.roleTargets(track.slotId, track.role) ??
+      const <Metrics>[];
+  final priorEfforts = broadcast
+      ? priorDefinition!.roleEfforts(track.slotId, track.role)
+      : null;
   if (proposedAuthored.length != priorCount ||
       priorAuthored.length != priorCount) {
     blockers.add(
       ReconciliationBlocker('workingSetCount', {
-        'priorWorkingSetCount': priorCount,
+        'priorWorkingSetCount': priorDefinition == null
+            ? null
+            : track.nextSets.length,
         'proposedWorkingSetCount': proposedAuthored.length,
+        if (priorDefinition == null)
+          'reason':
+              'the track revision cannot express the candidate variant '
+              'structure',
       }),
     );
   }
+  final expectedSets = broadcast
+      ? List.filled(proposedAuthored.length, track.nextSets.first)
+      : track.nextSets;
   final priorSlot = track.slot, candidateSlot = candidate.slot;
   for (final metric in metrics) {
     final prior = priorSlot.targets[metric],
@@ -249,9 +316,11 @@ List<ReconciliationBlocker> _reconciliationBlockers(
   final authored =
       candidate.prescription.definition.hasEffortTargets ||
       track.pinnedRevision.definition.hasEffortTargets;
-  final shared = proposedAuthored.length < priorAuthored.length
-      ? proposedAuthored.length
-      : priorAuthored.length;
+  final shared = [
+    proposedAuthored.length,
+    priorAuthored.length,
+    if (priorEfforts == null) track.sets.length,
+  ].reduce((a, b) => a < b ? a : b);
   final efforts = candidate.candidateEfforts;
   for (var ordinal = 0; ordinal < shared; ordinal++) {
     if (authored) {
@@ -282,21 +351,25 @@ List<ReconciliationBlocker> _reconciliationBlockers(
         }
       }
     }
-    final priorSet = track.sets[ordinal], proposedSet = efforts[ordinal];
-    if (priorSet.maxEffortMetrics.length !=
-            proposedSet.maxEffortMetrics.length ||
-        !priorSet.maxEffortMetrics.containsAll(proposedSet.maxEffortMetrics)) {
+    final proposedSet = efforts[ordinal];
+    final priorMaxEffort =
+        priorEfforts?[ordinal].maxEffortMetrics ??
+        track.sets[ordinal].maxEffortMetrics;
+    final priorCriteriaSource =
+        priorEfforts?[ordinal].criteria ?? track.sets[ordinal].criteria;
+    if (priorMaxEffort.length != proposedSet.maxEffortMetrics.length ||
+        !priorMaxEffort.containsAll(proposedSet.maxEffortMetrics)) {
       blockers.add(
         ReconciliationBlocker('objectiveCriteria', {
           'ordinal': ordinal,
           'reason': 'max-effort metrics changed',
-          'priorMaxEffort': priorSet.maxEffortMetrics.toList()..sort(),
+          'priorMaxEffort': priorMaxEffort.toList()..sort(),
           'proposedMaxEffort': proposedSet.maxEffortMetrics.toList()..sort(),
         }),
       );
     }
     final priorCriteria = {
-          for (final e in priorSet.criteria.entries)
+          for (final e in priorCriteriaSource.entries)
             e.key: e.value.semanticJson(),
         },
         proposedCriteria = {
@@ -326,7 +399,7 @@ List<ReconciliationBlocker> _reconciliationBlockers(
     final compared = sets.length < priorCount ? sets.length : priorCount;
     for (var ordinal = 0; ordinal < compared; ordinal++) {
       for (final metric in metrics) {
-        final expected = track.nextSets[ordinal][metric],
+        final expected = expectedSets[ordinal][metric],
             actual = sets[ordinal].suggested[metric];
         if (expected == null ||
             actual == null ||

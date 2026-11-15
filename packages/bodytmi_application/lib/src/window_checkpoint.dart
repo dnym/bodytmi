@@ -133,7 +133,7 @@ final class WindowCheckpointService {
     if (clock['status'] != 'boundary')
       invalid('A window boundary is required.');
     final occurrence = clock['occurrence'] as int;
-    final definition = session.revision.definition;
+    final definition = session.definition;
     final deadline = const WindowDeadlines().evaluate(
       definition: definition,
       occurrence: occurrence,
@@ -184,7 +184,7 @@ final class WindowCheckpointService {
       throw const BodyTmiException('conflict', 'Window clock version changed.');
     final destination = _expiredDestination(session, clock);
     final occurrence = clock['occurrence'] as int;
-    final plan = session.revision.definition.plan.occurrences().toList();
+    final plan = session.definition.plan.occurrences().toList();
     final sets = {for (final set in session.sets) set.id: set};
     for (var i = occurrence; i < destination; i++) {
       if (plan[i].activity is Effort &&
@@ -345,7 +345,7 @@ final class WindowCheckpointService {
         checkpoint.clock,
       );
       final clock = jsonObject(wrapper['clock'], 'window clock');
-      final definition = session.revision.definition;
+      final definition = session.definition;
       final plan = definition.plan.occurrences().toList();
       final index = clock['occurrence'] as int;
       final elapsed = clock['elapsedMilliseconds'] as int;
@@ -589,7 +589,7 @@ final class WindowCheckpointService {
     if (!{'paused', 'boundary'}.contains(clock['status']))
       invalid('Review requires a paused or boundary clock.');
     final occurrence = clock['occurrence'] as int;
-    final occurrences = session.revision.definition.plan.occurrences().toList();
+    final occurrences = session.definition.plan.occurrences().toList();
     if (occurrence >= occurrences.length ||
         occurrences[occurrence].activity is! Effort)
       invalid('Review requires a current effort.');
@@ -780,7 +780,7 @@ final class WindowCheckpointService {
     if (clock['status'] != 'boundary')
       invalid('Skipping expired work requires a window boundary.');
     final occurrence = clock['occurrence'] as int;
-    final definition = session.revision.definition;
+    final definition = session.definition;
     final destination = _expiredDestination(session, clock);
     final occurrences = definition.plan.occurrences().toList();
     String? reviewed;
@@ -881,7 +881,7 @@ final class WindowCheckpointService {
       throw const BodyTmiException('conflict', 'Window clock version changed.');
     final destination = _expiredDestination(session, clock);
     final occurrence = clock['occurrence'] as int;
-    final plan = session.revision.definition.plan.occurrences().toList();
+    final plan = session.definition.plan.occurrences().toList();
     final included = <String>{
       for (var i = occurrence; i < destination; i++)
         if (plan[i].activity is Effort) plan[i].id,
@@ -919,6 +919,7 @@ final class WindowCheckpointService {
     final updated = TrainingSession(
       id: session.id,
       revision: session.revision,
+      variantSelections: session.variantSelections,
       startedAt: session.startedAt,
       sets: sets,
       status: session.status,

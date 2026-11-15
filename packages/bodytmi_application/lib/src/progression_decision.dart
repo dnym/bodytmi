@@ -43,9 +43,7 @@ final class ProgressionDecision implements ProgressionAnchor {
         previousFailures < 0 ||
         ((previousApplication == null) != (previousSequence == 0)))
       invalid('Invalid progression decision state.');
-    final slots = session.revision.definition.slots.where(
-      (s) => s.id == slotId,
-    );
+    final slots = session.definition.slots.where((s) => s.id == slotId);
     if (slots.isEmpty || sets.isEmpty)
       invalid('Progression needs a known slot with sets in the selected role.');
     if ((acceptedAt != null && declinedAt != null) ||
@@ -212,9 +210,9 @@ final class ProgressionDecision implements ProgressionAnchor {
         }),
     ]);
   }();
-  late final ExerciseSlot slot = session.revision.definition.slot(slotId);
+  late final ExerciseSlot slot = session.definition.slot(slotId);
   @override
-  String get templateId => session.revision.definition.id;
+  String get templateId => session.definition.id;
   @override
   int get revisionNumber => session.revision.number;
   @override
@@ -258,11 +256,10 @@ final class ProgressionDecision implements ProgressionAnchor {
   bool sameContext(ProgressionDecision other) =>
       runId == other.runId &&
       role == other.role &&
-      session.revision.definition.id == other.session.revision.definition.id &&
+      session.definition.id == other.session.definition.id &&
       slot.compatibleWith(other.slot);
   bool matches(String templateId, ExerciseSlot candidate) =>
-      session.revision.definition.id == templateId &&
-      slot.compatibleWith(candidate);
+      session.definition.id == templateId && slot.compatibleWith(candidate);
   ProgressionDecision accept(DateTime at, {String? selectedLevel}) =>
       ProgressionDecision(
         session: session,
@@ -403,7 +400,7 @@ void validateProgressionDecisions(
     final s = current[d.session.id];
     if (s == null ||
         s.contentVersion < d.session.contentVersion ||
-        s.revision.definition.id != d.session.revision.definition.id ||
+        s.definition.id != d.session.definition.id ||
         s.revision.number != d.session.revision.number ||
         canonicalJson(
               s.initialBodyMassOverrides?.map(
@@ -528,10 +525,30 @@ bool matchesSessionProgressionBaseline(
   final sets = session.sets
       .where((s) => s.slotId == slotId && s.role == role)
       .toList();
-  if (sets.length != before.sets.length) return false;
+  final currentPlan = session.definition;
+  // The anchor's revision under this session's variant structure; a uniform
+  // vector may resize across a structural (set scheme) change.
+  final priorPlan = resolveAlike(
+    before.pinnedRevision.definition,
+    session.variantSelections,
+  );
+  if (priorPlan == null || sets.isEmpty) return false;
+  final broadcast = broadcastsVector(
+    before,
+    session.revision.definition,
+    slotId,
+    sets.first.settings,
+    sets.length,
+  );
+  if (sets.length != before.sets.length && !broadcast) return false;
+  final priorEfforts = broadcast
+      ? priorPlan.roleEfforts(before.slotId, before.role)
+      : null;
+  if (priorEfforts != null && priorEfforts.length != sets.length) return false;
   for (var i = 0; i < sets.length; i++) {
     final currentObjectives = sets[i].maxEffortMetrics;
-    final previousObjectives = before.sets[i].maxEffortMetrics;
+    final previousObjectives =
+        priorEfforts?[i].maxEffortMetrics ?? before.sets[i].maxEffortMetrics;
     if (currentObjectives.length != previousObjectives.length ||
         !currentObjectives.containsAll(previousObjectives))
       return false;
@@ -540,13 +557,12 @@ bool matchesSessionProgressionBaseline(
             e.key: e.value.semanticJson(),
         }) !=
         canonicalJson({
-          for (final e in before.sets[i].criteria.entries)
+          for (final e
+              in (priorEfforts?[i].criteria ?? before.sets[i].criteria).entries)
             e.key: e.value.semanticJson(),
         }))
       return false;
   }
-  final currentPlan = session.revision.definition;
-  final priorPlan = before.pinnedRevision.definition;
   if (currentPlan.hasEffortTargets || priorPlan.hasEffortTargets) {
     final authored = currentPlan.roleTargets(slotId, role);
     final prior = priorPlan.roleTargets(before.slotId, before.role);
@@ -562,7 +578,9 @@ bool matchesSessionProgressionBaseline(
       }
     }
   }
-  final expected = before.nextSets;
+  final expected = broadcast
+      ? List.filled(sets.length, before.nextSets.first)
+      : before.nextSets;
   if (expected.length != sets.length) return false;
   for (var i = 0; i < expected.length; i++) {
     for (final metric in controlledMetrics) {

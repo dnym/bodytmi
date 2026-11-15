@@ -19,7 +19,7 @@ void validateDerivedPlanSession(
   final plan = DerivedWorkoutPlan.fromJson(snapshot['plan']);
   final ref = input.reference;
   if (plan.id != ref.planId ||
-      plan.templateId != session.revision.definition.id ||
+      plan.templateId != session.definition.id ||
       plan.revision != session.revision.number) {
     invalid('Captured plan does not match the session.');
   }
@@ -263,13 +263,13 @@ void validateDerivedPlanReferences(
           final matches = prior.sets.where((s) => s.id == row['setId']);
           if (matches.length != 1) invalid('Captured history set is missing.');
           final set = matches.single;
-          final slot = prior.revision.definition.slot(set.slotId);
+          final slot = prior.definition.slot(set.slotId);
           if (set.slotId != row['slotId'] ||
               set.role != row['role'] ||
               set.ordinal != row['ordinal'] ||
               set.contentVersion < (row['setVersion'] as int) ||
               (expected['templateId'] != null &&
-                  expected['templateId'] != prior.revision.definition.id) ||
+                  expected['templateId'] != prior.definition.id) ||
               (expected['slotId'] != null &&
                   expected['slotId'] != set.slotId) ||
               (expected['exerciseId'] != null &&
@@ -510,10 +510,10 @@ bool usesDerivedHistory(TrainingSession session) {
 bool usesDerivedTargetlessObjective(TrainingSession session) {
   if (session.derivedPlanInput == null) return false;
   final authored = {
-    for (final occurrence in session.revision.definition.plan.occurrences())
+    for (final occurrence in session.definition.plan.occurrences())
       if (occurrence.activity is Effort)
         occurrence.id: (occurrence.activity as Effort).resolveTargets(
-          session.revision.definition
+          session.definition
               .slot((occurrence.activity as Effort).slotId)
               .targets,
         ),
