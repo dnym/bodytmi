@@ -224,7 +224,7 @@ void publishedObjectiveTests() {
             },
             'duration': {'mode': 'minimum', 'minimum': _q('30', 's')},
             'reps': {'mode': 'maxEffort', 'unit': 'rep'},
-            'angle': {'mode': 'observe', 'unit': 'rad'},
+            'angle': {'mode': 'observe', 'unit': 'deg'},
           },
         },
       };
@@ -241,7 +241,7 @@ void publishedObjectiveTests() {
       );
       s = const TrainingService().complete(s, s.sets.single.id, {
         'reps': Quantity('12', 'rep'),
-        'angle': Quantity('0', 'rad'),
+        'angle': Quantity('0', 'deg'),
       }, acceptSuggested: true);
       equal(s.sets.single.actuals['angle']!.value.toString(), '0');
       equal(s.sets.single.criteria.length, 4);

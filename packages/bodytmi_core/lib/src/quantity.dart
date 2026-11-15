@@ -99,7 +99,7 @@ enum Unit {
   ms(Dimension.duration, '0.001'),
   min(Dimension.duration, '60'),
   rep(Dimension.count, '1'),
-  rad(Dimension.angle, '1');
+  deg(Dimension.angle, '1');
 
   const Unit(this.dimension, this.factor);
   final Dimension dimension;
@@ -117,7 +117,7 @@ enum Unit {
     Dimension.distance => m,
     Dimension.duration => s,
     Dimension.count => rep,
-    Dimension.angle => rad,
+    Dimension.angle => deg,
   };
 }
 

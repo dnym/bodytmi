@@ -189,7 +189,7 @@ void recordsTests() {
           'extra',
           3,
           mass: '30',
-          extra: {'angle': Quantity('1', 'rad')},
+          extra: {'angle': Quantity('1', 'deg')},
         ),
       ];
       equal(_groups(_report(sessions)).length, 3);

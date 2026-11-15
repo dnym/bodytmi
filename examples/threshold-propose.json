@@ -24,7 +24,7 @@
       },
       "angle": {
         "value": "0.1",
-        "unit": "rad"
+        "unit": "deg"
       }
     },
     "resets": {

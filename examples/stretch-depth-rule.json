@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "sessionId": "sunday-1",
+  "slotId": "pike",
+  "ruleType": "ordinal",
+  "rule": {
+    "metric": "depth",
+    "performance": {
+      "direction": "higher",
+      "failureLimit": {"value": "0", "unit": "deg"},
+      "advancementLimit": {"value": "90", "unit": "deg"}
+    },
+    "levels": [
+      {"id": "seated", "settings": {"position": "seated"}},
+      {"id": "standing", "settings": {"position": "standing"}}
+    ]
+  }
+}

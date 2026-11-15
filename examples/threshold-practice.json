@@ -23,7 +23,7 @@
           },
           "angle": {
             "value": "1",
-            "unit": "rad"
+            "unit": "deg"
           },
           "reps": {
             "value": "5",

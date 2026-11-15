@@ -15,7 +15,7 @@ Map<String, Object?> _rule({String mode = 'weighted'}) => {
   'increments': {
     'mass': {'value': '1', 'unit': 'kg'},
     'distance': {'value': '0.1', 'unit': 'm'},
-    'angle': {'value': '0.1', 'unit': 'rad'},
+    'angle': {'value': '0.1', 'unit': 'deg'},
   },
   'resets': {
     'duration': {'value': '10', 'unit': 's'},
@@ -44,7 +44,7 @@ WorkoutDefinition _definition() => WorkoutDefinition.fromJson({
         'duration': {'value': '60', 'unit': 's'},
         'mass': {'value': '10', 'unit': 'kg'},
         'distance': {'value': '1', 'unit': 'm'},
-        'angle': {'value': '1', 'unit': 'rad'},
+        'angle': {'value': '1', 'unit': 'deg'},
         'reps': {'value': '5', 'unit': 'rep'},
       },
       'prefill': ['reps'],

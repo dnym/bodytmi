@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "pike-stretch",
+    "name": "Pike stretch",
+    "slots": [
+      {
+        "id": "pike",
+        "exercise": "pike-stretch",
+        "implementation": "bodyweight",
+        "targets": {"duration": {"value": "30", "unit": "s"}},
+        "categories": {
+          "position": {"values": ["seated", "standing"], "default": "seated"}
+        }
+      }
+    ],
+    "plan": {
+      "id": "workout", "type": "repeat", "count": 2, "restBetweenSeconds": 30,
+      "child": {
+        "id": "hold", "type": "effort", "slot": "pike",
+        "objectives": {"depth": {"mode": "observe", "unit": "deg"}}
+      }
+    }
+  }
+}
