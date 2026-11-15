@@ -1808,41 +1808,44 @@ Future<Map<String, Object?>> executeStored(
             store,
           ).revision(reference.id, reference.revision);
         }
-        final decision = switch (command) {
-          'progression propose' => await progression.propose(
-            sessionId,
-            slotId,
-            preset?.preset.rule ?? jsonObject(request['rule'], 'rule'),
-            ruleType:
-                preset?.preset.ruleType ??
-                (request.containsKey('ruleType')
-                    ? requiredString(request, 'ruleType')
-                    : 'double'),
-            role: role,
-            preset: preset == null
-                ? null
-                : (id: preset.preset.id, revision: preset.number),
-          ),
-          'progression accept' => await progression.accept(
-            sessionId,
-            slotId,
-            integer('expectedVersion'),
-            parseInstant(request['acceptedAt'], 'acceptedAt'),
-            role: role,
-            selectedLevel: request.containsKey('selectedLevel')
-                ? identifier(request, 'selectedLevel')
-                : null,
-          ),
-          'progression decline' => await progression.decline(
-            sessionId,
-            slotId,
-            integer('expectedVersion'),
-            parseInstant(request['declinedAt'], 'declinedAt'),
-            role: role,
-          ),
-          _ => await progression.decision(sessionId, slotId, role: role),
-        };
-        final changed = await progression.stale(decision);
+        // One transaction, so the staleness check shares decoded records.
+        final (decision, changed) = await store.transaction(() async {
+          final decision = switch (command) {
+            'progression propose' => await progression.propose(
+              sessionId,
+              slotId,
+              preset?.preset.rule ?? jsonObject(request['rule'], 'rule'),
+              ruleType:
+                  preset?.preset.ruleType ??
+                  (request.containsKey('ruleType')
+                      ? requiredString(request, 'ruleType')
+                      : 'double'),
+              role: role,
+              preset: preset == null
+                  ? null
+                  : (id: preset.preset.id, revision: preset.number),
+            ),
+            'progression accept' => await progression.accept(
+              sessionId,
+              slotId,
+              integer('expectedVersion'),
+              parseInstant(request['acceptedAt'], 'acceptedAt'),
+              role: role,
+              selectedLevel: request.containsKey('selectedLevel')
+                  ? identifier(request, 'selectedLevel')
+                  : null,
+            ),
+            'progression decline' => await progression.decline(
+              sessionId,
+              slotId,
+              integer('expectedVersion'),
+              parseInstant(request['declinedAt'], 'declinedAt'),
+              role: role,
+            ),
+            _ => await progression.decision(sessionId, slotId, role: role),
+          };
+          return (decision, await progression.stale(decision));
+        });
         data = {
           'id': decision.id,
           'applied': decision.acceptedAt != null,

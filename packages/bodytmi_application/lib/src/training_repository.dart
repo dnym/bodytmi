@@ -65,10 +65,23 @@ abstract interface class TrainingRepository {
   Future<List<ProgramRevision>> programRevisions();
   Future<void> insertProgramRevision(ProgramRevision revision);
   Future<WorkoutExecution?> execution(String id);
-  Future<List<WorkoutExecution>> executions();
+
+  /// All executions, or only [sessionId]'s (filtered before decoding).
+  Future<List<WorkoutExecution>> executions({String? sessionId});
   Future<void> saveExecution(WorkoutExecution execution);
   Future<TimingActivity?> timingActivity(String id);
-  Future<List<TimingActivity>> timingActivities();
+
+  /// All clocks, or only [sessionId]'s, or only those whose ID starts with
+  /// [idPrefix] (filtered before decoding; a prefix match may include
+  /// extra rows, callers compare exact IDs).
+  Future<List<TimingActivity>> timingActivities({
+    String? sessionId,
+    String? idPrefix,
+  });
+
+  /// Running or paused clocks across the profile (at most one when valid),
+  /// selected without decoding every stored clock.
+  Future<List<TimingActivity>> activeTimingActivities();
   Future<void> saveTimingActivity(TimingActivity timer);
   Future<RepeatCheckpoint?> repeatCheckpoint(String id);
   Future<List<RepeatCheckpoint>> repeatCheckpoints();
@@ -1174,9 +1187,12 @@ final class StoredTrainingService {
     if (current.contentVersion != expectedVersion) _conflict();
     final next = change(current);
     await _validateReservedClockChange(current, next);
-    for (final t in await repository.timingActivities()) {
+    final executions = await repository.executions(sessionId: id);
+    final clocks = await sessionClocks(repository, id, [
+      for (final e in executions) e.id,
+    ]);
+    for (final t in clocks) {
       if (t.active &&
-          t.sessionId == id &&
           (next.status == SessionStatus.finalized ||
               (!t.plan.restOnly &&
                   canonicalJson(current.set(t.setId).toJson()) !=
@@ -1220,10 +1236,17 @@ final class StoredTrainingService {
       );
     }
     validateDerivedPlanSession(next);
-    validateTimingData(await repository.timingActivities(), [
-      for (final s in await repository.sessions()) s.id == id ? next : s,
-    ]);
-    final executions = await repository.executions();
+    // Only this session changed, so only its own clocks and execution can
+    // newly disagree with it; profile-wide clock rules do not depend on
+    // results. Validating the whole history here made every logged set
+    // cost time proportional to all past sessions.
+    validateTimingData(
+      [
+        for (final t in clocks)
+          if (t.sessionId == id) t,
+      ],
+      [next],
+    );
     if (next.status == SessionStatus.finalized &&
         executions.any((e) => e.sessionId == id && !e.complete))
       invalid(
@@ -1250,9 +1273,7 @@ final class StoredTrainingService {
           'finishing the session: ${missing.join(', ')}.',
         );
     }
-    validateExecutionData(executions, [
-      for (final s in await repository.sessions()) s.id == id ? next : s,
-    ], await repository.timingActivities());
+    validateExecutionData(executions, [next], clocks);
     await repository.updateSession(next);
     if (next.status == SessionStatus.finalized) {
       await repository.recordFinalization(id);

@@ -15,12 +15,14 @@ import 'database.dart'
         TimingActivity,
         WorkoutExecution;
 import 'native_backup.dart';
+import 'read_cache.dart';
 import 'schema.dart';
 
 /// A single native owner. Never unlink the lock file: the OS holds ownership.
 final class TrainingStore implements TrainingRepository {
-  TrainingStore._(this._db, this._lock, this.path);
+  TrainingStore._(this._db, this._lock, this.path, this._cache);
   final TrainingDatabase _db;
+  final ReadCache _cache;
   final RandomAccessFile _lock;
   final String path;
   static final _owned = <String>{};
@@ -35,6 +37,7 @@ final class TrainingStore implements TrainingRepository {
     if (!_owned.add(canonical)) _busy();
     RandomAccessFile? lock;
     TrainingDatabase? db;
+    final cache = ReadCache();
     try {
       lock = await File('$canonical.owner.lock').open(mode: FileMode.append);
       try {
@@ -70,7 +73,7 @@ final class TrainingStore implements TrainingRepository {
               );
             }
           },
-        ),
+        ).interceptWith(ReadCacheInterceptor(cache)),
       );
       await db.customSelect('SELECT 1').get();
       final integrity = await db.customSelect('PRAGMA quick_check').get();
@@ -81,7 +84,7 @@ final class TrainingStore implements TrainingRepository {
           'Database integrity check failed.',
         );
       }
-      return TrainingStore._(db, lock, canonical);
+      return TrainingStore._(db, lock, canonical, cache);
     } catch (_) {
       await db?.close();
       await lock?.close();
@@ -168,7 +171,7 @@ final class TrainingStore implements TrainingRepository {
 
   @override
   Future<T> transaction<T>(Future<T> Function() action) =>
-      _db.transaction(action);
+      _cache.transaction(() => _db.transaction(action));
   @override
   Future<List<FamilyRevision>> familyRevisions() async {
     final result = <FamilyRevision>[];
@@ -266,19 +269,24 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<ProgressionPresetRevision>> progressionPresetRevisions() async {
-    final result = <ProgressionPresetRevision>[];
-    for (final row in await _db.select(_db.progressionPresetRevisions).get()) {
-      final revision = ProgressionPresetRevision.fromJson(
-        jsonDecode(row.snapshot),
-      );
-      if (revision.preset.id != row.presetId || revision.number != row.number)
-        invalid('Stored progression preset revision identity is inconsistent.');
-      result.add(revision);
-    }
-    validateProgressionPresetRevisions(result);
-    return result;
-  }
+  Future<List<ProgressionPresetRevision>> progressionPresetRevisions() =>
+      _cache.list('progressionPresetRevisions', () async {
+        final result = <ProgressionPresetRevision>[];
+        for (final row
+            in await _db.select(_db.progressionPresetRevisions).get()) {
+          final revision = ProgressionPresetRevision.fromJson(
+            jsonDecode(row.snapshot),
+          );
+          if (revision.preset.id != row.presetId ||
+              revision.number != row.number)
+            invalid(
+              'Stored progression preset revision identity is inconsistent.',
+            );
+          result.add(revision);
+        }
+        validateProgressionPresetRevisions(result);
+        return result;
+      });
 
   @override
   Future<void> insertProgressionPresetRevision(
@@ -404,20 +412,22 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<DerivedTargetGraphRevision>> derivedTargetGraphRevisions() async {
-    final result = <DerivedTargetGraphRevision>[];
-    for (final row in await _db.select(_db.derivedTargetGraphs).get()) {
-      final revision = DerivedTargetGraphRevision.fromJson(
-        jsonDecode(row.snapshot),
-      );
-      if (revision.graph.id != row.graphId || revision.number != row.number) {
-        invalid('Stored derived target graph identity is inconsistent.');
-      }
-      result.add(revision);
-    }
-    validateDerivedTargetGraphRevisions(result);
-    return result;
-  }
+  Future<List<DerivedTargetGraphRevision>> derivedTargetGraphRevisions() =>
+      _cache.list('derivedTargetGraphRevisions', () async {
+        final result = <DerivedTargetGraphRevision>[];
+        for (final row in await _db.select(_db.derivedTargetGraphs).get()) {
+          final revision = DerivedTargetGraphRevision.fromJson(
+            jsonDecode(row.snapshot),
+          );
+          if (revision.graph.id != row.graphId ||
+              revision.number != row.number) {
+            invalid('Stored derived target graph identity is inconsistent.');
+          }
+          result.add(revision);
+        }
+        validateDerivedTargetGraphRevisions(result);
+        return result;
+      });
 
   @override
   Future<void> insertDerivedTargetGraphRevision(
@@ -435,35 +445,39 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<WorkoutRevision>> revisions() async {
-    final result = <WorkoutRevision>[];
-    for (final row in await _db.select(_db.revisions).get()) {
-      final revision = WorkoutRevision.fromJson(jsonDecode(row.snapshot));
-      if (revision.definition.id != row.templateId ||
-          revision.number != row.number) {
-        invalid('Stored revision identity is inconsistent.');
-      }
-      result.add(revision);
-    }
-    return result;
-  }
+  Future<List<WorkoutRevision>> revisions() =>
+      _cache.list('revisions', () async {
+        final result = <WorkoutRevision>[];
+        for (final row in await _db.select(_db.revisions).get()) {
+          final revision = WorkoutRevision.fromJson(jsonDecode(row.snapshot));
+          if (revision.definition.id != row.templateId ||
+              revision.number != row.number) {
+            invalid('Stored revision identity is inconsistent.');
+          }
+          result.add(revision);
+        }
+        return result;
+      });
 
   @override
   Future<List<String>> finalizationIds() async => [
     for (final row in await _db.select(_db.finalizations).get()) row.sessionId,
   ];
   @override
-  Future<List<ProgressionDecision>> progressionDecisions() async {
-    final result = <ProgressionDecision>[];
-    for (final row in await _db.select(_db.progressionDecisions).get()) {
-      final decision = ProgressionDecision.fromJson(jsonDecode(row.snapshot));
-      if (decision.session.id != row.sessionId ||
-          decision.storageSlotKey != row.slotId)
-        invalid('Stored progression identity is inconsistent.');
-      result.add(decision);
-    }
-    return result;
-  }
+  Future<List<ProgressionDecision>> progressionDecisions() => _cache.list(
+    'progressionDecisions',
+    () async {
+      final result = <ProgressionDecision>[];
+      for (final row in await _db.select(_db.progressionDecisions).get()) {
+        final decision = ProgressionDecision.fromJson(jsonDecode(row.snapshot));
+        if (decision.session.id != row.sessionId ||
+            decision.storageSlotKey != row.slotId)
+          invalid('Stored progression identity is inconsistent.');
+        result.add(decision);
+      }
+      return result;
+    },
+  );
 
   @override
   Future<void> saveProgressionDecision(ProgressionDecision decision) async {
@@ -500,16 +514,20 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<ReconciliationReceipt>> progressionReconciliations() async {
-    final result = <ReconciliationReceipt>[];
-    for (final row in await _db.select(_db.progressionReconciliations).get()) {
-      final receipt = ReconciliationReceipt.fromJson(jsonDecode(row.snapshot));
-      if (receipt.id != row.id)
-        invalid('Reconciliation row identity does not match its key.');
-      result.add(receipt);
-    }
-    return result;
-  }
+  Future<List<ReconciliationReceipt>> progressionReconciliations() =>
+      _cache.list('progressionReconciliations', () async {
+        final result = <ReconciliationReceipt>[];
+        for (final row
+            in await _db.select(_db.progressionReconciliations).get()) {
+          final receipt = ReconciliationReceipt.fromJson(
+            jsonDecode(row.snapshot),
+          );
+          if (receipt.id != row.id)
+            invalid('Reconciliation row identity does not match its key.');
+          result.add(receipt);
+        }
+        return result;
+      });
 
   @override
   Future<void> saveProgressionReconciliation(
@@ -541,17 +559,18 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<LeverLinkRevision>> leverLinkRevisions() async {
-    final result = <LeverLinkRevision>[];
-    for (final row in await _db.select(_db.leverLinkRevisions).get()) {
-      final revision = LeverLinkRevision.fromJson(jsonDecode(row.snapshot));
-      if (revision.link.id != row.linkId || revision.number != row.number)
-        invalid('Stored lever link revision identity mismatch.');
-      result.add(revision);
-    }
-    validateLeverLinkRevisions(result);
-    return result;
-  }
+  Future<List<LeverLinkRevision>> leverLinkRevisions() =>
+      _cache.list('leverLinkRevisions', () async {
+        final result = <LeverLinkRevision>[];
+        for (final row in await _db.select(_db.leverLinkRevisions).get()) {
+          final revision = LeverLinkRevision.fromJson(jsonDecode(row.snapshot));
+          if (revision.link.id != row.linkId || revision.number != row.number)
+            invalid('Stored lever link revision identity mismatch.');
+          result.add(revision);
+        }
+        validateLeverLinkRevisions(result);
+        return result;
+      });
 
   @override
   Future<void> insertLeverLinkRevision(LeverLinkRevision revision) async {
@@ -567,19 +586,20 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<SharedLeverApplication>> sharedLeverApplications() async {
-    final result = <SharedLeverApplication>[];
-    for (final row in await _db.select(_db.sharedLeverApplications).get()) {
-      final application = SharedLeverApplication.fromJson(
-        jsonDecode(row.snapshot),
-      );
-      if (application.linkId != row.linkId ||
-          application.sequence != row.sequence)
-        invalid('Stored shared lever application identity mismatch.');
-      result.add(application);
-    }
-    return result;
-  }
+  Future<List<SharedLeverApplication>> sharedLeverApplications() =>
+      _cache.list('sharedLeverApplications', () async {
+        final result = <SharedLeverApplication>[];
+        for (final row in await _db.select(_db.sharedLeverApplications).get()) {
+          final application = SharedLeverApplication.fromJson(
+            jsonDecode(row.snapshot),
+          );
+          if (application.linkId != row.linkId ||
+              application.sequence != row.sequence)
+            invalid('Stored shared lever application identity mismatch.');
+          result.add(application);
+        }
+        return result;
+      });
 
   @override
   Future<void> insertSharedLeverApplication(
@@ -597,18 +617,19 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<LinkRetirementAnchor>> linkRetirements() async {
-    final result = <LinkRetirementAnchor>[];
-    for (final row in await _db.select(_db.linkRetirementAnchors).get()) {
-      final retirement = LinkRetirementAnchor.fromJson(
-        jsonDecode(row.snapshot),
-      );
-      if (retirement.id != row.id)
-        invalid('Stored lever link retirement identity mismatch.');
-      result.add(retirement);
-    }
-    return result;
-  }
+  Future<List<LinkRetirementAnchor>> linkRetirements() =>
+      _cache.list('linkRetirements', () async {
+        final result = <LinkRetirementAnchor>[];
+        for (final row in await _db.select(_db.linkRetirementAnchors).get()) {
+          final retirement = LinkRetirementAnchor.fromJson(
+            jsonDecode(row.snapshot),
+          );
+          if (retirement.id != row.id)
+            invalid('Stored lever link retirement identity mismatch.');
+          result.add(retirement);
+        }
+        return result;
+      });
 
   @override
   Future<void> insertLinkRetirementAnchor(
@@ -625,16 +646,17 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<ProgramRevision>> programRevisions() async {
-    final result = <ProgramRevision>[];
-    for (final row in await _db.select(_db.programRevisions).get()) {
-      final p = ProgramRevision.fromJson(jsonDecode(row.snapshot));
-      if (p.definition.id != row.programId || p.number != row.number)
-        invalid('Stored program revision identity mismatch.');
-      result.add(p);
-    }
-    return result;
-  }
+  Future<List<ProgramRevision>> programRevisions() =>
+      _cache.list('programRevisions', () async {
+        final result = <ProgramRevision>[];
+        for (final row in await _db.select(_db.programRevisions).get()) {
+          final p = ProgramRevision.fromJson(jsonDecode(row.snapshot));
+          if (p.definition.id != row.programId || p.number != row.number)
+            invalid('Stored program revision identity mismatch.');
+          result.add(p);
+        }
+        return result;
+      });
 
   @override
   Future<void> insertProgramRevision(ProgramRevision revision) async {
@@ -650,15 +672,16 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<ProgramRun>> programRuns() async {
-    final result = <ProgramRun>[];
-    for (final row in await _db.select(_db.programRuns).get()) {
-      final r = ProgramRun.fromJson(jsonDecode(row.snapshot));
-      if (r.id != row.id) invalid('Stored run identity mismatch.');
-      result.add(r);
-    }
-    return result;
-  }
+  Future<List<ProgramRun>> programRuns() =>
+      _cache.list('programRuns', () async {
+        final result = <ProgramRun>[];
+        for (final row in await _db.select(_db.programRuns).get()) {
+          final r = ProgramRun.fromJson(jsonDecode(row.snapshot));
+          if (r.id != row.id) invalid('Stored run identity mismatch.');
+          result.add(r);
+        }
+        return result;
+      });
 
   @override
   Future<void> saveProgramRun(ProgramRun run) async {
@@ -673,18 +696,19 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<SessionProgramBinding>> sessionPrograms() async {
-    final result = <SessionProgramBinding>[];
-    for (final row in await _db.select(_db.sessionPrograms).get()) {
-      final b = SessionProgramBinding.fromJson(jsonDecode(row.snapshot));
-      if (b.sessionId != row.sessionId ||
-          b.runId != row.runId ||
-          b.ordinal != row.ordinal)
-        invalid('Stored session binding identity mismatch.');
-      result.add(b);
-    }
-    return result;
-  }
+  Future<List<SessionProgramBinding>> sessionPrograms() =>
+      _cache.list('sessionPrograms', () async {
+        final result = <SessionProgramBinding>[];
+        for (final row in await _db.select(_db.sessionPrograms).get()) {
+          final b = SessionProgramBinding.fromJson(jsonDecode(row.snapshot));
+          if (b.sessionId != row.sessionId ||
+              b.runId != row.runId ||
+              b.ordinal != row.ordinal)
+            invalid('Stored session binding identity mismatch.');
+          result.add(b);
+        }
+        return result;
+      });
 
   @override
   Future<void> insertSessionProgram(SessionProgramBinding binding) async {
@@ -713,9 +737,16 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<WorkoutExecution>> executions() async {
+  Future<List<WorkoutExecution>> executions({String? sessionId}) =>
+      sessionId == null
+      ? _cache.list('executions', () => _executions(null))
+      : _executions(sessionId);
+
+  Future<List<WorkoutExecution>> _executions(String? sessionId) async {
     final result = <WorkoutExecution>[];
-    for (final row in await _db.select(_db.workoutExecutions).get()) {
+    final query = _db.select(_db.workoutExecutions);
+    if (sessionId != null) query.where((e) => e.sessionId.equals(sessionId));
+    for (final row in await query.get()) {
       final e = WorkoutExecution.fromJson(jsonDecode(row.snapshot));
       if (e.id != row.id || e.sessionId != row.sessionId)
         invalid('Execution row identity mismatch.');
@@ -750,9 +781,47 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<TimingActivity>> timingActivities() async {
+  Future<List<TimingActivity>> activeTimingActivities() async {
     final result = <TimingActivity>[];
-    for (final row in await _db.select(_db.timingActivities).get()) {
+    for (final row
+        in await _db
+            .customSelect(
+              "SELECT id, session_id, set_id, snapshot FROM timing_activities "
+              "WHERE json_extract(snapshot, '\$.status') IN ('running', 'paused')",
+              readsFrom: {_db.timingActivities},
+            )
+            .get()) {
+      final timer = TimingActivity.fromJson(
+        jsonDecode(row.read<String>('snapshot')),
+      );
+      if (timer.id != row.read<String>('id') ||
+          timer.sessionId != row.read<String>('session_id') ||
+          timer.setId != row.read<String>('set_id') ||
+          !timer.active)
+        invalid('Timing row identity mismatch.');
+      result.add(timer);
+    }
+    return result;
+  }
+
+  @override
+  Future<List<TimingActivity>> timingActivities({
+    String? sessionId,
+    String? idPrefix,
+  }) => sessionId == null && idPrefix == null
+      ? _cache.list('timingActivities', () => _timingActivities(null, null))
+      : _timingActivities(sessionId, idPrefix);
+
+  Future<List<TimingActivity>> _timingActivities(
+    String? sessionId,
+    String? idPrefix,
+  ) async {
+    final result = <TimingActivity>[];
+    final query = _db.select(_db.timingActivities);
+    if (sessionId != null) query.where((t) => t.sessionId.equals(sessionId));
+    // LIKE treats '_' in identifiers as a wildcard: a superset, never a miss.
+    if (idPrefix != null) query.where((t) => t.id.like('$idPrefix%'));
+    for (final row in await query.get()) {
       final timer = TimingActivity.fromJson(jsonDecode(row.snapshot));
       if (timer.id != row.id ||
           timer.sessionId != row.sessionId ||
@@ -790,16 +859,19 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<RepeatCheckpoint>> repeatCheckpoints() async {
-    final result = <RepeatCheckpoint>[];
-    for (final row in await _db.select(_db.repeatCheckpoints).get()) {
-      final checkpoint = RepeatCheckpoint.fromJson(jsonDecode(row.snapshot));
-      if (checkpoint.id != row.id)
-        invalid('Repeat checkpoint row identity mismatch.');
-      result.add(checkpoint);
-    }
-    return result;
-  }
+  Future<List<RepeatCheckpoint>> repeatCheckpoints() => _cache.list(
+    'repeatCheckpoints',
+    () async {
+      final result = <RepeatCheckpoint>[];
+      for (final row in await _db.select(_db.repeatCheckpoints).get()) {
+        final checkpoint = RepeatCheckpoint.fromJson(jsonDecode(row.snapshot));
+        if (checkpoint.id != row.id)
+          invalid('Repeat checkpoint row identity mismatch.');
+        result.add(checkpoint);
+      }
+      return result;
+    },
+  );
 
   @override
   Future<void> saveRepeatCheckpoint(RepeatCheckpoint checkpoint) async {
@@ -833,16 +905,19 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<WindowCheckpoint>> windowCheckpoints() async {
-    final result = <WindowCheckpoint>[];
-    for (final row in await _db.select(_db.windowCheckpoints).get()) {
-      final checkpoint = WindowCheckpoint.fromJson(jsonDecode(row.snapshot));
-      if (checkpoint.id != row.id || checkpoint.sessionId != row.sessionId)
-        invalid('Window checkpoint row identity mismatch.');
-      result.add(checkpoint);
-    }
-    return result;
-  }
+  Future<List<WindowCheckpoint>> windowCheckpoints() => _cache.list(
+    'windowCheckpoints',
+    () async {
+      final result = <WindowCheckpoint>[];
+      for (final row in await _db.select(_db.windowCheckpoints).get()) {
+        final checkpoint = WindowCheckpoint.fromJson(jsonDecode(row.snapshot));
+        if (checkpoint.id != row.id || checkpoint.sessionId != row.sessionId)
+          invalid('Window checkpoint row identity mismatch.');
+        result.add(checkpoint);
+      }
+      return result;
+    },
+  );
 
   @override
   Future<void> saveWindowCheckpoint(WindowCheckpoint checkpoint) async {
@@ -865,16 +940,17 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<BodyMassRecord>> bodyMassRecords() async {
-    final result = <BodyMassRecord>[];
-    for (final row in await _db.select(_db.bodyMassRecords).get()) {
-      final record = BodyMassRecord.fromJson(jsonDecode(row.snapshot));
-      if (record.measurement.id != row.id)
-        invalid('Body-mass row identity mismatch.');
-      result.add(record);
-    }
-    return result;
-  }
+  Future<List<BodyMassRecord>> bodyMassRecords() =>
+      _cache.list('bodyMassRecords', () async {
+        final result = <BodyMassRecord>[];
+        for (final row in await _db.select(_db.bodyMassRecords).get()) {
+          final record = BodyMassRecord.fromJson(jsonDecode(row.snapshot));
+          if (record.measurement.id != row.id)
+            invalid('Body-mass row identity mismatch.');
+          result.add(record);
+        }
+        return result;
+      });
 
   @override
   Future<void> saveBodyMassRecord(BodyMassRecord record) async {
@@ -889,18 +965,19 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<BlockProgressionDecision>> blockProgressions() async {
-    final result = <BlockProgressionDecision>[];
-    for (final row in await _db.select(_db.blockProgressions).get()) {
-      final decision = BlockProgressionDecision.fromJson(
-        jsonDecode(row.snapshot),
-      );
-      if (decision.id != row.id)
-        invalid('Stored block progression identity is inconsistent.');
-      result.add(decision);
-    }
-    return result;
-  }
+  Future<List<BlockProgressionDecision>> blockProgressions() =>
+      _cache.list('blockProgressions', () async {
+        final result = <BlockProgressionDecision>[];
+        for (final row in await _db.select(_db.blockProgressions).get()) {
+          final decision = BlockProgressionDecision.fromJson(
+            jsonDecode(row.snapshot),
+          );
+          if (decision.id != row.id)
+            invalid('Stored block progression identity is inconsistent.');
+          result.add(decision);
+        }
+        return result;
+      });
 
   @override
   Future<void> saveBlockProgression(BlockProgressionDecision decision) async {
@@ -949,19 +1026,20 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<ProgramReceipt>> programReceipts() async {
-    final result = <ProgramReceipt>[];
-    for (final row in await _db.select(_db.programReceipts).get()) {
-      final r = ProgramReceipt.fromJson(jsonDecode(row.snapshot));
-      if (r.runId != row.runId ||
-          r.ordinal != row.ordinal ||
-          r.operationKey != row.operationKey ||
-          r.sessionId != row.sessionId)
-        invalid('Stored occurrence receipt identity mismatch.');
-      result.add(r);
-    }
-    return result;
-  }
+  Future<List<ProgramReceipt>> programReceipts() =>
+      _cache.list('programReceipts', () async {
+        final result = <ProgramReceipt>[];
+        for (final row in await _db.select(_db.programReceipts).get()) {
+          final r = ProgramReceipt.fromJson(jsonDecode(row.snapshot));
+          if (r.runId != row.runId ||
+              r.ordinal != row.ordinal ||
+              r.operationKey != row.operationKey ||
+              r.sessionId != row.sessionId)
+            invalid('Stored occurrence receipt identity mismatch.');
+          result.add(r);
+        }
+        return result;
+      });
 
   @override
   Future<void> insertProgramReceipt(ProgramReceipt receipt) async {
@@ -979,16 +1057,17 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<ProgramUpgradeReceipt>> programUpgrades() async {
-    final result = <ProgramUpgradeReceipt>[];
-    for (final row in await _db.select(_db.programUpgradeReceipts).get()) {
-      final r = ProgramUpgradeReceipt.fromJson(jsonDecode(row.snapshot));
-      if (r.runId != row.runId || r.requestId != row.requestId)
-        invalid('Stored program upgrade identity mismatch.');
-      result.add(r);
-    }
-    return result;
-  }
+  Future<List<ProgramUpgradeReceipt>> programUpgrades() =>
+      _cache.list('programUpgrades', () async {
+        final result = <ProgramUpgradeReceipt>[];
+        for (final row in await _db.select(_db.programUpgradeReceipts).get()) {
+          final r = ProgramUpgradeReceipt.fromJson(jsonDecode(row.snapshot));
+          if (r.runId != row.runId || r.requestId != row.requestId)
+            invalid('Stored program upgrade identity mismatch.');
+          result.add(r);
+        }
+        return result;
+      });
 
   @override
   Future<void> insertProgramUpgrade(ProgramUpgradeReceipt receipt) async {
@@ -1038,7 +1117,7 @@ final class TrainingStore implements TrainingRepository {
   }
 
   @override
-  Future<List<TrainingSession>> sessions() async {
+  Future<List<TrainingSession>> sessions() => _cache.list('sessions', () async {
     final result = <TrainingSession>[];
     for (final row in await (_db.select(
       _db.sessions,
@@ -1049,7 +1128,7 @@ final class TrainingStore implements TrainingRepository {
       result.add(session);
     }
     return result;
-  }
+  });
 
   @override
   Future<void> insertSession(TrainingSession session) async {

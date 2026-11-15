@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'errors.dart';
 import 'increment_bands.dart';
 import 'set_observations.dart';
@@ -349,7 +350,26 @@ final class ThresholdRule {
     this.retest,
   ]);
 
+  /// Parsed rules by their exact JSON. Stored decisions re-parse the same
+  /// rule many times per read (the BBR rules carry a 300-position scale,
+  /// about 0.6 ms each); rules are immutable, so identical input shares one
+  /// value. Failures are never cached; the memo is bounded.
   factory ThresholdRule.fromJson(Object? input) {
+    final String key;
+    try {
+      key = jsonEncode(input);
+    } on JsonUnsupportedObjectError {
+      return ThresholdRule._parse(input);
+    }
+    final hit = _parsed[key];
+    if (hit != null) return hit;
+    final rule = ThresholdRule._parse(input);
+    if (_parsed.length >= 256) _parsed.clear();
+    return _parsed[key] = rule;
+  }
+  static final _parsed = <String, ThresholdRule>{};
+
+  factory ThresholdRule._parse(Object? input) {
     final json = jsonObject(input, 'rule');
     checkKeys(json, {
       'aggregation',
@@ -523,22 +543,22 @@ final class ThresholdRule {
       identifier(json, 'metric'),
       min,
       threshold,
-      increments,
-      metricsFromJson(json['resets'] ?? <String, Object?>{}),
-      maximums,
-      sequence,
+      Map.unmodifiable(increments),
+      Map.unmodifiable(metricsFromJson(json['resets'] ?? <String, Object?>{})),
+      Map.unmodifiable(maximums),
+      sequence == null ? null : List.unmodifiable(sequence),
       after,
       Decimal.parse('1') - percent * Decimal.parse('0.01'),
       Set.unmodifiable(deload.cast<String>()),
       aggregation,
       failureAggregation,
       json.containsKey('aggregation') || json.containsKey('failureAggregation'),
-      minimums,
+      Map.unmodifiable(minimums),
       Map<String, String>.unmodifiable(directions.cast<String, String>()),
       json.containsKey('minimums') || json.containsKey('directions'),
       mode as String,
       chosenMetric,
-      priorityOrder,
+      priorityOrder == null ? null : List.unmodifiable(priorityOrder),
       Map.unmodifiable(scales),
       json.containsKey('scales'),
       performanceDirection,

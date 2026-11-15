@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'training_service.dart';
 import 'canonical_json.dart';
@@ -90,7 +91,30 @@ Map<String, String> variantSelectionsFromJson(Object? input) {
   };
 }
 
+/// Decoded sessions by their exact JSON. A session snapshot is decoded and
+/// fully validated (including re-expanding its prescription) every time it
+/// is read, and the same snapshot recurs: in the sessions table and frozen
+/// inside each progression decision of that exposure. Sessions are
+/// immutable, so identical input can share one decoded value; failures are
+/// never cached. Bounded so a long-lived process does not grow without end.
+final _decodedSessions = <String, TrainingSession>{};
+const _decodedSessionLimit = 256;
+
 TrainingSession sessionFromJson(Object? input) {
+  final String key;
+  try {
+    key = jsonEncode(input);
+  } on JsonUnsupportedObjectError {
+    return _sessionFromJson(input);
+  }
+  final hit = _decodedSessions[key];
+  if (hit != null) return hit;
+  final session = _sessionFromJson(input);
+  if (_decodedSessions.length >= _decodedSessionLimit) _decodedSessions.clear();
+  return _decodedSessions[key] = session;
+}
+
+TrainingSession _sessionFromJson(Object? input) {
   final json = jsonObject(input, 'session');
   checkKeys(json, {
     'schemaVersion',

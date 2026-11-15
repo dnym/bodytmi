@@ -30,8 +30,7 @@ final class TimingService {
       plan: resolved,
       at: at,
     );
-    final all = await repository.timingActivities();
-    final existing = all.where((t) => t.id == id).firstOrNull;
+    final existing = await repository.timingActivity(id);
     if (existing != null) {
       if (existing.sessionId != sessionId ||
           existing.setId != setId ||
@@ -42,7 +41,7 @@ final class TimingService {
         _conflict();
       return existing;
     }
-    if (all.any((t) => t.active) ||
+    if ((await repository.activeTimingActivities()).isNotEmpty ||
         (await repository.windowCheckpoints()).any((c) => c.reserved) ||
         (await repository.repeatCheckpoints()).any((c) => c.reserved))
       _conflict(
@@ -57,11 +56,7 @@ final class TimingService {
       invalid(
         'Timing needs a compatible duration metric in an active planned set and a valid start time.',
       );
-    validateExecutionData(
-      await repository.executions(),
-      await repository.sessions(),
-      [...all, next],
-    );
+    await _validateAgainstExecutions(next, s);
     await repository.saveTimingActivity(next);
     return next;
   });
@@ -91,8 +86,7 @@ final class TimingService {
       'effortMilliseconds': 0,
       'restMilliseconds': rest.durationSeconds! * 1000,
     });
-    final all = await repository.timingActivities();
-    final existing = all.where((t) => t.id == id).firstOrNull;
+    final existing = await repository.timingActivity(id);
     if (existing != null) {
       if (existing.sessionId != sessionId ||
           existing.setId != occurrenceId ||
@@ -101,7 +95,7 @@ final class TimingService {
         _conflict();
       return existing;
     }
-    if (all.any((t) => t.active) ||
+    if ((await repository.activeTimingActivities()).isNotEmpty ||
         (await repository.windowCheckpoints()).any((c) => c.reserved) ||
         (await repository.repeatCheckpoints()).any((c) => c.reserved))
       _conflict('Another timing activity is active.');
@@ -113,14 +107,47 @@ final class TimingService {
       plan: plan,
       at: at,
     );
-    validateExecutionData(
-      await repository.executions(),
-      await repository.sessions(),
-      [...all, next],
-    );
+    await _validateAgainstExecutions(next, s);
     await repository.saveTimingActivity(next);
     return next;
   });
+
+  /// A new clock can only conflict with its own session's traversal or with
+  /// the execution its ID names as a managed clock (possibly of another
+  /// session); the rest of history is unaffected.
+  Future<void> _validateAgainstExecutions(
+    TimingActivity next,
+    TrainingSession s,
+  ) async {
+    final executions = {
+      for (final e in await repository.executions(sessionId: s.id)) e.id: e,
+    };
+    final sessions = {s.id: s};
+    final owner = managedClockExecution(next.id);
+    if (owner != null && !executions.containsKey(owner)) {
+      final e = await repository.execution(owner);
+      if (e != null) {
+        executions[e.id] = e;
+        sessions[e.sessionId] ??= await StoredTrainingService(
+          repository,
+        ).session(e.sessionId);
+      }
+    }
+    final clocks = {
+      for (final sessionId in sessions.keys)
+        for (final t in await sessionClocks(repository, sessionId, [
+          for (final e in executions.values)
+            if (e.sessionId == sessionId) e.id,
+        ]))
+          t.id: t,
+    };
+    validateExecutionData(
+      executions.values.toList(),
+      sessions.values.toList(),
+      [...clocks.values, next],
+    );
+  }
+
   Future<TimingActivity> resume(
     String id,
     int version,

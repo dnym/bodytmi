@@ -159,6 +159,27 @@ Future<WorkoutExecution> _startGroups(TrainingStore store) async {
 
 void executionTests() {
   test(
+    'a clock cannot take another session\'s managed execution clock ID',
+    () => _withStore((store, _) async {
+      await _start(store, id: 'ex-a');
+      await StoredTrainingService(
+        store,
+      ).start('other', 'traversal', 1, instant(1));
+      final error = await _failure(
+        () => TimingService(store).start(
+          'execution-ex-a-effort-0',
+          'other',
+          'workout/hold-set',
+          'duration',
+          TimingPlan.fromJson({'effortMilliseconds': 1000}),
+          instant(1),
+        ),
+      );
+      check(error.message.contains('another context'), error.message);
+      equal(await store.timingActivity('execution-ex-a-effort-0'), null);
+    }),
+  );
+  test(
     'a set logged ahead of the cursor is acknowledged, never overwritten',
     () => _withStore((store, _) async {
       final training = StoredTrainingService(store);

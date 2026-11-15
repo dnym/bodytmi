@@ -22,13 +22,12 @@ final class ExecutionService {
     final s = await StoredTrainingService(repository).session(sessionId);
     final plan = executionPlan(s);
     final candidate = WorkoutExecution.create(id, sessionId, at, plan.length);
-    final all = await repository.executions();
-    final old = all.where((e) => e.id == id).firstOrNull;
+    final old = await repository.execution(id);
     if (old != null) {
       if (old.sessionId != sessionId || old.createdAt != at) _conflict();
       return old;
     }
-    if (all.any((e) => e.sessionId == sessionId))
+    if ((await repository.executions(sessionId: sessionId)).isNotEmpty)
       _conflict('This session already has a traversal.');
     if (s.status != SessionStatus.active || at.isBefore(s.startedAt))
       invalid('Execution needs an active session and valid start time.');
@@ -36,7 +35,11 @@ final class ExecutionService {
       (c) => c.sessionId == sessionId && c.reserved,
     ))
       invalid('Release the reserved window clock before starting a traversal.');
-    _validateManagedClocks(candidate, s, await repository.timingActivities());
+    _validateManagedClocks(
+      candidate,
+      s,
+      await sessionClocks(repository, sessionId, [id]),
+    );
     await repository.saveExecution(candidate);
     await _prepareRest(candidate, s, at);
     return candidate;
@@ -243,11 +246,9 @@ final class ExecutionService {
     } else if (action == 'skip') {
       if (!confirm)
         invalid('Skipping an execution occurrence requires confirm:true.');
-      final clocks = (await repository.timingActivities())
-          .where(
-            (t) => t.sessionId == s.id && t.setId == occurrence.id && t.active,
-          )
-          .toList();
+      final clocks = (await repository.timingActivities(
+        sessionId: s.id,
+      )).where((t) => t.setId == occurrence.id && t.active).toList();
       for (final t in clocks)
         await TimingService(
           repository,
@@ -259,17 +260,12 @@ final class ExecutionService {
           (s) => const TrainingService().skip(s, occurrence.id, confirm: true),
         );
       if (rest)
-        sourceTimer = (await repository.timingActivities())
-            .where((t) => t.id == e.clockId('rest'))
-            .firstOrNull
-            ?.id;
+        sourceTimer = (await repository.timingActivity(e.clockId('rest')))?.id;
     } else if (rest) {
       if (action != 'advance')
         invalid('Rest does not contain effort results to complete.');
       if (!(occurrence.activity as Rest).isManual) {
-        final clock = (await repository.timingActivities())
-            .where((t) => t.id == e.clockId('rest'))
-            .firstOrNull;
+        final clock = await repository.timingActivity(e.clockId('rest'));
         if (clock?.status != 'completed')
           invalid('Run the rest clock to its boundary or explicitly skip it.');
         sourceTimer = clock!.id;
@@ -390,10 +386,9 @@ final class ExecutionService {
       if (usedRequests.contains(_groupRequestId(requestId, e.cursor, i)))
         _conflict('A group child request ID is already used.');
     }
-    final timers = await repository.timingActivities();
+    final timers = await repository.timingActivities(sessionId: s.id);
     for (final t in timers) {
-      if (t.sessionId == s.id &&
-          paths.contains(t.setId) &&
+      if (paths.contains(t.setId) &&
           (t.active || t.status == 'awaitingConfirmation')) {
         await TimingService(
           repository,
@@ -460,6 +455,33 @@ final class ExecutionService {
 
 String _groupRequestId(String id, int start, int ordinal) =>
     ordinal == start ? id : '$id-group-$ordinal';
+
+/// A session's own clocks plus every clock whose ID is a managed clock ID of
+/// one of [executionIds]. Such a clock may belong to another session, which
+/// the managed-clock check must still see and reject; scoping by session
+/// alone would hide it.
+Future<List<TimingActivity>> sessionClocks(
+  TrainingRepository repository,
+  String sessionId,
+  Iterable<String> executionIds,
+) async {
+  final byId = {
+    for (final t in await repository.timingActivities(sessionId: sessionId))
+      t.id: t,
+  };
+  for (final id in executionIds) {
+    for (final t in await repository.timingActivities(
+      idPrefix: 'execution-$id-',
+    ))
+      byId[t.id] = t;
+  }
+  return byId.values.toList();
+}
+
+/// The execution a managed clock ID would belong to, if that ID has the
+/// managed form `execution-<id>-(effort|rest)-<ordinal>`.
+String? managedClockExecution(String clockId) =>
+    RegExp(r'^execution-(.+)-(?:effort|rest)-\d+$').firstMatch(clockId)?[1];
 
 void _validateManagedClocks(
   WorkoutExecution e,
