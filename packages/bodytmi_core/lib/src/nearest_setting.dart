@@ -12,7 +12,12 @@ import 'quantity.dart';
 /// Settings come from the instance's declared selector scale and/or plate
 /// loading, never from assumptions; an instance declaring neither for the
 /// target's dimension has no settings and nothing can follow on it.
-List<Quantity> nearestSettings(EquipmentInstance instance, Quantity target) {
+/// [loading] replaces the declared loading, e.g. without plates left at home.
+List<Quantity> nearestSettings(
+  EquipmentInstance instance,
+  Quantity target, {
+  LoadingSpec? loading,
+}) {
   final below = <Quantity>[];
   final above = <Quantity>[];
   final scale = instance.scale;
@@ -22,9 +27,9 @@ List<Quantity> nearestSettings(EquipmentInstance instance, Quantity target) {
     if (lower != null) below.add(lower);
     if (upper != null) above.add(upper);
   }
-  final loading = instance.loading;
-  if (loading != null && target.dimension == Dimension.mass) {
-    final plan = PlatePlan.evaluate(loading, target);
+  final plates = loading ?? instance.loading;
+  if (plates != null && target.dimension == Dimension.mass) {
+    final plan = PlatePlan.evaluate(plates, target);
     for (final arrangement in plan['arrangements']! as List<Object?>) {
       final a = arrangement! as Map<String, Object?>;
       final total = Quantity.fromJson(a['totalMass']);
@@ -65,12 +70,18 @@ List<Quantity> nearestSettings(EquipmentInstance instance, Quantity target) {
 
 /// Whether [actual] follows [target] on [instance]: equal to the target, or
 /// one of its [nearestSettings].
-bool followsOn(EquipmentInstance instance, Quantity target, Quantity actual) {
+bool followsOn(
+  EquipmentInstance instance,
+  Quantity target,
+  Quantity actual, {
+  LoadingSpec? loading,
+}) {
   if (actual.dimension != target.dimension) return false;
   if (actual.compareTo(target) == 0) return true;
   return nearestSettings(
     instance,
     target,
+    loading: loading,
   ).any((setting) => setting.compareTo(actual) == 0);
 }
 

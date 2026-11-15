@@ -42,7 +42,12 @@ List<FollowedSetting> followedSettings(
           if ((set.suggested[metric], set.actuals[metric])
               case (final target?, final actual?)
               when actual.compareTo(target) != 0 &&
-                  followsOn(instance.snapshot, target, actual))
+                  followsOn(
+                    instance.snapshot,
+                    target,
+                    actual,
+                    loading: set.availableLoading,
+                  ))
             FollowedSetting(set.id, metric, target, actual, instance),
 ];
 
@@ -74,6 +79,7 @@ List<TrainingSet> asFollowed(
           observations: set.observations,
           loadArrangement: set.loadArrangement,
           performedOn: set.performedOn,
+          unavailablePlates: set.unavailablePlates,
           maxEffortMetrics: set.maxEffortMetrics,
           criteria: set.criteria,
           substitution: set.substitution,

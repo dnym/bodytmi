@@ -195,6 +195,7 @@ TrainingSession _sessionFromJson(Object? input) {
       'observations',
       'loadArrangement',
       'performedOn',
+      'unavailablePlates',
       'objectives',
       'substitution',
       'settings',
@@ -342,6 +343,12 @@ TrainingSession _sessionFromJson(Object? input) {
         performedOn: row['performedOn'] == null
             ? null
             : LoadInstanceReference.fromJson(row['performedOn']),
+        unavailablePlates: row.containsKey('unavailablePlates')
+            ? [
+                for (final p in jsonList(row, 'unavailablePlates'))
+                  PlateUsage.fromJson(p),
+              ]
+            : const [],
         status: setStatus,
         substitution: substitution,
         settings: settings,

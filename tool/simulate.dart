@@ -929,8 +929,27 @@ Future<void> bbrSession(LiftDay d) async {
     );
     if (edited.ok) session = edited.data['session'] ?? edited.data;
   }
+  // Every barbell target should be exactly loadable on the bar used.
+  for (final slot in slots) {
+    if (slot == 'chinup') continue;
+    final target = (session['sets'] as List).firstWhere(
+      (x) => x['slot'] == slot,
+    )['suggested']['load'];
+    final plan = await ok('store plate-plan', {
+      'instanceId': 'main-bar',
+      'target': {'value': target['value'], 'unit': target['unit']},
+    });
+    final status = (plan['plan'] ?? plan)['status'];
+    if (status != 'exact') {
+      note(
+        '$id $slot target ${entered(target)} is not exactly loadable on '
+        'main-bar (plate plan: $status).',
+      );
+    }
+  }
   var benchSubstituted = false;
   dynamic kgSetting;
+  dynamic microSetting;
   final planned = <String, String>{};
   for (final s in session['sets'] as List) {
     final m = metricOf(s['slot'] as String);
@@ -992,37 +1011,54 @@ Future<void> bbrSession(LiftDay d) async {
     final m = metricOf(slot);
     var actualControlled = set['suggested'][m];
     if (d.forgotMicroPlates && slot == 'bench') {
-      // Without micro plates the planned load is not loadable; plan it.
       final target = set['suggested']['load'];
-      final plan = await ok('plate plan', {
-        'loading': microlessLoading(),
-        'target': {'value': target['value'], 'unit': target['unit']},
-      });
-      final p = plan['plan'] ?? plan;
       if (ordinal == 0) {
+        // The micro plates are at home: say so, and get the setting to use.
+        final shown = await ok('store show', {'id': id});
+        final marked = await ok('store perform-on', {
+          'id': id,
+          'expectedVersion': shown['contentVersion'],
+          'setId': set['id'],
+          'instanceId': 'main-bar',
+          'unavailablePlates': [
+            {'mass': q('0.5', 'kg'), 'count': 4},
+            {'mass': q('0.25', 'kg'), 'count': 4},
+          ],
+          'applyToRemaining': true,
+        });
+        microSetting = (marked['settings'] as List).firstWhere(
+          (x) => x['metric'] == 'load',
+        )['settings'][0];
         log(
-          '  - Forgot the micro-plate bag: plate plan for ${entered(target)} '
-          'says `${p['status']}`; lifted the nearest lower load.',
+          '  - Forgot the micro-plate bag: `store perform-on main-bar` with '
+          'the 0.5 and 0.25 kg plates unavailable says to load '
+          '${entered(microSetting)} for ${entered(target)}.',
         );
-      }
-      final lower = (p['arrangements'] as List).firstWhere(
-        (a) => a['relation'] == 'nearest-lower' || a['relation'] == 'exact',
-      );
-      usedPlates = [
-        for (final plate in lower['sides'][0]['plates'] as List)
-          {
-            'mass': {
-              'value': plate['mass']['value'],
-              'unit': plate['mass']['unit'],
-            },
-            'count': (plate['count'] as int) * 2,
+        await ex.refresh();
+        // The stack actually used, from the planner without micro plates.
+        final plan = await ok('plate plan', {
+          'loading': microlessLoading(),
+          'target': {
+            'value': microSetting['value'],
+            'unit': microSetting['unit'],
           },
-      ];
-      final lowerMass = lower['totalMass'];
-      if (lowerMass != null) {
-        actualControlled = lowerMass;
-        load = qv(lowerMass);
+        });
+        final exact = (plan['arrangements'] as List).firstWhere(
+          (a) => a['relation'] == 'exact',
+        );
+        usedPlates = [
+          for (final plate in exact['sides'][0]['plates'] as List)
+            {
+              'mass': {
+                'value': plate['mass']['value'],
+                'unit': plate['mass']['unit'],
+              },
+              'count': (plate['count'] as int) * 2,
+            },
+        ];
       }
+      actualControlled = microSetting;
+      load = qv(microSetting);
     }
     if (d.lbMachineBusy && slot == 'chinup') {
       if (ordinal == 0) {
@@ -1242,6 +1278,7 @@ Map<String, Object?> barLoading() => {
   'plates': [
     ...(microlessLoading()['plates'] as List),
     {'mass': q('0.5', 'kg'), 'count': 4},
+    {'mass': q('0.25', 'kg'), 'count': 4},
   ],
 };
 
@@ -1326,7 +1363,7 @@ Future<void> resolveProgression(
       if (v != null) next = entered(v);
     }
     // Oracle.
-    if (reps.length == 3 && !d.phoneCall && !d.forgotMicroPlates ||
+    if (reps.length == 3 && !d.phoneCall ||
         reps.length == 3 && slot != 'bench' && slot != 'deadlift') {
       final current = double.parse(planned[slot]!.split(' ').first);
       final o = bbrOracle(slot, current, reps);
@@ -1979,7 +2016,7 @@ Future<void> setup() async {
       'id': 'main-bar',
       'equipmentId': 'barbell',
       'gym': 'local',
-      'name': '20 kg bar, kg plates + own 0.5 kg micro plates',
+      'name': '20 kg bar, kg plates + own 0.5/0.25 kg micro plates',
       'loading': barLoading(),
     },
     'expectedRevision': 0,

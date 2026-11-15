@@ -279,6 +279,175 @@ void performedOnTests() {
     },
   );
 
+  test(
+    'forgotten micro plates: the nearest load without them follows the target',
+    () async {
+      Map<String, Object?> bar() => {
+        'id': 'main-bar',
+        'equipmentId': 'barbell',
+        'loading': {
+          'components': [
+            {'id': 'bar', 'kind': 'bar', 'mass': _q('20', 'kg')},
+          ],
+          'channel': {'id': 'barbell', 'sides': 2, 'symmetry': 'required'},
+          'plates': [
+            {'mass': _q('10', 'kg'), 'count': 4},
+            {'mass': _q('2.5', 'kg'), 'count': 4},
+            {'mass': _q('1.25', 'kg'), 'count': 4},
+            {'mass': _q('0.5', 'kg'), 'count': 4},
+          ],
+        },
+      };
+      final loading = EquipmentInstance.fromJson(bar()).loading!;
+      final micro = [PlateUsage(Quantity.fromJson(_q('0.5', 'kg')), 4)];
+      // Stock checks: unknown plate, too many, nothing left.
+      for (final missing in [
+        [PlateUsage(Quantity.fromJson(_q('5', 'kg')), 2)],
+        [PlateUsage(Quantity.fromJson(_q('0.5', 'kg')), 6)],
+        [
+          PlateUsage(Quantity.fromJson(_q('10', 'kg')), 4),
+          PlateUsage(Quantity.fromJson(_q('2.5', 'kg')), 4),
+          PlateUsage(Quantity.fromJson(_q('1.25', 'kg')), 4),
+          ...micro,
+        ],
+      ]) {
+        rejects(() => loading.without(missing));
+      }
+      final target = Quantity.fromJson(_q('47', 'kg'));
+      final instance = EquipmentInstance.fromJson(bar());
+      equal(nearestSettings(instance, target).single.compareTo(target), 0);
+      final without = nearestSettings(
+        instance,
+        target,
+        loading: loading.without(micro),
+      );
+      equal(without.single.compareTo(Quantity.fromJson(_q('47.5', 'kg'))), 0);
+
+      final dir = await Directory.systemTemp.createTemp('bodytmi-micro-');
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final equipment = EquipmentService(store);
+        await equipment.publishEquipment(
+          EquipmentDefinition.fromJson({'id': 'barbell'}),
+          0,
+        );
+        await equipment.publishInstance(EquipmentInstance.fromJson(bar()), 0);
+        final training = StoredTrainingService(store);
+        final progression = StoredProgressionService(store);
+        await training.publish(
+          WorkoutDefinition.fromJson({
+            'id': 'bench',
+            'name': 'Bench',
+            'slots': [
+              {
+                'id': 'bench',
+                'exercise': 'bench-press',
+                'implementation': 'barbell',
+                'equipment': 'barbell',
+                'targets': {'load': _q('47', 'kg'), 'reps': _q('5', 'rep')},
+              },
+            ],
+            'plan': {
+              'id': 'w',
+              'type': 'repeat',
+              'count': 3,
+              'child': {'id': 'set', 'type': 'effort', 'slot': 'bench'},
+            },
+          }),
+          0,
+        );
+        final rule = {
+          'metric': 'reps',
+          'minimum': _q('5', 'rep'),
+          'threshold': _q('5', 'rep'),
+          'increments': {'load': _q('1', 'kg')},
+        };
+        final head = await equipment.instanceRevision('main-bar');
+        final reference = LoadInstanceReference(
+          head.instance.id,
+          head.instance,
+          head.number,
+        );
+        Future<ProgressionDecision> day(String id, int n, bool forgot) async {
+          var s = await training.start(
+            id,
+            'bench',
+            1,
+            instant(n),
+            loadBindings: {'bench': 'main-bar'},
+          );
+          if (forgot) {
+            s = await training.edit(
+              id,
+              s.contentVersion,
+              (s) => const TrainingService().performOn(
+                s,
+                s.sets.first.id,
+                reference,
+                unavailablePlates: micro,
+                applyToRemaining: true,
+              ),
+            );
+          }
+          s = await training.edit(id, s.contentVersion, (s) {
+            for (final set in s.sets) {
+              s = const TrainingService().complete(s, set.id, {
+                'load': Quantity.fromJson(_q('47.5', 'kg')),
+                'reps': Quantity.fromJson(_q('5', 'rep')),
+              });
+            }
+            return s.finish(instant(n).add(const Duration(hours: 1)));
+          });
+          if (forgot) {
+            // A recorded stack may not use the plates that were missing.
+            await _failure(
+              () => training.edit(
+                id,
+                s.contentVersion,
+                (s) => const TrainingService().arrange(
+                  s,
+                  s.sets.first.id,
+                  LoadArrangement.fromJson({
+                    'instanceId': 'main-bar',
+                    'channel': 'barbell',
+                    'plates': [
+                      {'mass': _q('10', 'kg'), 'count': 2},
+                      {'mass': _q('2.5', 'kg'), 'count': 2},
+                      {'mass': _q('0.5', 'kg'), 'count': 4},
+                    ],
+                  }),
+                ),
+              ),
+            );
+          }
+          return progression.propose(id, 'bench', rule, ruleType: 'threshold');
+        }
+
+        final strict = await day('plates-at-home', 1, false);
+        equal(strict.proposal.outcome, 'review');
+        await progression.decline(
+          'plates-at-home',
+          'bench',
+          strict.version,
+          instant(1).add(const Duration(hours: 2)),
+        );
+        final forgot = await day('forgot', 2, true);
+        equal(forgot.proposal.outcome, 'advance');
+        equal(forgot.followed.length, 3);
+        equal(
+          forgot.nextSets.first['load']!.compareTo(
+            Quantity.fromJson(_q('48', 'kg')),
+          ),
+          0,
+        );
+        TrainingArchive.fromJson((await training.exportArchive()).toJson());
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+
   test('CLI store perform-on reports the settings to use', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-performed-cli-');
     final db = '${dir.path}/db.sqlite';

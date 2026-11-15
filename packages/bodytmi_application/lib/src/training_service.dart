@@ -407,23 +407,31 @@ final class TrainingService {
     TrainingSession session,
     String setId,
     LoadInstanceReference? instance, {
+    List<PlateUsage> unavailablePlates = const [],
     bool applyToRemaining = false,
     bool confirm = false,
   }) {
     final set = session.set(setId);
+    if (instance == null && unavailablePlates.isNotEmpty)
+      invalid('Unavailable plates describe an instance; name it.');
     if (instance == null && set.performedOn != null && !confirm)
       invalid('Confirm before clearing the instance a set was performed on.');
     if (instance == null && applyToRemaining)
       invalid('Clear the instance one set at a time.');
     final index = session.sets.indexOf(set);
-    final replaced = <String, TrainingSet>{set.id: set.performOn(instance)};
+    final replaced = <String, TrainingSet>{
+      set.id: set.performOn(instance, unavailablePlates: unavailablePlates),
+    };
     if (applyToRemaining) {
       for (final later in session.sets.skip(index + 1)) {
         if (later.slotId == set.slotId &&
             later.role == set.role &&
             later.status == SetStatus.planned &&
             later.substitution == null) {
-          replaced[later.id] = later.performOn(instance);
+          replaced[later.id] = later.performOn(
+            instance,
+            unavailablePlates: unavailablePlates,
+          );
         }
       }
     }

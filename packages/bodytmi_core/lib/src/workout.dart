@@ -5,6 +5,7 @@ import 'categorical.dart';
 import 'tempo.dart';
 import 'errors.dart';
 import 'effective_mass.dart';
+import 'equipment.dart';
 import 'load_context.dart';
 import 'nearest_setting.dart';
 import 'load_arrangement.dart';
@@ -577,6 +578,7 @@ final class TrainingSet {
     SetObservations? observations,
     this.loadArrangement,
     this.performedOn,
+    List<PlateUsage> unavailablePlates = const [],
     Set<String> maxEffortMetrics = const {},
     Map<String, NumericObjective> criteria = const {},
     this.substitution,
@@ -588,6 +590,7 @@ final class TrainingSet {
        carriedTargets = Map.unmodifiable(carriedTargets),
        manualTargets = Set.unmodifiable(manualTargets),
        maxEffortMetrics = Set.unmodifiable(maxEffortMetrics),
+       unavailablePlates = List.unmodifiable(unavailablePlates),
        observations = observations == null || observations.isEmpty
            ? null
            : observations,
@@ -644,6 +647,15 @@ final class TrainingSet {
     }
     if (loadArrangement != null && status != SetStatus.completed)
       invalid('Plate arrangements record only for completed sets.');
+    if (this.unavailablePlates.isNotEmpty) {
+      final loading = performedOn?.snapshot.loading;
+      if (loading == null)
+        invalid(
+          'Unavailable plates need a performedOn instance with declared '
+          'loading.',
+        );
+      loading.without(this.unavailablePlates);
+    }
     if (this.criteria.length + this.maxEffortMetrics.length > 100)
       invalid('Too many set objectives.');
     for (final entry in this.criteria.entries) {
@@ -688,6 +700,17 @@ final class TrainingSet {
   /// the pound one was taken. Frozen at the published revision; progression
   /// treats the instance's nearest setting to the target as following it.
   final LoadInstanceReference? performedOn;
+
+  /// Plates of [performedOn]'s stock that were not available for this set
+  /// (the micro-plate bag left at home). The nearest setting is then judged
+  /// on the remaining stock.
+  final List<PlateUsage> unavailablePlates;
+
+  /// The loading this set could use: [performedOn]'s without
+  /// [unavailablePlates], or null when nothing is missing.
+  LoadingSpec? get availableLoading => unavailablePlates.isEmpty
+      ? null
+      : performedOn!.snapshot.loading!.without(unavailablePlates);
   final Set<String> maxEffortMetrics;
   final Map<String, NumericObjective> criteria;
 
@@ -728,6 +751,7 @@ final class TrainingSet {
       observations: observations,
       loadArrangement: loadArrangement,
       performedOn: performedOn,
+      unavailablePlates: unavailablePlates,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
@@ -801,6 +825,7 @@ final class TrainingSet {
       observations: this.observations,
       loadArrangement: loadArrangement,
       performedOn: performedOn,
+      unavailablePlates: unavailablePlates,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
@@ -853,6 +878,7 @@ final class TrainingSet {
       observations: replacement,
       loadArrangement: loadArrangement,
       performedOn: performedOn,
+      unavailablePlates: unavailablePlates,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
@@ -865,7 +891,10 @@ final class TrainingSet {
   /// Records (or with null clears) the instance this set is performed on.
   /// A recorded plate arrangement belongs to the previous instance, so a
   /// change requires clearing it first.
-  TrainingSet performOn(LoadInstanceReference? instance) {
+  TrainingSet performOn(
+    LoadInstanceReference? instance, {
+    List<PlateUsage> unavailablePlates = const [],
+  }) {
     if (substitution != null)
       invalid('A substituted set names its own equipment, not an instance.');
     if (loadArrangement != null &&
@@ -886,6 +915,7 @@ final class TrainingSet {
       observations: observations,
       loadArrangement: loadArrangement,
       performedOn: instance,
+      unavailablePlates: instance == null ? const [] : unavailablePlates,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
@@ -915,6 +945,7 @@ final class TrainingSet {
       observations: observations,
       loadArrangement: replacement,
       performedOn: performedOn,
+      unavailablePlates: unavailablePlates,
       maxEffortMetrics: maxEffortMetrics,
       criteria: criteria,
       substitution: substitution,
@@ -943,6 +974,8 @@ final class TrainingSet {
     if (observations != null) 'observations': observations!.toJson(),
     if (loadArrangement != null) 'loadArrangement': loadArrangement!.toJson(),
     if (performedOn != null) 'performedOn': performedOn!.toJson(),
+    if (unavailablePlates.isNotEmpty)
+      'unavailablePlates': [for (final p in unavailablePlates) p.toJson()],
     if (maxEffortMetrics.isNotEmpty || criteria.isNotEmpty)
       'objectives': objectivesJson,
     if (substitution != null) 'substitution': substitution!.toJson(),
@@ -1038,7 +1071,9 @@ final class TrainingSession {
         invalid(
           'A plate arrangement requires an instance with declared loading.',
         );
-      arrangement.validateAgainst(instance.snapshot.loading!);
+      arrangement.validateAgainst(
+        set.availableLoading ?? instance.snapshot.loading!,
+      );
     }
   }
 

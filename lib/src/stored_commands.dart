@@ -647,6 +647,7 @@ Future<Map<String, Object?>> executeStored(
       'expectedVersion',
       'setId',
       'instanceId',
+      'unavailablePlates',
       'applyToRemaining',
       'confirm',
     },
@@ -2600,6 +2601,13 @@ Future<Map<String, Object?>> executeStored(
               s,
               setId,
               reference,
+              unavailablePlates: [
+                for (final p
+                    in request['unavailablePlates'] == null
+                        ? const <Object?>[]
+                        : jsonList(request, 'unavailablePlates'))
+                  PlateUsage.fromJson(p),
+              ],
               applyToRemaining: flag('applyToRemaining'),
               confirm: flag('confirm'),
             ),
@@ -2612,7 +2620,11 @@ Future<Map<String, Object?>> executeStored(
                 for (final set in session.sets)
                   if (set.performedOn?.instanceId == reference.instanceId)
                     for (final entry in set.suggested.entries)
-                      if (nearestSettings(reference.snapshot, entry.value)
+                      if (nearestSettings(
+                            reference.snapshot,
+                            entry.value,
+                            loading: set.availableLoading,
+                          )
                           case final settings when settings.isNotEmpty)
                         {
                           'setId': set.id,

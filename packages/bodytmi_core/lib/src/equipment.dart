@@ -1,5 +1,6 @@
 import 'catalog_labels.dart';
 import 'errors.dart';
+import 'load_arrangement.dart';
 import 'load_convention.dart';
 import 'numeric_scale.dart';
 import 'quantity.dart';
@@ -123,6 +124,38 @@ final class LoadingSpec {
   final List<LoadingComponent> components;
   final LoadingChannel channel;
   final List<PlateStock> plates;
+
+  /// This loading with [missing] plates taken out of stock, e.g. the micro
+  /// plates left at home. Each missing denomination must be declared stock
+  /// and at most its count, and at least one plate must remain.
+  LoadingSpec without(List<PlateUsage> missing) {
+    final remaining = {
+      for (final plate in plates) plate.mass.value.toString(): plate.count,
+    };
+    final seen = <String>{};
+    for (final usage in missing) {
+      final key = usage.mass.value.toString();
+      if (!seen.add(key))
+        invalid('Unavailable plate denominations must be distinct.');
+      final count = remaining[key];
+      if (count == null)
+        invalid(
+          'Unavailable plate ${usage.mass.enteredValue} '
+          '${usage.mass.enteredUnit.name} is not in the declared stock.',
+        );
+      if (usage.count > count)
+        invalid('More unavailable plates than declared: $count.');
+      remaining[key] = count - usage.count;
+    }
+    final kept = [
+      for (final plate in plates)
+        if (remaining[plate.mass.value.toString()]! > 0)
+          PlateStock._(plate.mass, remaining[plate.mass.value.toString()]!),
+    ];
+    if (kept.isEmpty)
+      invalid('At least one plate denomination must remain available.');
+    return LoadingSpec._(components, channel, List.unmodifiable(kept));
+  }
 
   /// Exact canonical mass carried by the components that are included.
   Decimal get tareMass {
