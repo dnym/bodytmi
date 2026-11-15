@@ -280,6 +280,7 @@ final class StoredTrainingService {
     String templateId,
     int number,
     DateTime startedAt, {
+    int startOffsetMinutes = 0,
     ProgramRun? programRun,
     Map<String, BodyMassOverride> bodyMassOverrides = const {},
     DerivedPlanRef? derivedPlan,
@@ -297,6 +298,7 @@ final class StoredTrainingService {
           existing.definition.id != templateId ||
           existing.revision.number != number ||
           existing.startedAt != startedAt ||
+          existing.startOffsetMinutes != startOffsetMinutes ||
           !sameBodyMassOverrides(existing, bodyMassOverrides) ||
           !sameLoadInputs(existing, loadBindings, loadConventions) ||
           !sameVariantRequest(existing, variantSettings) ||
@@ -458,6 +460,7 @@ final class StoredTrainingService {
           if (!r.deleted) r.measurement,
       ],
       startedAt: startedAt,
+      startOffsetMinutes: startOffsetMinutes,
       loadInstances: await _resolveLoadBindings(
         prescription,
         loadBindings,
@@ -671,6 +674,8 @@ final class StoredTrainingService {
       revision: next.revision,
       variantSelections: next.variantSelections,
       startedAt: next.startedAt,
+      startOffsetMinutes: next.startOffsetMinutes,
+      finishOffsetMinutes: next.finishOffsetMinutes,
       sets: finalSets,
       bodyMassInputs: next.bodyMassInputs,
       loadInputs: next.loadInputs,
@@ -926,6 +931,7 @@ final class StoredTrainingService {
       revision: current.revision,
       variantSelections: current.variantSelections,
       startedAt: current.startedAt,
+      startOffsetMinutes: current.startOffsetMinutes,
       sets: result.$1,
       bodyMassInputs: current.bodyMassInputs,
       loadInputs: current.loadInputs,
@@ -934,6 +940,7 @@ final class StoredTrainingService {
       prescriptionOverrides: current.prescriptionOverrides,
       status: current.status,
       finishedAt: current.finishedAt,
+      finishOffsetMinutes: current.finishOffsetMinutes,
       contentVersion: current.contentVersion + 1,
     );
     final sessions = await repository.sessions();
@@ -1458,6 +1465,7 @@ void requireFrozenPrescriptionOverrides(
     sessionId: session.id,
     revision: session.revision,
     startedAt: session.startedAt,
+    startOffsetMinutes: session.startOffsetMinutes,
   );
   final expected = applyPrescriptionOverrides(
     session.definition,

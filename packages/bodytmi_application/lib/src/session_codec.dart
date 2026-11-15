@@ -141,6 +141,7 @@ TrainingSession _sessionFromJson(Object? input) {
   final id = identifier(json, 'id');
   final revision = WorkoutRevision.fromJson(json['revision']);
   final startedAt = parseInstant(json['startedAt'], 'startedAt');
+  final startOffset = parseOffsetMinutes(json['startedAt'], 'startedAt');
   final status = switch (json['status']) {
     'active' => SessionStatus.active,
     'finalized' => SessionStatus.finalized,
@@ -149,6 +150,9 @@ TrainingSession _sessionFromJson(Object? input) {
   final finishedAt = json['finishedAt'] == null
       ? null
       : parseInstant(json['finishedAt'], 'finishedAt');
+  final finishOffset = finishedAt == null
+      ? 0
+      : parseOffsetMinutes(json['finishedAt'], 'finishedAt');
   if ((status == SessionStatus.finalized) != (finishedAt != null) ||
       (finishedAt?.isBefore(startedAt) ?? false))
     invalid('Inconsistent session finish state/time.');
@@ -444,6 +448,7 @@ TrainingSession _sessionFromJson(Object? input) {
     revision: revision,
     variantSelections: variantSelections,
     startedAt: startedAt,
+    startOffsetMinutes: startOffset,
     sets: sets,
     extraSets: [
       if (json.containsKey('extraSets'))
@@ -470,6 +475,7 @@ TrainingSession _sessionFromJson(Object? input) {
     prescriptionOverrides: prescriptionOverrides,
     status: status,
     finishedAt: finishedAt,
+    finishOffsetMinutes: finishOffset,
     contentVersion: _positive(json, 'contentVersion'),
   );
   validateDerivedPlanSession(session);

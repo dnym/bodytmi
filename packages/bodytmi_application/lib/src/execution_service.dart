@@ -411,12 +411,14 @@ final class ExecutionService {
           revision: current.revision,
           variantSelections: current.variantSelections,
           startedAt: current.startedAt,
+          startOffsetMinutes: current.startOffsetMinutes,
           sets: [
             for (final set in current.sets)
               planned.contains(set.id) ? set.skip(confirm: true) : set,
           ],
           status: current.status,
           finishedAt: current.finishedAt,
+          finishOffsetMinutes: current.finishOffsetMinutes,
           contentVersion: current.contentVersion + 1,
           bodyMassInputs: current.bodyMassInputs,
           loadInputs: current.loadInputs,

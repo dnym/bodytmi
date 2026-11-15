@@ -4,6 +4,7 @@ import 'body_mass_input.dart';
 import 'categorical.dart';
 import 'tempo.dart';
 import 'errors.dart';
+import 'instant.dart';
 import 'effective_mass.dart';
 import 'equipment.dart';
 import 'load_context.dart';
@@ -990,10 +991,12 @@ final class TrainingSession {
     required this.id,
     required this.revision,
     required this.startedAt,
+    required this.startOffsetMinutes,
     required List<TrainingSet> sets,
     required List<TrainingSet> extraSets,
     this.status = SessionStatus.active,
     this.finishedAt,
+    required this.finishOffsetMinutes,
     this.contentVersion = 1,
     Map<String, BodyMassInputSnapshot> bodyMassInputs = const {},
     Map<String, BodyMassOverride>? initialBodyMassOverrides,
@@ -1013,6 +1016,10 @@ final class TrainingSession {
        initialBodyMassOverrides = initialBodyMassOverrides == null
            ? null
            : Map.unmodifiable(initialBodyMassOverrides) {
+    checkOffsetMinutes(startOffsetMinutes, 'startedAt');
+    checkOffsetMinutes(finishOffsetMinutes, 'finishedAt');
+    if (finishedAt == null && finishOffsetMinutes != 0)
+      invalid('An unfinished session has no finish offset.');
     definition = revision.definition.resolveVariants(this.variantSelections);
     final expected = [
       for (final o in definition.plan.occurrences())
@@ -1099,6 +1106,17 @@ final class TrainingSession {
   late final WorkoutDefinition definition;
   final DateTime startedAt;
   final DateTime? finishedAt;
+
+  /// UTC offsets the start/finish were entered with, in minutes east of UTC.
+  /// The instants stay authoritative for ordering; offsets keep the local
+  /// wall-clock time of the workout.
+  final int startOffsetMinutes, finishOffsetMinutes;
+
+  /// [startedAt]/[finishedAt] in the local time they were entered with.
+  String get startedAtText => formatInstant(startedAt, startOffsetMinutes);
+  String? get finishedAtText => finishedAt == null
+      ? null
+      : formatInstant(finishedAt!, finishOffsetMinutes);
   final List<TrainingSet> sets;
 
   /// Sets logged outside the plan (a starting-weight ramp, an extra
@@ -1176,12 +1194,14 @@ final class TrainingSession {
       id: id,
       revision: revision,
       startedAt: startedAt,
+      startOffsetMinutes: startOffsetMinutes,
       sets: [for (final set in sets) set.id == updated.id ? updated : set],
       extraSets: [
         for (final set in extraSets) set.id == updated.id ? updated : set,
       ],
       status: status,
       finishedAt: finishedAt,
+      finishOffsetMinutes: finishOffsetMinutes,
       contentVersion: contentVersion + 1,
       bodyMassInputs: bodyMassInputs,
       loadInputs: loadInputs,
@@ -1192,7 +1212,7 @@ final class TrainingSession {
     );
   }
 
-  TrainingSession finish(DateTime at) {
+  TrainingSession finish(DateTime at, {int offsetMinutes = 0}) {
     if (status == SessionStatus.finalized) return this;
     if (at.isBefore(startedAt))
       invalid('Finish time cannot precede start time.');
@@ -1202,6 +1222,7 @@ final class TrainingSession {
       id: id,
       revision: revision,
       startedAt: startedAt,
+      startOffsetMinutes: startOffsetMinutes,
       sets: sets,
       extraSets: extraSets,
       bodyMassInputs: bodyMassInputs,
@@ -1211,6 +1232,7 @@ final class TrainingSession {
       prescriptionOverrides: prescriptionOverrides,
       status: SessionStatus.finalized,
       finishedAt: at,
+      finishOffsetMinutes: offsetMinutes,
       contentVersion: contentVersion + 1,
       variantSelections: variantSelections,
     );
@@ -1227,8 +1249,8 @@ final class TrainingSession {
     'schemaVersion': 1,
     'id': id,
     'revision': revision.toJson(),
-    'startedAt': startedAt.toUtc().toIso8601String(),
-    if (finishedAt != null) 'finishedAt': finishedAt!.toUtc().toIso8601String(),
+    'startedAt': startedAtText,
+    if (finishedAt != null) 'finishedAt': finishedAtText,
     'status': status.name,
     'contentVersion': contentVersion,
     if (variantSelections.isNotEmpty) 'variantSelections': variantSelections,

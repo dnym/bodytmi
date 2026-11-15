@@ -369,9 +369,11 @@ void analyticsTests() {
             revision: session.revision,
             variantSelections: session.variantSelections,
             startedAt: session.startedAt,
+            startOffsetMinutes: session.startOffsetMinutes,
             sets: session.sets,
             status: session.status,
             finishedAt: session.finishedAt,
+            finishOffsetMinutes: session.finishOffsetMinutes,
           ),
       ];
       rejects(() => _analytics.series(many, metric: 'reps'));

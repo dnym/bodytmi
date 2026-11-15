@@ -96,8 +96,8 @@ final class TrainingAnalytics {
         'revision': session.revision.number,
       },
       'status': session.status.name,
-      'startedAt': session.startedAt.toUtc().toIso8601String(),
-      'finishedAt': session.finishedAt?.toUtc().toIso8601String(),
+      'startedAt': session.startedAtText,
+      'finishedAt': session.finishedAtText,
       'elapsed': session.finishedAt == null
           ? null
           : Quantity(

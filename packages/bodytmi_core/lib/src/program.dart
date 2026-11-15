@@ -470,6 +470,7 @@ final class ProgramRun {
     required this.id,
     required this.program,
     required this.startedAt,
+    this.startOffsetMinutes = 0,
     this.loop = true,
     this.cursor = 0,
     this.contentVersion = 1,
@@ -477,6 +478,7 @@ final class ProgramRun {
     List<RunJump> jumps = const [],
   }) : jumps = List.unmodifiable(jumps) {
     identifier({'id': id}, 'id');
+    checkOffsetMinutes(startOffsetMinutes, 'startedAt');
     final days = program.definition.dayCount;
     final ids = <String>{};
     for (var i = 0; i < this.jumps.length; i++) {
@@ -518,6 +520,7 @@ final class ProgramRun {
       id: identifier(j, 'id'),
       program: ProgramRevision.fromJson(j['program']),
       startedAt: parseInstant(j['startedAt'], 'startedAt'),
+      startOffsetMinutes: parseOffsetMinutes(j['startedAt'], 'startedAt'),
       loop: loop,
       cursor: positiveProgramInt(j, 'cursor', min: 0),
       contentVersion: positiveProgramInt(j, 'contentVersion'),
@@ -531,6 +534,9 @@ final class ProgramRun {
   final String id, status;
   final ProgramRevision program;
   final DateTime startedAt;
+
+  /// The offset [startedAt] was entered with (minutes east of UTC).
+  final int startOffsetMinutes;
   final bool loop;
   final int cursor, contentVersion;
 
@@ -569,6 +575,7 @@ final class ProgramRun {
       id: id,
       program: program,
       startedAt: startedAt,
+      startOffsetMinutes: startOffsetMinutes,
       loop: loop,
       cursor: next,
       contentVersion: contentVersion + 1,
@@ -584,6 +591,7 @@ final class ProgramRun {
       id: id,
       program: program,
       startedAt: startedAt,
+      startOffsetMinutes: startOffsetMinutes,
       loop: loop,
       cursor: cursor,
       contentVersion: contentVersion + 1,
@@ -598,6 +606,7 @@ final class ProgramRun {
     id: id,
     program: revision,
     startedAt: startedAt,
+    startOffsetMinutes: startOffsetMinutes,
     loop: loop,
     cursor: cursor,
     contentVersion: contentVersion + 1,
@@ -608,7 +617,7 @@ final class ProgramRun {
   Map<String, Object?> toJson() => {
     'id': id,
     'program': program.toJson(),
-    'startedAt': startedAt.toUtc().toIso8601String(),
+    'startedAt': formatInstant(startedAt, startOffsetMinutes),
     'loop': loop,
     'cursor': cursor,
     'contentVersion': contentVersion,

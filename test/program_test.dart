@@ -1315,6 +1315,8 @@ void programTests() {
               revision: s.revision,
               variantSelections: s.variantSelections,
               startedAt: s.startedAt,
+              startOffsetMinutes: s.startOffsetMinutes,
+              finishOffsetMinutes: s.finishOffsetMinutes,
               sets: s.sets,
             ),
           ),

@@ -524,6 +524,10 @@ final class Commands {
               sessionId: identifier(request, 'id'),
               revision: startRevision,
               startedAt: parseInstant(request['startedAt'], 'startedAt'),
+              startOffsetMinutes: parseOffsetMinutes(
+                request['startedAt'],
+                'startedAt',
+              ),
               variantSelections: startRevision.definition.variantSelections(
                 requestedVariants,
               ),
@@ -991,9 +995,15 @@ final class Commands {
             .toJson();
       case 'session finish':
         keys({'session', 'finishedAt'});
-        data = sessionFromJson(
-          request['session'],
-        ).finish(parseInstant(request['finishedAt'], 'finishedAt')).toJson();
+        data = sessionFromJson(request['session'])
+            .finish(
+              parseInstant(request['finishedAt'], 'finishedAt'),
+              offsetMinutes: parseOffsetMinutes(
+                request['finishedAt'],
+                'finishedAt',
+              ),
+            )
+            .toJson();
       case 'progression evaluate':
         keys({'rule', 'current', 'results', 'state', 'observations', 'stage'});
         final state = jsonObject(

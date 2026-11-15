@@ -1631,6 +1631,10 @@ Future<Map<String, Object?>> executeStored(
             identifier(request, 'programId'),
             integer('revision'),
             parseInstant(request['startedAt'], 'startedAt'),
+            offsetMinutes: parseOffsetMinutes(
+              request['startedAt'],
+              'startedAt',
+            ),
             loop: request.containsKey('loop')
                 ? flag('loop')
                 : invalid(
@@ -1673,6 +1677,7 @@ Future<Map<String, Object?>> executeStored(
           integer('expectedVersion'),
           identifier(request, 'id'),
           parseInstant(request['startedAt'], 'startedAt'),
+          offsetMinutes: parseOffsetMinutes(request['startedAt'], 'startedAt'),
           bodyMassOverrides: bodyMassOverridesFromJson(
             request['bodyMassOverrides'],
           ),
@@ -1933,6 +1938,10 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'templateId'),
           integer('revision'),
           parseInstant(request['startedAt'], 'startedAt'),
+          startOffsetMinutes: parseOffsetMinutes(
+            request['startedAt'],
+            'startedAt',
+          ),
           bodyMassOverrides: bodyMassOverridesFromJson(
             request['bodyMassOverrides'],
           ),
@@ -2764,10 +2773,14 @@ Future<Map<String, Object?>> executeStored(
         )).toJson();
       case 'store finish':
         final finishedAt = parseInstant(request['finishedAt'], 'finishedAt');
+        final finishOffset = parseOffsetMinutes(
+          request['finishedAt'],
+          'finishedAt',
+        );
         data = (await service.edit(
           identifier(request, 'id'),
           integer('expectedVersion'),
-          (s) => s.finish(finishedAt),
+          (s) => s.finish(finishedAt, offsetMinutes: finishOffset),
         )).toJson();
       case 'store snapshot':
         final destination = requiredString(request, 'destination');

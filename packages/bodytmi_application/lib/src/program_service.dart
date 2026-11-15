@@ -193,6 +193,7 @@ final class ProgramService {
     int number,
     DateTime at, {
     required bool loop,
+    int offsetMinutes = 0,
   }) => repository.transaction(() async {
     final existing = (await repository.programRuns())
         .where((r) => r.id == id)
@@ -201,6 +202,7 @@ final class ProgramService {
       if (existing.program.definition.id != programId ||
           existing.program.number != number ||
           existing.startedAt != at ||
+          existing.startOffsetMinutes != offsetMinutes ||
           existing.loop != loop)
         programConflict('Run identity already exists with other inputs.');
       return existing;
@@ -209,6 +211,7 @@ final class ProgramService {
       id: id,
       program: await revision(programId, number),
       startedAt: at,
+      startOffsetMinutes: offsetMinutes,
       loop: loop,
     );
     await repository.saveProgramRun(next);
@@ -376,6 +379,7 @@ final class ProgramService {
     int expectedVersion,
     String sessionId,
     DateTime at, {
+    int offsetMinutes = 0,
     Map<String, BodyMassOverride> bodyMassOverrides = const {},
     DerivedPlanRef? derivedPlan,
     Map<String, String> loadBindings = const {},
@@ -399,6 +403,7 @@ final class ProgramService {
       final effectivePlan = pinned ?? derivedPlan;
       if (existing.runId != runId ||
           session.startedAt != at ||
+          session.startOffsetMinutes != offsetMinutes ||
           !sameBodyMassOverrides(session, bodyMassOverrides) ||
           !sameLoadInputs(session, loadBindings, loadConventions) ||
           canonicalJson(session.derivedPlanInput?.reference.toJson()) !=
@@ -434,6 +439,7 @@ final class ProgramService {
       day.day.templateId,
       day.day.revision,
       at,
+      startOffsetMinutes: offsetMinutes,
       programRun: current,
       bodyMassOverrides: bodyMassOverrides,
       derivedPlan: pinned ?? derivedPlan,
