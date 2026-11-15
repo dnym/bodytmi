@@ -189,7 +189,7 @@ final class ProgramService {
     String programId,
     int number,
     DateTime at, {
-    bool loop = true,
+    required bool loop,
   }) => repository.transaction(() async {
     final existing = (await repository.programRuns())
         .where((r) => r.id == id)

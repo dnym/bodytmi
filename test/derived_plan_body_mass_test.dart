@@ -765,7 +765,7 @@ void derivedPlanBodyMassTests() {
         0,
       );
       for (final run in ['strength', 'cardio']) {
-        await programs.create(run, 'program', 1, instant(1));
+        await programs.create(run, 'program', 1, instant(1), loop: true);
       }
       final a = await programs.start(
         'strength',

@@ -712,7 +712,7 @@ void incrementBandsTests() {
         0,
       );
       for (final run in ['strength', 'cardio'])
-        await programs.create(run, 'shared', 1, instant(1));
+        await programs.create(run, 'shared', 1, instant(1), loop: true);
       for (final (run, step) in [('strength', '2'), ('cardio', '4')]) {
         final s = await _finish(store, '$run-one', 1, run: run);
         final rule = _rule();

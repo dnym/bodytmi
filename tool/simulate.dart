@@ -2085,7 +2085,7 @@ Future<void> setup() async {
     'programId': 'c25k',
     'revision': 1,
     'startedAt': t0,
-    // Omitting loop makes a run loop; C25K is a finite program.
+    // C25K is a finite program: the run ends after day 27.
     'loop': false,
   });
   await ok('run create', {

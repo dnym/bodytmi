@@ -588,7 +588,7 @@ void timingTests() {
         }),
         0,
       );
-      await programs.create('run', 'program', 1, instant(1));
+      await programs.create('run', 'program', 1, instant(1), loop: true);
       final session = await programs.start(
         'run',
         1,

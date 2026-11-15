@@ -469,7 +469,7 @@ void derivedTargetGraphTests() {
         ('run-a', 'session-a', '45'),
         ('run-b', 'session-b', '110'),
       ]) {
-        await programs.create(item.$1, 'two-runs', 1, instant(1));
+        await programs.create(item.$1, 'two-runs', 1, instant(1), loop: true);
         final session = await programs.start(item.$1, 1, item.$2, instant(4));
         await StoredTrainingService(store).edit(
           session.id,

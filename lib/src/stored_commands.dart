@@ -1600,7 +1600,12 @@ Future<Map<String, Object?>> executeStored(
             identifier(request, 'programId'),
             integer('revision'),
             parseInstant(request['startedAt'], 'startedAt'),
-            loop: request.containsKey('loop') ? flag('loop') : true,
+            loop: request.containsKey('loop')
+                ? flag('loop')
+                : invalid(
+                    'loop is required: true repeats the program, false ends '
+                    'the run after its last day.',
+                  ),
           ),
         );
       case 'run list':

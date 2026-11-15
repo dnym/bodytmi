@@ -69,7 +69,7 @@ void phaseOverrideTests() {
         await training.publish(definition(), 0);
         final programs = ProgramService(store);
         await programs.publish(ProgramDefinition.fromJson(_program), 0);
-        await programs.create('run', 'phased', 1, instant(1));
+        await programs.create('run', 'phased', 1, instant(1), loop: true);
 
         final schedule = await programs.schedule(
           'run',

@@ -939,7 +939,7 @@ void derivedPlanSessionTests() {
         0,
       );
       for (final run in ['strength', 'cardio']) {
-        await programs.create(run, 'program', 1, instant(1));
+        await programs.create(run, 'program', 1, instant(1), loop: true);
         final source = await programs.start(run, 1, '$run-source', instant(1));
         await training.edit(source.id, source.contentVersion, (session) {
           for (final set in session.sets) {
@@ -1392,7 +1392,13 @@ void derivedPlanSessionTests() {
           .derivedPlan;
       sameJson(pinned!.toJson(), _ref.toJson());
       for (final run in ['strength', 'cardio']) {
-        await programs.create(run, 'planned-program', 1, instant(1));
+        await programs.create(
+          run,
+          'planned-program',
+          1,
+          instant(1),
+          loop: true,
+        );
         final schedule = await programs.schedule(run, count: 1);
         final scheduleDay = jsonObject(
           jsonObject(jsonList(schedule, 'days').single, 'entry')['day'],
@@ -1516,7 +1522,7 @@ void derivedPlanSessionTests() {
         0,
       );
       for (final run in ['strength', 'cardio']) {
-        await programs.create(run, 'two-days', 1, instant(1));
+        await programs.create(run, 'two-days', 1, instant(1), loop: true);
         final source = await programs.start(run, 1, '$run-source', instant(1));
         await training.edit(source.id, source.contentVersion, (s) {
           for (final set in s.sets) {
@@ -1685,7 +1691,7 @@ void derivedPlanSessionTests() {
         0,
       );
       for (final run in ['run-a', 'run-b']) {
-        await programs.create(run, 'program', 1, instant(1));
+        await programs.create(run, 'program', 1, instant(1), loop: true);
       }
       final a = await programs.start(
         'run-a',

@@ -602,7 +602,7 @@ void numericScaleTests() {
         0,
       );
       for (final run in ['strength', 'cardio'])
-        await programs.create(run, 'shared', 1, instant(1));
+        await programs.create(run, 'shared', 1, instant(1), loop: true);
       for (final (day, run, rule, native) in [
         (1, 'strength', _rule(), '15'),
         (2, 'cardio', _rule(scale: _scale(values: [10, 12, 14])), '12'),
@@ -940,7 +940,7 @@ void fixedRangeTests() {
         0,
       );
       for (final run in ['strength', 'cardio'])
-        await programs.create(run, 'shared', 1, instant(1));
+        await programs.create(run, 'shared', 1, instant(1), loop: true);
       final rule = _rule(scale: _range());
       final service = StoredProgressionService(store);
       for (var day = 1; day <= 4; day++) {

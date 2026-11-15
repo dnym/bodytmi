@@ -428,7 +428,7 @@ void sessionBodyMassTests() {
         0,
       );
       for (final run in ['strength', 'cardio']) {
-        await programs.create(run, 'program', 1, instant(1));
+        await programs.create(run, 'program', 1, instant(1), loop: true);
       }
       final a = await programs.start(
         'strength',
@@ -845,7 +845,7 @@ void sessionBodyMassTests() {
         0,
       );
       for (final run in ['strength', 'cardio']) {
-        await programs.create(run, 'program', 1, instant(1));
+        await programs.create(run, 'program', 1, instant(1), loop: true);
       }
       final strength = await programs.start(
         'strength',
@@ -1204,7 +1204,7 @@ void sessionBodyMassTests() {
       });
       final programs = ProgramService(store);
       await programs.publish(program, 0);
-      await programs.create('run', 'program', 1, instant(10));
+      await programs.create('run', 'program', 1, instant(10), loop: true);
       final overrides = {
         'bench-heavy': _override({'measurementId': 'training'}),
       };

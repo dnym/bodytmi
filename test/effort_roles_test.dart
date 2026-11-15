@@ -519,7 +519,7 @@ void effortRolesTests() {
             }),
             0,
           );
-          await programs.create('$name-run', name, 1, instant(1));
+          await programs.create('$name-run', name, 1, instant(1), loop: true);
           var session = await programs.start(
             '$name-run',
             1,
@@ -1056,7 +1056,7 @@ void effortRolesTests() {
             }),
             0,
           );
-          await programs.create('$name-run', name, 1, instant(1));
+          await programs.create('$name-run', name, 1, instant(1), loop: true);
         }
         var strength = await programs.start(
           'strength-run',

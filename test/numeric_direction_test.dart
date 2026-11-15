@@ -477,7 +477,7 @@ void numericDirectionTests() {
         0,
       );
       for (final run in ['strength', 'cardio'])
-        await programs.create(run, 'shared', 1, instant(1));
+        await programs.create(run, 'shared', 1, instant(1), loop: true);
       final down = _rule();
       final up = {
         ..._rule(),

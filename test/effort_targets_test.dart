@@ -528,7 +528,7 @@ void effortTargetsTests() {
         0,
       );
       for (final run in ['strength', 'cardio'])
-        await programs.create(run, 'shared', 1, instant(1));
+        await programs.create(run, 'shared', 1, instant(1), loop: true);
       final s = await _finish(store, 'strength-one', 1, run: 'strength');
       final p = await _propose(store, s.id);
       final progression = StoredProgressionService(store);

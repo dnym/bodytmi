@@ -179,7 +179,7 @@ void runUpgradeTests() {
         ),
         0,
       );
-      await programs.create('run-1', 'upgrade-program', 1, _at(1));
+      await programs.create('run-1', 'upgrade-program', 1, _at(1), loop: true);
       final run = await advance(store, 'run-1', 'session-a', 1);
 
       // Changing a completed day is allowed (covered by the looping-cycle
@@ -276,7 +276,13 @@ void runUpgradeTests() {
         ),
         4,
       );
-      await programs.create('paused-run', 'upgrade-program', 4, _at(1));
+      await programs.create(
+        'paused-run',
+        'upgrade-program',
+        4,
+        _at(1),
+        loop: true,
+      );
       final fresh = await programs.run('paused-run');
       await programs.skip('paused-run', fresh.contentVersion, 'skip-a', _at(2));
       await programs.status(
@@ -313,7 +319,7 @@ void runUpgradeTests() {
         ),
         0,
       );
-      await programs.create('run-1', 'upgrade-program', 1, _at(1));
+      await programs.create('run-1', 'upgrade-program', 1, _at(1), loop: true);
       // One full cycle and the next day A: every day has run at least once.
       await advance(store, 'run-1', 'a-1', 1);
       await advance(store, 'run-1', 'b-1', 2);
@@ -421,7 +427,13 @@ void runUpgradeTests() {
       );
 
       // Looping runs keep the cycle but may change the cycle entirely.
-      await programs.create('looping', 'upgrade-program', 3, _at(4));
+      await programs.create(
+        'looping',
+        'upgrade-program',
+        3,
+        _at(4),
+        loop: true,
+      );
       final loop = await advance(store, 'looping', 'session-c', 5);
       equal(loop.cursor, 1);
       await programs.publish(
@@ -453,7 +465,7 @@ void runUpgradeTests() {
         ),
         0,
       );
-      await programs.create('run-1', 'upgrade-program', 1, _at(1));
+      await programs.create('run-1', 'upgrade-program', 1, _at(1), loop: true);
       var run = await programs.run('run-1');
       await programs.publish(
         ProgramDefinition.fromJson(
@@ -507,7 +519,7 @@ void runUpgradeTests() {
         ),
         0,
       );
-      await programs.create('run-1', 'upgrade-program', 1, _at(1));
+      await programs.create('run-1', 'upgrade-program', 1, _at(1), loop: true);
       final run = await advance(store, 'run-1', 'session-a', 1);
       await programs.publish(
         ProgramDefinition.fromJson(

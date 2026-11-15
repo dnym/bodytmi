@@ -554,7 +554,7 @@ void maxEffortTests() {
         0,
       );
       for (final run in ['strength', 'cardio'])
-        await programs.create(run, 'shared', 1, instant(1));
+        await programs.create(run, 'shared', 1, instant(1), loop: true);
       final training = StoredTrainingService(store);
       final progression = StoredProgressionService(store);
       for (final (run, reps, outcome) in [

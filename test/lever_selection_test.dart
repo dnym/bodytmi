@@ -479,7 +479,7 @@ void leverSelectionTests() {
         0,
       );
       for (final run in ['strength', 'cardio'])
-        await programs.create(run, 'shared', 1, instant(1));
+        await programs.create(run, 'shared', 1, instant(1), loop: true);
       final chosen = _rule(mode: 'chosen');
       final priority = {
         ..._rule(),

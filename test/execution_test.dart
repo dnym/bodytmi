@@ -393,7 +393,7 @@ void executionTests() {
           }),
           0,
         );
-        await programs.create('$name-run', name, 1, instant(1));
+        await programs.create('$name-run', name, 1, instant(1), loop: true);
       }
       final strength = await programs.start(
         'strength-run',
@@ -867,7 +867,7 @@ void executionTests() {
           }),
           0,
         );
-        await programs.create('$id-run', id, 1, instant(1));
+        await programs.create('$id-run', id, 1, instant(1), loop: true);
         await programs.start('$id-run', 1, id, instant(1));
         await _start(store, id: '$id-execution', session: id);
       }
@@ -1573,7 +1573,7 @@ void executionTests() {
           }),
           0,
         );
-        await programs.create('$id-run', id, 1, instant(1));
+        await programs.create('$id-run', id, 1, instant(1), loop: true);
         await programs.start('$id-run', 1, id, instant(1));
         await _start(store, id: '$id-execution', session: id);
       }

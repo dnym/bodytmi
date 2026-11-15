@@ -395,7 +395,7 @@ void performanceDirectionTests() {
         0,
       );
       for (final run in ['strength', 'cardio'])
-        await programs.create(run, 'shared', 1, instant(1));
+        await programs.create(run, 'shared', 1, instant(1), loop: true);
       for (final (day, run, direction, values) in [
         (1, 'strength', 'higher', ['300', '300']),
         (2, 'cardio', 'lower', ['240', '240']),

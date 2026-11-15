@@ -684,7 +684,7 @@ void publishedObjectiveTests() {
           revision - 1,
         );
       for (final (run, revision) in [('strength', 1), ('cardio', 2)])
-        await programs.create(run, 'shared', revision, instant(1));
+        await programs.create(run, 'shared', revision, instant(1), loop: true);
       final training = StoredTrainingService(store);
       final progression = StoredProgressionService(store);
       for (final run in ['strength', 'cardio']) {

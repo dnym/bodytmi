@@ -569,7 +569,7 @@ void effortConditionsTests() {
         0,
       );
       for (final run in ['strength', 'cardio'])
-        await programs.create(run, 'shared', 1, instant(1));
+        await programs.create(run, 'shared', 1, instant(1), loop: true);
       final strength = await _finish(store, 'strength-one', 1, run: 'strength');
       final cardio = await _finish(store, 'cardio-one', 1, run: 'cardio');
       final p = await _propose(store, strength.id);

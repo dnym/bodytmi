@@ -44,8 +44,12 @@ Future<void> _setup(TrainingStore store) async {
   await StoredTrainingService(store).publish(definition(), 0);
   await ProgramService(store).publish(_program('strength'), 0);
   await ProgramService(store).publish(_program('cardio'), 0);
-  await ProgramService(store).create('strength-run', 'strength', 1, instant(1));
-  await ProgramService(store).create('cardio-run', 'cardio', 1, instant(1));
+  await ProgramService(
+    store,
+  ).create('strength-run', 'strength', 1, instant(1), loop: true);
+  await ProgramService(
+    store,
+  ).create('cardio-run', 'cardio', 1, instant(1), loop: true);
 }
 
 Future<TrainingSession> _start(
@@ -806,7 +810,13 @@ void programTests() {
           'child': nested['plan'],
         };
         await programs.publish(ProgramDefinition.fromJson(nested), 0);
-        await programs.create('nested-run', 'nested', 1, instant(1));
+        await programs.create(
+          'nested-run',
+          'nested',
+          1,
+          instant(1),
+          loop: true,
+        );
         final before = canonicalJson((await store.archive()).toJson());
         final schedule = await programs.schedule('nested-run', count: 6);
         equal(schedule['policy'], 'bodytmi-program-run-schedule/1');
@@ -1229,7 +1239,13 @@ void programTests() {
           service.status(run.id, complete.contentVersion, 'active'),
           throwsA(isA<BodyTmiException>()),
         );
-        final rotating = await service.create('rotation', 'p', 1, instant(1));
+        final rotating = await service.create(
+          'rotation',
+          'p',
+          1,
+          instant(1),
+          loop: true,
+        );
         for (var n = 0; n < 5; n++) {
           final r = await service.run(rotating.id);
           await service.skip(
@@ -1397,7 +1413,7 @@ void programTests() {
         final old = await _start(store, 'strength-run', 'old-pin', 1);
         equal(old.revision.number, 1);
         equal(old.sets.first.suggested['mass']!.value.toString(), '60');
-        await service.create('new-run', 'strength', 2, instant(1));
+        await service.create('new-run', 'strength', 2, instant(1), loop: true);
         final newer = await _start(store, 'new-run', 'new-pin', 2);
         equal(newer.revision.number, 2);
         equal(newer.sets.first.suggested['mass']!.value.toString(), '80');
@@ -1576,11 +1592,26 @@ void programTests() {
             'definition': _program(p).toJson(),
             'expectedRevision': 0,
           });
+          // Whether a run repeats is an explicit choice, never a default.
+          final implicit = await invoke(
+            ['run', 'create'],
+            jsonEncode({
+              'schemaVersion': 1,
+              'database': path,
+              'id': '$p-run',
+              'programId': p,
+              'revision': 1,
+              'startedAt': instant(1).toIso8601String(),
+            }),
+          );
+          equal(implicit.code, 2);
+          check(implicit.error.contains('loop is required'), implicit.error);
           await call('run create', {
             'id': '$p-run',
             'programId': p,
             'revision': 1,
             'startedAt': instant(1).toIso8601String(),
+            'loop': true,
           });
         }
         equal(

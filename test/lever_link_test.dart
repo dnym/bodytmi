@@ -431,16 +431,16 @@ void leverLinkTests() {
         );
         final doubleRun = await ProgramService(
           store,
-        ).create('double-run', 'link-cycle', 1, instant(2));
+        ).create('double-run', 'link-cycle', 1, instant(2), loop: true);
         final wideRun = await ProgramService(
           store,
-        ).create('wide-run', 'link-cycle', 1, instant(2));
+        ).create('wide-run', 'link-cycle', 1, instant(2), loop: true);
         final narrowRun = await ProgramService(
           store,
-        ).create('narrow-run', 'link-cycle', 1, instant(2));
+        ).create('narrow-run', 'link-cycle', 1, instant(2), loop: true);
         final thirdRun = await ProgramService(
           store,
-        ).create('third-run', 'link-cycle', 1, instant(2));
+        ).create('third-run', 'link-cycle', 1, instant(2), loop: true);
         // The same rule kind on both tracks links cleanly.  Run-scoped
         // contexts keep these tracks separate from the ad hoc probes above.
         await _logged(service, 'second', 2, programRun: doubleRun);

@@ -392,7 +392,7 @@ void storedThresholdTests() {
         0,
       );
       for (final id in ['strength', 'cardio'])
-        await programs.create(id, 'shared', 1, instant(1));
+        await programs.create(id, 'shared', 1, instant(1), loop: true);
       for (var day = 1; day <= 3; day++) {
         final s = await _finish(store, 'strength$day', day, run: 'strength');
         final p = await _propose(store, s.id, _rule());

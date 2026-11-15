@@ -407,7 +407,7 @@ void aggregationTests() {
         0,
       );
       for (final id in ['strength', 'cardio'])
-        await programs.create(id, 'shared', 1, instant(1));
+        await programs.create(id, 'shared', 1, instant(1), loop: true);
       final rule = _rule('total', totalFailure: true);
       final service = StoredProgressionService(store);
       for (final (day, values, expected, count) in [

@@ -408,7 +408,7 @@ void analyticsTests() {
           0,
         );
         for (final pair in [('strength', 'one', 1), ('cardio', 'two', 2)]) {
-          await programs.create(pair.$1, 'shared', 1, instant(1));
+          await programs.create(pair.$1, 'shared', 1, instant(1), loop: true);
           final s = await programs.start(pair.$1, 1, pair.$2, instant(pair.$3));
           await training.edit(
             s.id,
