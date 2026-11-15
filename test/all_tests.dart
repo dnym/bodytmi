@@ -74,6 +74,7 @@ import 'staged_threshold_test.dart';
 import 'tempo_lever_test.dart';
 import 'structures_trace_test.dart';
 import 'wave_test.dart';
+import 'catalog_acceptance_test.dart';
 import 'quantity_test.dart';
 import 'workflow_test.dart';
 
@@ -143,6 +144,7 @@ Future<void> main() async {
   tempoLeverTests();
   structuresTraceTests();
   waveTests();
+  catalogAcceptanceTests();
   runUpgradeTests();
   programOverrideTests();
   logicalArchiveTests();
