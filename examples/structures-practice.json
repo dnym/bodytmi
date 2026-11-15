@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "definition": {
+    "id": "structures",
+    "name": "Superset, drop set, circuit, cluster and rest-pause",
+    "slots": [
+      {
+        "id": "bench",
+        "exercise": "bench-press",
+        "implementation": "barbell",
+        "targets": {
+          "load": {
+            "value": "60",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "8",
+            "unit": "rep"
+          }
+        }
+      },
+      {
+        "id": "row",
+        "exercise": "row",
+        "implementation": "cable",
+        "targets": {
+          "load": {
+            "value": "40",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "10",
+            "unit": "rep"
+          }
+        }
+      },
+      {
+        "id": "squat",
+        "exercise": "goblet-squat",
+        "implementation": "dumbbell",
+        "targets": {
+          "load": {
+            "value": "20",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "12",
+            "unit": "rep"
+          }
+        }
+      },
+      {
+        "id": "pushup",
+        "exercise": "push-up",
+        "implementation": "floor",
+        "targets": {
+          "reps": {
+            "value": "15",
+            "unit": "rep"
+          }
+        }
+      },
+      {
+        "id": "deadlift",
+        "exercise": "deadlift",
+        "implementation": "barbell",
+        "targets": {
+          "load": {
+            "value": "120",
+            "unit": "kg"
+          },
+          "reps": {
+            "value": "2",
+            "unit": "rep"
+          }
+        }
+      },
+      {
+        "id": "dip",
+        "exercise": "dip",
+        "implementation": "parallel-bars",
+        "targets": {}
+      }
+    ],
+    "plan": {
+      "id": "workout",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "superset",
+          "type": "repeat",
+          "count": 3,
+          "restBetweenSeconds": 90,
+          "child": {
+            "id": "pair",
+            "type": "sequence",
+            "children": [
+              {
+                "id": "press",
+                "type": "effort",
+                "slot": "bench"
+              },
+              {
+                "id": "pull",
+                "type": "effort",
+                "slot": "row"
+              }
+            ]
+          }
+        },
+        {
+          "id": "drop-set",
+          "type": "sequence",
+          "bout": true,
+          "children": [
+            {
+              "id": "top",
+              "type": "effort",
+              "slot": "bench"
+            },
+            {
+              "id": "drop-1",
+              "type": "effort",
+              "slot": "bench",
+              "role": "drop",
+              "targets": {
+                "load": {
+                  "value": "45",
+                  "unit": "kg"
+                }
+              }
+            },
+            {
+              "id": "drop-2",
+              "type": "effort",
+              "slot": "bench",
+              "role": "drop",
+              "targets": {
+                "load": {
+                  "value": "30",
+                  "unit": "kg"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "circuit",
+          "type": "repeat",
+          "count": 2,
+          "restBetweenSeconds": 120,
+          "child": {
+            "id": "stations",
+            "type": "sequence",
+            "children": [
+              {
+                "id": "squat-station",
+                "type": "effort",
+                "slot": "squat"
+              },
+              {
+                "id": "transition",
+                "type": "rest",
+                "durationSeconds": 30
+              },
+              {
+                "id": "pushup-station",
+                "type": "effort",
+                "slot": "pushup"
+              }
+            ]
+          }
+        },
+        {
+          "id": "cluster",
+          "type": "repeat",
+          "count": 3,
+          "restBetweenSeconds": 20,
+          "bout": true,
+          "child": {
+            "id": "cluster-pull",
+            "type": "effort",
+            "slot": "deadlift"
+          }
+        },
+        {
+          "id": "rest-pause",
+          "type": "sequence",
+          "bout": true,
+          "children": [
+            {
+              "id": "rp-1",
+              "type": "effort",
+              "slot": "dip",
+              "objectives": {
+                "reps": {
+                  "mode": "maxEffort",
+                  "unit": "rep"
+                }
+              }
+            },
+            {
+              "id": "rp-breath-1",
+              "type": "rest",
+              "durationSeconds": 15
+            },
+            {
+              "id": "rp-2",
+              "type": "effort",
+              "slot": "dip",
+              "objectives": {
+                "reps": {
+                  "mode": "maxEffort",
+                  "unit": "rep"
+                }
+              }
+            },
+            {
+              "id": "rp-breath-2",
+              "type": "rest",
+              "durationSeconds": 15
+            },
+            {
+              "id": "rp-3",
+              "type": "effort",
+              "slot": "dip",
+              "objectives": {
+                "reps": {
+                  "mode": "maxEffort",
+                  "unit": "rep"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

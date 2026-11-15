@@ -256,6 +256,25 @@ final class WorkoutDefinition {
     }
 
     checkVariants(plan, const {});
+    // Parent bouts count once; nesting them would double-count a bout.
+    void checkBouts(Activity node, bool inside) {
+      final bout = switch (node) {
+        Sequence(:final bout) || Repeat(:final bout) => bout,
+        _ => false,
+      };
+      if (bout && inside)
+        invalid('Bout ${node.id} cannot sit inside another bout.');
+      if (bout &&
+          node
+                  .structuralOccurrences()
+                  .where((o) => o.activity is Effort)
+                  .length <
+              2)
+        invalid('Bout ${node.id} needs at least two effort occurrences.');
+      for (final child in node.children) checkBouts(child, inside || bout);
+    }
+
+    checkBouts(plan, false);
     for (final slot in slots) {
       if (slot.targets.isEmpty &&
           !plan.nodes.whereType<Effort>().any(

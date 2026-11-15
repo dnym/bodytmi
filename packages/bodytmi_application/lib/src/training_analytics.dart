@@ -46,6 +46,34 @@ final class TrainingAnalytics {
       }
     }
     final keys = totals.keys.toList()..sort();
+    // Parent bouts (drop sets, clusters, rest-pause) count once, separately
+    // from their child efforts; never as additional sets.
+    final byId = {for (final set in sets) set.id: set};
+    final bouts = [
+      for (final group in boutGroups(session.definition.plan))
+        if (group.efforts.any(byId.containsKey))
+          (
+            path: group.path,
+            sets: [
+              for (final id in group.efforts)
+                if (byId[id] case final set?) set,
+            ],
+          ),
+    ];
+    String boutStatus(List<TrainingSet> members) {
+      final statuses = {for (final m in members) m.status};
+      if (statuses.length > 1) return 'partial';
+      return statuses.single.name;
+    }
+
+    final boutRows = [
+      for (final b in bouts)
+        {
+          'path': b.path,
+          'sets': [for (final set in b.sets) set.id],
+          'status': boutStatus(b.sets),
+        },
+    ];
     return {
       'policy': {
         'id': selectedRoles != null
@@ -58,6 +86,7 @@ final class TrainingAnalytics {
         'includeWarmups': includeWarmups,
         if (selectedRoles != null) 'roles': selectedRoles,
         'sumMetrics': metrics,
+        if (bouts.isNotEmpty) 'boutPolicy': 'bodytmi-bout-count/1',
       },
       'source': {
         'sessionId': session.id,
@@ -92,7 +121,17 @@ final class TrainingAnalytics {
               .length,
         for (final status in SetStatus.values)
           status.name: sets.where((s) => s.status == status).length,
+        if (bouts.isNotEmpty)
+          'bouts': {
+            'total': bouts.length,
+            for (final status in [
+              ...SetStatus.values.map((s) => s.name),
+              'partial',
+            ])
+              status: boutRows.where((r) => r['status'] == status).length,
+          },
       },
+      if (bouts.isNotEmpty) 'bouts': boutRows,
       'totals': [for (final key in keys) totals[key]!.toJson()],
       'sets': [
         for (final set in sets)

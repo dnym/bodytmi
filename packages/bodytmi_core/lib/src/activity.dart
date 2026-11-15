@@ -105,22 +105,30 @@ sealed class Activity {
         }
         return Rest(id, _positiveInt(json, 'durationSeconds'));
       case 'sequence':
-        checkKeys(json, {'id', 'type', 'children'});
+        checkKeys(json, {'id', 'type', 'children', 'bout'});
         final children = jsonList(json, 'children');
         if (children.isEmpty) invalid('Sequence must have children.');
         return Sequence(id, [
           for (final child in children) fromJson(child, depth + 1),
-        ]);
+        ], bout: _bout(json));
       case 'repeat':
-        checkKeys(json, {'id', 'type', 'count', 'child', 'restBetweenSeconds'});
+        checkKeys(json, {
+          'id',
+          'type',
+          'count',
+          'child',
+          'restBetweenSeconds',
+          'bout',
+        });
         final rest = json['restBetweenSeconds'] ?? 0;
         if (rest is! int || rest < 0)
           invalid('Rest between rounds must be nonnegative.');
-        return Repeat(
+        return Repeat.withBout(
           id,
           _positiveInt(json, 'count'),
           fromJson(json['child'], depth + 1),
           rest,
+          bout: _bout(json),
         );
       case 'window':
         checkKeys(json, {'id', 'type', 'durationSeconds', 'child'});
@@ -152,6 +160,12 @@ sealed class Activity {
       default:
         invalid('Unsupported activity type: ${json['type']}.');
     }
+  }
+
+  static bool _bout(Map<String, Object?> json) {
+    if (!json.containsKey('bout')) return false;
+    if (json['bout'] != true) invalid('bout must be true when specified.');
+    return true;
   }
 
   static int _positiveInt(Map<String, Object?> json, String key) {
@@ -247,6 +261,42 @@ imposedOccurrences(
   }
 }
 
+/// One authored parent bout of a resolved plan and the effort occurrences it
+/// contains, in plan order.
+typedef BoutGroup = ({String path, List<String> efforts});
+
+/// Parent bouts (sequence/repeat nodes marked bout:true) of a resolved plan.
+/// A repeated bout yields one group per enclosing iteration.
+List<BoutGroup> boutGroups(Activity root) {
+  final groups = <BoutGroup>[];
+  void walk(Activity node, String prefix, List<String>? open) {
+    final path = prefix.isEmpty ? node.id : '$prefix/${node.id}';
+    final starts = switch (node) {
+      Sequence(:final bout) || Repeat(:final bout) => bout,
+      _ => false,
+    };
+    final efforts = starts ? <String>[] : open;
+    switch (node) {
+      case Effort():
+        efforts?.add(path);
+      case Rest() || AmrapPlacement():
+        break;
+      case Sequence(:final items):
+        for (final child in items) walk(child, path, efforts);
+      case Repeat(:final count, :final child):
+        for (var i = 0; i < count; i++) walk(child, '$path[$i]', efforts);
+      case TimeWindow(:final child):
+        walk(child, path, efforts);
+      case Variant():
+        throw unresolvedVariant();
+    }
+    if (starts) groups.add((path: path, efforts: List.unmodifiable(efforts!)));
+  }
+
+  walk(root, '', null);
+  return List.unmodifiable(groups);
+}
+
 BodyTmiException unresolvedVariant() => BodyTmiException(
   'validation',
   'Resolve workout variants before expanding plan occurrences.',
@@ -304,9 +354,17 @@ Activity resolveVariantActivity(
     case Rest() || AmrapPlacement():
       return node;
     case Sequence(:final items):
-      return Sequence(node.id, [for (final c in items) walk(c)]);
+      return Sequence(node.id, [
+        for (final c in items) walk(c),
+      ], bout: node.bout);
     case Repeat(:final count, :final child, :final restBetweenSeconds):
-      return Repeat(node.id, count, walk(child), restBetweenSeconds);
+      return Repeat.withBout(
+        node.id,
+        count,
+        walk(child),
+        restBetweenSeconds,
+        bout: node.bout,
+      );
     case TimeWindow(:final durationSeconds, :final child):
       return TimeWindow(node.id, durationSeconds, walk(child));
   }
@@ -476,30 +534,47 @@ final class Rest extends Activity {
 }
 
 final class Sequence extends Activity {
-  Sequence(super.id, List<Activity> children)
+  Sequence(super.id, List<Activity> children, {this.bout = false})
     : items = List.unmodifiable(children);
   final List<Activity> items;
+
+  /// Marks the group as one parent bout (drop set, cluster, rest-pause):
+  /// reports count it once, separately from its child efforts.
+  final bool bout;
   @override
   Iterable<Activity> get children => items;
   @override
   Map<String, Object?> toJson() => {
     'type': 'sequence',
     'id': id,
+    if (bout) 'bout': true,
     'children': [for (final item in items) item.toJson()],
   };
 }
 
 final class Repeat extends Activity {
-  const Repeat(super.id, this.count, this.child, [this.restBetweenSeconds = 0]);
+  const Repeat(super.id, this.count, this.child, [this.restBetweenSeconds = 0])
+    : bout = false;
+  const Repeat.withBout(
+    super.id,
+    this.count,
+    this.child,
+    this.restBetweenSeconds, {
+    required this.bout,
+  });
   final int count;
   final Activity child;
   final int restBetweenSeconds;
+
+  /// The whole repeat (every iteration) is one parent bout, e.g. a cluster.
+  final bool bout;
   @override
   Iterable<Activity> get children => [child];
   @override
   Map<String, Object?> toJson() => {
     'type': 'repeat',
     'id': id,
+    if (bout) 'bout': true,
     'count': count,
     'child': child.toJson(),
     'restBetweenSeconds': restBetweenSeconds,
