@@ -587,6 +587,7 @@ class Walk {
   final String sessionId;
   late dynamic view;
   var step = 0;
+  var loggedAhead = 0;
   late DateTime now;
 
   Map<String, Object?> request() => {
@@ -662,6 +663,12 @@ class Walk {
           continue;
         }
         await runClock(view['timer']['id'] as String, taken);
+        view = await ok('execution advance', request());
+        continue;
+      }
+      if (c['set']['status'] != 'planned') {
+        // Logged ahead of the cursor: acknowledge, do not log it again.
+        loggedAhead++;
         view = await ok('execution advance', request());
         continue;
       }
@@ -1126,14 +1133,12 @@ Future<void> bbrSession(LiftDay d) async {
           'reps': q('5', 'rep'),
         },
       });
-      note(
-        'Bench station busy, squat rack free: completing a squat set out of '
-        'order during managed traversal gave rc ${attempt.code}'
-        '${attempt.ok ? '' : ' (${attempt.error})'}. There is no "do this '
-        'block next" or reorder command in execution.',
+      log(
+        '  - Logged squat set 1 first, out of order, during the guided '
+        'workout: rc ${attempt.code}${attempt.ok ? '' : ' (${attempt.error})'}.',
       );
       if (attempt.ok) {
-        // Undo is not possible either; we keep going in order.
+        done.putIfAbsent('squat', () => []).add(5);
         await ex.refresh();
       }
       d.rackBusy = false;
@@ -1163,6 +1168,12 @@ Future<void> bbrSession(LiftDay d) async {
     log('  - Left the gym; the deadlift rest clock is still pending.');
     pendingInterruption = (id, ex, t);
     return;
+  }
+  if (ex.loggedAhead > 0) {
+    log(
+      '  - When the guide reached the squat, it acknowledged the '
+      '${ex.loggedAhead} set(s) already logged with `execution advance`.',
+    );
   }
   t = ex.now.add(const Duration(minutes: 5));
   if (interruptedSet.isNotEmpty) {

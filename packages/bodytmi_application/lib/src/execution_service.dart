@@ -150,6 +150,7 @@ final class ExecutionService {
       return old;
     }
     final set = s.set(occurrence.id);
+    if (set.status != SetStatus.planned) _alreadyRecorded(set.id, set.status);
     final selected = timingMetricFor(s, set.id, metric);
     final chosen = plan ?? timingPlanFor(s, set.id, selected);
     if (!supportsTimingMetric(set, selected, chosen))
@@ -216,6 +217,12 @@ final class ExecutionService {
     final kind = occurrenceKind(occurrence.activity);
     String? sourceTimer;
     String? checkpointId;
+    // A set logged ahead of the cursor (e.g. squats while the bench was
+    // busy) is acknowledged, never silently replaced or turned into a skip.
+    if (kind == 'effort' &&
+        action != 'advance' &&
+        s.set(occurrence.id).status != SetStatus.planned)
+      _alreadyRecorded(occurrence.id, s.set(occurrence.id).status);
     if (occurrence.activity case AmrapPlacement(:final amrapId)) {
       if (action != 'advance')
         invalid(
@@ -748,6 +755,11 @@ RepeatCheckpoint? _blockCheckpoint(
 
 String _blockStatus(RepeatCheckpoint c) =>
     jsonObject(c.execution['cursor'], 'cursor')['status']! as String;
+
+Never _alreadyRecorded(String occurrenceId, SetStatus status) => _conflict(
+  'Effort $occurrenceId is already ${status.name}; acknowledge it with '
+  'execution advance, or correct it with store complete.',
+);
 
 Never _conflict([
   String message = 'Execution or session changed; refresh before retrying.',

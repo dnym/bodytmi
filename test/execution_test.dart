@@ -54,6 +54,15 @@ WorkoutDefinition _manualDefinition() => WorkoutDefinition.fromJson({
     ],
   },
 });
+Future<BodyTmiException> _failure(Object? Function() action) async {
+  try {
+    await action();
+  } on BodyTmiException catch (error) {
+    return error;
+  }
+  throw StateError('Expected a BodyTmiException.');
+}
+
 Future<void> _fails(Future<Object?> action) =>
     expectLater(action, throwsA(isA<BodyTmiException>()));
 Future<void> _withStore(
@@ -149,6 +158,48 @@ Future<WorkoutExecution> _startGroups(TrainingStore store) async {
 }
 
 void executionTests() {
+  test(
+    'a set logged ahead of the cursor is acknowledged, never overwritten',
+    () => _withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      var e = await _start(store);
+      // The lift station is free first: log the lift before the hold.
+      var s = await training.session('session');
+      await training.edit(
+        'session',
+        s.contentVersion,
+        (s) => const TrainingService().complete(s, 'workout/lift-set', {
+          'mass': Quantity.fromJson({'value': '12', 'unit': 'kg'}),
+          'reps': Quantity.fromJson({'value': '6', 'unit': 'rep'}),
+        }),
+      );
+      e = await _step(store, e, 'hold', action: 'complete');
+      await _finishRest(store, e);
+      e = await _step(store, e, 'rest');
+      equal(
+        executionPlan((await store.session('session'))!)[e.cursor].id,
+        'workout/lift-set',
+      );
+      for (final action in ['complete', 'skip']) {
+        final error = await _failure(
+          () => _step(store, e, 'lift-$action', action: action, confirm: true),
+        );
+        equal(error.code, 'conflict');
+        check(error.message.contains('execution advance'), error.message);
+      }
+      final timed = await _failure(
+        () => ExecutionService(store).time(e.id, e.version, instant(1)),
+      );
+      equal(timed.code, 'conflict');
+      e = await _step(store, e, 'lift-ack');
+      check(e.complete, 'acknowledging the logged set completes traversal');
+      equal(e.receipts.last['resultStatus'], 'completed');
+      s = await training.session('session');
+      final lift = s.set('workout/lift-set');
+      equal(lift.actuals['mass']!.enteredValue, '12');
+      equal(lift.actuals['reps']!.enteredValue, '6');
+    }),
+  );
   test(
     'manual rest advances only explicitly and survives both portability formats',
     () => _withStore((store, dir) async {
