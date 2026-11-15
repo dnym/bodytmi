@@ -719,6 +719,7 @@ Future<Map<String, Object?>> executeStored(
       'rule',
       'ruleType',
       'preset',
+      'countSubstitutes',
     },
     'progression track' => {
       'templateId',
@@ -1905,6 +1906,7 @@ Future<Map<String, Object?>> executeStored(
               preset: preset == null
                   ? null
                   : (id: preset.preset.id, revision: preset.number),
+              countSubstitutes: flag('countSubstitutes'),
             ),
             'progression accept' => await progression.accept(
               sessionId,
@@ -1951,6 +1953,8 @@ Future<Map<String, Object?>> executeStored(
           'sequence': decision.sequence,
           if (decision.followed.isNotEmpty)
             'followedSettings': [for (final f in decision.followed) f.toJson()],
+          if (decision.countedSubstitutes.isNotEmpty)
+            'countedSubstitutes': decision.countedSubstitutes,
           'inputsChanged': changed,
           'stale': decision.resolvedAt == null && changed,
           ...decision.toJson(),

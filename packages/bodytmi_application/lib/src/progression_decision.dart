@@ -27,6 +27,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     this.selectedLevel,
     this.preset,
     Metrics? previousReference,
+    this.countSubstitutes = false,
   }) : rule = _freeze(rule) as Map<String, Object?>,
        previousReference = previousReference == null
            ? null
@@ -51,6 +52,8 @@ final class ProgressionDecision implements ProgressionAnchor {
     final slots = session.definition.slots.where((s) => s.id == slotId);
     if (slots.isEmpty || sets.isEmpty)
       invalid('Progression needs a known slot with sets in the selected role.');
+    if (countSubstitutes && !sets.any((s) => s.substitution != null))
+      invalid('countSubstitutes needs a substituted set in this exposure.');
     if ((acceptedAt != null && declinedAt != null) ||
         (resolvedAt != null && resolvedAt!.isBefore(session.finishedAt!)))
       invalid('A decision needs one resolution, no earlier than finalization.');
@@ -90,7 +93,10 @@ final class ProgressionDecision implements ProgressionAnchor {
       'selectedLevel',
       'preset',
       'previousReference',
+      'countSubstitutes',
     });
+    if (j.containsKey('countSubstitutes') && j['countSubstitutes'] != true)
+      invalid('countSubstitutes must be true when stored.');
     int count(String key, int min) {
       final v = j[key];
       if (v is! int || v < min) invalid('Invalid $key.');
@@ -133,6 +139,7 @@ final class ProgressionDecision implements ProgressionAnchor {
       previousReference: j.containsKey('previousReference')
           ? metricsFromJson(j['previousReference'])
           : null,
+      countSubstitutes: j['countSubstitutes'] == true,
     );
     if (canonicalJson(j['proposal']) !=
         canonicalJson(decision.proposal.toJson()))
@@ -168,6 +175,11 @@ final class ProgressionDecision implements ProgressionAnchor {
   /// Provenance only: the published preset revision whose rule this decision
   /// froze. The decision's own [rule] stays authoritative.
   final PresetReference? preset;
+
+  /// The person explicitly counted this exposure's substituted sets toward
+  /// the slot's own track: they read as the original prescription, with the
+  /// controlled lever done as planned and performance as recorded.
+  final bool countSubstitutes;
   int get cursor => declinedAt != null ? previousCursor : proposal.cursor;
   late final Set<String> controlledMetrics = ruleType == 'double'
       ? {
@@ -268,7 +280,19 @@ final class ProgressionDecision implements ProgressionAnchor {
     sets,
     leverMetrics(ruleType, rule),
   );
-  late final List<TrainingSet> _evaluatedSets = asFollowed(sets, followed);
+  late final List<TrainingSet> _evaluatedSets = asFollowed(
+    countSubstitutes
+        ? asOriginalSlot(sets, leverMetrics(ruleType, rule))
+        : sets,
+    followed,
+  );
+
+  /// Substituted sets counted as exposures of this slot (opt-in).
+  List<String> get countedSubstitutes => [
+    if (countSubstitutes)
+      for (final set in sets)
+        if (set.substitution != null) set.id,
+  ];
   late final ProgressionEvaluation _evaluated = switch (ruleType) {
     'threshold' => ProgressionEvaluation.threshold(
       boundToInstance(ThresholdRule.fromJson(rule), session, sets),
@@ -318,6 +342,7 @@ final class ProgressionDecision implements ProgressionAnchor {
         selectedLevel: selectedLevel,
         preset: preset,
         previousReference: previousReference,
+        countSubstitutes: countSubstitutes,
       );
   ProgressionDecision decline(DateTime at) => ProgressionDecision(
     session: session,
@@ -335,6 +360,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     role: role,
     preset: preset,
     previousReference: previousReference,
+    countSubstitutes: countSubstitutes,
   );
   Map<String, Object?> toJson() => {
     'session': session.toJson(),
@@ -356,6 +382,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     if (selectedLevel != null) 'selectedLevel': selectedLevel,
     if (preset case (:final id, :final revision))
       'preset': {'id': id, 'revision': revision},
+    if (countSubstitutes) 'countSubstitutes': true,
   };
 }
 
@@ -648,7 +675,11 @@ bool matchesSessionProgressionBaseline(
   if (expected.length != sets.length) return false;
   for (var i = 0; i < expected.length; i++) {
     for (final metric in controlledMetrics) {
-      final actual = sets[i].suggested[metric];
+      // A substitute's own targets never re-anchor the slot's track; its
+      // frozen original prescription is the baseline.
+      final actual =
+          (sets[i].substitution?.originalSuggested ??
+          sets[i].suggested)[metric];
       if (actual == null || actual.compareTo(expected[i][metric]!) != 0)
         return false;
     }

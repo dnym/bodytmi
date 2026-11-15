@@ -117,3 +117,41 @@ ThresholdRule boundToInstance(
   final positions = instancePositions(instance.snapshot);
   return rule.bindInstanceScales({for (final m in metrics) m: positions});
 }
+
+/// Evaluation-only copies in which each substituted set reads as the slot's
+/// original prescription: its frozen original targets, and each controlled
+/// [levers] actual as that original target (the lever counted as done as
+/// planned), while every other actual, such as repetitions, stays as
+/// performed. Used only when the person explicitly counts substitutes.
+List<TrainingSet> asOriginalSlot(
+  List<TrainingSet> sets,
+  Set<String> levers,
+) => [
+  for (final set in sets)
+    if (set.substitution case final substitution?)
+      TrainingSet(
+        id: set.id,
+        slotId: set.slotId,
+        role: set.role,
+        ordinal: set.ordinal,
+        suggested: substitution.originalSuggested,
+        sources: const {},
+        status: set.status,
+        actuals: set.status == SetStatus.completed
+            ? {
+                ...set.actuals,
+                for (final metric in levers)
+                  if (substitution.originalSuggested[metric] case final target?)
+                    metric: target,
+              }
+            : set.actuals,
+        contentVersion: set.contentVersion,
+        observations: set.observations,
+        maxEffortMetrics: set.maxEffortMetrics,
+        criteria: set.criteria,
+        settings: set.settings,
+        actualSettings: set.actualSettings,
+      )
+    else
+      set,
+];

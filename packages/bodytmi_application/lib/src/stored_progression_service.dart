@@ -439,6 +439,7 @@ final class StoredProgressionService {
     String ruleType = 'double',
     String role = 'work',
     PresetReference? preset,
+    bool countSubstitutes = false,
   }) => repository.transaction(() async {
     if (!{'work', 'warmup', 'backoff', 'drop'}.contains(role))
       invalid('Unknown progression role.');
@@ -489,15 +490,17 @@ final class StoredProgressionService {
           'Ordinal level ${level.id}',
         );
     }
-    // A temporary substitute is not an exposure of the slot's own track,
-    // and a one-off replacement never establishes linkage.
-    if (session.sets.any(
+    // A temporary substitute is not an exposure of the slot's own track
+    // unless the person explicitly counts it; a one-off replacement never
+    // establishes linkage.
+    final substituted = session.sets.any(
       (set) =>
           set.slotId == slotId && set.role == role && set.substitution != null,
-    ))
+    );
+    if (substituted && !countSubstitutes)
       invalid(
         'Substituted $role sets are not an exposure of this slot track; '
-        'nothing is proposed for it.',
+        'nothing is proposed for it unless countSubstitutes is true.',
       );
     final links = await _links();
     final before = linkLinkedTrack(
@@ -581,6 +584,7 @@ final class StoredProgressionService {
       role: role,
       preset: preset,
       previousReference: before?.cycleReference,
+      countSubstitutes: countSubstitutes,
     );
     final comparable = next.toJson()
       ..['version'] = existing?.version ?? next.version;
@@ -903,6 +907,12 @@ final class StoredProgressionService {
       role: role,
       preset: resolved.preset,
       previousReference: resolved.previousReference,
+      countSubstitutes:
+          resolved.countSubstitutes &&
+          session.sets.any(
+            (s) =>
+                s.slotId == slotId && s.role == role && s.substitution != null,
+          ),
     );
     await repository.saveProgressionDecision(reopened, reopening: true);
     return reopened;

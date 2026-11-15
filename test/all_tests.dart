@@ -44,6 +44,7 @@ import 'body_mass_size_test.dart';
 import 'execution_move_test.dart';
 import 'continuous_run_test.dart';
 import 'stretch_depth_test.dart';
+import 'count_substitutes_test.dart';
 import 'phase_override_test.dart';
 import 'extended_records_test.dart';
 import 'progression_preset_test.dart';
@@ -153,6 +154,7 @@ Future<void> main() async {
   executionMoveTests();
   continuousRunTests();
   stretchDepthTests();
+  countSubstitutesTests();
   phaseOverrideTests();
   extendedRecordsTests();
   progressionPresetTests();
