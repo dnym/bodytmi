@@ -2,6 +2,7 @@ import 'activity.dart';
 import 'derived_plan_input.dart';
 import 'body_mass_input.dart';
 import 'categorical.dart';
+import 'tempo.dart';
 import 'errors.dart';
 import 'effective_mass.dart';
 import 'load_context.dart';
@@ -66,6 +67,13 @@ final class ExerciseSlot {
         ? null
         : EffortTimingDefaults.fromJson(json['timing']);
     timing?.resolve(targets);
+    final categories = json.containsKey('categories')
+        ? categoricalLeversFromJson(json['categories'])
+        : const <String, CategoricalLever>{};
+    final tempoLevers = categories.values.where((l) => l.isTempo).length;
+    if (tempoLevers > 1) invalid('A slot declares at most one tempo lever.');
+    if (tempoLevers == 1 && timing?.tempo != null)
+      invalid('A slot with a tempo lever cannot also publish timing tempo.');
     return ExerciseSlot._(
       identifier(json, 'id'),
       identifier(json, 'exercise'),
@@ -80,9 +88,7 @@ final class ExerciseSlot {
       json['convention'] == null
           ? null
           : LoadConvention.fromJson(json['convention']),
-      json.containsKey('categories')
-          ? categoricalLeversFromJson(json['categories'])
-          : const {},
+      categories,
     );
   }
 
@@ -100,6 +106,21 @@ final class ExerciseSlot {
 
   /// Declared categorical levers (grip, hand count, …) and their defaults.
   final Map<String, CategoricalLever> categories;
+
+  /// The categorical lever whose values prescribe tempo, or null.
+  String? get tempoLever => categories.entries
+      .where((e) => e.value.isTempo)
+      .map((e) => e.key)
+      .firstOrNull;
+
+  /// The tempo a set planned with [settings] follows: its tempo lever's value
+  /// (default when unset), else the published timing tempo, else none.
+  TempoPlan? tempoFor(Map<String, String> settings) {
+    final lever = tempoLever;
+    if (lever == null) return timing?.tempo;
+    final declared = categories[lever]!;
+    return declared.tempos[settings[lever] ?? declared.defaultValue];
+  }
 
   /// Lever defaults, before any effort or progression setting.
   Map<String, String> get defaultSettings => Map.unmodifiable({

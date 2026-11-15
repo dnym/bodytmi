@@ -142,6 +142,21 @@ final class TrainingAnalytics {
                 },
             },
             if (set.timing != null) 'timing': set.timing!.toJson(),
+            // Tempo-lever slots: the planned and (if it differed) performed
+            // tempo pattern of this set.
+            if (session.definition.slot(set.slotId).tempoLever != null) ...{
+              'plannedTempo': session.definition
+                  .slot(set.slotId)
+                  .tempoFor(set.settings)!
+                  .toJson(),
+              if (set.actualSettings.containsKey(
+                session.definition.slot(set.slotId).tempoLever,
+              ))
+                'performedTempo': session.definition
+                    .slot(set.slotId)
+                    .tempoFor(set.performedSettings)!
+                    .toJson(),
+            },
             if (set.observations != null)
               'observations': set.observations!.toJson(),
           },

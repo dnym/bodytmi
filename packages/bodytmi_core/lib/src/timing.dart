@@ -157,6 +157,7 @@ final class EffortTimingDefaults {
   final String metric;
   final TimingPlan _guidance;
   bool get openEnded => _guidance.openEnded;
+  TempoPlan? get tempo => _guidance.tempo;
   TimingPlan resolve(Metrics suggested) {
     final duration = suggested[metric];
     if (openEnded) {

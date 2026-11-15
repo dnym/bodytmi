@@ -282,11 +282,22 @@ String timingMetricFor(TrainingSession session, String setId, String? metric) {
 
 TimingPlan timingPlanFor(TrainingSession session, String setId, String metric) {
   final set = session.set(setId);
-  final defaults = session.definition.slot(set.slotId).timing;
-  if (defaults?.metric == metric) return defaults!.resolve(set.suggested);
-  final duration = set.suggested[metric];
-  if (duration == null) invalid('Timing metric is not configured.');
-  return TimingPlan.fromDuration(duration);
+  final slot = session.definition.slot(set.slotId);
+  final defaults = slot.timing;
+  final TimingPlan plan;
+  if (defaults?.metric == metric) {
+    plan = defaults!.resolve(set.suggested);
+  } else {
+    final duration = set.suggested[metric];
+    if (duration == null) invalid('Timing metric is not configured.');
+    plan = TimingPlan.fromDuration(duration);
+  }
+  // A tempo lever prescribes the planned setting's tempo for this set.
+  if (slot.tempoLever == null) return plan;
+  return TimingPlan.fromJson({
+    ...plan.toJson(),
+    'tempo': slot.tempoFor(set.settings)!.toJson(),
+  });
 }
 
 void validateTimingData(

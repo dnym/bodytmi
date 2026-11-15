@@ -71,6 +71,7 @@ import 'save_back_test.dart';
 import 'categorical_test.dart';
 import 'set_scheme_test.dart';
 import 'staged_threshold_test.dart';
+import 'tempo_lever_test.dart';
 import 'quantity_test.dart';
 import 'workflow_test.dart';
 
@@ -137,6 +138,7 @@ Future<void> main() async {
   categoricalTests();
   setSchemeTests();
   stagedThresholdTests();
+  tempoLeverTests();
   runUpgradeTests();
   programOverrideTests();
   logicalArchiveTests();

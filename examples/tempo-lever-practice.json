@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "definition": {
+    "id": "tempo-pushups",
+    "name": "Push-ups by tempo",
+    "slots": [
+      {
+        "id": "pushup",
+        "exercise": "push-up",
+        "implementation": "floor",
+        "targets": {
+          "reps": {
+            "value": "8",
+            "unit": "rep"
+          }
+        },
+        "timing": {
+          "metric": "duration",
+          "openEnded": true
+        },
+        "categories": {
+          "tempo": {
+            "values": [
+              "standard",
+              "slow-eccentric",
+              "paused"
+            ],
+            "default": "standard",
+            "tempos": {
+              "standard": {
+                "phases": [
+                  {
+                    "id": "eccentric",
+                    "milliseconds": 2000
+                  },
+                  {
+                    "id": "concentric",
+                    "milliseconds": 1000
+                  }
+                ]
+              },
+              "slow-eccentric": {
+                "phases": [
+                  {
+                    "id": "eccentric",
+                    "milliseconds": 4000
+                  },
+                  {
+                    "id": "concentric",
+                    "milliseconds": 1000
+                  }
+                ]
+              },
+              "paused": {
+                "phases": [
+                  {
+                    "id": "eccentric",
+                    "milliseconds": 4000
+                  },
+                  {
+                    "id": "bottom-pause",
+                    "milliseconds": 2000
+                  },
+                  {
+                    "id": "concentric",
+                    "milliseconds": 1000
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    ],
+    "plan": {
+      "id": "workout",
+      "type": "sequence",
+      "children": [
+        {
+          "id": "set-1",
+          "type": "effort",
+          "slot": "pushup"
+        },
+        {
+          "id": "set-2",
+          "type": "effort",
+          "slot": "pushup"
+        },
+        {
+          "id": "set-3",
+          "type": "effort",
+          "slot": "pushup"
+        }
+      ]
+    }
+  }
+}

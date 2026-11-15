@@ -1,13 +1,14 @@
 import 'errors.dart';
+import 'tempo.dart';
 
 /// One categorical lever of a slot, such as grip or hand count: a declared
 /// set of identifier values and a default. Values have no implied harder
 /// order; only declared progression edges may move between them.
 final class CategoricalLever {
-  CategoricalLever._(this.values, this.defaultValue);
+  CategoricalLever._(this.values, this.defaultValue, [this.tempos = const {}]);
   factory CategoricalLever.fromJson(Object? input, String lever) {
     final j = jsonObject(input, 'categorical lever $lever');
-    checkKeys(j, {'values', 'default'});
+    checkKeys(j, {'values', 'default', 'tempos'});
     final raw = jsonList(j, 'values');
     if (raw.length < 2 || raw.length > 64)
       invalid('Categorical lever $lever needs 2–64 values.');
@@ -22,11 +23,33 @@ final class CategoricalLever {
     final fallback = requiredString(j, 'default');
     if (!values.contains(fallback))
       invalid('Categorical lever $lever default must be one of its values.');
-    return CategoricalLever._(List.unmodifiable(values), fallback);
+    // A tempo lever: each value prescribes one authored tempo pattern, so
+    // progression between values (ordinal levels, stages) progresses tempo.
+    final tempos = <String, TempoPlan>{};
+    if (j.containsKey('tempos')) {
+      final raw = jsonObject(j['tempos'], 'tempos');
+      if (raw.length != values.length || !values.every(raw.containsKey))
+        invalid('Tempo lever $lever needs exactly one tempo per value.');
+      for (final value in values)
+        tempos[value] = TempoPlan.fromJson(raw[value]);
+    }
+    return CategoricalLever._(
+      List.unmodifiable(values),
+      fallback,
+      Map.unmodifiable(tempos),
+    );
   }
   final List<String> values;
   final String defaultValue;
-  Map<String, Object?> toJson() => {'values': values, 'default': defaultValue};
+
+  /// Authored tempo per value; empty unless this is a tempo lever.
+  final Map<String, TempoPlan> tempos;
+  bool get isTempo => tempos.isNotEmpty;
+  Map<String, Object?> toJson() => {
+    'values': values,
+    'default': defaultValue,
+    if (isTempo) 'tempos': {for (final v in values) v: tempos[v]!.toJson()},
+  };
 }
 
 /// Parses a slot's `categories` map (1–16 levers).
