@@ -988,7 +988,7 @@ final class Commands {
           request['session'],
         ).finish(parseInstant(request['finishedAt'], 'finishedAt')).toJson();
       case 'progression evaluate':
-        keys({'rule', 'current', 'results', 'state', 'observations'});
+        keys({'rule', 'current', 'results', 'state', 'observations', 'stage'});
         final state = jsonObject(
           request['state'] ?? <String, Object?>{},
           'state',
@@ -1013,6 +1013,9 @@ final class Commands {
                   : null,
               failedSessions: failures,
               cursor: cursor,
+              stage: request['stage'] == null
+                  ? null
+                  : identifier(request, 'stage'),
             )
             .toJson();
       case 'progression double':

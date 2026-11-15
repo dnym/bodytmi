@@ -17,7 +17,11 @@ final class ProgressionEvaluation {
     this.incrementBandAssessment, [
     this._ordinal,
     this._withCursor = true,
+    this.nextStage,
   ]);
+
+  /// The stage a staged threshold rule plans next (held unless it moved).
+  final String? nextStage;
 
   /// Sets performed with categorical settings other than planned are not an
   /// exposure of the planned prescription: hold every target and counter.
@@ -84,6 +88,16 @@ final class ProgressionEvaluation {
       for (final s in sets) s.eligibleForPerformance ? s.actuals : null,
     ];
     final missing = results.any((r) => r == null || r[rule.metric] == null);
+    String? stage;
+    if (rule.stages case final staged?) {
+      final values = {for (final s in sets) s.settings[staged.lever]};
+      if (values.length != 1 || values.single == null)
+        invalid(
+          'Staged threshold progression needs every working set to plan the '
+          'same value of lever ${staged.lever}.',
+        );
+      stage = values.single;
+    }
     final proposals = rule.evaluateVector(
       currentSets: [for (final s in sets) s.suggested],
       results: [
@@ -93,6 +107,7 @@ final class ProgressionEvaluation {
       observations: [for (final s in sets) s.observations],
       failedSessions: failures,
       cursor: cursor,
+      stage: stage,
     );
     final first = proposals.first;
     final changed =
@@ -139,6 +154,9 @@ final class ProgressionEvaluation {
       List.unmodifiable([for (final p in proposals) p.scaleResolutions]),
       first.effortAssessment,
       first.incrementBandAssessment,
+      null,
+      true,
+      hold ? stage : first.nextStage,
     );
   }
 
@@ -235,6 +253,7 @@ final class ProgressionEvaluation {
           'failedSessions': failedSessions,
           if (_withCursor) 'cursor': cursor,
         },
+        if (nextStage != null) 'nextStage': nextStage,
         'requiresAcceptance': true,
         if (assessment != null) 'assessment': assessment!.toJson(),
         if (effortAssessment != null)

@@ -172,7 +172,8 @@ final class ProgressionDecision implements ProgressionAnchor {
 
   /// Decline holds targets, but the confirmed exposure's classification still
   /// resolves exactly once. Declining a deload never grants its counter reset.
-  int get failedSessions => declinedAt != null && proposal.outcome == 'deload'
+  int get failedSessions =>
+      declinedAt != null && const {'deload', 'stage'}.contains(proposal.outcome)
       ? previousFailures + 1
       : proposal.failedSessions;
   List<Metrics> get nextSets => selectedLevel != null
@@ -186,6 +187,8 @@ final class ProgressionDecision implements ProgressionAnchor {
   @override
   late final Set<String> controlledSettings = ruleType == 'ordinal'
       ? OrdinalRule.fromJson(rule).controlledSettings
+      : ruleType == 'threshold'
+      ? {?ThresholdRule.fromJson(rule).stages?.lever}
       : const {};
 
   /// Settings move only with an applied ordinal level change.
@@ -199,7 +202,14 @@ final class ProgressionDecision implements ProgressionAnchor {
               ? proposal.nextLevel
               : null);
     }
-    final settings = level == null
+    final settings = ruleType == 'threshold'
+        ? (declinedAt == null && proposal.nextStage != null
+              ? {
+                  ThresholdRule.fromJson(rule).stages!.lever:
+                      proposal.nextStage!,
+                }
+              : null)
+        : level == null
         ? null
         : OrdinalRule.fromJson(rule).levelSettings(level);
     return List<Map<String, String>>.unmodifiable([

@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "rule": {
+    "metric": "reps",
+    "performance": {
+      "direction": "higher",
+      "failureLimit": {
+        "value": "15",
+        "unit": "rep"
+      },
+      "advancementLimit": {
+        "value": "15",
+        "unit": "rep"
+      }
+    },
+    "aggregation": {
+      "mode": "total"
+    },
+    "failureAggregation": {
+      "mode": "total"
+    },
+    "increments": {
+      "load": {
+        "value": "2.5",
+        "unit": "kg"
+      }
+    },
+    "deloadAfter": 1,
+    "deloadMetrics": [
+      "load"
+    ],
+    "deloadPercent": "15",
+    "stages": {
+      "lever": "scheme",
+      "order": [
+        {
+          "value": "triples",
+          "failureLimit": {
+            "value": "15",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "15",
+            "unit": "rep"
+          }
+        },
+        {
+          "value": "doubles",
+          "failureLimit": {
+            "value": "12",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "12",
+            "unit": "rep"
+          }
+        },
+        {
+          "value": "singles",
+          "failureLimit": {
+            "value": "10",
+            "unit": "rep"
+          },
+          "advancementLimit": {
+            "value": "10",
+            "unit": "rep"
+          }
+        }
+      ]
+    }
+  },
+  "stage": "triples",
+  "current": {
+    "load": {
+      "value": "62.5",
+      "unit": "kg"
+    }
+  },
+  "results": [
+    {
+      "reps": {
+        "value": "3",
+        "unit": "rep"
+      }
+    },
+    {
+      "reps": {
+        "value": "3",
+        "unit": "rep"
+      }
+    },
+    {
+      "reps": {
+        "value": "3",
+        "unit": "rep"
+      }
+    },
+    {
+      "reps": {
+        "value": "3",
+        "unit": "rep"
+      }
+    },
+    {
+      "reps": {
+        "value": "2",
+        "unit": "rep"
+      }
+    }
+  ],
+  "state": {
+    "failedSessions": 0
+  }
+}

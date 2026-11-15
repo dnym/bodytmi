@@ -23,6 +23,7 @@ final class ProgressionProposal {
     this.incrementBandAssessment,
     this.coordination,
     List<ScaleResolution> scaleResolutions = const [],
+    this.nextStage,
   }) : scaleResolutions = List.unmodifiable(scaleResolutions),
        nextValues = Map.unmodifiable(nextValues);
   final String outcome;
@@ -35,10 +36,14 @@ final class ProgressionProposal {
   final IncrementBandAssessment? incrementBandAssessment;
   final LeverSelection? coordination;
   final List<ScaleResolution> scaleResolutions;
+
+  /// The stage value later sessions plan, for staged rules (null otherwise).
+  final String? nextStage;
   Map<String, Object?> toJson() => {
     'outcome': outcome,
     'reason': reason,
     'nextValues': metricsToJson(nextValues),
+    if (nextStage != null) 'nextStage': nextStage,
     'nextState': {'failedSessions': failedSessions, 'cursor': cursor},
     'requiresAcceptance': true,
     if (assessment != null) 'assessment': assessment!.toJson(),
@@ -49,6 +54,72 @@ final class ProgressionProposal {
     if (coordination != null) 'coordination': coordination!.toJson(),
     if (scaleResolutions.isNotEmpty)
       'scaleResolutions': [for (final r in scaleResolutions) r.toJson()],
+  };
+}
+
+/// One authored stage of a staged threshold rule: a value of the slot's stage
+/// lever (typically a variant set scheme) with its own inclusive performance
+/// limits, since each structure has its own success criterion.
+final class ThresholdStage {
+  const ThresholdStage(this.value, this.failureLimit, this.advancementLimit);
+  final String value;
+  final Quantity failureLimit, advancementLimit;
+  Map<String, Object?> toJson() => {
+    'value': value,
+    'failureLimit': failureLimit.toJson(),
+    'advancementLimit': advancementLimit.toJson(),
+  };
+}
+
+/// Ordered failure-driven stages (e.g. 5x3 → 6x2 → 10x1). When the failed
+/// exposure count reaches deloadAfter, the rule moves to the next stage and
+/// holds every numeric setting; failing at the last stage applies the
+/// configured deload (if any) and restarts at the first stage. Stage order is
+/// authored; no difficulty is inferred from it.
+final class ThresholdStages {
+  ThresholdStages._(this.lever, List<ThresholdStage> order)
+    : order = List.unmodifiable(order);
+  factory ThresholdStages.fromJson(
+    Object? input, {
+    required Dimension dimension,
+    required String direction,
+    required bool sameScope,
+  }) {
+    final json = jsonObject(input, 'stages');
+    checkKeys(json, {'lever', 'order'});
+    final lever = identifier(json, 'lever');
+    final raw = jsonList(json, 'order');
+    if (raw.length < 2 || raw.length > 64)
+      invalid('Staged threshold rules need 2–64 stages.');
+    final order = <ThresholdStage>[];
+    for (final item in raw) {
+      final stage = jsonObject(item, 'stage');
+      checkKeys(stage, {'value', 'failureLimit', 'advancementLimit'});
+      final value = identifier(stage, 'value');
+      if (order.any((s) => s.value == value))
+        invalid('Stage $value occurs more than once.');
+      final failure = Quantity.fromJson(stage['failureLimit']);
+      final advancement = Quantity.fromJson(stage['advancementLimit']);
+      if (failure.dimension != dimension || advancement.dimension != dimension)
+        invalid('Stage $value limits must match the performance metric.');
+      final c = failure.compareTo(advancement);
+      if (sameScope && (direction == 'higher' ? c > 0 : c < 0))
+        invalid('Stage $value limits contradict the performance direction.');
+      order.add(ThresholdStage(value, failure, advancement));
+    }
+    return ThresholdStages._(lever, order);
+  }
+  final String lever;
+  final List<ThresholdStage> order;
+  int indexOf(String value) {
+    final i = order.indexWhere((s) => s.value == value);
+    if (i < 0) invalid('Current stage $value is not declared by the rule.');
+    return i;
+  }
+
+  Map<String, Object?> toJson() => {
+    'lever': lever,
+    'order': [for (final s in order) s.toJson()],
   };
 }
 
@@ -79,8 +150,9 @@ final class ThresholdRule {
     this.performanceDirection,
     this.hasPerformancePolicy,
     this.advancementEffort,
-    this.incrementBands,
-  );
+    this.incrementBands, [
+    this.stages,
+  ]);
 
   factory ThresholdRule.fromJson(Object? input) {
     final json = jsonObject(input, 'rule');
@@ -103,6 +175,7 @@ final class ThresholdRule {
       'deloadAfter',
       'deloadPercent',
       'deloadMetrics',
+      'stages',
     });
     final performance = json.containsKey('performance')
         ? jsonObject(json['performance'], 'performance predicate')
@@ -274,6 +347,16 @@ final class ThresholdRule {
               direction: performanceDirection,
             )
           : null,
+      json.containsKey('stages')
+          ? ThresholdStages.fromJson(
+              json['stages'],
+              dimension: min.dimension,
+              direction: performanceDirection,
+              sameScope:
+                  (aggregation.mode == 'total') ==
+                  (failureAggregation.mode == 'total'),
+            )
+          : null,
     );
   }
 
@@ -301,6 +384,9 @@ final class ThresholdRule {
   final bool hasPerformancePolicy;
   final AdvancementEffort? advancementEffort;
   final IncrementBands? incrementBands;
+
+  /// Optional failure-driven stages over one categorical slot lever.
+  final ThresholdStages? stages;
   Quantity get failureLimit => minimum;
   Quantity get advancementLimit => threshold;
   bool get hasSelectionPolicy => chosenMetric != null || priorityOrder != null;
@@ -316,12 +402,14 @@ final class ThresholdRule {
     List<SetObservations?>? observations,
     int failedSessions = 0,
     int cursor = 0,
+    String? stage,
   }) => evaluateVector(
     currentSets: [current],
     results: results,
     observations: observations,
     failedSessions: failedSessions,
     cursor: cursor,
+    stage: stage,
   ).single;
 
   /// Classify once. Chosen/priority advancement selects a whole-vector candidate.
@@ -333,7 +421,16 @@ final class ThresholdRule {
     List<SetObservations?>? observations,
     int failedSessions = 0,
     int cursor = 0,
+    String? stage,
   }) {
+    if ((stages == null) != (stage == null))
+      invalid(
+        stages == null
+            ? 'Only staged threshold rules take a current stage.'
+            : 'Staged threshold rules need the current stage.',
+      );
+    final stageIndex = stage == null ? null : stages!.indexOf(stage);
+    final limits = stageIndex == null ? null : stages!.order[stageIndex];
     if (currentSets.isEmpty || currentSets.length > 10000)
       invalid('Threshold progression needs 1 to 10000 target sets.');
     if (failedSessions < 0 ||
@@ -363,8 +460,8 @@ final class ThresholdRule {
       advancement: aggregation,
       failure: failureAggregation,
       metric: metric,
-      minimum: minimum,
-      threshold: threshold,
+      minimum: limits?.failureLimit ?? minimum,
+      threshold: limits?.advancementLimit ?? threshold,
       results: eligibleResults,
       direction: performanceDirection,
       explicitPerformance: hasPerformancePolicy,
@@ -384,6 +481,7 @@ final class ThresholdRule {
           selectedMetric: selected,
           effortAssessment: effortAssessment,
           incrementBandAssessment: incrementBandAssessment,
+          stageIndex: stageIndex,
         ),
     ];
     if (!hasSelectionPolicy) return List.unmodifiable(evaluate(null));
@@ -428,6 +526,7 @@ final class ThresholdRule {
           coordination: selection,
           effortAssessment: effortAssessment,
           incrementBandAssessment: incrementBandAssessment,
+          nextStage: stage,
         ),
     ]);
   }
@@ -446,6 +545,7 @@ final class ThresholdRule {
     incrementBandAssessment: p.incrementBandAssessment,
     coordination: selection,
     scaleResolutions: p.scaleResolutions,
+    nextStage: p.nextStage,
   );
 
   void _validateCurrent(Metrics current) {
@@ -477,15 +577,20 @@ final class ThresholdRule {
     String? selectedMetric,
     EffortAssessment? effortAssessment,
     IncrementBandAssessment? incrementBandAssessment,
+    int? stageIndex,
   }) {
     final scaleResolutions = <ScaleResolution>[];
+    final currentStage = stageIndex == null
+        ? null
+        : stages!.order[stageIndex].value;
     ProgressionProposal proposal(
       String outcome,
       String reason,
       Metrics values,
       int failures,
-      int nextCursor,
-    ) => ProgressionProposal(
+      int nextCursor, [
+      String? stageValue,
+    ]) => ProgressionProposal(
       outcome,
       reason,
       values,
@@ -497,6 +602,7 @@ final class ThresholdRule {
       scaleResolutions: scaleResolutions,
       effortAssessment: effortAssessment,
       incrementBandAssessment: incrementBandAssessment,
+      nextStage: stageValue ?? currentStage,
     );
     if (assessment.unknown) {
       return proposal(
@@ -510,6 +616,27 @@ final class ThresholdRule {
     if (assessment.failed) {
       final failures =
           failedSessions + 1; // one exposure, regardless of failed set count
+      final last = stageIndex != null && stageIndex == stages!.order.length - 1;
+      if (failures >= deloadAfter && stageIndex != null && !last)
+        return proposal(
+          'stage',
+          'Failed-exposure threshold reached; move to the next stage and '
+              'hold every numeric setting.',
+          current,
+          0,
+          cursor,
+          stages!.order[stageIndex + 1].value,
+        );
+      if (failures >= deloadAfter && last && deloadMetrics.isEmpty)
+        return proposal(
+          'stage',
+          'Failed-exposure threshold reached at the last stage; restart at '
+              'the first stage without a configured deload.',
+          current,
+          0,
+          cursor,
+          stages!.order.first.value,
+        );
       if (failures >= deloadAfter && deloadMetrics.isNotEmpty) {
         final next = <String, Quantity>{...current};
         for (final key in deloadMetrics) {
@@ -560,6 +687,7 @@ final class ThresholdRule {
           next,
           0,
           cursor,
+          last ? stages!.order.first.value : null,
         );
       }
       return proposal(
