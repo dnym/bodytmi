@@ -377,7 +377,8 @@ final class RepeatCheckpointService {
       final index = session.definition.plan.occurrences().toList().indexWhere(
         (o) => o.id == placement,
       );
-      if (traversal != null && traversal.cursor < index)
+      if (traversal != null &&
+          traversal.order.indexOf(index) > traversal.cursor)
         invalid(
           'AMRAP block $amrapId is placed at $placement; advance the '
           'traversal to it before starting the block.',

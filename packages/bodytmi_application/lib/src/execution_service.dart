@@ -50,7 +50,7 @@ final class ExecutionService {
   ) => repository.transaction(() async {
     final e = await show(id);
     final s = await StoredTrainingService(repository).session(e.sessionId);
-    final plan = executionPlan(s);
+    final plan = orderedPlan(s, e);
     final current = e.complete ? null : plan[e.cursor];
     final kind = current == null ? 'effort' : occurrenceKind(current.activity);
     final clock = e.complete || kind == 'amrap'
@@ -77,10 +77,12 @@ final class ExecutionService {
       'cursor': e.cursor,
       'status': e.complete ? 'completed' : 'active',
       'sessionContentVersion': s.contentVersion,
+      // What is left, in the order the traversal will walk it.
+      'remaining': [for (final o in plan.skip(e.cursor)) o.id],
       'groups': [
         for (final group in activityGroups(
           s.definition.plan,
-          containing: e.cursor,
+          containing: e.complete ? e.cursor : e.order[e.cursor],
         ))
           group.toJson(),
       ],
@@ -117,7 +119,7 @@ final class ExecutionService {
     if (e.version != version || e.complete) _conflict();
     final s = await StoredTrainingService(repository).session(e.sessionId);
     if (s.status != SessionStatus.active) invalid('Session is finalized.');
-    final occurrence = executionPlan(s)[e.cursor];
+    final occurrence = orderedPlan(s, e)[e.cursor];
     if (occurrence.activity is AmrapPlacement)
       invalid(
         'An AMRAP placement is timed by its repeat checkpoint; use '
@@ -215,7 +217,7 @@ final class ExecutionService {
     if (s.contentVersion != sessionVersion) _conflict();
     if (s.status != SessionStatus.active || at.isBefore(s.startedAt))
       invalid('Invalid execution session/time.');
-    final occurrence = executionPlan(s)[e.cursor];
+    final occurrence = orderedPlan(s, e)[e.cursor];
     final rest = occurrence.activity is Rest;
     final kind = occurrenceKind(occurrence.activity);
     String? sourceTimer;
@@ -341,10 +343,89 @@ final class ExecutionService {
     DateTime at,
   ) async {
     if (!e.complete) {
-      final current = executionPlan(s)[e.cursor].activity;
+      final current = orderedPlan(s, e)[e.cursor].activity;
       if (current is Rest && !current.isManual) await time(e.id, e.version, at);
     }
   }
+
+  /// Puts a not-yet-reached effort, or the remaining occurrences of a
+  /// structural group (an exercise's sets and their rests), next: at the
+  /// cursor while the current effort has not started timing, or right after
+  /// the current rest. Relative order is kept and nothing is recorded; the
+  /// version advances, so steps computed before the move conflict.
+  Future<WorkoutExecution> move(
+    String id,
+    int version,
+    String requestId,
+    DateTime at, {
+    String? occurrenceId,
+    String? groupPath,
+  }) => repository.transaction(() async {
+    identifier({'id': requestId}, 'id');
+    if ((occurrenceId == null) == (groupPath == null))
+      invalid('Name exactly one occurrenceId or groupPath to move.');
+    final e = await show(id);
+    final retried = e.moves
+        .where((m) => m['requestId'] == requestId)
+        .firstOrNull;
+    if (retried != null) {
+      if (retried['at'] != at.toUtc().toIso8601String()) _conflict();
+      return e;
+    }
+    if (e.version != version || e.complete) _conflict();
+    final s = await StoredTrainingService(repository).session(e.sessionId);
+    if (s.status != SessionStatus.active || at.isBefore(s.startedAt))
+      invalid('Execution needs an active session and valid time.');
+    final plan = executionPlan(s);
+    final Set<int> target;
+    if (occurrenceId != null) {
+      final index = plan.indexWhere((o) => o.id == occurrenceId);
+      if (index < 0 || plan[index].activity is! Effort)
+        invalid('Only an effort occurrence of this plan can be moved.');
+      target = {index};
+    } else {
+      final group = activityGroups(
+        s.definition.plan,
+        paths: {groupPath!},
+      ).where((g) => g.path == groupPath).firstOrNull;
+      if (group == null) invalid('Unknown structural group occurrence.');
+      target = {for (var i = group.start; i < group.end; i++) i};
+    }
+    final current = plan[e.order[e.cursor]].activity;
+    final int position;
+    if (current is Rest) {
+      position = e.cursor + 1;
+    } else if (current is Effort) {
+      if (await repository.timingActivity(e.clockId('effort')) != null)
+        invalid(
+          'The current effort has a clock; review or skip it before '
+          'reordering.',
+        );
+      position = e.cursor;
+    } else {
+      invalid('Finish or skip the current AMRAP block before reordering.');
+    }
+    final moved = [
+      for (var p = position; p < e.order.length; p++)
+        if (target.contains(e.order[p])) e.order[p],
+    ];
+    if (moved.isEmpty)
+      invalid(
+        'Nothing of that occurrence remains to be done after the cursor.',
+      );
+    if (moved.any((i) => plan[i].activity is AmrapPlacement))
+      invalid('An AMRAP placement cannot be moved.');
+    final next = e.withMove({
+      'cursor': e.cursor,
+      'position': position,
+      'occurrences': moved,
+      'requestId': requestId,
+      'at': at.toUtc().toIso8601String(),
+    });
+    await repository.saveExecution(next);
+    await _prepareRest(next, s, at);
+    return next;
+  });
 
   /// Skip only the unacknowledged remainder of a structural occurrence. Existing
   /// results are preserved; one transaction records every boundary and next rest.
@@ -391,6 +472,11 @@ final class ExecutionService {
         e.complete ||
         s.contentVersion != sessionVersion)
       _conflict();
+    if (e.moves.isNotEmpty)
+      invalid(
+        'This traversal was reordered; skip its remaining occurrences '
+        'individually.',
+      );
     if (s.status != SessionStatus.active ||
         at.isBefore(s.startedAt) ||
         !group.contains(e.cursor))
@@ -510,7 +596,7 @@ void _validateManagedClocks(
   List<TimingActivity> timers,
 ) {
   final byId = {for (final t in timers) t.id: t};
-  final plan = executionPlan(s);
+  final plan = orderedPlan(s, e);
   for (var i = 0; i < plan.length; i++) {
     if (plan[i].activity is AmrapPlacement) {
       if (byId.containsKey('execution-${e.id}-rest-$i') ||
@@ -528,6 +614,26 @@ void _validateManagedClocks(
             (!rest && t.plan.restMilliseconds != 0)))
       invalid('Managed execution clock identity belongs to another context.');
   }
+}
+
+/// The traversal order just before [move] was applied.
+List<int> _orderBefore(WorkoutExecution e, Map<String, Object?> move) {
+  final order = List<int>.generate(e.occurrenceCount, (i) => i);
+  for (final m in e.moves) {
+    if (identical(m, move)) break;
+    final moved = (m['occurrences']! as List).cast<int>();
+    order.removeWhere(moved.contains);
+    order.insertAll(m['position']! as int, moved);
+  }
+  return order;
+}
+
+/// The traversal's occurrences in the order it walks them, after any moves.
+List<ActivityOccurrence> orderedPlan(TrainingSession s, WorkoutExecution e) {
+  final plan = executionPlan(s);
+  if (plan.length != e.occurrenceCount)
+    invalid('Execution plan/context mismatch.');
+  return [for (final i in e.order) plan[i]];
 }
 
 List<ActivityOccurrence> executionPlan(TrainingSession s) {
@@ -559,8 +665,17 @@ void validateExecutionData(
     final s = sessionMap[e.sessionId];
     if (s == null || !ids.add(e.id) || !owners.add(e.sessionId))
       invalid('Duplicate or orphan workout execution.');
-    final plan = executionPlan(s);
+    if (executionPlan(s).length != e.occurrenceCount)
+      invalid('Execution plan/context mismatch.');
+    final plan = orderedPlan(s, e);
     _validateManagedClocks(e, s, timers);
+    for (final m in e.moves) {
+      // A move after the cursor position keeps the current rest first.
+      final cursor = m['cursor']! as int;
+      if (m['position'] != cursor &&
+          executionPlan(s)[_orderBefore(e, m)[cursor]].activity is! Rest)
+        invalid('An execution move can only follow the current rest.');
+    }
     final groups = {
       for (final g in activityGroups(
         s.definition.plan,
@@ -614,7 +729,7 @@ void validateExecutionData(
             'skip',
             'skip-group',
           }.contains(action) ||
-          request['version'] != ordinal + 1 ||
+          request['version'] != e.versionAt(ordinal) ||
           request['at'] != r['at'] ||
           request['sessionVersion'] is! int ||
           (request['sessionVersion']! as int) < 1 ||
@@ -633,6 +748,7 @@ void validateExecutionData(
             end is! int ||
             start < 0 ||
             start > ordinal ||
+            e.moves.any((m) => (m['cursor']! as int) <= ordinal) ||
             ordinal >= end ||
             end > e.cursor ||
             group == null ||

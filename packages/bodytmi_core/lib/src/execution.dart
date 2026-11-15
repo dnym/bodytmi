@@ -10,6 +10,8 @@ final class WorkoutExecution {
     this.createdAt,
     this.occurrenceCount,
     this.receipts,
+    this.moves,
+    this.order,
   );
   factory WorkoutExecution.create(
     String id,
@@ -31,6 +33,7 @@ final class WorkoutExecution {
       'createdAt',
       'occurrenceCount',
       'receipts',
+      'moves',
     });
     final id = identifier(j, 'id');
     if (id.length > 64) invalid('Execution ID exceeds 64 characters.');
@@ -91,20 +94,68 @@ final class WorkoutExecution {
       }
       receipts.add(_freeze(r) as Map<String, Object?>);
     }
+    // Explicit reorders: each move takes not-yet-reached occurrences and
+    // puts them next, at the cursor or right after the current rest.
+    if (j.containsKey('moves') && jsonList(j, 'moves').isEmpty)
+      invalid('Empty execution moves must be omitted.');
+    final order = List<int>.generate(count, (i) => i);
+    final moves = <Map<String, Object?>>[];
+    var lastCursor = 0;
+    DateTime? lastAt;
+    for (final item in j.containsKey('moves') ? jsonList(j, 'moves') : []) {
+      final m = jsonObject(item, 'execution move');
+      checkKeys(m, {'cursor', 'position', 'occurrences', 'requestId', 'at'});
+      final cursor = m['cursor'], position = m['position'];
+      final at = parseInstant(m['at'], 'at');
+      final moved = jsonList(m, 'occurrences');
+      if (cursor is! int ||
+          cursor < lastCursor ||
+          cursor > rows.length ||
+          (lastAt != null && at.isBefore(lastAt)) ||
+          position is! int ||
+          (position != cursor && position != cursor + 1) ||
+          position >= count ||
+          moved.isEmpty ||
+          moved.any((i) => i is! int || i < 0 || i >= count) ||
+          moved.toSet().length != moved.length ||
+          moved.any((i) => order.indexOf(i as int) < position) ||
+          !requests.add(identifier(m, 'requestId')))
+        invalid('Invalid execution move.');
+      order.removeWhere(moved.contains);
+      order.insertAll(position, moved.cast<int>());
+      lastCursor = cursor;
+      lastAt = at;
+      moves.add(_freeze(m) as Map<String, Object?>);
+    }
     return WorkoutExecution._(
       id,
       identifier(j, 'sessionId'),
       parseInstant(j['createdAt'], 'createdAt'),
       count,
       List.unmodifiable(receipts),
+      List.unmodifiable(moves),
+      List.unmodifiable(order),
     );
   }
   final String id, sessionId;
   final DateTime createdAt;
   final int occurrenceCount;
   final List<Map<String, Object?>> receipts;
+
+  /// Explicit reorders, oldest first.
+  final List<Map<String, Object?>> moves;
+
+  /// Plan index of the occurrence at each traversal position.
+  final List<int> order;
   int get cursor => receipts.length;
-  int get version => cursor + 1;
+
+  /// Advances with every receipt and every move, so a step computed before
+  /// a reorder conflicts instead of acting on another occurrence.
+  int get version => cursor + 1 + moves.length;
+
+  /// The version a receipt at [ordinal] was made under.
+  int versionAt(int ordinal) =>
+      ordinal + 1 + moves.where((m) => (m['cursor']! as int) <= ordinal).length;
   bool get complete => cursor == occurrenceCount;
   String clockId(String kind) => 'execution-$id-$kind-$cursor';
   WorkoutExecution append(Map<String, Object?> receipt) =>
@@ -112,12 +163,18 @@ final class WorkoutExecution {
         ...toJson(),
         'receipts': [...receipts, receipt],
       });
+  WorkoutExecution withMove(Map<String, Object?> move) =>
+      WorkoutExecution.fromJson({
+        ...toJson(),
+        'moves': [...moves, move],
+      });
   Map<String, Object?> toJson() => {
     'id': id,
     'sessionId': sessionId,
     'createdAt': createdAt.toUtc().toIso8601String(),
     'occurrenceCount': occurrenceCount,
     'receipts': receipts,
+    if (moves.isNotEmpty) 'moves': moves,
   };
 }
 

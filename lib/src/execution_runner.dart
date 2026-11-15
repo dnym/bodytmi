@@ -31,7 +31,7 @@ Future<Map<String, Object?>> runExecution(
   if (e.version != version || session.contentVersion != sessionVersion)
     throw const BodyTmiException('conflict', 'Execution or session changed.');
   if (e.complete) invalid('Workout traversal is complete.');
-  final current = executionPlan(session)[e.cursor];
+  final current = orderedPlan(session, e)[e.cursor];
   final rest = current.activity is Rest;
   if (!rest && session.set(current.id).status != SetStatus.planned) {
     await service.step(id, version, sessionVersion, requestId, at);

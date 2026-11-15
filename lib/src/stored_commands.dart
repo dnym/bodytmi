@@ -18,6 +18,7 @@ const storedCommandNames = [
   'execution confirm',
   'execution skip',
   'execution skip-group',
+  'execution move',
   'execution run',
   'timer rest',
   'timer start',
@@ -245,6 +246,14 @@ Future<Map<String, Object?>> executeStored(
       'at',
       'groupPath',
       'confirm',
+    },
+    'execution move' => {
+      'id',
+      'expectedVersion',
+      'requestId',
+      'at',
+      'occurrenceId',
+      'groupPath',
     },
     'execution run' => {
       'id',
@@ -1422,6 +1431,20 @@ Future<Map<String, Object?>> executeStored(
           requiredString(request, 'groupPath'),
           parseInstant(request['at'], 'at'),
           confirm: flag('confirm'),
+        );
+        data = await execution.view(e.id);
+      case 'execution move':
+        final e = await execution.move(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          identifier(request, 'requestId'),
+          parseInstant(request['at'], 'at'),
+          occurrenceId: request.containsKey('occurrenceId')
+              ? requiredString(request, 'occurrenceId')
+              : null,
+          groupPath: request.containsKey('groupPath')
+              ? requiredString(request, 'groupPath')
+              : null,
         );
         data = await execution.view(e.id);
       case 'timer rest':

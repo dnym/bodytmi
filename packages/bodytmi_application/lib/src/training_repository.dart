@@ -1098,7 +1098,7 @@ final class StoredTrainingService {
     }
     for (final execution in await repository.executions()) {
       if (execution.sessionId != id || execution.complete) continue;
-      final plan = executionPlan(current);
+      final plan = orderedPlan(current, execution);
       if (plan
           .take(execution.cursor)
           .any((occurrence) => changed.contains(occurrence.id))) {
@@ -1188,7 +1188,7 @@ final class StoredTrainingService {
       );
     for (final execution in await repository.executions(sessionId: id)) {
       if (execution.complete) continue;
-      if (executionPlan(current)
+      if (orderedPlan(current, execution)
           .take(execution.cursor)
           .any((occurrence) => changed.contains(occurrence.id)))
         invalid('Sets behind the traversal cursor cannot be substituted.');
