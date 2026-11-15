@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'errors.dart';
 import 'instant.dart';
 import 'quantity.dart';
@@ -183,25 +185,12 @@ final class BodyMassTrend {
   final List<BodyMassDay> days;
   final List<BodyMassMeasurement> eligibleMeasurements;
 
-  /// Structured fingerprint rather than an unverified hash. Includes membership,
-  /// versions and values, so insertion/deletion or a wrongly unversioned edit is
-  /// still visible. It belongs to the frozen resolver input, not a global clock.
-  Map<String, Object?> get sourceFingerprint => {
-    'policy': policy,
-    'dailyMode': dailyMode.name,
-    'context': context,
-    'sources': List<Map<String, Object?>>.unmodifiable([
-      for (final m in eligibleMeasurements)
-        Map<String, Object?>.unmodifiable({
-          'id': m.id,
-          'contentVersion': m.contentVersion,
-          'observedAt': m.observedAtText,
-          'massKg': m.mass.value.toString(),
-          if (m.source != null) 'source': m.source,
-          if (m.notes != null) 'notes': m.notes,
-        }),
-    ]),
-  };
+  /// A compact fingerprint of every eligible observation: membership,
+  /// versions, times, values and metadata hashed (SHA-256 over canonical
+  /// JSON), so insertions, deletions and edits stay visible while a frozen
+  /// session stores a constant-size value rather than the whole history.
+  Map<String, Object?> get sourceFingerprint =>
+      bodyMassFingerprint(context, dailyMode, eligibleMeasurements);
 
   Map<String, Object?> toJson() => {
     'policy': policy,
@@ -212,6 +201,32 @@ final class BodyMassTrend {
     'days': [for (final day in days) day.toJson()],
     'sourceFingerprint': sourceFingerprint,
   };
+}
+
+/// The policy `body-mass-ewma/2` fingerprint over [sources], in order.
+Map<String, Object?> bodyMassFingerprint(
+  String context,
+  DailyMassMode dailyMode,
+  List<BodyMassMeasurement> sources,
+) {
+  final canonical = jsonEncode([
+    for (final m in sources)
+      [
+        m.id,
+        m.contentVersion,
+        m.observedAtText,
+        m.mass.value.toString(),
+        m.source,
+        m.notes,
+      ],
+  ]);
+  return Map.unmodifiable({
+    'policy': 'body-mass-ewma/2',
+    'dailyMode': dailyMode.name,
+    'context': context,
+    'sourceCount': sources.length,
+    'sha256': sha256.convert(utf8.encode(canonical)).toString(),
+  });
 }
 
 final class BodyMassResolution {
@@ -294,6 +309,94 @@ final class BodyMassResolution {
     );
   }
 
+  /// A frozen resolution, checked for internal consistency under the
+  /// selection's staleness settings. Its raw trend inputs are not retained,
+  /// so the trend mass itself is taken as captured.
+  factory BodyMassResolution.fromJson(
+    Object? input, {
+    required int staleAfterDays,
+    required bool warningEnabled,
+  }) {
+    final j = jsonObject(input, 'body-mass resolution');
+    checkKeys(j, {
+      'policy',
+      'context',
+      'asOf',
+      'source',
+      'mass',
+      'sourceObservedAt',
+      'stale',
+      'warnings',
+      'sourceFingerprint',
+    });
+    if (j['policy'] != 'training-mass/1')
+      invalid('Unsupported body-mass resolution policy.');
+    final source = j['source'];
+    if (!{'unavailable', 'manual', 'measurement', 'trend'}.contains(source))
+      invalid('Invalid body-mass resolution source.');
+    final mass = j['mass'] == null ? null : Quantity.fromJson(j['mass']);
+    if ((mass == null) != (source == 'unavailable'))
+      invalid('Only an unavailable body mass has no mass.');
+    if (mass != null) _requireMass(mass);
+    final asOf = parseInstant(j['asOf'], 'asOf');
+    final observed = j['sourceObservedAt'] == null
+        ? null
+        : parseInstant(j['sourceObservedAt'], 'sourceObservedAt');
+    if ((observed == null) != (source == 'unavailable') ||
+        (observed?.isAfter(asOf) ?? false))
+      invalid('Invalid body-mass source observation time.');
+    final fingerprint = jsonObject(
+      j['sourceFingerprint'],
+      'source fingerprint',
+    );
+    final expectedPolicy = switch (source) {
+      'manual' => 'manual/1',
+      'measurement' => 'measurement/1',
+      _ => 'body-mass-ewma/2',
+    };
+    if (fingerprint['policy'] != expectedPolicy ||
+        fingerprint['context'] != j['context'])
+      invalid('Body-mass fingerprint does not match its resolution.');
+    if (expectedPolicy == 'body-mass-ewma/2') {
+      checkKeys(fingerprint, {
+        'policy',
+        'dailyMode',
+        'context',
+        'sourceCount',
+        'sha256',
+      });
+      final count = fingerprint['sourceCount'];
+      if (count is! int ||
+          (count == 0) != (source == 'unavailable') ||
+          fingerprint['sha256'] is! String ||
+          !RegExp(r'^[0-9a-f]{64}$').hasMatch(fingerprint['sha256'] as String))
+        invalid('Invalid body-mass trend fingerprint.');
+    }
+    final result = BodyMassResolution._(
+      context: identifier(j, 'context'),
+      asOf: asOf.toUtc(),
+      source: source as String,
+      mass: mass,
+      sourceObservedAt: observed,
+      stale:
+          observed != null &&
+          asOf.difference(observed) > Duration(days: staleAfterDays),
+      warningEnabled: warningEnabled,
+      sourceFingerprint: expectedPolicy == 'body-mass-ewma/2'
+          ? {
+              'policy': fingerprint['policy'],
+              'dailyMode': fingerprint['dailyMode'],
+              'context': fingerprint['context'],
+              'sourceCount': fingerprint['sourceCount'],
+              'sha256': fingerprint['sha256'],
+            }
+          : fingerprint,
+    );
+    if (_sortedJson(result.toJson()) != _sortedJson(j))
+      invalid('Body-mass resolution is internally inconsistent.');
+    return result;
+  }
+
   final String context;
   final DateTime asOf;
   final String source;
@@ -314,3 +417,13 @@ final class BodyMassResolution {
     'sourceFingerprint': sourceFingerprint,
   };
 }
+
+String _sortedJson(Object? value) => jsonEncode(_sorted(value));
+Object? _sorted(Object? value) => switch (value) {
+  Map() => {
+    for (final k in (value.keys.map((k) => k as String).toList()..sort()))
+      k: _sorted(value[k]),
+  },
+  List() => [for (final v in value) _sorted(v)],
+  _ => value,
+};

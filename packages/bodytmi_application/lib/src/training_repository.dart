@@ -749,30 +749,14 @@ final class StoredTrainingService {
       invalid('Derived plan pins another workout revision.');
     final preview = jsonObject(resolved['preview'], 'derived preview');
     final graph = jsonObject(preview['graphResolution'], 'graph resolution');
-    final bodyMassSources = <String, Object?>{};
-    final bodyRecords = await repository.bodyMassRecords();
     for (final entry in jsonObject(
       graph['bindings'],
       'graph bindings',
     ).entries) {
       final source = jsonObject(entry.value, 'graph source');
-      if (source['kind'] == 'bodyMass') {
-        final cutoff = source['asOf'] == null
-            ? startedAt
-            : parseInstant(source['asOf'], 'asOf');
-        final selected = [
-          for (final record in bodyRecords)
-            if (!record.deleted &&
-                record.measurement.context == source['context'] &&
-                !record.measurement.observedAt.isAfter(cutoff))
-              record.measurement,
-        ];
-        selected.sort((a, b) {
-          final order = a.observedAt.compareTo(b.observedAt);
-          return order != 0 ? order : a.id.compareTo(b.id);
-        });
-        bodyMassSources[entry.key] = [for (final m in selected) m.toJson()];
-      } else if (source['kind'] != 'manual' && source['kind'] != 'history') {
+      if (source['kind'] != 'bodyMass' &&
+          source['kind'] != 'manual' &&
+          source['kind'] != 'history') {
         invalid('Unsupported session plan source.');
       }
     }
@@ -847,7 +831,6 @@ final class StoredTrainingService {
     final derivedInput = DerivedPlanInput.fromJson({
       'reference': reference.toJson(),
       'snapshot': resolved,
-      if (bodyMassSources.isNotEmpty) 'bodyMassSources': bodyMassSources,
     });
     return (finalSets, derivedInput);
   }

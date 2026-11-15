@@ -109,9 +109,11 @@ void sessionBodyMassTests() {
       );
       await mass.save(_observation(_mass('training', '75')), 1);
       final saved = await training.session(session.id);
+      // The trend input keeps its mass and fingerprint, not the weigh-in.
+      check(saved.bodyMassInputs['bench-heavy']!.measurements.isEmpty);
       equal(
-        saved.bodyMassInputs['bench-heavy']!.measurements.single.notes,
-        'Morning',
+        saved.bodyMassInputs['bench-heavy']!.resolution.mass!.value.toString(),
+        '75',
       );
       final status = const TrainingService().bodyMassStatus(saved, [
         (await mass.show('training')).measurement,
@@ -1263,10 +1265,14 @@ void sessionBodyMassTests() {
       await measurements.save(_observation(_mass('training', '75')), 0);
       final s = await service.start('saved', definition().id, 1, instant(10));
       final mutations = <void Function(Map<String, Object?>)>[
-        (j) => jsonObject(_input(j)['resolution'], 'resolution')['mass'] = {
-          'value': '999',
-          'unit': 'kg',
-        },
+        (j) => jsonObject(_input(j)['resolution'], 'resolution')['stale'] =
+            !(jsonObject(_input(j)['resolution'], 'r')['stale']! as bool),
+        (j) => jsonObject(_input(j)['resolution'], 'resolution')['mass'] = null,
+        (j) => jsonObject(
+          jsonObject(_input(j)['resolution'], 'r')['sourceFingerprint'],
+          'f',
+        )['sha256'] = 'not-a-hash',
+        (j) => _input(j)['measurements'] = [_mass('training', '75').toJson()],
         (j) => jsonObject(_input(j)['selection'], 'selection')['context'] =
             'other',
         (j) => _input(j)['asOf'] = instant(9).toIso8601String(),
@@ -1278,10 +1284,16 @@ void sessionBodyMassTests() {
         mutate(j);
         rejects(() => sessionFromJson(j));
       }
+      // A trend keeps its mass and fingerprint, not the weigh-ins: removing or
+      // editing raw records is a later correction the fingerprint reports,
+      // never a rewrite of what the session used.
       final archive = (await store.archive()).toJson();
       final missing = copyJson(archive);
       jsonList(missing, 'bodyMass').clear();
-      rejects(() => TrainingArchive.fromJson(missing));
+      jsonEqual(
+        TrainingArchive.fromJson(missing).sessions.single.toJson(),
+        s.toJson(),
+      );
       final changed = copyJson(archive);
       jsonObject(
         jsonObject(
@@ -1293,7 +1305,13 @@ void sessionBodyMassTests() {
         'value': '76',
         'unit': 'kg',
       };
-      rejects(() => TrainingArchive.fromJson(changed));
+      final edited = TrainingArchive.fromJson(changed);
+      equal(
+        edited.sessions.single.bodyMassInputs['bench-heavy']!.freshness([
+          edited.bodyMass.single.measurement,
+        ])['changed'],
+        true,
+      );
       await measurements.save(_observation(_mass('training', '76')), 1);
       await measurements.delete('training', 2, confirm: true);
       jsonEqual(

@@ -165,12 +165,13 @@ void derivedPlanBodyMassTests() {
         jsonObject(beforeStatus['comparison'], 'comparison')['changed'],
         false,
       );
-      final captured =
-          session.derivedPlanInput!.bodyMassSources['body-source']!;
-      equal(captured.length, 2);
-      equal(captured.first.id, 'm1');
-      equal(captured.first.mass.enteredUnit, Unit.lb);
-      equal(captured.first.observedAtText, '2026-10-01T08:00:00+02:00');
+      // Only the resolved mass and a compact fingerprint are frozen.
+      final captured = _bodySource(session);
+      equal(_fingerprint(session)['sourceCount'], 2);
+      check(!captured.containsKey('measurements'));
+      check(
+        !jsonEncode(session.toJson()).contains('2026-10-01T08:00:00+02:00'),
+      );
       equal(
         canonicalJson(sessionFromJson(session.toJson()).toJson()),
         canonicalJson(session.toJson()),
@@ -289,10 +290,7 @@ void derivedPlanBodyMassTests() {
         derivedPlan: _ref,
       );
       await mass.save(observation, 1);
-      equal(
-        session.derivedPlanInput!.bodyMassSources['body-source']!.single.notes,
-        'Clothed',
-      );
+      equal(_fingerprint(session)['sourceCount'], 1);
       final comparison = jsonObject(
         (await DerivedWorkoutPreview(
           store,
@@ -314,15 +312,10 @@ void derivedPlanBodyMassTests() {
       );
       try {
         equal(
-          prepared
-              .archive
-              .sessions
-              .single
-              .derivedPlanInput!
-              .bodyMassSources['body-source']!
-              .single
-              .notes,
-          'Clothed',
+          canonicalJson(
+            prepared.archive.sessions.single.derivedPlanInput!.snapshot,
+          ),
+          canonicalJson(session.derivedPlanInput!.snapshot),
         );
       } finally {
         await prepared.close();
@@ -405,13 +398,7 @@ void derivedPlanBodyMassTests() {
         canonicalJson(session.sets.last.toJson()),
       );
       equal(
-        refreshed
-            .derivedPlanInput!
-            .bodyMassSources['body-source']!
-            .single
-            .mass
-            .value
-            .toString(),
+        Quantity.fromJson(_bodySource(refreshed)['value']).value.toString(),
         '90',
       );
       equal(
@@ -597,10 +584,7 @@ void derivedPlanBodyMassTests() {
         next.sets.first.suggested['mass']!.value.toString(),
         session.sets.first.suggested['mass']!.value.toString(),
       );
-      equal(
-        next.derivedPlanInput!.bodyMassSources['body-source']!.single.notes,
-        'After',
-      );
+      check(_fingerprint(next)['sha256'] != _fingerprint(session)['sha256']);
     }),
   );
 
@@ -685,10 +669,7 @@ void derivedPlanBodyMassTests() {
         derivedPlan: const DerivedPlanRef('mass-graph', 2, 'mass-plan'),
       );
       equal(session.sets.first.suggested['mass']!.value.toString(), '80');
-      equal(
-        session.derivedPlanInput!.bodyMassSources['body-source']!.length,
-        0,
-      );
+      equal(_fingerprint(session)['sourceCount'], 0);
       equal((await store.archive()).sessions.length, 1);
     }),
   );
@@ -712,26 +693,34 @@ void derivedPlanBodyMassTests() {
       final session = await StoredTrainingService(
         store,
       ).start('session', definition().id, 1, instant(3), derivedPlan: _ref);
+      // The frozen mass feeds the frozen arithmetic; a forged value or
+      // fingerprint is rejected, while later corrections of the raw weigh-in
+      // are reported by fingerprint rather than revalidated.
+      Map<String, Object?> source(Map<String, Object?> session) => jsonObject(
+        jsonObject(
+          jsonObject(
+            jsonObject(
+              jsonObject(
+                jsonObject(session['derivedPlanInput'], 'input')['snapshot'],
+                'snapshot',
+              )['preview'],
+              'preview',
+            )['graphResolution'],
+            'graph resolution',
+          )['bindings'],
+          'bindings',
+        )['body-source'],
+        'source',
+      );
       final forged = copyJson(session.toJson());
-      final inputs = jsonObject(
-        jsonObject(forged['derivedPlanInput'], 'input')['bodyMassSources'],
-        'sources',
-      );
-      final m = jsonObject(
-        (inputs['body-source']! as List<Object?>).single,
-        'measurement',
-      );
-      m['mass'] = {'value': '81', 'unit': 'kg'};
+      source(forged)['value'] = {'value': '81', 'unit': 'kg'};
       rejects(() => sessionFromJson(forged));
-      final archive = await store.archive();
-      final doc = copyJson(archive.toJson());
-      final record = jsonObject(
-        (doc['bodyMass']! as List<Object?>).single,
-        'record',
-      );
-      final measurement = jsonObject(record['measurement'], 'measurement');
-      measurement['mass'] = {'value': '81', 'unit': 'kg'};
-      rejects(() => TrainingArchive.fromJson(doc));
+      final hashed = copyJson(session.toJson());
+      jsonObject(
+        jsonObject(source(hashed)['provenance'], 'p')['sourceFingerprint'],
+        'f',
+      )['sourceCount'] = 0;
+      rejects(() => sessionFromJson(hashed));
     }),
   );
   test(
@@ -847,11 +836,30 @@ void derivedPlanBodyMassTests() {
         session.sets.first.suggested['mass']!.value.toString(),
         '72.5747792',
       );
-      final sources = session.derivedPlanInput!.bodyMassSources['body-source']!;
-      equal(sources.length, 1);
-      equal(sources.single.id, 'm1');
-      equal(sources.single.mass.enteredUnit, Unit.lb);
+      equal(_fingerprint(session)['sourceCount'], 1);
       equal((await store.archive()).sessions.length, 1);
     }),
   );
 }
+
+Map<String, Object?> _bodySource(TrainingSession session) => jsonObject(
+  jsonObject(
+    jsonObject(
+      jsonObject(
+        session.derivedPlanInput!.snapshot['preview'],
+        'preview',
+      )['graphResolution'],
+      'graph resolution',
+    )['bindings'],
+    'bindings',
+  )['body-source'],
+  'body source',
+);
+
+Map<String, Object?> _fingerprint(TrainingSession session) => jsonObject(
+  jsonObject(
+    _bodySource(session)['provenance'],
+    'provenance',
+  )['sourceFingerprint'],
+  'fingerprint',
+);

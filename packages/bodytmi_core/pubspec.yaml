@@ -5,3 +5,5 @@ description: Pure Dart training models and rules.
 resolution: workspace
 environment:
   sdk: ^3.10.0
+dependencies:
+  crypto: ^3.0.8

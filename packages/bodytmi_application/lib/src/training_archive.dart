@@ -638,13 +638,3 @@ void validateBodyMassInputReferences(
           );
       }
 }
-
-/// Whether raw metadata is frozen within a session's body-mass inputs.
-bool sessionHasBodyMassMetadata(TrainingSession session) =>
-    session.bodyMassInputs.values.any(
-      (input) => input.measurements.any((m) => m.hasMetadata),
-    ) ||
-    (session.derivedPlanInput?.bodyMassSources.values.any(
-          (sources) => sources.any((m) => m.hasMetadata),
-        ) ??
-        false);

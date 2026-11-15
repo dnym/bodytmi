@@ -61,8 +61,11 @@ final class BodyMassOverride {
   };
 }
 
-/// Frozen resolver input and reproducible output. Corrections to the live series
-/// do not rewrite this input. Retain raw inputs to validate historical provenance.
+/// The body mass a slot used, frozen at the session start: its selection,
+/// the resolved mass and a compact source fingerprint. A chosen weigh-in is
+/// retained (it resolves on its own); a trend's raw history is not, so storage
+/// stays constant as weigh-ins accumulate. Later corrections never rewrite it;
+/// [freshness] reports them by fingerprint.
 final class BodyMassInputSnapshot {
   BodyMassInputSnapshot._(
     this.selection,
@@ -90,14 +93,12 @@ final class BodyMassInputSnapshot {
       staleAfterDays: selection.staleAfterDays,
       warningEnabled: selection.warnIfStale,
     );
-    final selected = override?.mass != null
+    // Only a chosen weigh-in is retained; a trend keeps its resolved mass
+    // and compact source fingerprint, not the whole history.
+    final selected = override?.measurementId == null
         ? <BodyMassMeasurement>[]
         : trend.eligibleMeasurements
-              .where(
-                (m) =>
-                    override?.measurementId == null ||
-                    m.id == override!.measurementId,
-              )
+              .where((m) => m.id == override!.measurementId)
               .toList();
     return BodyMassInputSnapshot._(
       selection,
@@ -116,17 +117,45 @@ final class BodyMassInputSnapshot {
       'measurements',
       'resolution',
     });
-    final result = BodyMassInputSnapshot.capture(
-      selection: BodyMassSelection.fromJson(j['selection']),
-      asOf: parseInstant(j['asOf'], 'asOf'),
-      measurements: [
-        for (final m in jsonList(j, 'measurements'))
-          BodyMassMeasurement.fromJson(m),
-      ],
-      override: j.containsKey('override')
-          ? BodyMassOverride.fromJson(j['override'])
-          : null,
-    );
+    final selection = BodyMassSelection.fromJson(j['selection']);
+    final asOf = parseInstant(j['asOf'], 'asOf');
+    final measurements = [
+      for (final m in jsonList(j, 'measurements'))
+        BodyMassMeasurement.fromJson(m),
+    ];
+    final override = j.containsKey('override')
+        ? BodyMassOverride.fromJson(j['override'])
+        : null;
+    final BodyMassInputSnapshot result;
+    if (override != null) {
+      // An override resolves from its own frozen input alone.
+      result = BodyMassInputSnapshot.capture(
+        selection: selection,
+        asOf: asOf,
+        measurements: measurements,
+        override: override,
+      );
+    } else {
+      if (measurements.isNotEmpty)
+        invalid('A trend body-mass input retains no raw measurements.');
+      final resolution = BodyMassResolution.fromJson(
+        j['resolution'],
+        staleAfterDays: selection.staleAfterDays,
+        warningEnabled: selection.warnIfStale,
+      );
+      if (resolution.context != selection.context ||
+          resolution.asOf != asOf.toUtc() ||
+          !{'trend', 'unavailable'}.contains(resolution.source) ||
+          resolution.sourceFingerprint['dailyMode'] != selection.dailyMode.name)
+        invalid('Body-mass trend input does not match its selection.');
+      result = BodyMassInputSnapshot._(
+        selection,
+        asOf.toUtc(),
+        null,
+        const [],
+        resolution,
+      );
+    }
     if (!_sameJson(j, result.toJson()))
       invalid(
         'Body-mass input snapshot is inconsistent with its resolver output.',
