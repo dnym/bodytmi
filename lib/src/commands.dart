@@ -994,7 +994,7 @@ final class Commands {
             )
             .toJson();
       case 'session finish':
-        keys({'session', 'finishedAt'});
+        keys({'session', 'finishedAt', 'endedAt'});
         data = sessionFromJson(request['session'])
             .finish(
               parseInstant(request['finishedAt'], 'finishedAt'),
@@ -1002,6 +1002,9 @@ final class Commands {
                 request['finishedAt'],
                 'finishedAt',
               ),
+              endedAt: request.containsKey('endedAt')
+                  ? parseInstant(request['endedAt'], 'endedAt')
+                  : null,
             )
             .toJson();
       case 'progression evaluate':

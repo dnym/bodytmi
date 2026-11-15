@@ -1317,6 +1317,7 @@ void programTests() {
               startedAt: s.startedAt,
               startOffsetMinutes: s.startOffsetMinutes,
               finishOffsetMinutes: s.finishOffsetMinutes,
+              endedAt: s.endedAt,
               sets: s.sets,
             ),
           ),

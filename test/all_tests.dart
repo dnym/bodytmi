@@ -39,6 +39,7 @@ import 'unilateral_side_test.dart';
 import 'local_time_test.dart';
 import 'reopen_decision_test.dart';
 import 'rest_range_test.dart';
+import 'small_fixes_test.dart';
 import 'phase_override_test.dart';
 import 'extended_records_test.dart';
 import 'progression_preset_test.dart';
@@ -143,6 +144,7 @@ Future<void> main() async {
   localTimeTests();
   reopenDecisionTests();
   restRangeTests();
+  smallFixesTests();
   phaseOverrideTests();
   extendedRecordsTests();
   progressionPresetTests();

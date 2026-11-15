@@ -490,10 +490,16 @@ final class TimingActivity {
       });
 
   TimingActivity resume(String owner, DateTime at) {
-    if (status != 'paused')
-      invalid(
-        'Only a paused clock can resume; recover an interrupted clock explicitly.',
+    // Another owner's running clock is a state conflict needing recovery,
+    // not invalid input.
+    if (status == 'running')
+      throw const BodyTmiException(
+        'conflict',
+        'The clock is running under another owner; recover it explicitly '
+            'before resuming.',
       );
+    if (status != 'paused')
+      invalid('Only a paused clock can resume; this clock already ended.');
     identifier({'id': owner}, 'id');
     if (owner == ownerId)
       invalid('Resume requires a fresh monotonic clock owner.');
@@ -524,9 +530,12 @@ final class TimingActivity {
 
   TimingAdvance advance(int cumulative, String owner, DateTime at) {
     timingInt({'n': cumulative}, 'n');
-    if (status != 'running' ||
-        owner != ownerId ||
-        cumulative < ownerElapsedMilliseconds)
+    if (status == 'running' && owner != ownerId)
+      throw const BodyTmiException(
+        'conflict',
+        'The clock is owned by another monotonic clock; recover it first.',
+      );
+    if (status != 'running' || cumulative < ownerElapsedMilliseconds)
       invalid('Invalid monotonic clock owner/sample.');
     var delta = cumulative - ownerElapsedMilliseconds;
     if (delta == 0) return TimingAdvance(this, const []);

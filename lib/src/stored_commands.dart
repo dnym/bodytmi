@@ -693,7 +693,7 @@ Future<Map<String, Object?>> executeStored(
       'applyToRemaining',
     },
     'store carry-actual' => {'id', 'expectedVersion', 'setId', 'metric'},
-    'store finish' => {'id', 'expectedVersion', 'finishedAt'},
+    'store finish' => {'id', 'expectedVersion', 'finishedAt', 'endedAt'},
     'store history' => <String>{},
     'store snapshot' => {'destination'},
     'backup create' => {'destination'},
@@ -2064,12 +2064,20 @@ Future<Map<String, Object?>> executeStored(
           };
         });
       case 'store summary':
-        data = const TrainingAnalytics().summary(
-          await service.session(identifier(request, 'id')),
-          includeWarmups: flag('includeWarmups'),
-          sumMetrics: analyticsSums(request),
-          roles: analyticsRoles(request),
+        final summarized = await service.session(identifier(request, 'id'));
+        final rests = restTotals(
+          await store.executions(sessionId: summarized.id),
         );
+        data = {
+          ...const TrainingAnalytics().summary(
+            summarized,
+            includeWarmups: flag('includeWarmups'),
+            sumMetrics: analyticsSums(request),
+            roles: analyticsRoles(request),
+          ),
+          // Guided traversals measure authored rests (walk intervals).
+          'rests': ?rests,
+        };
       case 'store rounds':
         data = const RoundProgress().evaluate(
           await service.session(identifier(request, 'id')),
@@ -2796,7 +2804,13 @@ Future<Map<String, Object?>> executeStored(
         data = (await service.edit(
           identifier(request, 'id'),
           integer('expectedVersion'),
-          (s) => s.finish(finishedAt, offsetMinutes: finishOffset),
+          (s) => s.finish(
+            finishedAt,
+            offsetMinutes: finishOffset,
+            endedAt: request.containsKey('endedAt')
+                ? parseInstant(request['endedAt'], 'endedAt')
+                : null,
+          ),
         )).toJson();
       case 'store snapshot':
         final destination = requiredString(request, 'destination');

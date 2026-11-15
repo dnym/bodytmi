@@ -997,6 +997,7 @@ final class TrainingSession {
     this.status = SessionStatus.active,
     this.finishedAt,
     required this.finishOffsetMinutes,
+    required this.endedAt,
     this.contentVersion = 1,
     Map<String, BodyMassInputSnapshot> bodyMassInputs = const {},
     Map<String, BodyMassOverride>? initialBodyMassOverrides,
@@ -1020,6 +1021,11 @@ final class TrainingSession {
     checkOffsetMinutes(finishOffsetMinutes, 'finishedAt');
     if (finishedAt == null && finishOffsetMinutes != 0)
       invalid('An unfinished session has no finish offset.');
+    if (endedAt != null &&
+        (finishedAt == null ||
+            endedAt!.isBefore(startedAt) ||
+            endedAt!.isAfter(finishedAt!)))
+      invalid('Training must end between the session start and finish.');
     definition = revision.definition.resolveVariants(this.variantSelections);
     final expected = [
       for (final o in definition.plan.occurrences())
@@ -1112,6 +1118,13 @@ final class TrainingSession {
   /// wall-clock time of the workout.
   final int startOffsetMinutes, finishOffsetMinutes;
 
+  /// When training actually ended, if the session was finalized later (an
+  /// evening workout closed the next morning). Elapsed time runs to it.
+  final DateTime? endedAt;
+
+  /// The end of the training itself: [endedAt], else [finishedAt].
+  DateTime? get trainingEndedAt => endedAt ?? finishedAt;
+
   /// [startedAt]/[finishedAt] in the local time they were entered with.
   String get startedAtText => formatInstant(startedAt, startOffsetMinutes);
   String? get finishedAtText => finishedAt == null
@@ -1202,6 +1215,7 @@ final class TrainingSession {
       status: status,
       finishedAt: finishedAt,
       finishOffsetMinutes: finishOffsetMinutes,
+      endedAt: endedAt,
       contentVersion: contentVersion + 1,
       bodyMassInputs: bodyMassInputs,
       loadInputs: loadInputs,
@@ -1212,7 +1226,11 @@ final class TrainingSession {
     );
   }
 
-  TrainingSession finish(DateTime at, {int offsetMinutes = 0}) {
+  TrainingSession finish(
+    DateTime at, {
+    int offsetMinutes = 0,
+    DateTime? endedAt,
+  }) {
     if (status == SessionStatus.finalized) return this;
     if (at.isBefore(startedAt))
       invalid('Finish time cannot precede start time.');
@@ -1233,6 +1251,7 @@ final class TrainingSession {
       status: SessionStatus.finalized,
       finishedAt: at,
       finishOffsetMinutes: offsetMinutes,
+      endedAt: endedAt,
       contentVersion: contentVersion + 1,
       variantSelections: variantSelections,
     );
@@ -1251,10 +1270,18 @@ final class TrainingSession {
     'revision': revision.toJson(),
     'startedAt': startedAtText,
     if (finishedAt != null) 'finishedAt': finishedAtText,
+    if (endedAt != null)
+      'endedAt': formatInstant(endedAt!, finishOffsetMinutes),
     'status': status.name,
     'contentVersion': contentVersion,
     if (variantSelections.isNotEmpty) 'variantSelections': variantSelections,
-    'sets': [for (final set in sets) set.toJson()],
+    'sets': [
+      for (final set in sets)
+        {
+          ...set.toJson(),
+          if (definition.effortSide(set.id) case final side?) 'side': side,
+        },
+    ],
     if (extraSets.isNotEmpty)
       'extraSets': [for (final set in extraSets) set.toJson()],
     if (derivedPlanInput != null)

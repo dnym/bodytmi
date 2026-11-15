@@ -316,7 +316,15 @@ final class LoadInterpretation {
       return known(Quantity(quotient.toString(), quantity.unit.name));
     final power = BigInt.from(10).pow(scale);
     final whole = quotient ~/ power;
-    final fraction = (quotient % power).toString().padLeft(scale, '0');
-    return known(Quantity('$whole.$fraction', quantity.unit.name));
+    final fraction = (quotient % power)
+        .toString()
+        .padLeft(scale, '0')
+        .replaceFirst(RegExp(r'0+$'), '');
+    return known(
+      Quantity(
+        fraction.isEmpty ? '$whole' : '$whole.$fraction',
+        quantity.unit.name,
+      ),
+    );
   }
 }

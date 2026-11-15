@@ -175,6 +175,7 @@ final class TrainingService {
       startedAt: startedAt,
       startOffsetMinutes: startOffsetMinutes,
       finishOffsetMinutes: 0,
+      endedAt: null,
       sets: sets,
       bodyMassInputs: massInputs,
       loadInputs: loadInputs,
@@ -225,6 +226,7 @@ final class TrainingService {
       status: session.status,
       finishedAt: session.finishedAt,
       finishOffsetMinutes: session.finishOffsetMinutes,
+      endedAt: session.endedAt,
       contentVersion: session.contentVersion + 1,
       bodyMassInputs: refreshed,
       loadInputs: session.loadInputs,
@@ -294,6 +296,7 @@ final class TrainingService {
       status: session.status,
       finishedAt: session.finishedAt,
       finishOffsetMinutes: session.finishOffsetMinutes,
+      endedAt: session.endedAt,
       contentVersion: session.contentVersion + 1,
       bodyMassInputs: inputs,
       loadInputs: session.loadInputs,
@@ -474,6 +477,7 @@ final class TrainingService {
     status: session.status,
     finishedAt: session.finishedAt,
     finishOffsetMinutes: session.finishOffsetMinutes,
+    endedAt: session.endedAt,
     contentVersion: session.contentVersion + 1,
     bodyMassInputs: session.bodyMassInputs,
     loadInputs: session.loadInputs,
@@ -704,6 +708,7 @@ final class TrainingService {
       status: session.status,
       finishedAt: session.finishedAt,
       finishOffsetMinutes: session.finishOffsetMinutes,
+      endedAt: session.endedAt,
       contentVersion: session.contentVersion + 1,
       bodyMassInputs: session.bodyMassInputs,
       loadInputs: session.loadInputs,
@@ -789,6 +794,7 @@ final class TrainingService {
       status: session.status,
       finishedAt: session.finishedAt,
       finishOffsetMinutes: session.finishOffsetMinutes,
+      endedAt: session.endedAt,
       contentVersion: session.contentVersion + 1,
     );
   }
@@ -1043,6 +1049,7 @@ final class TrainingService {
     status: session.status,
     finishedAt: session.finishedAt,
     finishOffsetMinutes: session.finishOffsetMinutes,
+    endedAt: session.endedAt,
     contentVersion: session.contentVersion + 1,
   );
 }

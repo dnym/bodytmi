@@ -215,7 +215,7 @@ void timingTests() {
       rejects(() => t.advance(90000, 'first', instant(9)));
       rejects(() => t.resume('first', instant(9)));
       t = t.resume('second', instant(9));
-      rejects(() => t.advance(1, 'first', instant(9)));
+      rejects(() => t.advance(1, 'first', instant(9)), 'conflict');
       t = t
           .advance(2000, 'second', instant(1))
           .activity; // Wall clock moves backwards.
@@ -248,7 +248,7 @@ void timingTests() {
           .advance(15000, 'epoch', instant(1))
           .activity;
       final restored = TimingActivity.fromJson(running.toJson());
-      rejects(() => restored.resume('new', instant(9)));
+      rejects(() => restored.resume('new', instant(9)), 'conflict');
       final frozen = restored.recover(instant(9));
       equal(frozen.status, 'paused');
       equal(frozen.effortElapsedMilliseconds, 5000);

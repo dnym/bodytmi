@@ -436,6 +436,7 @@ final class ExecutionService {
           status: current.status,
           finishedAt: current.finishedAt,
           finishOffsetMinutes: current.finishOffsetMinutes,
+          endedAt: current.endedAt,
           contentVersion: current.contentVersion + 1,
           bodyMassInputs: current.bodyMassInputs,
           loadInputs: current.loadInputs,
@@ -811,3 +812,36 @@ Never _alreadyRecorded(String occurrenceId, SetStatus status) => _conflict(
 Never _conflict([
   String message = 'Execution or session changed; refresh before retrying.',
 ]) => throw BodyTmiException('conflict', message);
+
+/// Authored rests the session's traversals timed (walk intervals, recovery):
+/// how many were taken and the measured rest, from rest receipts. Skipped and
+/// manual rests are counted separately and add no time. Null without any
+/// rest receipt.
+Map<String, Object?>? restTotals(List<WorkoutExecution> executions) {
+  var timed = 0, other = 0, milliseconds = 0;
+  for (final e in executions)
+    for (final r in e.receipts.where((r) => r['kind'] == 'rest')) {
+      final taken = r['restElapsedMilliseconds'];
+      if (taken is int) {
+        timed++;
+        milliseconds += taken;
+      } else {
+        other++;
+      }
+    }
+  if (timed + other == 0) return null;
+  final whole = milliseconds ~/ 1000;
+  final fraction = (milliseconds % 1000)
+      .toString()
+      .padLeft(3, '0')
+      .replaceFirst(RegExp(r'0+$'), '');
+  return {
+    'policy': 'bodytmi-rest-totals/1',
+    'timed': timed,
+    'untimedOrSkipped': other,
+    'elapsed': Quantity(
+      fraction.isEmpty ? '$whole' : '$whole.$fraction',
+      's',
+    ).toJson(),
+  };
+}

@@ -33,7 +33,7 @@ final class PlatePlan {
     BigInt at(Decimal value) =>
         value.coefficient * BigInt.from(10).pow(scale - value.scale);
     Quantity mass(BigInt coefficient) =>
-        Quantity(_decimalString(coefficient, scale), 'kg');
+        Quantity(_trimmed(_decimalString(coefficient, scale)), 'kg');
     final tareScaled = at(tare);
     final remaining = at(target.value) - tareScaled;
     var unit = BigInt.zero;

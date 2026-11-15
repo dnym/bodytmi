@@ -927,6 +927,7 @@ final class WindowCheckpointService {
       status: session.status,
       finishedAt: session.finishedAt,
       finishOffsetMinutes: session.finishOffsetMinutes,
+      endedAt: session.endedAt,
       contentVersion: session.contentVersion + 1,
       bodyMassInputs: session.bodyMassInputs,
       loadInputs: session.loadInputs,

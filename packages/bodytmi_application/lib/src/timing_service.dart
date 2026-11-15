@@ -254,9 +254,11 @@ final class TimingService {
     if (session.status != SessionStatus.active ||
         at.isBefore(session.startedAt))
       invalid('Timing confirmation needs an active session and valid time.');
-    final duration = Quantity(
-      current.effortElapsedMilliseconds.toString(),
-      'ms',
+    final duration = measuredDuration(
+      session,
+      session.set(current.setId),
+      current.metric,
+      current.effortElapsedMilliseconds,
     );
     final observations = {current.metric: duration, ...actuals};
     final chosen = observations[current.metric]!;
@@ -377,7 +379,12 @@ void validateTimingData(
       final request = jsonObject(c['request'], 'confirmation request');
       final expected = {
         if (request['acceptSuggested'] == true) ...set.suggested,
-        t.metric: Quantity(t.effortElapsedMilliseconds.toString(), 'ms'),
+        t.metric: measuredDuration(
+          s,
+          set,
+          t.metric,
+          t.effortElapsedMilliseconds,
+        ),
         ...metricsFromJson(request['actuals']),
       };
       set.complete(metricsFromJson(c['actuals']));
@@ -415,6 +422,31 @@ void validateTimingData(
 }
 
 /// Unplanned timing must be explicit and cannot collide with another metric.
+/// A clock-measured duration, written in the unit the set's target (or the
+/// slot target) for [metric] uses, so a 300 s interval reads in seconds.
+/// Minutes are used only when exact; otherwise, and without a target,
+/// seconds. The canonical value is always the exact measured milliseconds.
+Quantity measuredDuration(
+  TrainingSession session,
+  TrainingSet set,
+  String metric,
+  int milliseconds,
+) {
+  final unit =
+      (set.suggested[metric] ??
+              session.definition.slot(set.slotId).targets[metric])
+          ?.enteredUnit;
+  if (unit == Unit.ms) return Quantity('$milliseconds', 'ms');
+  if (unit == Unit.min && milliseconds % 60000 == 0)
+    return Quantity('${milliseconds ~/ 60000}', 'min');
+  final whole = milliseconds ~/ 1000;
+  final fraction = (milliseconds % 1000)
+      .toString()
+      .padLeft(3, '0')
+      .replaceFirst(RegExp(r'0+$'), '');
+  return Quantity(fraction.isEmpty ? '$whole' : '$whole.$fraction', 's');
+}
+
 bool supportsTimingMetric(TrainingSet set, String metric, TimingPlan plan) {
   final target = set.suggested[metric];
   if (!plan.unplannedDuration) return target?.dimension == Dimension.duration;

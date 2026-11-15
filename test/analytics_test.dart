@@ -374,6 +374,7 @@ void analyticsTests() {
             status: session.status,
             finishedAt: session.finishedAt,
             finishOffsetMinutes: session.finishOffsetMinutes,
+            endedAt: session.endedAt,
           ),
       ];
       rejects(() => _analytics.series(many, metric: 'reps'));

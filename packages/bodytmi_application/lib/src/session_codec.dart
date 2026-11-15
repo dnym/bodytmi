@@ -122,6 +122,7 @@ TrainingSession _sessionFromJson(Object? input) {
     'revision',
     'startedAt',
     'finishedAt',
+    'endedAt',
     'status',
     'contentVersion',
     'sets',
@@ -206,8 +207,12 @@ TrainingSession _sessionFromJson(Object? input) {
       'settings',
       'actualSettings',
       'contentVersion',
+      'side',
     });
     final expected = baseline.sets[i];
+    // The side is derived from the resolved plan, shown for readers only.
+    if (row['side'] != baseline.definition.effortSide(expected.id))
+      invalid('Set side does not match its authored effort.');
     // Categorical settings keep the planned levers and declared values.
     final levers = revision.definition.slot(expected.slotId).categories;
     final settings = row.containsKey('settings')
@@ -476,6 +481,9 @@ TrainingSession _sessionFromJson(Object? input) {
     status: status,
     finishedAt: finishedAt,
     finishOffsetMinutes: finishOffset,
+    endedAt: json.containsKey('endedAt')
+        ? parseInstant(json['endedAt'], 'endedAt')
+        : null,
     contentVersion: _positive(json, 'contentVersion'),
   );
   validateDerivedPlanSession(session);

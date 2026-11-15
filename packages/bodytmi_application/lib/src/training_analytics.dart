@@ -98,11 +98,13 @@ final class TrainingAnalytics {
       'status': session.status.name,
       'startedAt': session.startedAtText,
       'finishedAt': session.finishedAtText,
+      if (session.endedAt != null)
+        'endedAt': formatInstant(session.endedAt!, session.finishOffsetMinutes),
       'elapsed': session.finishedAt == null
           ? null
           : Quantity(
               (Decimal.parse(
-                        session.finishedAt!
+                        session.trainingEndedAt!
                             .difference(session.startedAt)
                             .inMicroseconds
                             .toString(),

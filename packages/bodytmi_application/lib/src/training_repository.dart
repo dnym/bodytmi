@@ -682,6 +682,7 @@ final class StoredTrainingService {
       startedAt: next.startedAt,
       startOffsetMinutes: next.startOffsetMinutes,
       finishOffsetMinutes: next.finishOffsetMinutes,
+      endedAt: next.endedAt,
       sets: finalSets,
       bodyMassInputs: next.bodyMassInputs,
       loadInputs: next.loadInputs,
@@ -947,6 +948,7 @@ final class StoredTrainingService {
       status: current.status,
       finishedAt: current.finishedAt,
       finishOffsetMinutes: current.finishOffsetMinutes,
+      endedAt: current.endedAt,
       contentVersion: current.contentVersion + 1,
     );
     final sessions = await repository.sessions();

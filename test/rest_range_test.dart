@@ -139,6 +139,9 @@ void restRangeTests() {
       equal(done.activity.status, 'completed');
       e = await advance();
       equal(e.receipts.last['restElapsedMilliseconds'], 60000);
+      final totals = restTotals([e])!;
+      equal(totals['timed'], 2);
+      equal((totals['elapsed']! as Map)['value'], '210');
 
       // Portability validates the recorded rest against its clock.
       await store.backup('${dir.path}/native');
