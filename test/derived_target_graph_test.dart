@@ -601,7 +601,7 @@ void derivedTargetGraphTests() {
         await service.resolve('history-fingerprint', null, instant(10)),
       );
       final beforeFingerprint = fingerprint(before);
-      equal(beforeFingerprint['policy'], 'bodytmi-history-source/1');
+      equal(beforeFingerprint['policy'], 'bodytmi-history-source/2');
       final rev = revision();
       var lower = start(id: 'nonwinner', day: 4, from: rev);
       for (final set in lower.sets) {
@@ -619,14 +619,15 @@ void derivedTargetGraphTests() {
       equal(jsonObject(inserted['value'], 'value')['value'], '70');
       equal(inserted['sourceVersion'], before['sourceVersion']);
       check(jsonEncode(beforeFingerprint) != jsonEncode(fingerprint(inserted)));
-      final eligible = fingerprint(inserted)['sources']! as List<Object?>;
+      // The non-winning insertion counts and changes the hash; the selected
+      // result is unchanged.
       check(
-        eligible.any(
-          (s) => jsonObject(s, 'source')['sessionId'] == 'nonwinner',
-        ),
+        (fingerprint(inserted)['sourceCount']! as int) >
+            (beforeFingerprint['sourceCount']! as int),
       );
-      check(
-        !eligible.any((s) => jsonObject(s, 'source')['sessionId'] == 's-two'),
+      jsonEqual(
+        fingerprint(inserted)['selected'],
+        beforeFingerprint['selected'],
       );
       final current = await StoredTrainingService(store).session('nonwinner');
       final set = current.sets.firstWhere((s) => s.slotId == 'bench-heavy');
@@ -686,7 +687,8 @@ void derivedTargetGraphTests() {
         jsonObject(source['provenance'], 'provenance')['sourceFingerprint'],
         'fingerprint',
       );
-      equal((fp['sources']! as List<Object?>).length, 0);
+      equal(fp['sourceCount'], 0);
+      check(!fp.containsKey('selected'));
     }),
   );
 

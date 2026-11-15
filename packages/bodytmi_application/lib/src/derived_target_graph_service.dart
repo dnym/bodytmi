@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'body_mass_service.dart';
 import 'canonical_json.dart';
@@ -290,8 +292,7 @@ final class DerivedTargetGraphService {
             strictHistoryStart,
             10000 - historySourceCount,
           );
-          historySourceCount +=
-              (history.$2['sources']! as List<Object?>).length;
+          historySourceCount += history.$2['sourceCount']! as int;
           final selection = history.$1;
           if (selection != null) {
             value = selection.$1;
@@ -442,14 +443,31 @@ typedef _Selection = (Quantity, int, String, String, DateTime, int);
   });
   return (
     best,
-    {
-      'policy': 'bodytmi-history-source/1',
-      'metric': metric,
-      'direction': direction,
-      'sources': sources,
-    },
+    historyFingerprint(metric, direction, sources, best?.$3, best?.$4),
   );
 }
+
+/// Policy `bodytmi-history-source/2`: every eligible result is hashed
+/// (SHA-256 over the canonical, ordered rows), so insertions, removals and
+/// corrections stay visible, while only the selected result is kept in full.
+/// A captured plan therefore stays constant-size however long the history.
+Map<String, Object?> historyFingerprint(
+  String metric,
+  String direction,
+  List<Map<String, Object?>> sources,
+  String? selectedSession,
+  String? selectedSet,
+) => {
+  'policy': 'bodytmi-history-source/2',
+  'metric': metric,
+  'direction': direction,
+  'sourceCount': sources.length,
+  'sha256': sha256.convert(utf8.encode(canonicalJson(sources))).toString(),
+  if (selectedSession != null)
+    'selected': sources.singleWhere(
+      (r) => r['sessionId'] == selectedSession && r['setId'] == selectedSet,
+    ),
+};
 
 bool _better(_Selection candidate, _Selection incumbent, String direction) {
   final comparison = direction == 'highest'

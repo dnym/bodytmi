@@ -7,3 +7,4 @@ environment:
   sdk: ^3.10.0
 dependencies:
   bodytmi_core: ^0.1.0
+  crypto: ^3.0.8

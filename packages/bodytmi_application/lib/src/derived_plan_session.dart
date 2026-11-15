@@ -220,7 +220,10 @@ void validateDerivedPlanReferences(
           jsonObject(actual['provenance'], 'provenance')['sourceFingerprint'],
           'fingerprint',
         );
-        for (final item in jsonList(fingerprint, 'sources')) {
+        // Only the selected result is retained; the rest is in the hash.
+        for (final item in [
+          if (fingerprint['selected'] != null) fingerprint['selected'],
+        ]) {
           final row = jsonObject(item, 'history source');
           final prior = sessionsById[row['sessionId']];
           if (prior == null ||
@@ -379,19 +382,33 @@ void _validateHistorySource(
     provenance['sourceFingerprint'],
     'history fingerprint',
   );
-  checkKeys(fingerprint, {'policy', 'metric', 'direction', 'sources'});
-  if (fingerprint['policy'] != 'bodytmi-history-source/1' ||
+  checkKeys(fingerprint, {
+    'policy',
+    'metric',
+    'direction',
+    'sourceCount',
+    'sha256',
+    'selected',
+  });
+  final count = fingerprint['sourceCount'];
+  final hash = fingerprint['sha256'];
+  if (fingerprint['policy'] != 'bodytmi-history-source/2' ||
+      count is! int ||
+      count < 0 ||
+      count > 10000 ||
+      (count == 0) != (fingerprint['selected'] == null) ||
+      hash is! String ||
+      !RegExp(r'^[0-9a-f]{64}$').hasMatch(hash) ||
       fingerprint['metric'] != source['metric'] ||
       fingerprint['direction'] != source['direction'] ||
       provenance['metric'] != source['metric'] ||
       provenance['direction'] != source['direction'] ||
       provenance['sourceVersionSemantics'] != 'selectedSessionVersionOnly')
     invalid('Invalid history provenance.');
-  final rows = jsonList(fingerprint, 'sources');
-  if (rows.length > 10000) invalid('Too many history sources.');
   Map<String, Object?>? best;
-  String? previous;
-  for (final item in rows) {
+  for (final item in [
+    if (fingerprint['selected'] != null) fingerprint['selected'],
+  ]) {
     final row = jsonObject(item, 'history source');
     checkKeys(row, {
       'sessionId',
@@ -406,8 +423,8 @@ void _validateHistorySource(
       'ordinal',
       'value',
     });
-    final id = identifier(row, 'sessionId');
-    final setId = requiredString(row, 'setId');
+    identifier(row, 'sessionId');
+    requiredString(row, 'setId');
     identifier(row, 'slotId');
     requiredString(row, 'role');
     final version = row['sessionVersion'];
@@ -436,32 +453,7 @@ void _validateHistorySource(
         (source['ordinal'] != null && source['ordinal'] != ordinal) ||
         (source['includeWarmups'] != true && row['role'] == 'warmup'))
       invalid('Captured history is outside its policy.');
-    final key = '$id\u0000$setId';
-    if (previous != null && previous.compareTo(key) >= 0)
-      invalid('History sources must be unique and ordered.');
-    previous = key;
-    final value = Quantity.fromJson(row['value']);
-    if (best == null) {
-      best = row;
-      continue;
-    }
-    final compare = value.compareTo(Quantity.fromJson(best['value']));
-    final byTime = started.compareTo(
-      parseInstant(best['startedAt'], 'startedAt'),
-    );
-    final byId = id.compareTo(best['sessionId'] as String);
-    final byOrdinal = ordinal.compareTo(best['ordinal'] as int);
-    if ((source['direction'] == 'highest' ? compare : -compare) > 0 ||
-        (compare == 0 &&
-            (byTime < 0 ||
-                (byTime == 0 &&
-                    (byId < 0 ||
-                        (byId == 0 &&
-                            (byOrdinal < 0 ||
-                                (byOrdinal == 0 &&
-                                    setId.compareTo(best['setId'] as String) <
-                                        0))))))))
-      best = row;
+    best = row;
   }
   if ((source['direction'] != 'highest' && source['direction'] != 'lowest') ||
       source['status'] != (best == null ? 'unresolved' : 'resolved') ||

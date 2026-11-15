@@ -639,7 +639,13 @@ void derivedPlanSessionTests() {
         jsonObject(binding['provenance'], 'provenance')['sourceFingerprint'],
         'fingerprint',
       );
-      check(jsonList(fingerprint, 'sources').isNotEmpty);
+      // Eligible results are hashed; only the selected one is kept in full.
+      check((fingerprint['sourceCount']! as int) > 0);
+      check(!fingerprint.containsKey('sources'));
+      equal(
+        jsonObject(fingerprint['selected'], 'selected')['setId'],
+        jsonObject(binding['provenance'], 'provenance')['set'],
+      );
       equal(
         jsonObject(
           (await DerivedWorkoutPreview(
@@ -741,7 +747,7 @@ void derivedPlanSessionTests() {
         jsonObject(binding['provenance'], 'provenance')['sourceFingerprint'],
         'fingerprint',
       );
-      final row = jsonObject(jsonList(fingerprint, 'sources').first, 'row');
+      final row = jsonObject(fingerprint['selected'], 'row');
       row['runId'] = 'forged-run';
       rejects(() => sessionFromJson(forged));
       final sameTime = await training.start(
@@ -783,10 +789,11 @@ void derivedPlanSessionTests() {
         jsonObject(history['provenance'], 'provenance')['sourceFingerprint'],
         'fingerprint',
       );
+      // The same-start session adds nothing to the eligible results.
+      equal(evidence['sourceCount'], fingerprint['sourceCount']);
       check(
-        jsonList(evidence, 'sources').every(
-          (row) => jsonObject(row, 'source')['sessionId'] != 'same-time-source',
-        ),
+        jsonObject(evidence['selected'], 'selected')['sessionId'] !=
+            'same-time-source',
       );
       final status = DerivedWorkoutPreview(store);
       equal(
@@ -829,10 +836,48 @@ void derivedPlanSessionTests() {
         jsonObject(normal['provenance'], 'provenance')['sourceFingerprint'],
         'fingerprint',
       );
+      // Public graph resolution keeps its inclusive cutoff, so it counts more.
       check(
-        jsonList(normalFingerprint, 'sources').any(
-          (row) => jsonObject(row, 'source')['sessionId'] == 'same-time-source',
-        ),
+        (normalFingerprint['sourceCount']! as int) >
+            (evidence['sourceCount']! as int),
+      );
+    }),
+  );
+
+  test(
+    'a history-derived plan stays constant-size as history grows',
+    () => withStore((store, _) async {
+      final training = StoredTrainingService(store);
+      await DerivedTargetGraphService(
+        store,
+      ).publish(DerivedTargetGraph.fromJson(_graph(manual: false)), 0);
+      Future<void> history(String id, DateTime at) async {
+        final s = await training.start(id, definition().id, 1, at);
+        await training.edit(s.id, s.contentVersion, finished);
+      }
+
+      int planSize(TrainingSession s) =>
+          jsonEncode(s.derivedPlanInput!.toJson()).length;
+      await history('h0', DateTime.utc(2026, 1, 1, 12));
+      final early = await training.start(
+        'early-plan',
+        definition().id,
+        1,
+        DateTime.utc(2026, 1, 2, 12),
+        derivedPlan: _ref,
+      );
+      for (var day = 3; day < 60; day++)
+        await history('h$day', DateTime.utc(2026, 1, day, 12));
+      final late = await training.start(
+        'late-plan',
+        definition().id,
+        1,
+        DateTime.utc(2026, 3, 1, 12),
+        derivedPlan: _ref,
+      );
+      check(
+        (planSize(late) - planSize(early)).abs() < 128,
+        '${planSize(early)} vs ${planSize(late)}',
       );
     }),
   );
