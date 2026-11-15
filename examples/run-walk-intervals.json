@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "run-walk-intervals",
+    "name": "Run/walk intervals",
+    "slots": [
+      {
+        "id": "run",
+        "exercise": "run",
+        "implementation": "outdoor",
+        "targets": {"duration": {"value": "60", "unit": "s"}},
+        "timing": {"metric": "duration", "confirmOnTarget": true}
+      }
+    ],
+    "plan": {
+      "id": "workout", "type": "repeat", "count": 8, "restBetweenSeconds": 90,
+      "child": {"id": "run", "type": "effort", "slot": "run"}
+    }
+  }
+}

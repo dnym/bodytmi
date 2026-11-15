@@ -149,7 +149,7 @@ final class TimingPlan {
 /// Published per-slot effort guidance. Duration comes from the session target;
 /// authored rest occurrences retain ownership of recovery between efforts.
 final class EffortTimingDefaults {
-  EffortTimingDefaults._(this.metric, this._guidance);
+  EffortTimingDefaults._(this.metric, this._guidance, this.confirmOnTarget);
   factory EffortTimingDefaults.fromJson(Object? input) {
     final j = jsonObject(input, 'effort timing defaults');
     checkKeys(j, {
@@ -159,21 +159,34 @@ final class EffortTimingDefaults {
       'nearEndMilliseconds',
       'tempo',
       'openEnded',
+      'confirmOnTarget',
     });
     final metric = identifier(j, 'metric');
+    if (j.containsKey('confirmOnTarget') && j['confirmOnTarget'] != true)
+      invalid('confirmOnTarget must be true when specified.');
+    final confirmOnTarget = j['confirmOnTarget'] == true;
     if (j.containsKey('openEnded') && j['openEnded'] != true)
       invalid('openEnded must be true when specified.');
     final openEnded = j['openEnded'] == true;
     final probe = TimingPlan.fromJson({
       for (final e in j.entries)
-        if (e.key != 'metric') e.key: e.value,
+        if (e.key != 'metric' && e.key != 'confirmOnTarget') e.key: e.value,
       if (openEnded) 'unplannedDuration': true,
       if (!openEnded) 'effortMilliseconds': 86400000,
     });
-    return EffortTimingDefaults._(metric, probe);
+    if (confirmOnTarget && (probe.openEnded || probe.overrun != 'stop'))
+      invalid(
+        'confirmOnTarget needs a target duration that stops at its target.',
+      );
+    return EffortTimingDefaults._(metric, probe, confirmOnTarget);
   }
   final String metric;
   final TimingPlan _guidance;
+
+  /// Reaching the full target duration confirms the set at its suggestions
+  /// (Couch to 5K run intervals). Ending early or manually still needs
+  /// explicit review. Opt-in per slot.
+  final bool confirmOnTarget;
   bool get openEnded => _guidance.openEnded;
   TempoPlan? get tempo => _guidance.tempo;
   TimingPlan resolve(Metrics suggested) {
@@ -199,6 +212,7 @@ final class EffortTimingDefaults {
     if (_guidance.nearEndMilliseconds != null)
       'nearEndMilliseconds': _guidance.nearEndMilliseconds,
     if (_guidance.tempo != null) 'tempo': _guidance.tempo!.toJson(),
+    if (confirmOnTarget) 'confirmOnTarget': true,
   };
 }
 

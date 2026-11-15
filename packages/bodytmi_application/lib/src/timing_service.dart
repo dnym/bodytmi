@@ -353,6 +353,11 @@ void validateTimingData(
           (occurrences.single.activity as Rest).isManual ||
           (occurrences.single.activity as Rest).durationSeconds! * 1000 !=
               t.plan.restMilliseconds ||
+          switch ((occurrences.single.activity as Rest).maxDurationSeconds) {
+                final max? => max * 1000,
+                null => null,
+              } !=
+              t.plan.restMaximumMilliseconds ||
           t.metric != 'duration' ||
           parseInstant(
             t.toJson()['createdAt'],

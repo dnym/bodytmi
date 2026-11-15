@@ -265,6 +265,7 @@ Future<Map<String, Object?>> executeStored(
       'plan',
       'runForMilliseconds',
       'stream',
+      'continuous',
     },
     'timer rest' => {'id', 'sessionId', 'occurrenceId', 'at'},
     'timer start' => {'id', 'sessionId', 'setId', 'metric', 'plan', 'at'},
@@ -1421,6 +1422,7 @@ Future<Map<String, Object?>> executeStored(
               : null,
           runForMilliseconds: limit,
           stream: flag('stream'),
+          continuous: flag('continuous'),
         );
       case 'execution skip-group':
         final e = await execution.skipGroup(

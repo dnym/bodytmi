@@ -42,6 +42,7 @@ import 'rest_range_test.dart';
 import 'small_fixes_test.dart';
 import 'body_mass_size_test.dart';
 import 'execution_move_test.dart';
+import 'continuous_run_test.dart';
 import 'phase_override_test.dart';
 import 'extended_records_test.dart';
 import 'progression_preset_test.dart';
@@ -149,6 +150,7 @@ Future<void> main() async {
   smallFixesTests();
   bodyMassSizeTests();
   executionMoveTests();
+  continuousRunTests();
   phaseOverrideTests();
   extendedRecordsTests();
   progressionPresetTests();
