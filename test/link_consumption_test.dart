@@ -11,8 +11,28 @@ import 'support.dart';
 Map<String, Object?> _rule() =>
     jsonObject(example('double-progression')['rule'], 'rule');
 
-WorkoutDefinition _pair() =>
-    WorkoutDefinition.fromJson(example('lever-link-practice')['definition']);
+WorkoutDefinition _pair({bool grip = false}) {
+  final json = copyJson(
+    jsonObject(example('lever-link-practice')['definition'], 'definition'),
+  );
+  if (grip) {
+    // A categorical lever on the light member: retirements must keep the
+    // head's planned settings so structure comparisons stay honest.
+    jsonObject(
+      jsonList(
+        json,
+        'slots',
+      ).firstWhere((s) => jsonObject(s, 'slot')['id'] == 'bench-light'),
+      'slot',
+    )['categories'] = {
+      'grip': {
+        'values': ['medium', 'wide'],
+        'default': 'medium',
+      },
+    };
+  }
+  return WorkoutDefinition.fromJson(json);
+}
 
 Future<TrainingSession> _logged(
   StoredTrainingService service,
@@ -654,7 +674,7 @@ void linkConsumptionTests() {
     TrainingArchive? archived;
     String before;
     try {
-      await StoredTrainingService(store).publish(_pair(), 0);
+      await StoredTrainingService(store).publish(_pair(grip: true), 0);
       await _tracks(store);
       final linkService = LeverLinkService(store);
       await linkService.create(
@@ -683,11 +703,33 @@ void linkConsumptionTests() {
         pending.version,
         instant(3).add(const Duration(hours: 3)),
       );
-      await linkService.retire(
+      final retired = await linkService.retire(
         linkId: 'portable-chain',
         memberAnchorId: 'accepted/bench-light',
         retiredAt: instant(4),
         confirm: true,
+      );
+      jsonEqual(retired.sets.first.settings, {'grip': 'medium'});
+      final stored = (await store.linkRetirements()).single;
+      jsonEqual(stored.sets.first.settings, {'grip': 'medium'});
+      jsonEqual(
+        jsonObject(jsonList(stored.toJson(), 'sets').first, 'set')['settings'],
+        {'grip': 'medium'},
+      );
+      // A retirement whose copied settings differ from its head is forged.
+      final forged = copyJson(stored.toJson());
+      jsonObject(jsonList(forged, 'sets').first, 'set')['settings'] = {
+        'grip': 'wide',
+      };
+      final archive = await store.archive();
+      rejects(
+        () => validateLinkRetirements(
+          [LinkRetirementAnchor.fromJson(forged)],
+          archive.links,
+          archive.sharedApplications,
+          archive.progressions,
+          archive.reconciliations,
+        ),
       );
       archived = await store.archive();
       before = canonicalJson(archived.toJson());

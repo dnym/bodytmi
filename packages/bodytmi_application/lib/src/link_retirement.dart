@@ -148,7 +148,8 @@ final class LinkRetirementAnchor implements ProgressionAnchor {
   @override
   final List<Metrics> nextSets;
 
-  /// Shared links reject ordinal rules, so retirements move no settings.
+  /// Shared links reject ordinal and staged rules, so retirements control no
+  /// settings; their sets still keep the head's planned settings.
   @override
   Set<String> get controlledSettings => const {};
   @override
@@ -213,6 +214,7 @@ final class LinkRetirementAnchor implements ProgressionAnchor {
           'ordinal': set.ordinal,
           'suggested': metricsToJson(set.suggested),
           if (set.objectivesJson.isNotEmpty) 'objectives': set.objectivesJson,
+          if (set.settings.isNotEmpty) 'settings': set.settings,
         },
     ],
     'rule': rule,
@@ -243,6 +245,7 @@ List<TrainingSet> _retiredSetsFromJson(Object? input) {
       'ordinal',
       'suggested',
       'objectives',
+      'settings',
     });
     final ordinal = row['ordinal'];
     if (ordinal is! int || ordinal < 0) invalid('Invalid set ordinal.');
@@ -263,7 +266,11 @@ List<TrainingSet> _retiredSetsFromJson(Object? input) {
         criteria: Map.fromEntries(
           objectives.entries.where((entry) => entry.value.mode != 'maxEffort'),
         ),
-        settings: const {},
+        // Planned settings (set scheme, grip, tempo) of the copied head, so
+        // structure comparisons see the member's real prescription.
+        settings: row.containsKey('settings')
+            ? categoricalSettingsFromJson(row['settings'], 'settings')
+            : const {},
         actualSettings: const {},
       ),
     );
@@ -343,6 +350,7 @@ void validateLinkRetirements(
           headSet.ordinal != copied.ordinal ||
           canonicalJson(metricsToJson(headSet.suggested)) !=
               canonicalJson(metricsToJson(copied.suggested)) ||
+          canonicalJson(headSet.settings) != canonicalJson(copied.settings) ||
           canonicalJson({
                 for (final e in headSet.criteria.entries)
                   e.key: e.value.semanticJson(),
