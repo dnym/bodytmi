@@ -17,6 +17,7 @@ final class TrainingService {
     Map<String, Map<String, String>> progressedSettings = const {},
     Map<String, String>? variantSelections,
     String? gymId,
+    Map<String, String> gymSetupNotes = const {},
   }) {
     identifier({'id': sessionId}, 'id');
     // Variants resolve once: explicit selections, else each lever's default.
@@ -188,6 +189,7 @@ final class TrainingService {
       loadInputs: loadInputs,
       variantSelections: selections,
       gymId: gymId,
+      gymSetupNotes: gymSetupNotes,
     );
   }
 
@@ -229,6 +231,7 @@ final class TrainingService {
       revision: session.revision,
       variantSelections: session.variantSelections,
       gymId: session.gymId,
+      gymSetupNotes: session.gymSetupNotes,
       startedAt: session.startedAt,
       startOffsetMinutes: session.startOffsetMinutes,
       sets: session.sets,
@@ -300,6 +303,7 @@ final class TrainingService {
       revision: session.revision,
       variantSelections: session.variantSelections,
       gymId: session.gymId,
+      gymSetupNotes: session.gymSetupNotes,
       startedAt: session.startedAt,
       startOffsetMinutes: session.startOffsetMinutes,
       sets: session.sets,
@@ -481,6 +485,7 @@ final class TrainingService {
     revision: session.revision,
     variantSelections: session.variantSelections,
     gymId: session.gymId,
+    gymSetupNotes: session.gymSetupNotes,
     startedAt: session.startedAt,
     startOffsetMinutes: session.startOffsetMinutes,
     sets: session.sets,
@@ -714,6 +719,7 @@ final class TrainingService {
       revision: session.revision,
       variantSelections: session.variantSelections,
       gymId: session.gymId,
+      gymSetupNotes: session.gymSetupNotes,
       startedAt: session.startedAt,
       startOffsetMinutes: session.startOffsetMinutes,
       sets: sets,
@@ -791,6 +797,7 @@ final class TrainingService {
       revision: session.revision,
       variantSelections: session.variantSelections,
       gymId: session.gymId,
+      gymSetupNotes: session.gymSetupNotes,
       startedAt: session.startedAt,
       startOffsetMinutes: session.startOffsetMinutes,
       sets: [
@@ -1052,6 +1059,7 @@ final class TrainingService {
     revision: session.revision,
     variantSelections: session.variantSelections,
     gymId: session.gymId,
+    gymSetupNotes: session.gymSetupNotes,
     startedAt: session.startedAt,
     startOffsetMinutes: session.startOffsetMinutes,
     sets: [for (final set in session.sets) replaced[set.id] ?? set],

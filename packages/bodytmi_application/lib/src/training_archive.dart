@@ -466,6 +466,13 @@ final class TrainingArchive {
     validateDerivedPlanReferences(sessions, graphs, {
       for (final b in sessionPrograms) b.sessionId: b.runId,
     }, bodyMass);
+    {
+      final gymIds = {for (final g in gyms) g.gym.id};
+      for (final run in programRuns) {
+        if (run.gymId != null && !gymIds.contains(run.gymId))
+          invalid('Run ${run.id} names an unpublished default gym.');
+      }
+    }
     validateProgramData(
       programs: programRevisions,
       runs: programRuns,

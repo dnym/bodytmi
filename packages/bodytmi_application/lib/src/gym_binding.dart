@@ -46,6 +46,7 @@ final class GymSlotBinding {
   final String? equipmentId;
 
   /// `explicit` (a requested binding), `bound` (the gym's only instance),
+  /// `preferred` (the gym's declared choice among several),
   /// `unbound` (explicitly done without a binding), `missing` (the gym has
   /// none), `ambiguous` (the gym has several), or `none` (the slot declares
   /// no equipment).
@@ -74,6 +75,7 @@ final class GymBindingPlan {
     required WorkoutDefinition definition,
     required String gymId,
     required List<EquipmentInstanceRevision> instances,
+    Map<String, String> preferred = const {},
     Map<String, String> explicit = const {},
     Set<String> unbound = const {},
   }) {
@@ -117,6 +119,14 @@ final class GymBindingPlan {
                 'bound',
                 instanceId: candidates.single,
               ),
+              _ when candidates.contains(preferred[slot.equipmentId]) =>
+                GymSlotBinding(
+                  slot.id,
+                  slot.equipmentId,
+                  'preferred',
+                  instanceId: preferred[slot.equipmentId],
+                  candidates: candidates,
+                ),
               _ => GymSlotBinding(
                 slot.id,
                 slot.equipmentId,

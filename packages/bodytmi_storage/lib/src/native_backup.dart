@@ -513,6 +513,11 @@ final class NativeBackup {
             );
             if (r.id != row['id'])
               invalid('Program run row identity mismatch.');
+            if (r.gymId != null &&
+                db.select('SELECT 1 FROM gym_revisions WHERE gym_id = ?', [
+                  r.gymId,
+                ]).isEmpty)
+              invalid('Run ${r.id} names an unpublished default gym.');
             runs.add(r);
           }
           final bindings = <SessionProgramBinding>[];

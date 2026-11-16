@@ -302,6 +302,150 @@ void gymTests() {
     }
   });
 
+  test(
+    'gym preferences, setup notes, run default gyms and gym filters',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('bodytmi-gym-pref-');
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final equipment = EquipmentService(store);
+        final training = StoredTrainingService(store);
+        final programs = ProgramService(store);
+        await _inventory(equipment);
+        for (final id in ['away-press', 'away-press-2']) {
+          await equipment.publishInstance(
+            EquipmentInstance.fromJson({
+              'id': id,
+              'equipmentId': 'leg-press',
+              'gym': 'away',
+            }),
+            0,
+          );
+        }
+        await training.publish(WorkoutDefinition.fromJson(_workout()), 0);
+
+        // A preference names an instance placed at that gym.
+        GymDefinition away(Map<String, Object?> extra) =>
+            GymDefinition.fromJson({'id': 'away', ...extra});
+        equal(
+          (await _failure(
+            () => equipment.publishGym(
+              away({
+                'preferred': {'leg-press': 'nope'},
+              }),
+              1,
+            ),
+          )).code,
+          'not_found',
+        );
+        equal(
+          (await _failure(
+            () => equipment.publishGym(
+              away({
+                'preferred': {'leg-press': 'home-press'},
+              }),
+              1,
+            ),
+          )).code,
+          'validation',
+        );
+        rejects(() => GymDefinition.fromJson({'id': 'away', 'setupNotes': {}}));
+        await equipment.publishGym(
+          away({
+            'preferred': {'leg-press': 'away-press-2'},
+            'setupNotes': {'pulldown': 'Thigh pad at 4.'},
+          }),
+          1,
+        );
+        final plan = await training.gymCheck('legs', 1, 'away');
+        final press = plan.slots.firstWhere((s) => s.slotId == 'press');
+        equal(press.status, 'preferred');
+        equal(press.instanceId, 'away-press-2');
+        equal(plan.ready, true);
+
+        // A run's default gym applies unless a start names another or none.
+        await programs.publish(
+          ProgramDefinition.fromJson({
+            'id': 'p',
+            'name': 'P',
+            'plan': {
+              'id': 'd',
+              'type': 'day',
+              'templateId': 'legs',
+              'revision': 1,
+            },
+          }),
+          0,
+        );
+        equal(
+          (await _failure(
+            () =>
+                programs.create('r', 'p', 1, instant(1), loop: true, gym: 'x'),
+          )).code,
+          'not_found',
+        );
+        var run = await programs.create(
+          'r',
+          'p',
+          1,
+          instant(1),
+          loop: true,
+          gym: 'away',
+        );
+        equal(run.toJson()['gym'], 'away');
+        var s = await programs.start('r', run.contentVersion, 'r1', instant(2));
+        equal(s.gymId, 'away');
+        equal(s.loadInputs['press']!.instance!.instanceId, 'away-press-2');
+        jsonEqual(s.gymSetupNotes, {'pulldown': 'Thigh pad at 4.'});
+        jsonEqual(sessionFromJson(s.toJson()).toJson(), s.toJson());
+        s = await training.edit('r1', s.contentVersion, (s) {
+          for (final set in s.sets) {
+            s = const TrainingService().complete(s, set.id, {
+              'mass': set.suggested['mass']!,
+              'reps': Quantity.fromJson(_q('8', 'rep')),
+            });
+          }
+          return s.finish(instant(2).add(const Duration(hours: 1)));
+        });
+        run = await programs.run('r');
+        final home = await programs.start(
+          'r',
+          run.contentVersion,
+          'r2',
+          instant(3),
+          gym: 'home',
+          useRunGym: false,
+        );
+        equal(home.gymId, 'home');
+        equal(home.gymSetupNotes.isEmpty, true);
+        run = await programs.setGym('r', run.contentVersion + 1, null);
+        equal(run.gymId, null);
+        equal(
+          (await _failure(() => programs.setGym('r', 1, 'home'))).code,
+          'conflict',
+        );
+
+        // Archives keep run gyms and gym notes; an unpublished run gym fails.
+        final archive = await training.exportArchive();
+        TrainingArchive.fromJson(archive.toJson());
+        final forged = jsonDecode(jsonEncode(archive.toJson())) as Map;
+        ((forged['programRuns'] as List).single as Map)['gym'] = 'nowhere';
+        rejects(() => TrainingArchive.fromJson(forged.cast<String, Object?>()));
+        final noted = jsonDecode(jsonEncode(archive.toJson())) as Map;
+        final r1 =
+            (noted['sessions'] as List).firstWhere(
+                  (s) => (s as Map)['id'] == 'r1',
+                )
+                as Map;
+        r1.remove('gym');
+        rejects(() => TrainingArchive.fromJson(noted.cast<String, Object?>()));
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+
   test('CLI store gym-check and gym starts', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-gym-cli-');
     final db = '${dir.path}/db.sqlite';
@@ -372,6 +516,40 @@ void gymTests() {
       check(
         !jsonObject(started.data!['loadInputs'], 'l').containsKey('press'),
         'unbound slot has no binding',
+      );
+      final firstSet = jsonObject(jsonList(started.data!, 'sets').first, 'set');
+      equal(
+        (await cli('store complete', {
+          'id': 's',
+          'expectedVersion': started.data!['contentVersion'],
+          'setId': firstSet['id'],
+          'actuals': {'mass': _q('100', 'kg'), 'reps': _q('8', 'rep')},
+        })).code,
+        0,
+      );
+      Future<int> points(Map<String, Object?> extra) async {
+        final r = await cli('store series', {'includeActive': true, ...extra});
+        equal(r.code, 0);
+        return r.data!['pointCount']! as int;
+      }
+
+      check(await points({'gym': 'away'}) > 0, 'away points');
+      equal(await points({'gym': 'home'}), 0);
+      equal((await cli('store series', {'gym': 'nowhere'})).code, 3);
+      equal(
+        (await cli('store series', {
+          'gym': 'away',
+          'includeImported': true,
+        })).code,
+        2,
+      );
+      equal(
+        (await cli('store records', {
+          'gym': 'home',
+          'metric': 'mass',
+          'direction': 'higher',
+        })).code,
+        0,
       );
     } finally {
       await dir.delete(recursive: true);

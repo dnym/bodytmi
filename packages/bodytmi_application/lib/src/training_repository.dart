@@ -295,17 +295,28 @@ final class StoredTrainingService {
     return _gymPlan(prescription.definition, gym, loadBindings, unboundSlots);
   });
 
+  /// The latest published revision of [gym]; not_found otherwise.
+  Future<GymDefinition> latestGym(String gym) async {
+    GymRevision? latest;
+    for (final r in await repository.gymRevisions()) {
+      if (r.gym.id == gym && (latest == null || r.number > latest.number))
+        latest = r;
+    }
+    return latest?.gym ??
+        (throw BodyTmiException('not_found', 'Gym not found: $gym.'));
+  }
+
   Future<GymBindingPlan> _gymPlan(
     WorkoutDefinition definition,
     String gym,
     Map<String, String> explicit,
     Set<String> unbound,
   ) async {
-    if (!(await repository.gymRevisions()).any((r) => r.gym.id == gym))
-      throw BodyTmiException('not_found', 'Gym not found: $gym.');
+    final published = await latestGym(gym);
     return GymBindingPlan.plan(
       definition: definition,
       gymId: gym,
+      preferred: published.preferred,
       instances: await repository.equipmentInstanceRevisions(),
       explicit: explicit,
       unbound: unbound,
@@ -535,6 +546,14 @@ final class StoredTrainingService {
         await repository.equipmentRevisions(),
       ),
       gymId: gym,
+      gymSetupNotes: gym == null
+          ? const {}
+          : {
+              for (final slot in prescription.definition.slots)
+                if ((await latestGym(gym)).setupNotes[slot.exerciseId]
+                    case final note?)
+                  slot.id: note,
+            },
       loadConventions: loadConventions,
       // Prefill is opt-in per slot and scoped to this workout template, so
       // other templates' sessions (and all history, when nothing prefills)
@@ -743,6 +762,7 @@ final class StoredTrainingService {
       revision: next.revision,
       variantSelections: next.variantSelections,
       gymId: next.gymId,
+      gymSetupNotes: next.gymSetupNotes,
       startedAt: next.startedAt,
       startOffsetMinutes: next.startOffsetMinutes,
       finishOffsetMinutes: next.finishOffsetMinutes,
@@ -985,6 +1005,7 @@ final class StoredTrainingService {
       revision: current.revision,
       variantSelections: current.variantSelections,
       gymId: current.gymId,
+      gymSetupNotes: current.gymSetupNotes,
       startedAt: current.startedAt,
       startOffsetMinutes: current.startOffsetMinutes,
       sets: result.$1,

@@ -514,6 +514,7 @@ final class ExecutionService {
           revision: current.revision,
           variantSelections: current.variantSelections,
           gymId: current.gymId,
+          gymSetupNotes: current.gymSetupNotes,
           startedAt: current.startedAt,
           startOffsetMinutes: current.startOffsetMinutes,
           sets: [

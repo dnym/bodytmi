@@ -194,6 +194,7 @@ final class ProgramService {
     DateTime at, {
     required bool loop,
     int offsetMinutes = 0,
+    String? gym,
   }) => repository.transaction(() async {
     final existing = (await repository.programRuns())
         .where((r) => r.id == id)
@@ -203,20 +204,37 @@ final class ProgramService {
           existing.program.number != number ||
           existing.startedAt != at ||
           existing.startOffsetMinutes != offsetMinutes ||
-          existing.loop != loop)
+          existing.loop != loop ||
+          (existing.contentVersion == 1 && existing.gymId != gym))
         programConflict('Run identity already exists with other inputs.');
       return existing;
     }
+    if (gym != null) await StoredTrainingService(repository).latestGym(gym);
     final next = ProgramRun(
       id: id,
       program: await revision(programId, number),
       startedAt: at,
       startOffsetMinutes: offsetMinutes,
       loop: loop,
+      gymId: gym,
     );
     await repository.saveProgramRun(next);
     return next;
   });
+
+  /// Sets or clears the gym this run's sessions start at by default.
+  Future<ProgramRun> setGym(String id, int expectedVersion, String? gym) =>
+      repository.transaction(() async {
+        final current = await run(id);
+        if (current.contentVersion != expectedVersion)
+          programConflict('Run version changed.');
+        if (gym != null) await StoredTrainingService(repository).latestGym(gym);
+        if (current.gymId == gym) return current;
+        final next = current.withGym(gym);
+        await repository.saveProgramRun(next);
+        return next;
+      });
+
   Future<ProgramRun> status(String id, int expectedVersion, String status) =>
       repository.transaction(() async {
         if (!{'active', 'paused'}.contains(status))
@@ -386,9 +404,14 @@ final class ProgramService {
     Map<String, LoadConvention> loadConventions = const {},
     Map<String, Map<String, String>> variantSettings = const {},
     String? gym,
+    bool useRunGym = true,
     Set<String> unboundSlots = const {},
   }) => repository.transaction(() async {
     final current = await run(runId);
+    if (useRunGym && gym != null)
+      invalid('A named gym replaces the run default; useRunGym is false.');
+    // A start without a gym of its own uses the run's default gym.
+    gym = useRunGym ? current.gymId : gym;
     final bindings = await repository.sessionPrograms();
     final existing = bindings
         .where((b) => b.sessionId == sessionId)

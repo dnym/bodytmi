@@ -167,6 +167,7 @@ const storedCommandNames = [
   'program show',
   'program list',
   'run create',
+  'run gym',
   'run list',
   'run show',
   'run schedule',
@@ -538,6 +539,7 @@ Future<Map<String, Object?>> executeStored(
       'importNamespace',
       'includeBlocks',
       'amrapId',
+      'gym',
     },
     'store series' => {
       'context',
@@ -552,6 +554,7 @@ Future<Map<String, Object?>> executeStored(
       'includeImported',
       'importNamespace',
       'includeBlocks',
+      'gym',
     },
     'family publish' => {'family', 'expectedRevision', 'requireCatalog'},
     'family show' => {'familyId', 'revision'},
@@ -837,7 +840,8 @@ Future<Map<String, Object?>> executeStored(
     'program publish' => {'definition', 'expectedRevision'},
     'program show' => {'programId', 'revision'},
     'program list' => <String>{},
-    'run create' => {'id', 'programId', 'revision', 'startedAt', 'loop'},
+    'run create' => {'id', 'programId', 'revision', 'startedAt', 'loop', 'gym'},
+    'run gym' => {'runId', 'expectedVersion', 'gym'},
     'run list' => {'status'},
     'run show' => {'runId'},
     'run schedule' => {'runId', 'count', 'includeScopes'},
@@ -990,6 +994,19 @@ Future<Map<String, Object?>> executeStored(
   try {
     final service = StoredTrainingService(store);
     final programs = ProgramService(store);
+
+    /// Sessions for analytics: all, or only those started at `gym`.
+    Future<List<TrainingSession>> analyticsSessions() async {
+      final all = await store.sessions();
+      if (!request.containsKey('gym')) return all;
+      final gym = identifier(request, 'gym');
+      await StoredTrainingService(store).latestGym(gym);
+      return [
+        for (final session in all)
+          if (session.gymId == gym) session,
+      ];
+    }
+
     Future<Map<String, Object?>> runView(ProgramRun run) async {
       final bindings = await store.sessionPrograms();
       final current = run.current;
@@ -1699,6 +1716,7 @@ Future<Map<String, Object?>> executeStored(
                     'loop is required: true repeats the program, false ends '
                     'the run after its last day.',
                   ),
+            gym: request['gym'] == null ? null : identifier(request, 'gym'),
           ),
         );
       case 'run list':
@@ -1746,8 +1764,19 @@ Future<Map<String, Object?>> executeStored(
           loadConventions: loadConventionsFromJson(request['loadConventions']),
           variantSettings: variantSettingsFromJson(request['variants']),
           gym: request['gym'] == null ? null : identifier(request, 'gym'),
+          useRunGym: !request.containsKey('gym'),
           unboundSlots: unboundSlots(),
         )).toJson();
+      case 'run gym':
+        if (!request.containsKey('gym'))
+          invalid('gym is required (null clears the run default).');
+        data = await runView(
+          await programs.setGym(
+            identifier(request, 'runId'),
+            integer('expectedVersion'),
+            request['gym'] == null ? null : identifier(request, 'gym'),
+          ),
+        );
       case 'run skip':
         final runId = identifier(request, 'runId');
         final receipt = await programs.skip(
@@ -2175,9 +2204,13 @@ Future<Map<String, Object?>> executeStored(
           invalid('importNamespace needs includeImported:true.');
         if (request.containsKey('amrapId') && !flag('includeBlocks'))
           invalid('amrapId needs includeBlocks:true.');
+        if (request.containsKey('gym') && flag('includeImported'))
+          invalid(
+            'Imported history records no gym; drop gym or includeImported.',
+          );
         data = await store.transaction(() async {
           final native = const ContextualRecords().evaluate(
-            await store.sessions(),
+            await analyticsSessions(),
             metric: identifier(request, 'metric'),
             direction: requiredString(request, 'direction'),
             atActuals: metricsFromJson(
@@ -2226,7 +2259,7 @@ Future<Map<String, Object?>> executeStored(
             if (flag('includeBlocks'))
               'blocks': blockScoreRecords(
                 await store.repeatCheckpoints(),
-                await store.sessions(),
+                await analyticsSessions(),
                 runBySession: runBySession,
                 context: context,
                 amrapId: request.containsKey('amrapId')
@@ -2269,6 +2302,10 @@ Future<Map<String, Object?>> executeStored(
           invalid('familyRevision needs familyId.');
         if (request.containsKey('importNamespace') && !flag('includeImported'))
           invalid('importNamespace needs includeImported:true.');
+        if (request.containsKey('gym') && flag('includeImported'))
+          invalid(
+            'Imported history records no gym; drop gym or includeImported.',
+          );
         data = await store.transaction(() async {
           final context = jsonObject(
             request['context'] ?? <String, Object?>{},
@@ -2293,7 +2330,7 @@ Future<Map<String, Object?>> executeStored(
                 )
               : null;
           final native = const TrainingAnalytics().series(
-            await store.sessions(),
+            await analyticsSessions(),
             runBySession: {
               for (final b in await store.sessionPrograms())
                 b.sessionId: b.runId,
@@ -2310,7 +2347,7 @@ Future<Map<String, Object?>> executeStored(
           final blocks = flag('includeBlocks')
               ? blockSeriesSection(
                   await store.repeatCheckpoints(),
-                  await store.sessions(),
+                  await analyticsSessions(),
                   runBySession: {
                     for (final b in await store.sessionPrograms())
                       b.sessionId: b.runId,

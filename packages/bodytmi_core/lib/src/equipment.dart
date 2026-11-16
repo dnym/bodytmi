@@ -232,11 +232,46 @@ final class EquipmentDefinition {
 
 /// One user-defined location such as Home or a gym. Gyms carry no prescription
 /// semantics; membership of an instance is expressed by that instance.
+///
+/// [preferred] names the instance a start binds when the gym has several of
+/// one equipment kind (equipment ID → instance ID). [setupNotes] are this
+/// gym's setup notes per exercise ID ("hands on the kitchen counter"); a
+/// session started here freezes the note for each slot of that exercise.
 final class GymDefinition {
-  GymDefinition._(this.id, this.name, this.notes);
+  GymDefinition._(
+    this.id,
+    this.name,
+    this.notes, [
+    this.preferred = const {},
+    this.setupNotes = const {},
+  ]);
   factory GymDefinition.fromJson(Object? input) {
     final j = jsonObject(input, 'gym definition');
-    checkKeys(j, {'id', 'name', 'notes'});
+    checkKeys(j, {'id', 'name', 'notes', 'preferred', 'setupNotes'});
+    Map<String, String> idMap(String key, {required bool notes}) {
+      if (!j.containsKey(key)) return const {};
+      final map = jsonObject(j[key], key);
+      if (map.isEmpty || map.length > 1000)
+        invalid('Gym $key, when given, has 1 to 1000 entries.');
+      final keys = map.keys.toList()..sort();
+      return Map.unmodifiable({
+        for (final k in keys)
+          identifier({key: k}, key): notes
+              ? (() {
+                  final note = map[k];
+                  if (note is! String ||
+                      note.trim().isEmpty ||
+                      note.length > 4000)
+                    invalid(
+                      'Gym setup notes are nonempty strings of at most '
+                      '4000 characters.',
+                    );
+                  return note;
+                })()
+              : identifier(map, k),
+      });
+    }
+
     final name = j['name'];
     if (name != null &&
         (name is! String || name.trim().isEmpty || name.length > 200)) {
@@ -253,14 +288,19 @@ final class GymDefinition {
       identifier(j, 'id'),
       name as String?,
       notes as String?,
+      idMap('preferred', notes: false),
+      idMap('setupNotes', notes: true),
     );
   }
   final String id;
   final String? name, notes;
+  final Map<String, String> preferred, setupNotes;
   Map<String, Object?> toJson() => {
     'id': id,
     if (name != null) 'name': name,
     if (notes != null) 'notes': notes,
+    if (preferred.isNotEmpty) 'preferred': preferred,
+    if (setupNotes.isNotEmpty) 'setupNotes': setupNotes,
   };
 }
 
@@ -484,6 +524,17 @@ void validateEquipmentInstanceRevisions(
     if (revision.instance.gymId != null &&
         !gymIds.contains(revision.instance.gymId))
       invalid('Instance references a gym that is not published.');
+  }
+  // A preference names a published instance of that equipment kind. It may
+  // have moved since; a start then simply does not use the preference.
+  for (final gym in gyms) {
+    for (final entry in gym.gym.preferred.entries) {
+      if (seen[entry.value] != entry.key)
+        invalid(
+          'Gym ${gym.gym.id} prefers ${entry.value}, which is not a published '
+          'instance of ${entry.key}.',
+        );
+    }
   }
   for (final versions in numbers.values)
     if (versions.any((n) => n > versions.length))

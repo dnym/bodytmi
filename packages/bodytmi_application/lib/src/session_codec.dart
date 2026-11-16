@@ -133,6 +133,7 @@ TrainingSession _sessionFromJson(Object? input) {
     'prescriptionOverrides',
     'variantSelections',
     'gym',
+    'gymSetupNotes',
     'extraSets',
   });
   if (json['schemaVersion'] != 1)
@@ -161,6 +162,18 @@ TrainingSession _sessionFromJson(Object? input) {
   final gymId = json['gym'] == null ? null : identifier(json, 'gym');
   if (json.containsKey('gym') && json['gym'] == null)
     invalid('A session without a gym omits gym.');
+  final gymSetupNotes = <String, String>{
+    if (json.containsKey('gymSetupNotes'))
+      for (final e in jsonObject(
+        json['gymSetupNotes'],
+        'gymSetupNotes',
+      ).entries)
+        e.key: e.value is String
+            ? e.value as String
+            : invalid('Gym setup notes are strings.'),
+  };
+  if (json.containsKey('gymSetupNotes') && gymSetupNotes.isEmpty)
+    invalid('Empty gym setup notes must be omitted.');
   final variantSelections = json.containsKey('variantSelections')
       ? variantSelectionsFromJson(json['variantSelections'])
       : const <String, String>{};
@@ -457,6 +470,7 @@ TrainingSession _sessionFromJson(Object? input) {
     revision: revision,
     variantSelections: variantSelections,
     gymId: gymId,
+    gymSetupNotes: gymSetupNotes,
     startedAt: startedAt,
     startOffsetMinutes: startOffset,
     sets: sets,

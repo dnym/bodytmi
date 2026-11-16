@@ -105,6 +105,24 @@ final class EquipmentService {
         final before = matches.firstOrNull;
         if ((before?.number ?? 0) != expectedRevision)
           throw const BodyTmiException('conflict', 'Gym revision changed.');
+        // A preference names an instance placed at this gym now.
+        final latest = latestInstances(
+          await repository.equipmentInstanceRevisions(),
+        );
+        for (final entry in gym.preferred.entries) {
+          final instance = latest[entry.value]?.instance;
+          if (instance == null)
+            throw BodyTmiException(
+              'not_found',
+              'Equipment instance not found: ${entry.value}.',
+            );
+          if (instance.equipmentId != entry.key || instance.gymId != gym.id)
+            invalid(
+              'Gym ${gym.id} can only prefer an instance of ${entry.key} '
+              'placed at it; ${entry.value} is ${instance.equipmentId} at '
+              '${instance.gymId ?? 'no gym'}.',
+            );
+        }
         final next = GymRevision.publish(gym, previous: before);
         await repository.insertGymRevision(next);
         return next;

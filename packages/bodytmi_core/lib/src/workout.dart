@@ -1006,7 +1006,12 @@ final class TrainingSession {
     Map<String, LoadInputSnapshot> loadInputs = const {},
     required Map<String, String> variantSelections,
     required this.gymId,
+    required Map<String, String> gymSetupNotes,
   }) : sets = List.unmodifiable(sets),
+       gymSetupNotes = Map.unmodifiable({
+         for (final k in (gymSetupNotes.keys.toList()..sort()))
+           k: gymSetupNotes[k]!,
+       }),
        extraSets = List.unmodifiable(extraSets),
        variantSelections = Map.unmodifiable({
          for (final k in (variantSelections.keys.toList()..sort()))
@@ -1019,6 +1024,14 @@ final class TrainingSession {
            ? null
            : Map.unmodifiable(initialBodyMassOverrides) {
     if (gymId != null) identifier({'gym': gymId}, 'gym');
+    if (this.gymSetupNotes.isNotEmpty && gymId == null)
+      invalid('Gym setup notes need the session gym.');
+    for (final entry in this.gymSetupNotes.entries) {
+      if (!revision.definition.slots.any((s) => s.id == entry.key))
+        invalid('Gym setup note names an unknown slot.');
+      if (entry.value.trim().isEmpty || entry.value.length > 4000)
+        invalid('Gym setup notes are nonempty, at most 4000 characters.');
+    }
     checkOffsetMinutes(startOffsetMinutes, 'startedAt');
     checkOffsetMinutes(finishOffsetMinutes, 'finishedAt');
     if (finishedAt == null && finishOffsetMinutes != 0)
@@ -1108,6 +1121,11 @@ final class TrainingSession {
   /// The gym the session was started at, when one was selected. It records
   /// where the work happened; instance bindings stay per slot.
   final String? gymId;
+
+  /// The gym's setup notes frozen at start, per slot (from the gym's notes
+  /// for each slot's exercise). Shown alongside the slot's own note; they
+  /// never change history contexts.
+  final Map<String, String> gymSetupNotes;
 
   /// Frozen variant selections (variant ID → branch value) chosen at start.
   final Map<String, String> variantSelections;
@@ -1230,6 +1248,7 @@ final class TrainingSession {
       prescriptionOverrides: prescriptionOverrides,
       variantSelections: variantSelections,
       gymId: gymId,
+      gymSetupNotes: gymSetupNotes,
     );
   }
 
@@ -1262,6 +1281,7 @@ final class TrainingSession {
       contentVersion: contentVersion + 1,
       variantSelections: variantSelections,
       gymId: gymId,
+      gymSetupNotes: gymSetupNotes,
     );
   }
 
@@ -1283,6 +1303,7 @@ final class TrainingSession {
     'status': status.name,
     'contentVersion': contentVersion,
     if (gymId != null) 'gym': gymId,
+    if (gymSetupNotes.isNotEmpty) 'gymSetupNotes': gymSetupNotes,
     if (variantSelections.isNotEmpty) 'variantSelections': variantSelections,
     'sets': [
       for (final set in sets)

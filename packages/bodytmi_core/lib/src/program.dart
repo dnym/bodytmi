@@ -476,8 +476,10 @@ final class ProgramRun {
     this.contentVersion = 1,
     this.status = 'active',
     List<RunJump> jumps = const [],
+    this.gymId,
   }) : jumps = List.unmodifiable(jumps) {
     identifier({'id': id}, 'id');
+    if (gymId != null) identifier({'gym': gymId}, 'gym');
     checkOffsetMinutes(startOffsetMinutes, 'startedAt');
     final days = program.definition.dayCount;
     final ids = <String>{};
@@ -511,7 +513,10 @@ final class ProgramRun {
       'contentVersion',
       'status',
       'jumps',
+      'gym',
     });
+    if (j.containsKey('gym') && j['gym'] == null)
+      invalid('A run without a default gym omits gym.');
     final loop = j['loop'];
     if (loop is! bool) invalid('Run loop must be boolean.');
     if (j.containsKey('jumps') && jsonList(j, 'jumps').isEmpty)
@@ -529,9 +534,13 @@ final class ProgramRun {
         if (j.containsKey('jumps'))
           for (final jump in jsonList(j, 'jumps')) RunJump.fromJson(jump),
       ],
+      gymId: j['gym'] == null ? null : identifier(j, 'gym'),
     );
   }
   final String id, status;
+
+  /// The gym this run's sessions start at unless a start names another.
+  final String? gymId;
   final ProgramRevision program;
   final DateTime startedAt;
 
@@ -581,6 +590,7 @@ final class ProgramRun {
       contentVersion: contentVersion + 1,
       status: _statusAt(positionAt(next), status ?? this.status),
       jumps: jumps,
+      gymId: gymId,
     );
   }
 
@@ -597,6 +607,7 @@ final class ProgramRun {
       contentVersion: contentVersion + 1,
       status: _statusAt(jump.position, status),
       jumps: [...jumps, jump],
+      gymId: gymId,
     );
     return next;
   }
@@ -612,6 +623,21 @@ final class ProgramRun {
     contentVersion: contentVersion + 1,
     status: status,
     jumps: jumps,
+    gymId: gymId,
+  );
+
+  /// This run with another default gym (or none).
+  ProgramRun withGym(String? gym) => ProgramRun(
+    id: id,
+    program: program,
+    startedAt: startedAt,
+    startOffsetMinutes: startOffsetMinutes,
+    loop: loop,
+    cursor: cursor,
+    contentVersion: contentVersion + 1,
+    status: status,
+    jumps: jumps,
+    gymId: gym,
   );
 
   Map<String, Object?> toJson() => {
@@ -623,6 +649,7 @@ final class ProgramRun {
     'contentVersion': contentVersion,
     'status': status,
     if (jumps.isNotEmpty) 'jumps': [for (final jump in jumps) jump.toJson()],
+    if (gymId != null) 'gym': gymId,
   };
 }
 
