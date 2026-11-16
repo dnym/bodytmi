@@ -349,7 +349,12 @@ void gymTests() {
           )).code,
           'validation',
         );
-        rejects(() => GymDefinition.fromJson({'id': 'away', 'setupNotes': {}}));
+        rejects(
+          () => GymDefinition.fromJson({
+            'id': 'away',
+            'setupNotes': <String, Object?>{},
+          }),
+        );
         await equipment.publishGym(
           away({
             'preferred': {'leg-press': 'away-press-2'},
