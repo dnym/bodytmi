@@ -129,6 +129,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM observations), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM measure_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM series_policies), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM window_checkpoints), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM repeat_checkpoints), 0)
@@ -1130,6 +1131,30 @@ final class TrainingStore implements TrainingRepository {
           measureId: revision.measure.id,
           number: revision.number,
           snapshot: _snapshot(revision.toJson()),
+        ),
+      );
+
+  @override
+  Future<List<SeriesPolicy>> seriesPolicies() =>
+      _cache.list('seriesPolicies', () async {
+        final result = <SeriesPolicy>[];
+        for (final row in await _db.select(_db.seriesPolicies).get()) {
+          final policy = SeriesPolicy.fromJson(jsonDecode(row.snapshot));
+          if (policy.key != row.seriesKey || policy.number != row.number)
+            invalid('Stored series policy identity is inconsistent.');
+          result.add(policy);
+        }
+        return result;
+      });
+
+  @override
+  Future<void> insertSeriesPolicy(SeriesPolicy policy) => _db
+      .into(_db.seriesPolicies)
+      .insert(
+        SeriesPoliciesCompanion.insert(
+          seriesKey: policy.key,
+          number: policy.number,
+          snapshot: _snapshot(policy.toJson()),
         ),
       );
 

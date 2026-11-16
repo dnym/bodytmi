@@ -154,9 +154,17 @@ final class ObservationService {
     String dailyMode = 'mean',
   }) => repository.transaction(() async {
     final definition = await measure(measureId);
+    final effective = policy == null
+        ? effectivePolicy(
+            definition,
+            attributes,
+            await repository.seriesPolicies(),
+          )
+        : (policy: policy, source: 'request');
     return ObservationResolution.resolve(
       measure: definition,
       attributes: attributes,
+      policySource: effective.source,
       observations: [
         for (final r in await repository.observationRecords(
           measureId: measureId,
@@ -164,9 +172,44 @@ final class ObservationService {
           if (!r.deleted) r.observation,
       ],
       asOfText: asOfText,
-      policy: policy,
+      policy: effective.policy,
       dailyMode: dailyMode,
     );
+  });
+
+  /// Sets (or, with a null [policy], clears) the stored resolution policy of
+  /// a measure (empty [attributes]) or one series; compare-and-set on the
+  /// series' revision.
+  Future<SeriesPolicy> setPolicy(
+    String measureId,
+    Map<String, String> attributes,
+    MeasurePolicy? policy,
+    int expectedRevision,
+  ) => repository.transaction(() async {
+    final definition = await measure(measureId);
+    requireSeries(definition, attributes);
+    if (policy != null) requirePolicyFits(definition, policy);
+    final probe = SeriesPolicy.publish(measureId, attributes, policy);
+    final before =
+        ((await repository.seriesPolicies())
+                .where((p) => p.key == probe.key)
+                .toList()
+              ..sort((a, b) => b.number.compareTo(a.number)))
+            .firstOrNull;
+    if ((before?.number ?? 0) != expectedRevision)
+      throw const BodyTmiException('conflict', 'Series policy changed.');
+    final next = SeriesPolicy.publish(
+      measureId,
+      attributes,
+      policy,
+      previous: before,
+    );
+    if (before != null &&
+        canonicalJson(before.policy?.toJson()) ==
+            canonicalJson(next.policy?.toJson()))
+      return before;
+    await repository.insertSeriesPolicy(next);
+    return next;
   });
 
   /// Observations sorted by local date, then instant or date, then id;

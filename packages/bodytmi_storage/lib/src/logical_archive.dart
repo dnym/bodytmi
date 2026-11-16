@@ -78,6 +78,7 @@ final class LogicalArchiveFiles {
       'programReceipts',
       'observations',
       'measures',
+      'seriesPolicies',
       'timers',
       'windowCheckpoints',
       'repeatCheckpoints',
@@ -312,6 +313,12 @@ final class LogicalArchiveFiles {
               'INSERT INTO program_upgrade_receipts(run_id,request_id,snapshot) VALUES (?,?,?)',
               [u.runId, u.requestId, canonicalJson(u.toJson())],
             );
+          for (final p in archive.seriesPolicies) {
+            db.execute(
+              'INSERT INTO series_policies(series_key,number,snapshot) VALUES (?,?,?)',
+              [p.key, p.number, canonicalJson(p.toJson())],
+            );
+          }
           for (final m in archive.measures) {
             db.execute(
               'INSERT INTO measure_revisions(measure_id,number,snapshot) VALUES (?,?,?)',

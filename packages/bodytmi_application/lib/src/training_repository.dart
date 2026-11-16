@@ -131,6 +131,8 @@ abstract interface class TrainingRepository {
   Future<ObservationRecord?> observationRecord(String id);
   Future<List<MeasureRevision>> measureRevisions();
   Future<void> insertMeasureRevision(MeasureRevision revision);
+  Future<List<SeriesPolicy>> seriesPolicies();
+  Future<void> insertSeriesPolicy(SeriesPolicy policy);
   Future<void> saveObservationRecord(ObservationRecord record);
   Future<void> saveBodyMassRecord(BodyMassRecord record);
   Future<List<ImportedSessionRecord>> importedSessions();
@@ -229,6 +231,7 @@ final class StoredTrainingService {
       programRevisions: await repository.programRevisions(),
       observations: await repository.observationRecords(),
       measures: await repository.measureRevisions(),
+      seriesPolicies: await repository.seriesPolicies(),
       importedSessions: await repository.importedSessions(),
       blockProgressions: await repository.blockProgressions(),
       timers: await repository.timingActivities(),

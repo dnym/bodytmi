@@ -213,6 +213,7 @@ final class NativeBackup {
         'progression_decisions',
         'observations',
         'measure_revisions',
+        'series_policies',
         'timing_activities',
         'window_checkpoints',
         'repeat_checkpoints',
@@ -763,6 +764,19 @@ final class NativeBackup {
         validateObservationRecords(
           observations,
           measures: currentMeasures(measureRevisions),
+        );
+        final seriesPolicies = <SeriesPolicy>[];
+        for (final row in db.select('SELECT * FROM series_policies')) {
+          final p = SeriesPolicy.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (p.key != row['series_key'] || p.number != row['number'])
+            invalid('Series policy row identity mismatch.');
+          seriesPolicies.add(p);
+        }
+        validateSeriesPolicies(
+          seriesPolicies,
+          currentMeasures(measureRevisions),
         );
         final massRecords = [
           for (final r in observations)

@@ -2185,6 +2185,274 @@ class MeasureRevisionsCompanion extends UpdateCompanion<StoredMeasureRevision> {
   }
 }
 
+class $SeriesPoliciesTable extends SeriesPolicies
+    with TableInfo<$SeriesPoliciesTable, StoredSeriesPolicy> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SeriesPoliciesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _seriesKeyMeta = const VerificationMeta(
+    'seriesKey',
+  );
+  @override
+  late final GeneratedColumn<String> seriesKey = GeneratedColumn<String>(
+    'series_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [seriesKey, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'series_policies';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredSeriesPolicy> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('series_key')) {
+      context.handle(
+        _seriesKeyMeta,
+        seriesKey.isAcceptableOrUnknown(data['series_key']!, _seriesKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_seriesKeyMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {seriesKey, number};
+  @override
+  StoredSeriesPolicy map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredSeriesPolicy(
+      seriesKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}series_key'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $SeriesPoliciesTable createAlias(String alias) {
+    return $SeriesPoliciesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredSeriesPolicy extends DataClass
+    implements Insertable<StoredSeriesPolicy> {
+  final String seriesKey;
+  final int number;
+  final String snapshot;
+  const StoredSeriesPolicy({
+    required this.seriesKey,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['series_key'] = Variable<String>(seriesKey);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  SeriesPoliciesCompanion toCompanion(bool nullToAbsent) {
+    return SeriesPoliciesCompanion(
+      seriesKey: Value(seriesKey),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredSeriesPolicy.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredSeriesPolicy(
+      seriesKey: serializer.fromJson<String>(json['seriesKey']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'seriesKey': serializer.toJson<String>(seriesKey),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredSeriesPolicy copyWith({
+    String? seriesKey,
+    int? number,
+    String? snapshot,
+  }) => StoredSeriesPolicy(
+    seriesKey: seriesKey ?? this.seriesKey,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredSeriesPolicy copyWithCompanion(SeriesPoliciesCompanion data) {
+    return StoredSeriesPolicy(
+      seriesKey: data.seriesKey.present ? data.seriesKey.value : this.seriesKey,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSeriesPolicy(')
+          ..write('seriesKey: $seriesKey, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(seriesKey, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredSeriesPolicy &&
+          other.seriesKey == this.seriesKey &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class SeriesPoliciesCompanion extends UpdateCompanion<StoredSeriesPolicy> {
+  final Value<String> seriesKey;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const SeriesPoliciesCompanion({
+    this.seriesKey = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SeriesPoliciesCompanion.insert({
+    required String seriesKey,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : seriesKey = Value(seriesKey),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredSeriesPolicy> custom({
+    Expression<String>? seriesKey,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (seriesKey != null) 'series_key': seriesKey,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SeriesPoliciesCompanion copyWith({
+    Value<String>? seriesKey,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return SeriesPoliciesCompanion(
+      seriesKey: seriesKey ?? this.seriesKey,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (seriesKey.present) {
+      map['series_key'] = Variable<String>(seriesKey.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SeriesPoliciesCompanion(')
+          ..write('seriesKey: $seriesKey, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $EquipmentRevisionsTable extends EquipmentRevisions
     with TableInfo<$EquipmentRevisionsTable, StoredEquipmentRevision> {
   @override
@@ -8447,6 +8715,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
   late final $MeasureRevisionsTable measureRevisions = $MeasureRevisionsTable(
     this,
   );
+  late final $SeriesPoliciesTable seriesPolicies = $SeriesPoliciesTable(this);
   late final $EquipmentRevisionsTable equipmentRevisions =
       $EquipmentRevisionsTable(this);
   late final $GymRevisionsTable gymRevisions = $GymRevisionsTable(this);
@@ -8518,6 +8787,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     blueprintRevisions,
     blueprintInstances,
     measureRevisions,
+    seriesPolicies,
     equipmentRevisions,
     gymRevisions,
     equipmentInstanceRevisions,
@@ -10035,6 +10305,187 @@ typedef $$MeasureRevisionsTableProcessedTableManager =
         >,
       ),
       StoredMeasureRevision,
+      PrefetchHooks Function()
+    >;
+typedef $$SeriesPoliciesTableCreateCompanionBuilder =
+    SeriesPoliciesCompanion Function({
+      required String seriesKey,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$SeriesPoliciesTableUpdateCompanionBuilder =
+    SeriesPoliciesCompanion Function({
+      Value<String> seriesKey,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$SeriesPoliciesTableFilterComposer
+    extends Composer<_$TrainingDatabase, $SeriesPoliciesTable> {
+  $$SeriesPoliciesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get seriesKey => $composableBuilder(
+    column: $table.seriesKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SeriesPoliciesTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $SeriesPoliciesTable> {
+  $$SeriesPoliciesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get seriesKey => $composableBuilder(
+    column: $table.seriesKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SeriesPoliciesTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $SeriesPoliciesTable> {
+  $$SeriesPoliciesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get seriesKey =>
+      $composableBuilder(column: $table.seriesKey, builder: (column) => column);
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$SeriesPoliciesTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $SeriesPoliciesTable,
+          StoredSeriesPolicy,
+          $$SeriesPoliciesTableFilterComposer,
+          $$SeriesPoliciesTableOrderingComposer,
+          $$SeriesPoliciesTableAnnotationComposer,
+          $$SeriesPoliciesTableCreateCompanionBuilder,
+          $$SeriesPoliciesTableUpdateCompanionBuilder,
+          (
+            StoredSeriesPolicy,
+            BaseReferences<
+              _$TrainingDatabase,
+              $SeriesPoliciesTable,
+              StoredSeriesPolicy
+            >,
+          ),
+          StoredSeriesPolicy,
+          PrefetchHooks Function()
+        > {
+  $$SeriesPoliciesTableTableManager(
+    _$TrainingDatabase db,
+    $SeriesPoliciesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SeriesPoliciesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SeriesPoliciesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SeriesPoliciesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> seriesKey = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SeriesPoliciesCompanion(
+                seriesKey: seriesKey,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String seriesKey,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => SeriesPoliciesCompanion.insert(
+                seriesKey: seriesKey,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SeriesPoliciesTable, StoredSeriesPolicy>(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $SeriesPoliciesTable,
+                    StoredSeriesPolicy
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SeriesPoliciesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $SeriesPoliciesTable,
+      StoredSeriesPolicy,
+      $$SeriesPoliciesTableFilterComposer,
+      $$SeriesPoliciesTableOrderingComposer,
+      $$SeriesPoliciesTableAnnotationComposer,
+      $$SeriesPoliciesTableCreateCompanionBuilder,
+      $$SeriesPoliciesTableUpdateCompanionBuilder,
+      (
+        StoredSeriesPolicy,
+        BaseReferences<
+          _$TrainingDatabase,
+          $SeriesPoliciesTable,
+          StoredSeriesPolicy
+        >,
+      ),
+      StoredSeriesPolicy,
       PrefetchHooks Function()
     >;
 typedef $$EquipmentRevisionsTableCreateCompanionBuilder =
@@ -16169,6 +16620,8 @@ class $TrainingDatabaseManager {
       $$BlueprintInstancesTableTableManager(_db, _db.blueprintInstances);
   $$MeasureRevisionsTableTableManager get measureRevisions =>
       $$MeasureRevisionsTableTableManager(_db, _db.measureRevisions);
+  $$SeriesPoliciesTableTableManager get seriesPolicies =>
+      $$SeriesPoliciesTableTableManager(_db, _db.seriesPolicies);
   $$EquipmentRevisionsTableTableManager get equipmentRevisions =>
       $$EquipmentRevisionsTableTableManager(_db, _db.equipmentRevisions);
   $$GymRevisionsTableTableManager get gymRevisions =>

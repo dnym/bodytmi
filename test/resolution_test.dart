@@ -11,6 +11,15 @@ Map<String, Object?> _q(String value, String unit) => {
   'unit': unit,
 };
 
+Future<BodyTmiException> _failure(Future<Object?> Function() action) async {
+  try {
+    await action();
+  } on BodyTmiException catch (error) {
+    return error;
+  }
+  throw StateError('Expected a BodyTmiException.');
+}
+
 MeasureDefinition _builtIn(String id) =>
     builtInMeasures.firstWhere((m) => m.id == id);
 
@@ -229,6 +238,104 @@ void resolutionTests() {
       jsonEncode(before['fingerprint']) != jsonEncode(corrected['fingerprint']),
       'a corrected older reading changes the fingerprint',
     );
+  });
+
+  test('stored policies apply per series, then per measure', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-policy-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    try {
+      final service = ObservationService(store);
+      for (final o in [
+        _tape('a', 0, '90'),
+        _tape('b', 10, '89'),
+        _tape('c', 20, '88'),
+        _tape('d', 30, '87'),
+        _tape('n', 30, '40', attributes: {'site': 'neck'}),
+      ]) {
+        await service.save(o.toJson()..remove('contentVersion'), 0);
+      }
+      final asOf = '${_date(40)}T12:00:00+01:00';
+      Future<Map<String, Object?>> waist() async => (await service.resolve(
+        'circumference',
+        asOf,
+        attributes: {'site': 'waist'},
+      )).toJson();
+      var r = await waist();
+      equal(r['policySource'], 'default');
+      equal(r['used'], 'latest');
+      final extrapolated = MeasurePolicy.fromJson({
+        'policy': 'extrapolated',
+        'staleAfterDays': 60,
+      });
+      final set = await service.setPolicy(
+        'circumference',
+        {'site': 'waist'},
+        extrapolated,
+        0,
+      );
+      equal(set.number, 1);
+      r = await waist();
+      equal(r['policySource'], 'series');
+      equal(r['used'], 'extrapolated');
+      // The neck series keeps the measure default.
+      final neck = (await service.resolve(
+        'circumference',
+        asOf,
+        attributes: {'site': 'neck'},
+      )).toJson();
+      equal(neck['policySource'], 'default');
+      // An explicit request policy wins.
+      r = (await service.resolve(
+        'circumference',
+        asOf,
+        attributes: {'site': 'waist'},
+        policy: MeasurePolicy.fromJson({'policy': 'latest'}),
+      )).toJson();
+      equal(r['policySource'], 'request');
+      // Policies must fit the measure and series; versions are checked.
+      equal(
+        (await _failure(
+          () => service.setPolicy(
+            'circumference',
+            const {},
+            MeasurePolicy.fromJson({'policy': 'trend'}),
+            0,
+          ),
+        )).code,
+        'validation',
+      );
+      equal(
+        (await _failure(
+          () => service.setPolicy(
+            'circumference',
+            {'site': 'elbow'},
+            extrapolated,
+            0,
+          ),
+        )).code,
+        'validation',
+      );
+      equal(
+        (await _failure(
+          () => service.setPolicy('circumference', {'site': 'waist'}, null, 0),
+        )).code,
+        'conflict',
+      );
+      // Clearing the series policy falls back again.
+      await service.setPolicy('circumference', {'site': 'waist'}, null, 1);
+      equal((await waist())['policySource'], 'default');
+      // Archives carry policies and reject an unfit one.
+      final archive = (await store.archive()).toJson();
+      equal(TrainingArchive.fromJson(archive).seriesPolicies.length, 2);
+      final forged = jsonDecode(jsonEncode(archive)) as Map;
+      ((forged['seriesPolicies'] as List).first as Map)['attributes'] = {
+        'site': 'elbow',
+      };
+      rejects(() => TrainingArchive.fromJson(forged.cast<String, Object?>()));
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
   });
 
   test('CLI observation resolve', () async {

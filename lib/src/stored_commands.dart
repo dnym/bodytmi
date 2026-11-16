@@ -93,6 +93,8 @@ const storedCommandNames = [
   'measure define',
   'measure show',
   'measure list',
+  'measure policy',
+  'measure policies',
   'observation record',
   'observation update',
   'observation delete',
@@ -587,6 +589,13 @@ Future<Map<String, Object?>> executeStored(
     'measure define' => {'measure', 'expectedRevision'},
     'measure show' => {'measureId', 'revision'},
     'measure list' => <String>{},
+    'measure policy' => {
+      'measure',
+      'attributes',
+      'resolution',
+      'expectedRevision',
+    },
+    'measure policies' => {'measure'},
     'observation record' => {'observation'},
     'observation update' => {'observation', 'expectedVersion'},
     'observation delete' => {'id', 'expectedVersion', 'confirm'},
@@ -2511,6 +2520,30 @@ Future<Map<String, Object?>> executeStored(
               'builtIn': builtInMeasures.any((b) => b.id == m.id),
               'measure': m.toJson(),
             },
+        ];
+      case 'measure policy':
+        if (!request.containsKey('resolution'))
+          invalid('resolution is required (null clears the stored policy).');
+        data = (await ObservationService(store).setPolicy(
+          identifier(request, 'measure'),
+          {
+            for (final e in jsonObject(
+              request['attributes'] ?? <String, Object?>{},
+              'attributes',
+            ).entries)
+              e.key: identifier({e.key: e.value}, e.key),
+          },
+          request['resolution'] == null
+              ? null
+              : MeasurePolicy.fromJson(request['resolution']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'measure policies':
+        data = [
+          for (final p in await store.seriesPolicies())
+            if (!request.containsKey('measure') ||
+                p.measureId == identifier(request, 'measure'))
+              p.toJson(),
         ];
       case 'observation record':
         data = (await ObservationService(
