@@ -85,6 +85,8 @@ import 'gym_test.dart';
 import 'blueprint_test.dart';
 import 'catalog_import_test.dart';
 import 'gzclp_test.dart';
+import 'units_test.dart';
+import 'measure_test.dart';
 import 'unplanned_sets_test.dart';
 import 'tempo_lever_test.dart';
 import 'structures_trace_test.dart';
@@ -173,6 +175,8 @@ Future<void> main() async {
   blueprintTests();
   catalogImportTests();
   gzclpTests();
+  unitTests();
+  measureTests();
   unplannedSetsTests();
   tempoLeverTests();
   structuresTraceTests();

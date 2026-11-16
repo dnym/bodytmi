@@ -52,6 +52,8 @@ const commandNames = [
   'family validate',
   'blueprint validate',
   'catalog validate',
+  'measure validate',
+  'measure builtins',
   'session mass-status',
   'session mass-refresh',
   'session mass-rebind',
@@ -848,6 +850,15 @@ final class Commands {
               ? null
               : LoadingSpec.fromJson(request['loading']),
         );
+      case 'measure validate':
+        keys({'measure'});
+        data = MeasureDefinition.fromJson(request['measure']).toJson();
+      case 'measure builtins':
+        keys({});
+        data = {
+          'revision': builtInMeasureRevision,
+          'measures': [for (final m in builtInMeasures) m.toJson()],
+        };
       case 'catalog validate':
         keys({'document'});
         data = CatalogImportDocument.fromJson(request['document']).summary;

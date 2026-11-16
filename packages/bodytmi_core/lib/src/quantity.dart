@@ -87,19 +87,60 @@ final class Decimal implements Comparable<Decimal> {
   }
 }
 
-enum Dimension { mass, distance, duration, count, angle }
+/// Physical or counted dimensions. `count` is repetitions; `steps` and
+/// `tally` (a generic count of things) are separate so a step count never
+/// converts into repetitions. Every count-like dimension is whole numbers.
+enum Dimension {
+  mass,
+  distance,
+  duration,
+  count,
+  angle,
+  energy,
+  volume,
+  ratio,
+  temperature,
+  pressure,
+  frequency,
+  steps,
+  tally;
 
+  bool get integral => this == count || this == steps || this == tally;
+}
+
+/// Supported units with exact factors to their dimension's canonical unit.
+/// Kitchen measures (msk, tsk, krm) are portions of a food, not units.
 enum Unit {
   kg(Dimension.mass, '1'),
   lb(Dimension.mass, '0.45359237'),
+  g(Dimension.mass, '0.001'),
+  mg(Dimension.mass, '0.000001'),
+  mcg(Dimension.mass, '0.000000001'),
   m(Dimension.distance, '1'),
+  km(Dimension.distance, '1000'),
   cm(Dimension.distance, '0.01'),
   mm(Dimension.distance, '0.001'),
   s(Dimension.duration, '1'),
   ms(Dimension.duration, '0.001'),
   min(Dimension.duration, '60'),
+  h(Dimension.duration, '3600'),
+  d(Dimension.duration, '86400'),
+  wk(Dimension.duration, '604800'),
   rep(Dimension.count, '1'),
-  deg(Dimension.angle, '1');
+  deg(Dimension.angle, '1'),
+  kJ(Dimension.energy, '1'),
+  kcal(Dimension.energy, '4.184'),
+  l(Dimension.volume, '1'),
+  dl(Dimension.volume, '0.1'),
+  cl(Dimension.volume, '0.01'),
+  ml(Dimension.volume, '0.001'),
+  ratio(Dimension.ratio, '1'),
+  percent(Dimension.ratio, '0.01'),
+  degC(Dimension.temperature, '1'),
+  mmHg(Dimension.pressure, '1'),
+  bpm(Dimension.frequency, '1'),
+  step(Dimension.steps, '1'),
+  count(Dimension.tally, '1');
 
   const Unit(this.dimension, this.factor);
   final Dimension dimension;
@@ -118,6 +159,14 @@ enum Unit {
     Dimension.duration => s,
     Dimension.count => rep,
     Dimension.angle => deg,
+    Dimension.energy => kJ,
+    Dimension.volume => l,
+    Dimension.ratio => ratio,
+    Dimension.temperature => degC,
+    Dimension.pressure => mmHg,
+    Dimension.frequency => bpm,
+    Dimension.steps => step,
+    Dimension.tally => count,
   };
 }
 
@@ -129,8 +178,8 @@ final class Quantity implements Comparable<Quantity> {
     final parsedUnit = Unit.parse(unit);
     if (parsed.compareTo(Decimal.zero) < 0)
       invalid('Quantity cannot be negative.');
-    if (parsedUnit.dimension == Dimension.count && !parsed.isInteger) {
-      invalid('Repetitions must be integers.');
+    if (parsedUnit.dimension.integral && !parsed.isInteger) {
+      invalid('Repetitions, steps and tallies must be integers.');
     }
     return Quantity._(
       parsed * Decimal.parse(parsedUnit.factor),
