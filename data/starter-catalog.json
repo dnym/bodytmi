@@ -3,7 +3,7 @@
   "source": {
     "name": "BodyTMI starter catalog",
     "version": "1",
-    "notes": "Common, well-established strength exercises, their usual implementations and basic gym equipment, with Swedish labels, plus equipment blueprints for a plate-loaded barbell and a selectorized weight stack. Names and equipment shapes only: no programmes, targets or recommendations. Free weights and stations are marked interchangeable; machines are not, because one machine’s numbers do not carry over to another."
+    "notes": "Common, well-established strength exercises, their usual implementations and basic gym equipment, with Swedish labels, plus equipment blueprints for a plate-loaded barbell and a selectorized weight stack. Names and equipment shapes, plus one programme blueprint, GZCLP, transcribed from its author’s published description (its source is cited in the blueprint). Free weights and stations are marked interchangeable; machines are not, because one machine’s numbers do not carry over to another."
   },
   "exercises": [
     {
@@ -682,6 +682,2073 @@
                 "$choice": "pins"
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "id": "gzclp",
+      "name": "GZCLP",
+      "source": "Cody Lefever (gzcl), \"GZCLP (GZCL Linear Progression for new lifters)\", in \"Strength Training: Using the GZCL Method from Novice to Elite\", r/Fitness, 2016; excerpted from his \"GZCL Method: Applications & Adaptations\".",
+      "notes": "Four workouts rotate A1, B1, A2, B2, ideally with a day off between them (three a week). T1 lifts start at 3x5+ (five sets of three, last set as many reps as possible, stop at ten), drop to 2x6+ and 1x10+ when the base volume is missed at the same weight, then test a 5RM and restart at 85% of it. T2 lifts run 10x3, 8x3, 6x3, then restart at 10x3 a little heavier than the last 10x3 start. T3 lifts are 15x3+ and go up once the last set reaches 25. Propose each slot with its preset: t1-lower/t1-upper for T1 squat and deadlift/bench and OHP, t2-lower/t2-upper likewise for T2, t3 for T3. The T3 lifts appear on two days each and progress separately on each day unless their tracks are linked. Push AMRAP sets to one or two reps before failure, not beyond ten.",
+      "choices": [
+        {
+          "id": "squat-t1",
+          "kind": "quantity",
+          "label": "Squat T1 starting weight",
+          "notes": "The source: the bar, or the last weight from a previous linear-progression programme.",
+          "dimension": "mass",
+          "default": {
+            "value": "20",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "squat-t2",
+          "kind": "quantity",
+          "label": "Squat T2 starting weight",
+          "notes": "The source: the bar, or the last weight from a previous linear-progression programme.",
+          "dimension": "mass",
+          "default": {
+            "value": "20",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "bench-t1",
+          "kind": "quantity",
+          "label": "Bench press T1 starting weight",
+          "notes": "The source: the bar, or the last weight from a previous linear-progression programme.",
+          "dimension": "mass",
+          "default": {
+            "value": "20",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "bench-t2",
+          "kind": "quantity",
+          "label": "Bench press T2 starting weight",
+          "notes": "The source: the bar, or the last weight from a previous linear-progression programme.",
+          "dimension": "mass",
+          "default": {
+            "value": "20",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "deadlift-t1",
+          "kind": "quantity",
+          "label": "Deadlift T1 starting weight",
+          "notes": "The source: the bar, or the last weight from a previous linear-progression programme.",
+          "dimension": "mass",
+          "default": {
+            "value": "20",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "deadlift-t2",
+          "kind": "quantity",
+          "label": "Deadlift T2 starting weight",
+          "notes": "The source: the bar, or the last weight from a previous linear-progression programme.",
+          "dimension": "mass",
+          "default": {
+            "value": "20",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "ohp-t1",
+          "kind": "quantity",
+          "label": "Overhead press T1 starting weight",
+          "notes": "The source: the bar, or the last weight from a previous linear-progression programme.",
+          "dimension": "mass",
+          "default": {
+            "value": "20",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "ohp-t2",
+          "kind": "quantity",
+          "label": "Overhead press T2 starting weight",
+          "notes": "The source: the bar, or the last weight from a previous linear-progression programme.",
+          "dimension": "mass",
+          "default": {
+            "value": "20",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "pulldown-start",
+          "kind": "quantity",
+          "label": "Lat pulldown T3 starting weight",
+          "dimension": "mass"
+        },
+        {
+          "id": "row-start",
+          "kind": "quantity",
+          "label": "Dumbbell row T3 starting weight",
+          "dimension": "mass"
+        },
+        {
+          "id": "pulldown-equipment",
+          "kind": "equipment",
+          "label": "Lat pulldown equipment",
+          "options": [
+            "lat-pulldown-machine",
+            "cable-machine"
+          ],
+          "default": "lat-pulldown-machine"
+        },
+        {
+          "id": "lower-step",
+          "kind": "quantity",
+          "label": "Weight added per workout, squat and deadlift",
+          "notes": "The source: no more than 5 to 10 lb (2.5 to 4.5 kg) workout to workout.",
+          "dimension": "mass",
+          "minimum": {
+            "value": "0.5",
+            "unit": "kg"
+          },
+          "maximum": {
+            "value": "10",
+            "unit": "lb"
+          },
+          "default": {
+            "value": "2.5",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "upper-step",
+          "kind": "quantity",
+          "label": "Weight added per workout, bench and overhead press",
+          "notes": "The source: no more than 5 to 10 lb (2.5 to 4.5 kg) workout to workout.",
+          "dimension": "mass",
+          "minimum": {
+            "value": "0.5",
+            "unit": "kg"
+          },
+          "maximum": {
+            "value": "10",
+            "unit": "lb"
+          },
+          "default": {
+            "value": "2.5",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "t3-step",
+          "kind": "quantity",
+          "label": "Weight added to a T3 lift",
+          "notes": "The source: be modest; T3 movements have lower thresholds of weight increases.",
+          "dimension": "mass",
+          "minimum": {
+            "value": "0.5",
+            "unit": "kg"
+          },
+          "default": {
+            "value": "2.5",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "t2-restart",
+          "kind": "quantity",
+          "label": "T2 restart increase over the last 3x10 start",
+          "notes": "The source: restart at 10x3 at a slightly heavier weight than previously used, no more than 20 lb (9 kg).",
+          "dimension": "mass",
+          "minimum": {
+            "value": "0.5",
+            "unit": "kg"
+          },
+          "maximum": {
+            "value": "9",
+            "unit": "kg"
+          },
+          "default": {
+            "value": "5",
+            "unit": "kg"
+          }
+        }
+      ],
+      "workouts": {
+        "a1": {
+          "name": "GZCLP A1",
+          "slots": [
+            {
+              "id": "t1",
+              "exercise": "squat",
+              "implementation": "barbell-back-squat",
+              "equipment": "barbell",
+              "targets": {
+                "load": {
+                  "$choice": "squat-t1"
+                },
+                "reps": {
+                  "value": "3",
+                  "unit": "rep"
+                }
+              },
+              "categories": {
+                "scheme": {
+                  "values": [
+                    "triples",
+                    "doubles",
+                    "singles",
+                    "retest"
+                  ],
+                  "default": "triples"
+                }
+              }
+            },
+            {
+              "id": "t2",
+              "exercise": "bench-press",
+              "implementation": "barbell-bench-press",
+              "equipment": "barbell",
+              "targets": {
+                "load": {
+                  "$choice": "bench-t2"
+                },
+                "reps": {
+                  "value": "10",
+                  "unit": "rep"
+                }
+              },
+              "categories": {
+                "scheme": {
+                  "values": [
+                    "tens",
+                    "eights",
+                    "sixes"
+                  ],
+                  "default": "tens"
+                }
+              }
+            },
+            {
+              "id": "t3",
+              "exercise": "lat-pulldown",
+              "implementation": "cable-lat-pulldown",
+              "equipment": {
+                "$choice": "pulldown-equipment"
+              },
+              "targets": {
+                "load": {
+                  "$choice": "pulldown-start"
+                },
+                "reps": {
+                  "value": "15",
+                  "unit": "rep"
+                }
+              }
+            }
+          ],
+          "plan": {
+            "id": "workout",
+            "type": "sequence",
+            "children": [
+              {
+                "id": "t1-scheme",
+                "type": "variant",
+                "slot": "t1",
+                "lever": "scheme",
+                "branches": {
+                  "triples": {
+                    "id": "t1-triples",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-triples-sets",
+                        "type": "repeat",
+                        "count": 4,
+                        "child": {
+                          "id": "t1-triples-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "3",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-triples-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "3",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "3",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "doubles": {
+                    "id": "t1-doubles",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-doubles-sets",
+                        "type": "repeat",
+                        "count": 5,
+                        "child": {
+                          "id": "t1-doubles-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "2",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-doubles-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "2",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "2",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "singles": {
+                    "id": "t1-singles",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-singles-sets",
+                        "type": "repeat",
+                        "count": 9,
+                        "child": {
+                          "id": "t1-singles-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "1",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-singles-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "1",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "1",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "retest": {
+                    "id": "t1-retest",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-ramp-1",
+                        "type": "effort",
+                        "slot": "t1",
+                        "role": "warmup",
+                        "targets": {
+                          "reps": {
+                            "value": "5",
+                            "unit": "rep"
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-ramp-2",
+                        "type": "effort",
+                        "slot": "t1",
+                        "role": "warmup",
+                        "targets": {
+                          "reps": {
+                            "value": "3",
+                            "unit": "rep"
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-five-rep-max",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "5",
+                            "unit": "rep"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "t2-scheme",
+                "type": "variant",
+                "slot": "t2",
+                "lever": "scheme",
+                "branches": {
+                  "tens": {
+                    "id": "t2-tens",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-tens-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "10",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  "eights": {
+                    "id": "t2-eights",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-eights-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "8",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  "sixes": {
+                    "id": "t2-sixes",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-sixes-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "6",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "id": "t3",
+                "type": "sequence",
+                "children": [
+                  {
+                    "id": "t3-sets",
+                    "type": "repeat",
+                    "count": 2,
+                    "child": {
+                      "id": "t3-set",
+                      "type": "effort",
+                      "slot": "t3",
+                      "targets": {
+                        "reps": {
+                          "value": "15",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "t3-last",
+                    "type": "effort",
+                    "slot": "t3",
+                    "targets": {
+                      "reps": {
+                        "value": "15",
+                        "unit": "rep"
+                      }
+                    },
+                    "objectives": {
+                      "reps": {
+                        "mode": "minimum",
+                        "minimum": {
+                          "value": "15",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "b1": {
+          "name": "GZCLP B1",
+          "slots": [
+            {
+              "id": "t1",
+              "exercise": "overhead-press",
+              "implementation": "barbell-overhead-press",
+              "equipment": "barbell",
+              "targets": {
+                "load": {
+                  "$choice": "ohp-t1"
+                },
+                "reps": {
+                  "value": "3",
+                  "unit": "rep"
+                }
+              },
+              "categories": {
+                "scheme": {
+                  "values": [
+                    "triples",
+                    "doubles",
+                    "singles",
+                    "retest"
+                  ],
+                  "default": "triples"
+                }
+              }
+            },
+            {
+              "id": "t2",
+              "exercise": "deadlift",
+              "implementation": "barbell-deadlift",
+              "equipment": "barbell",
+              "targets": {
+                "load": {
+                  "$choice": "deadlift-t2"
+                },
+                "reps": {
+                  "value": "10",
+                  "unit": "rep"
+                }
+              },
+              "categories": {
+                "scheme": {
+                  "values": [
+                    "tens",
+                    "eights",
+                    "sixes"
+                  ],
+                  "default": "tens"
+                }
+              }
+            },
+            {
+              "id": "t3",
+              "exercise": "row",
+              "implementation": "dumbbell-row",
+              "equipment": "dumbbell",
+              "targets": {
+                "load": {
+                  "$choice": "row-start"
+                },
+                "reps": {
+                  "value": "15",
+                  "unit": "rep"
+                }
+              }
+            }
+          ],
+          "plan": {
+            "id": "workout",
+            "type": "sequence",
+            "children": [
+              {
+                "id": "t1-scheme",
+                "type": "variant",
+                "slot": "t1",
+                "lever": "scheme",
+                "branches": {
+                  "triples": {
+                    "id": "t1-triples",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-triples-sets",
+                        "type": "repeat",
+                        "count": 4,
+                        "child": {
+                          "id": "t1-triples-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "3",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-triples-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "3",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "3",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "doubles": {
+                    "id": "t1-doubles",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-doubles-sets",
+                        "type": "repeat",
+                        "count": 5,
+                        "child": {
+                          "id": "t1-doubles-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "2",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-doubles-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "2",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "2",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "singles": {
+                    "id": "t1-singles",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-singles-sets",
+                        "type": "repeat",
+                        "count": 9,
+                        "child": {
+                          "id": "t1-singles-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "1",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-singles-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "1",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "1",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "retest": {
+                    "id": "t1-retest",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-ramp-1",
+                        "type": "effort",
+                        "slot": "t1",
+                        "role": "warmup",
+                        "targets": {
+                          "reps": {
+                            "value": "5",
+                            "unit": "rep"
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-ramp-2",
+                        "type": "effort",
+                        "slot": "t1",
+                        "role": "warmup",
+                        "targets": {
+                          "reps": {
+                            "value": "3",
+                            "unit": "rep"
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-five-rep-max",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "5",
+                            "unit": "rep"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "t2-scheme",
+                "type": "variant",
+                "slot": "t2",
+                "lever": "scheme",
+                "branches": {
+                  "tens": {
+                    "id": "t2-tens",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-tens-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "10",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  "eights": {
+                    "id": "t2-eights",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-eights-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "8",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  "sixes": {
+                    "id": "t2-sixes",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-sixes-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "6",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "id": "t3",
+                "type": "sequence",
+                "children": [
+                  {
+                    "id": "t3-sets",
+                    "type": "repeat",
+                    "count": 2,
+                    "child": {
+                      "id": "t3-set",
+                      "type": "effort",
+                      "slot": "t3",
+                      "targets": {
+                        "reps": {
+                          "value": "15",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "t3-last",
+                    "type": "effort",
+                    "slot": "t3",
+                    "targets": {
+                      "reps": {
+                        "value": "15",
+                        "unit": "rep"
+                      }
+                    },
+                    "objectives": {
+                      "reps": {
+                        "mode": "minimum",
+                        "minimum": {
+                          "value": "15",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "a2": {
+          "name": "GZCLP A2",
+          "slots": [
+            {
+              "id": "t1",
+              "exercise": "bench-press",
+              "implementation": "barbell-bench-press",
+              "equipment": "barbell",
+              "targets": {
+                "load": {
+                  "$choice": "bench-t1"
+                },
+                "reps": {
+                  "value": "3",
+                  "unit": "rep"
+                }
+              },
+              "categories": {
+                "scheme": {
+                  "values": [
+                    "triples",
+                    "doubles",
+                    "singles",
+                    "retest"
+                  ],
+                  "default": "triples"
+                }
+              }
+            },
+            {
+              "id": "t2",
+              "exercise": "squat",
+              "implementation": "barbell-back-squat",
+              "equipment": "barbell",
+              "targets": {
+                "load": {
+                  "$choice": "squat-t2"
+                },
+                "reps": {
+                  "value": "10",
+                  "unit": "rep"
+                }
+              },
+              "categories": {
+                "scheme": {
+                  "values": [
+                    "tens",
+                    "eights",
+                    "sixes"
+                  ],
+                  "default": "tens"
+                }
+              }
+            },
+            {
+              "id": "t3",
+              "exercise": "lat-pulldown",
+              "implementation": "cable-lat-pulldown",
+              "equipment": {
+                "$choice": "pulldown-equipment"
+              },
+              "targets": {
+                "load": {
+                  "$choice": "pulldown-start"
+                },
+                "reps": {
+                  "value": "15",
+                  "unit": "rep"
+                }
+              }
+            }
+          ],
+          "plan": {
+            "id": "workout",
+            "type": "sequence",
+            "children": [
+              {
+                "id": "t1-scheme",
+                "type": "variant",
+                "slot": "t1",
+                "lever": "scheme",
+                "branches": {
+                  "triples": {
+                    "id": "t1-triples",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-triples-sets",
+                        "type": "repeat",
+                        "count": 4,
+                        "child": {
+                          "id": "t1-triples-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "3",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-triples-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "3",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "3",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "doubles": {
+                    "id": "t1-doubles",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-doubles-sets",
+                        "type": "repeat",
+                        "count": 5,
+                        "child": {
+                          "id": "t1-doubles-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "2",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-doubles-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "2",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "2",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "singles": {
+                    "id": "t1-singles",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-singles-sets",
+                        "type": "repeat",
+                        "count": 9,
+                        "child": {
+                          "id": "t1-singles-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "1",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-singles-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "1",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "1",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "retest": {
+                    "id": "t1-retest",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-ramp-1",
+                        "type": "effort",
+                        "slot": "t1",
+                        "role": "warmup",
+                        "targets": {
+                          "reps": {
+                            "value": "5",
+                            "unit": "rep"
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-ramp-2",
+                        "type": "effort",
+                        "slot": "t1",
+                        "role": "warmup",
+                        "targets": {
+                          "reps": {
+                            "value": "3",
+                            "unit": "rep"
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-five-rep-max",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "5",
+                            "unit": "rep"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "t2-scheme",
+                "type": "variant",
+                "slot": "t2",
+                "lever": "scheme",
+                "branches": {
+                  "tens": {
+                    "id": "t2-tens",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-tens-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "10",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  "eights": {
+                    "id": "t2-eights",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-eights-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "8",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  "sixes": {
+                    "id": "t2-sixes",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-sixes-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "6",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "id": "t3",
+                "type": "sequence",
+                "children": [
+                  {
+                    "id": "t3-sets",
+                    "type": "repeat",
+                    "count": 2,
+                    "child": {
+                      "id": "t3-set",
+                      "type": "effort",
+                      "slot": "t3",
+                      "targets": {
+                        "reps": {
+                          "value": "15",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "t3-last",
+                    "type": "effort",
+                    "slot": "t3",
+                    "targets": {
+                      "reps": {
+                        "value": "15",
+                        "unit": "rep"
+                      }
+                    },
+                    "objectives": {
+                      "reps": {
+                        "mode": "minimum",
+                        "minimum": {
+                          "value": "15",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "b2": {
+          "name": "GZCLP B2",
+          "slots": [
+            {
+              "id": "t1",
+              "exercise": "deadlift",
+              "implementation": "barbell-deadlift",
+              "equipment": "barbell",
+              "targets": {
+                "load": {
+                  "$choice": "deadlift-t1"
+                },
+                "reps": {
+                  "value": "3",
+                  "unit": "rep"
+                }
+              },
+              "categories": {
+                "scheme": {
+                  "values": [
+                    "triples",
+                    "doubles",
+                    "singles",
+                    "retest"
+                  ],
+                  "default": "triples"
+                }
+              }
+            },
+            {
+              "id": "t2",
+              "exercise": "overhead-press",
+              "implementation": "barbell-overhead-press",
+              "equipment": "barbell",
+              "targets": {
+                "load": {
+                  "$choice": "ohp-t2"
+                },
+                "reps": {
+                  "value": "10",
+                  "unit": "rep"
+                }
+              },
+              "categories": {
+                "scheme": {
+                  "values": [
+                    "tens",
+                    "eights",
+                    "sixes"
+                  ],
+                  "default": "tens"
+                }
+              }
+            },
+            {
+              "id": "t3",
+              "exercise": "row",
+              "implementation": "dumbbell-row",
+              "equipment": "dumbbell",
+              "targets": {
+                "load": {
+                  "$choice": "row-start"
+                },
+                "reps": {
+                  "value": "15",
+                  "unit": "rep"
+                }
+              }
+            }
+          ],
+          "plan": {
+            "id": "workout",
+            "type": "sequence",
+            "children": [
+              {
+                "id": "t1-scheme",
+                "type": "variant",
+                "slot": "t1",
+                "lever": "scheme",
+                "branches": {
+                  "triples": {
+                    "id": "t1-triples",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-triples-sets",
+                        "type": "repeat",
+                        "count": 4,
+                        "child": {
+                          "id": "t1-triples-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "3",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-triples-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "3",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "3",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "doubles": {
+                    "id": "t1-doubles",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-doubles-sets",
+                        "type": "repeat",
+                        "count": 5,
+                        "child": {
+                          "id": "t1-doubles-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "2",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-doubles-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "2",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "2",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "singles": {
+                    "id": "t1-singles",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-singles-sets",
+                        "type": "repeat",
+                        "count": 9,
+                        "child": {
+                          "id": "t1-singles-set",
+                          "type": "effort",
+                          "slot": "t1",
+                          "targets": {
+                            "reps": {
+                              "value": "1",
+                              "unit": "rep"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-singles-last",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "1",
+                            "unit": "rep"
+                          }
+                        },
+                        "objectives": {
+                          "reps": {
+                            "mode": "range",
+                            "minimum": {
+                              "value": "1",
+                              "unit": "rep"
+                            },
+                            "maximum": {
+                              "value": "10",
+                              "unit": "rep"
+                            },
+                            "upperMeaning": "stoppingCue"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "retest": {
+                    "id": "t1-retest",
+                    "type": "sequence",
+                    "children": [
+                      {
+                        "id": "t1-ramp-1",
+                        "type": "effort",
+                        "slot": "t1",
+                        "role": "warmup",
+                        "targets": {
+                          "reps": {
+                            "value": "5",
+                            "unit": "rep"
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-ramp-2",
+                        "type": "effort",
+                        "slot": "t1",
+                        "role": "warmup",
+                        "targets": {
+                          "reps": {
+                            "value": "3",
+                            "unit": "rep"
+                          }
+                        }
+                      },
+                      {
+                        "id": "t1-five-rep-max",
+                        "type": "effort",
+                        "slot": "t1",
+                        "targets": {
+                          "reps": {
+                            "value": "5",
+                            "unit": "rep"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "t2-scheme",
+                "type": "variant",
+                "slot": "t2",
+                "lever": "scheme",
+                "branches": {
+                  "tens": {
+                    "id": "t2-tens",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-tens-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "10",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  "eights": {
+                    "id": "t2-eights",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-eights-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "8",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  "sixes": {
+                    "id": "t2-sixes",
+                    "type": "repeat",
+                    "count": 3,
+                    "child": {
+                      "id": "t2-sixes-set",
+                      "type": "effort",
+                      "slot": "t2",
+                      "targets": {
+                        "reps": {
+                          "value": "6",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "id": "t3",
+                "type": "sequence",
+                "children": [
+                  {
+                    "id": "t3-sets",
+                    "type": "repeat",
+                    "count": 2,
+                    "child": {
+                      "id": "t3-set",
+                      "type": "effort",
+                      "slot": "t3",
+                      "targets": {
+                        "reps": {
+                          "value": "15",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "t3-last",
+                    "type": "effort",
+                    "slot": "t3",
+                    "targets": {
+                      "reps": {
+                        "value": "15",
+                        "unit": "rep"
+                      }
+                    },
+                    "objectives": {
+                      "reps": {
+                        "mode": "minimum",
+                        "minimum": {
+                          "value": "15",
+                          "unit": "rep"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "program": {
+        "name": "GZCLP",
+        "plan": {
+          "id": "rotation",
+          "type": "group",
+          "label": "A1 B1 A2 B2",
+          "children": [
+            {
+              "id": "a1",
+              "type": "day",
+              "label": "GZCLP A1",
+              "templateId": {
+                "$workoutId": "a1"
+              },
+              "revision": {
+                "$workoutRevision": "a1"
+              }
+            },
+            {
+              "id": "b1",
+              "type": "day",
+              "label": "GZCLP B1",
+              "templateId": {
+                "$workoutId": "b1"
+              },
+              "revision": {
+                "$workoutRevision": "b1"
+              }
+            },
+            {
+              "id": "a2",
+              "type": "day",
+              "label": "GZCLP A2",
+              "templateId": {
+                "$workoutId": "a2"
+              },
+              "revision": {
+                "$workoutRevision": "a2"
+              }
+            },
+            {
+              "id": "b2",
+              "type": "day",
+              "label": "GZCLP B2",
+              "templateId": {
+                "$workoutId": "b2"
+              },
+              "revision": {
+                "$workoutRevision": "b2"
+              }
+            }
+          ]
+        }
+      },
+      "presets": {
+        "t1-lower": {
+          "name": "GZCLP T1",
+          "ruleType": "threshold",
+          "rule": {
+            "metric": "reps",
+            "performance": {
+              "direction": "higher",
+              "failureLimit": {
+                "value": "15",
+                "unit": "rep"
+              },
+              "advancementLimit": {
+                "value": "15",
+                "unit": "rep"
+              }
+            },
+            "aggregation": {
+              "mode": "total"
+            },
+            "failureAggregation": {
+              "mode": "total"
+            },
+            "increments": {
+              "load": {
+                "$choice": "lower-step"
+              }
+            },
+            "deloadAfter": 1,
+            "deloadMetrics": [
+              "load"
+            ],
+            "deloadPercent": "15",
+            "stages": {
+              "lever": "scheme",
+              "order": [
+                {
+                  "value": "triples",
+                  "failureLimit": {
+                    "value": "15",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "15",
+                    "unit": "rep"
+                  }
+                },
+                {
+                  "value": "doubles",
+                  "failureLimit": {
+                    "value": "12",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "12",
+                    "unit": "rep"
+                  }
+                },
+                {
+                  "value": "singles",
+                  "failureLimit": {
+                    "value": "10",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "10",
+                    "unit": "rep"
+                  }
+                }
+              ]
+            },
+            "retest": {
+              "metric": "load",
+              "repetitions": {
+                "metric": "reps",
+                "minimum": {
+                  "value": "5",
+                  "unit": "rep"
+                }
+              },
+              "factor": "0.85",
+              "roundTo": {
+                "value": "2.5",
+                "unit": "kg"
+              },
+              "stage": "retest"
+            }
+          }
+        },
+        "t1-upper": {
+          "name": "GZCLP T1",
+          "ruleType": "threshold",
+          "rule": {
+            "metric": "reps",
+            "performance": {
+              "direction": "higher",
+              "failureLimit": {
+                "value": "15",
+                "unit": "rep"
+              },
+              "advancementLimit": {
+                "value": "15",
+                "unit": "rep"
+              }
+            },
+            "aggregation": {
+              "mode": "total"
+            },
+            "failureAggregation": {
+              "mode": "total"
+            },
+            "increments": {
+              "load": {
+                "$choice": "upper-step"
+              }
+            },
+            "deloadAfter": 1,
+            "deloadMetrics": [
+              "load"
+            ],
+            "deloadPercent": "15",
+            "stages": {
+              "lever": "scheme",
+              "order": [
+                {
+                  "value": "triples",
+                  "failureLimit": {
+                    "value": "15",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "15",
+                    "unit": "rep"
+                  }
+                },
+                {
+                  "value": "doubles",
+                  "failureLimit": {
+                    "value": "12",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "12",
+                    "unit": "rep"
+                  }
+                },
+                {
+                  "value": "singles",
+                  "failureLimit": {
+                    "value": "10",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "10",
+                    "unit": "rep"
+                  }
+                }
+              ]
+            },
+            "retest": {
+              "metric": "load",
+              "repetitions": {
+                "metric": "reps",
+                "minimum": {
+                  "value": "5",
+                  "unit": "rep"
+                }
+              },
+              "factor": "0.85",
+              "roundTo": {
+                "value": "2.5",
+                "unit": "kg"
+              },
+              "stage": "retest"
+            }
+          }
+        },
+        "t2-lower": {
+          "name": "GZCLP T2",
+          "ruleType": "threshold",
+          "rule": {
+            "metric": "reps",
+            "performance": {
+              "direction": "higher",
+              "failureLimit": {
+                "value": "30",
+                "unit": "rep"
+              },
+              "advancementLimit": {
+                "value": "30",
+                "unit": "rep"
+              }
+            },
+            "aggregation": {
+              "mode": "total"
+            },
+            "failureAggregation": {
+              "mode": "total"
+            },
+            "increments": {
+              "load": {
+                "$choice": "lower-step"
+              }
+            },
+            "deloadAfter": 1,
+            "stages": {
+              "lever": "scheme",
+              "order": [
+                {
+                  "value": "tens",
+                  "failureLimit": {
+                    "value": "30",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "30",
+                    "unit": "rep"
+                  }
+                },
+                {
+                  "value": "eights",
+                  "failureLimit": {
+                    "value": "24",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "24",
+                    "unit": "rep"
+                  }
+                },
+                {
+                  "value": "sixes",
+                  "failureLimit": {
+                    "value": "18",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "18",
+                    "unit": "rep"
+                  }
+                }
+              ],
+              "cycleRestart": {
+                "basis": "cycleStart",
+                "increments": {
+                  "load": {
+                    "$choice": "t2-restart"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "t2-upper": {
+          "name": "GZCLP T2",
+          "ruleType": "threshold",
+          "rule": {
+            "metric": "reps",
+            "performance": {
+              "direction": "higher",
+              "failureLimit": {
+                "value": "30",
+                "unit": "rep"
+              },
+              "advancementLimit": {
+                "value": "30",
+                "unit": "rep"
+              }
+            },
+            "aggregation": {
+              "mode": "total"
+            },
+            "failureAggregation": {
+              "mode": "total"
+            },
+            "increments": {
+              "load": {
+                "$choice": "upper-step"
+              }
+            },
+            "deloadAfter": 1,
+            "stages": {
+              "lever": "scheme",
+              "order": [
+                {
+                  "value": "tens",
+                  "failureLimit": {
+                    "value": "30",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "30",
+                    "unit": "rep"
+                  }
+                },
+                {
+                  "value": "eights",
+                  "failureLimit": {
+                    "value": "24",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "24",
+                    "unit": "rep"
+                  }
+                },
+                {
+                  "value": "sixes",
+                  "failureLimit": {
+                    "value": "18",
+                    "unit": "rep"
+                  },
+                  "advancementLimit": {
+                    "value": "18",
+                    "unit": "rep"
+                  }
+                }
+              ],
+              "cycleRestart": {
+                "basis": "cycleStart",
+                "increments": {
+                  "load": {
+                    "$choice": "t2-restart"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "t3": {
+          "name": "GZCLP T3",
+          "ruleType": "threshold",
+          "rule": {
+            "metric": "reps",
+            "performance": {
+              "direction": "higher",
+              "failureLimit": {
+                "value": "0",
+                "unit": "rep"
+              },
+              "advancementLimit": {
+                "value": "25",
+                "unit": "rep"
+              }
+            },
+            "aggregation": {
+              "mode": "last"
+            },
+            "increments": {
+              "load": {
+                "$choice": "t3-step"
+              }
+            },
+            "deloadAfter": 1
           }
         }
       }

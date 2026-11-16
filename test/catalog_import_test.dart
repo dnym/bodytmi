@@ -92,7 +92,10 @@ void catalogImportTests() {
       );
       equal(applied['applied'], true);
       equal((await store.exerciseRevisions()).length, starter.exercises.length);
-      equal((await store.blueprintRevisions()).length, 2);
+      equal(
+        (await store.blueprintRevisions()).length,
+        starter.blueprints.length,
+      );
       // Applying again changes nothing.
       final again = await imports.apply(
         starter,
