@@ -98,6 +98,7 @@ const storedCommandNames = [
   'observation delete',
   'observation show',
   'observation list',
+  'observation resolve',
   'catalog preview',
   'catalog apply',
   'blueprint publish',
@@ -590,6 +591,13 @@ Future<Map<String, Object?>> executeStored(
     'observation update' => {'observation', 'expectedVersion'},
     'observation delete' => {'id', 'expectedVersion', 'confirm'},
     'observation show' => {'id'},
+    'observation resolve' => {
+      'measure',
+      'attributes',
+      'asOf',
+      'resolution',
+      'dailyMode',
+    },
     'observation list' => {
       'measure',
       'from',
@@ -2518,6 +2526,24 @@ Future<Map<String, Object?>> executeStored(
           identifier(request, 'id'),
           integer('expectedVersion'),
           confirm: flag('confirm'),
+        )).toJson();
+      case 'observation resolve':
+        data = (await ObservationService(store).resolve(
+          identifier(request, 'measure'),
+          requiredString(request, 'asOf'),
+          attributes: {
+            for (final e in jsonObject(
+              request['attributes'] ?? <String, Object?>{},
+              'attributes',
+            ).entries)
+              e.key: identifier({e.key: e.value}, e.key),
+          },
+          policy: request['resolution'] == null
+              ? null
+              : MeasurePolicy.fromJson(request['resolution']),
+          dailyMode: request['dailyMode'] == null
+              ? 'mean'
+              : requiredString(request, 'dailyMode'),
         )).toJson();
       case 'observation show':
         data = (await ObservationService(

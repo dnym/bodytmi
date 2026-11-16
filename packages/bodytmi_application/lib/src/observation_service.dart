@@ -144,6 +144,31 @@ final class ObservationService {
     return next;
   });
 
+  /// The value of one series (measure + exact attributes) in force at
+  /// [asOfText], under the measure's policy or an explicit [policy].
+  Future<ObservationResolution> resolve(
+    String measureId,
+    String asOfText, {
+    Map<String, String> attributes = const {},
+    MeasurePolicy? policy,
+    String dailyMode = 'mean',
+  }) => repository.transaction(() async {
+    final definition = await measure(measureId);
+    return ObservationResolution.resolve(
+      measure: definition,
+      attributes: attributes,
+      observations: [
+        for (final r in await repository.observationRecords(
+          measureId: measureId,
+        ))
+          if (!r.deleted) r.observation,
+      ],
+      asOfText: asOfText,
+      policy: policy,
+      dailyMode: dailyMode,
+    );
+  });
+
   /// Observations sorted by local date, then instant or date, then id;
   /// optionally one measure, a local date range, attribute filters and
   /// deleted markers. More than 10000 is an error, never truncation.
