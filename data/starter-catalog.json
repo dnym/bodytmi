@@ -1,0 +1,690 @@
+{
+  "format": "bodytmi-catalog-import/1",
+  "source": {
+    "name": "BodyTMI starter catalog",
+    "version": "1",
+    "notes": "Common, well-established strength exercises, their usual implementations and basic gym equipment, with Swedish labels, plus equipment blueprints for a plate-loaded barbell and a selectorized weight stack. Names and equipment shapes only: no programmes, targets or recommendations. Free weights and stations are marked interchangeable; machines are not, because one machine’s numbers do not carry over to another."
+  },
+  "exercises": [
+    {
+      "id": "squat",
+      "name": "Squat",
+      "labels": {
+        "sv": {
+          "name": "Knäböj",
+          "aliases": [
+            "Böj"
+          ]
+        }
+      }
+    },
+    {
+      "id": "bench-press",
+      "name": "Bench press",
+      "labels": {
+        "sv": {
+          "name": "Bänkpress",
+          "aliases": [
+            "Bänk"
+          ]
+        }
+      }
+    },
+    {
+      "id": "deadlift",
+      "name": "Deadlift",
+      "labels": {
+        "sv": {
+          "name": "Marklyft",
+          "aliases": [
+            "Mark"
+          ]
+        }
+      }
+    },
+    {
+      "id": "romanian-deadlift",
+      "name": "Romanian deadlift",
+      "labels": {
+        "sv": {
+          "name": "Rumänska marklyft",
+          "aliases": [
+            "Raka marklyft"
+          ]
+        }
+      }
+    },
+    {
+      "id": "overhead-press",
+      "name": "Overhead press",
+      "labels": {
+        "sv": {
+          "name": "Axelpress",
+          "aliases": [
+            "Militärpress"
+          ]
+        }
+      }
+    },
+    {
+      "id": "row",
+      "name": "Row",
+      "labels": {
+        "sv": {
+          "name": "Rodd"
+        }
+      }
+    },
+    {
+      "id": "pull-up",
+      "name": "Pull-up",
+      "labels": {
+        "sv": {
+          "name": "Pull-ups"
+        }
+      }
+    },
+    {
+      "id": "chin-up",
+      "name": "Chin-up",
+      "labels": {
+        "sv": {
+          "name": "Chins"
+        }
+      }
+    },
+    {
+      "id": "lat-pulldown",
+      "name": "Lat pulldown",
+      "labels": {
+        "sv": {
+          "name": "Latsdrag"
+        }
+      }
+    },
+    {
+      "id": "push-up",
+      "name": "Push-up",
+      "labels": {
+        "sv": {
+          "name": "Armhävning",
+          "aliases": [
+            "Armhävningar"
+          ]
+        }
+      }
+    },
+    {
+      "id": "dip",
+      "name": "Dip",
+      "labels": {
+        "sv": {
+          "name": "Dips"
+        }
+      }
+    },
+    {
+      "id": "lunge",
+      "name": "Lunge",
+      "labels": {
+        "sv": {
+          "name": "Utfallssteg"
+        }
+      }
+    },
+    {
+      "id": "hip-thrust",
+      "name": "Hip thrust",
+      "labels": {
+        "sv": {
+          "name": "Höftlyft"
+        }
+      }
+    },
+    {
+      "id": "leg-press",
+      "name": "Leg press",
+      "labels": {
+        "sv": {
+          "name": "Benpress"
+        }
+      }
+    },
+    {
+      "id": "plank",
+      "name": "Plank",
+      "labels": {
+        "sv": {
+          "name": "Plankan"
+        }
+      }
+    },
+    {
+      "id": "dead-hang",
+      "name": "Dead hang",
+      "labels": {
+        "sv": {
+          "name": "Häng",
+          "aliases": [
+            "Dödhäng"
+          ]
+        }
+      }
+    },
+    {
+      "id": "farmers-carry",
+      "name": "Farmer’s carry",
+      "labels": {
+        "sv": {
+          "name": "Farmer’s walk",
+          "aliases": [
+            "Bondgång"
+          ]
+        }
+      }
+    }
+  ],
+  "implementations": [
+    {
+      "id": "barbell-back-squat",
+      "exerciseId": "squat",
+      "name": "Barbell back squat",
+      "labels": {
+        "sv": {
+          "name": "Knäböj med skivstång"
+        }
+      }
+    },
+    {
+      "id": "barbell-front-squat",
+      "exerciseId": "squat",
+      "name": "Barbell front squat",
+      "labels": {
+        "sv": {
+          "name": "Frontböj"
+        }
+      }
+    },
+    {
+      "id": "goblet-squat",
+      "exerciseId": "squat",
+      "name": "Goblet squat",
+      "labels": {
+        "sv": {
+          "name": "Gobletknäböj"
+        }
+      }
+    },
+    {
+      "id": "barbell-bench-press",
+      "exerciseId": "bench-press",
+      "name": "Barbell bench press",
+      "labels": {
+        "sv": {
+          "name": "Bänkpress med skivstång"
+        }
+      }
+    },
+    {
+      "id": "dumbbell-bench-press",
+      "exerciseId": "bench-press",
+      "name": "Dumbbell bench press",
+      "labels": {
+        "sv": {
+          "name": "Bänkpress med hantlar"
+        }
+      }
+    },
+    {
+      "id": "barbell-deadlift",
+      "exerciseId": "deadlift",
+      "name": "Barbell deadlift",
+      "labels": {
+        "sv": {
+          "name": "Marklyft med skivstång"
+        }
+      }
+    },
+    {
+      "id": "trap-bar-deadlift",
+      "exerciseId": "deadlift",
+      "name": "Trap-bar deadlift",
+      "labels": {
+        "sv": {
+          "name": "Marklyft med trapbar"
+        }
+      }
+    },
+    {
+      "id": "barbell-romanian-deadlift",
+      "exerciseId": "romanian-deadlift",
+      "name": "Barbell Romanian deadlift",
+      "labels": {
+        "sv": {
+          "name": "Rumänska marklyft med skivstång"
+        }
+      }
+    },
+    {
+      "id": "dumbbell-romanian-deadlift",
+      "exerciseId": "romanian-deadlift",
+      "name": "Dumbbell Romanian deadlift",
+      "labels": {
+        "sv": {
+          "name": "Rumänska marklyft med hantlar"
+        }
+      }
+    },
+    {
+      "id": "barbell-overhead-press",
+      "exerciseId": "overhead-press",
+      "name": "Barbell overhead press",
+      "labels": {
+        "sv": {
+          "name": "Axelpress med skivstång"
+        }
+      }
+    },
+    {
+      "id": "dumbbell-overhead-press",
+      "exerciseId": "overhead-press",
+      "name": "Dumbbell overhead press",
+      "labels": {
+        "sv": {
+          "name": "Axelpress med hantlar"
+        }
+      }
+    },
+    {
+      "id": "barbell-row",
+      "exerciseId": "row",
+      "name": "Barbell bent-over row",
+      "labels": {
+        "sv": {
+          "name": "Skivstångsrodd"
+        }
+      }
+    },
+    {
+      "id": "dumbbell-row",
+      "exerciseId": "row",
+      "name": "One-arm dumbbell row",
+      "labels": {
+        "sv": {
+          "name": "Enarmsrodd med hantel"
+        }
+      }
+    },
+    {
+      "id": "cable-row",
+      "exerciseId": "row",
+      "name": "Seated cable row",
+      "labels": {
+        "sv": {
+          "name": "Sittande kabelrodd"
+        }
+      }
+    },
+    {
+      "id": "bodyweight-pull-up",
+      "exerciseId": "pull-up",
+      "name": "Pull-up",
+      "labels": {
+        "sv": {
+          "name": "Pull-up med kroppsvikt"
+        }
+      }
+    },
+    {
+      "id": "bodyweight-chin-up",
+      "exerciseId": "chin-up",
+      "name": "Chin-up",
+      "labels": {
+        "sv": {
+          "name": "Chins med kroppsvikt"
+        }
+      }
+    },
+    {
+      "id": "cable-lat-pulldown",
+      "exerciseId": "lat-pulldown",
+      "name": "Cable lat pulldown",
+      "labels": {
+        "sv": {
+          "name": "Latsdrag i kabel"
+        }
+      }
+    },
+    {
+      "id": "bodyweight-push-up",
+      "exerciseId": "push-up",
+      "name": "Push-up",
+      "labels": {
+        "sv": {
+          "name": "Armhävning med kroppsvikt"
+        }
+      }
+    },
+    {
+      "id": "bodyweight-dip",
+      "exerciseId": "dip",
+      "name": "Parallel-bar dip",
+      "labels": {
+        "sv": {
+          "name": "Dips i dipsställning"
+        }
+      }
+    },
+    {
+      "id": "dumbbell-lunge",
+      "exerciseId": "lunge",
+      "name": "Dumbbell lunge",
+      "labels": {
+        "sv": {
+          "name": "Utfallssteg med hantlar"
+        }
+      }
+    },
+    {
+      "id": "barbell-hip-thrust",
+      "exerciseId": "hip-thrust",
+      "name": "Barbell hip thrust",
+      "labels": {
+        "sv": {
+          "name": "Höftlyft med skivstång"
+        }
+      }
+    },
+    {
+      "id": "machine-leg-press",
+      "exerciseId": "leg-press",
+      "name": "Machine leg press",
+      "labels": {
+        "sv": {
+          "name": "Benpress i maskin"
+        }
+      }
+    },
+    {
+      "id": "bodyweight-plank",
+      "exerciseId": "plank",
+      "name": "Front plank",
+      "labels": {
+        "sv": {
+          "name": "Plankan"
+        }
+      }
+    },
+    {
+      "id": "bar-dead-hang",
+      "exerciseId": "dead-hang",
+      "name": "Dead hang from a bar",
+      "labels": {
+        "sv": {
+          "name": "Häng i stång"
+        }
+      }
+    },
+    {
+      "id": "dumbbell-farmers-carry",
+      "exerciseId": "farmers-carry",
+      "name": "Dumbbell farmer’s carry",
+      "labels": {
+        "sv": {
+          "name": "Bondgång med hantlar"
+        }
+      }
+    }
+  ],
+  "equipment": [
+    {
+      "id": "barbell",
+      "name": "Barbell",
+      "labels": {
+        "sv": {
+          "name": "Skivstång"
+        }
+      },
+      "interchangeable": true
+    },
+    {
+      "id": "trap-bar",
+      "name": "Trap bar",
+      "labels": {
+        "sv": {
+          "name": "Trapbar",
+          "aliases": [
+            "Hexbar"
+          ]
+        }
+      },
+      "interchangeable": true
+    },
+    {
+      "id": "dumbbell",
+      "name": "Dumbbell",
+      "labels": {
+        "sv": {
+          "name": "Hantel",
+          "aliases": [
+            "Hantlar"
+          ]
+        }
+      },
+      "interchangeable": true
+    },
+    {
+      "id": "kettlebell",
+      "name": "Kettlebell",
+      "labels": {
+        "sv": {
+          "name": "Kettlebell"
+        }
+      },
+      "interchangeable": true
+    },
+    {
+      "id": "flat-bench",
+      "name": "Flat bench",
+      "labels": {
+        "sv": {
+          "name": "Bänk",
+          "aliases": [
+            "Plan bänk"
+          ]
+        }
+      },
+      "interchangeable": true
+    },
+    {
+      "id": "squat-rack",
+      "name": "Squat rack",
+      "labels": {
+        "sv": {
+          "name": "Knäböjsställning",
+          "aliases": [
+            "Rack"
+          ]
+        }
+      },
+      "interchangeable": true
+    },
+    {
+      "id": "pull-up-bar",
+      "name": "Pull-up bar",
+      "labels": {
+        "sv": {
+          "name": "Chinsstång",
+          "aliases": [
+            "Räckhävsstång"
+          ]
+        }
+      },
+      "interchangeable": true
+    },
+    {
+      "id": "dip-station",
+      "name": "Dip station",
+      "labels": {
+        "sv": {
+          "name": "Dipsställning"
+        }
+      },
+      "interchangeable": true
+    },
+    {
+      "id": "cable-machine",
+      "name": "Cable machine",
+      "labels": {
+        "sv": {
+          "name": "Kabelmaskin",
+          "aliases": [
+            "Kabelstation"
+          ]
+        }
+      }
+    },
+    {
+      "id": "lat-pulldown-machine",
+      "name": "Lat pulldown machine",
+      "labels": {
+        "sv": {
+          "name": "Latsdragsmaskin"
+        }
+      }
+    },
+    {
+      "id": "leg-press-machine",
+      "name": "Leg press machine",
+      "labels": {
+        "sv": {
+          "name": "Benpressmaskin"
+        }
+      }
+    }
+  ],
+  "blueprints": [
+    {
+      "id": "olympic-barbell",
+      "name": "Olympic barbell with plates",
+      "notes": "Two sleeves loaded symmetrically. Fill in your gym, the bar's own mass and the plates you have.",
+      "choices": [
+        {
+          "id": "gym",
+          "kind": "gym",
+          "label": "Gym"
+        },
+        {
+          "id": "bar-mass",
+          "kind": "quantity",
+          "label": "Bar mass",
+          "dimension": "mass",
+          "minimum": {
+            "value": "5",
+            "unit": "kg"
+          },
+          "default": {
+            "value": "20",
+            "unit": "kg"
+          }
+        },
+        {
+          "id": "plates",
+          "kind": "plates",
+          "label": "Plates (total count per denomination)"
+        }
+      ],
+      "instances": {
+        "bar": {
+          "equipmentId": "barbell",
+          "gym": {
+            "$choice": "gym"
+          },
+          "name": "Olympic barbell",
+          "loading": {
+            "components": [
+              {
+                "id": "bar",
+                "kind": "bar",
+                "mass": {
+                  "$choice": "bar-mass"
+                }
+              }
+            ],
+            "channel": {
+              "id": "sleeves",
+              "sides": 2,
+              "symmetry": "required"
+            },
+            "plates": {
+              "$choice": "plates"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "selectorized-machine",
+      "name": "Selectorized machine",
+      "notes": "A weight stack with evenly spaced pin positions. Fill in which machine, your gym, the first marked weight, the step between pins and the number of pins.",
+      "choices": [
+        {
+          "id": "machine",
+          "kind": "equipment",
+          "label": "Which machine"
+        },
+        {
+          "id": "gym",
+          "kind": "gym",
+          "label": "Gym"
+        },
+        {
+          "id": "first",
+          "kind": "quantity",
+          "label": "First marked weight",
+          "dimension": "mass"
+        },
+        {
+          "id": "step",
+          "kind": "number",
+          "label": "Step between pins, in the same unit",
+          "minimum": "0.5"
+        },
+        {
+          "id": "pins",
+          "kind": "integer",
+          "label": "Number of pin positions",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      ],
+      "instances": {
+        "stack": {
+          "equipmentId": {
+            "$choice": "machine"
+          },
+          "gym": {
+            "$choice": "gym"
+          },
+          "scale": {
+            "id": "stack",
+            "unit": {
+              "$unit": "first"
+            },
+            "range": {
+              "start": {
+                "$value": "first"
+              },
+              "step": {
+                "$choice": "step"
+              },
+              "count": {
+                "$choice": "pins"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

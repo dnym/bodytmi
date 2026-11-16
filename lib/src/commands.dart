@@ -51,6 +51,7 @@ const commandNames = [
   'history records',
   'family validate',
   'blueprint validate',
+  'catalog validate',
   'session mass-status',
   'session mass-refresh',
   'session mass-rebind',
@@ -847,6 +848,9 @@ final class Commands {
               ? null
               : LoadingSpec.fromJson(request['loading']),
         );
+      case 'catalog validate':
+        keys({'document'});
+        data = CatalogImportDocument.fromJson(request['document']).summary;
       case 'blueprint validate':
         keys({'blueprint'});
         data = Blueprint.fromJson(request['blueprint']).toJson();

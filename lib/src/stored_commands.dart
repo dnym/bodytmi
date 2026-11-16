@@ -90,6 +90,8 @@ const storedCommandNames = [
   'preset publish',
   'preset show',
   'preset list',
+  'catalog preview',
+  'catalog apply',
   'blueprint publish',
   'blueprint show',
   'blueprint list',
@@ -573,6 +575,8 @@ Future<Map<String, Object?>> executeStored(
     'preset publish' => {'preset', 'expectedRevision'},
     'preset show' => {'presetId', 'revision'},
     'preset list' => <String>{},
+    'catalog preview' => {'document'},
+    'catalog apply' => {'document', 'onChanged', 'confirm'},
     'blueprint publish' => {'blueprint', 'expectedRevision'},
     'blueprint show' => {'blueprintId', 'revision'},
     'blueprint list' => <String>{},
@@ -2445,6 +2449,18 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final p in presets) p.toJson()];
+      case 'catalog preview':
+        data = await CatalogImportService(
+          store,
+        ).preview(CatalogImportDocument.fromJson(request['document']));
+      case 'catalog apply':
+        data = await CatalogImportService(store).apply(
+          CatalogImportDocument.fromJson(request['document']),
+          onChanged: request.containsKey('onChanged')
+              ? requiredString(request, 'onChanged')
+              : 'reject',
+          confirm: flag('confirm'),
+        );
       case 'blueprint publish':
         data = (await BlueprintService(store).publish(
           Blueprint.fromJson(request['blueprint']),
