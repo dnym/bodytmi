@@ -54,6 +54,8 @@ const commandNames = [
   'catalog validate',
   'measure validate',
   'measure builtins',
+  'calc list',
+  'calc evaluate',
   'session mass-status',
   'session mass-refresh',
   'session mass-rebind',
@@ -853,6 +855,18 @@ final class Commands {
       case 'measure validate':
         keys({'measure'});
         data = MeasureDefinition.fromJson(request['measure']).toJson();
+      case 'calc list':
+        keys({});
+        data = [for (final c in calculations) c.toJson()];
+      case 'calc evaluate':
+        keys({'calculation', 'inputs'});
+        data = calculation(requiredString(request, 'calculation')).evaluate({
+          for (final e in jsonObject(
+            request['inputs'] ?? <String, Object?>{},
+            'inputs',
+          ).entries)
+            e.key: e.value is Map ? Quantity.fromJson(e.value) : e.value,
+        });
       case 'measure builtins':
         keys({});
         data = {

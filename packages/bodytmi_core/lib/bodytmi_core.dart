@@ -24,6 +24,7 @@ export 'src/catalog_import.dart';
 export 'src/measure.dart';
 export 'src/observation.dart';
 export 'src/resolution.dart';
+export 'src/calculation.dart';
 
 export 'src/instant.dart';
 export 'src/body_mass.dart';
