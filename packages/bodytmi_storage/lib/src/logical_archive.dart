@@ -91,6 +91,8 @@ final class LogicalArchiveFiles {
       'exercises',
       'implementations',
       'presets',
+      'blueprints',
+      'blueprintInstances',
       'equipment',
       'gyms',
       'instances',
@@ -158,6 +160,18 @@ final class LogicalArchiveFiles {
             db.execute(
               'INSERT INTO progression_preset_revisions(preset_id,number,snapshot) VALUES (?,?,?)',
               [preset.preset.id, preset.number, canonicalJson(preset.toJson())],
+            );
+          }
+          for (final b in archive.blueprints) {
+            db.execute(
+              'INSERT INTO blueprint_revisions(blueprint_id,number,snapshot) VALUES (?,?,?)',
+              [b.blueprint.id, b.number, canonicalJson(b.toJson())],
+            );
+          }
+          for (final i in archive.blueprintInstances) {
+            db.execute(
+              'INSERT INTO blueprint_instances(instance_id,number,snapshot) VALUES (?,?,?)',
+              [i.id, i.number, canonicalJson(i.toJson())],
             );
           }
           for (final equipment in archive.equipment) {

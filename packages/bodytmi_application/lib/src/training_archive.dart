@@ -1,4 +1,5 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'blueprint_service.dart';
 import 'derived_plan_session.dart';
 import 'session_codec.dart';
 import 'canonical_json.dart';
@@ -47,6 +48,8 @@ final class TrainingArchive {
     List<ExerciseRevision> exercises = const [],
     List<ImplementationRevision> implementations = const [],
     List<ProgressionPresetRevision> presets = const [],
+    List<BlueprintRevision> blueprints = const [],
+    List<BlueprintInstance> blueprintInstances = const [],
     List<EquipmentRevision> equipment = const [],
     List<GymRevision> gyms = const [],
     List<EquipmentInstanceRevision> instances = const [],
@@ -99,6 +102,18 @@ final class TrainingArchive {
        presets = List<ProgressionPresetRevision>.unmodifiable(
          <ProgressionPresetRevision>[...presets]..sort((a, b) {
            final id = a.preset.id.compareTo(b.preset.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       blueprints = List<BlueprintRevision>.unmodifiable(
+         <BlueprintRevision>[...blueprints]..sort((a, b) {
+           final id = a.blueprint.id.compareTo(b.blueprint.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       blueprintInstances = List<BlueprintInstance>.unmodifiable(
+         <BlueprintInstance>[...blueprintInstances]..sort((a, b) {
+           final id = a.id.compareTo(b.id);
            return id == 0 ? a.number.compareTo(b.number) : id;
          }),
        ),
@@ -219,6 +234,8 @@ final class TrainingArchive {
       'exercises',
       'implementations',
       'presets',
+      'blueprints',
+      'blueprintInstances',
       'equipment',
       'gyms',
       'instances',
@@ -239,6 +256,13 @@ final class TrainingArchive {
       presets: [
         for (final p in optional('presets'))
           ProgressionPresetRevision.fromJson(p),
+      ],
+      blueprints: [
+        for (final b in optional('blueprints')) BlueprintRevision.fromJson(b),
+      ],
+      blueprintInstances: [
+        for (final b in optional('blueprintInstances'))
+          BlueprintInstance.fromJson(b),
       ],
       equipment: [
         for (final e in optional('equipment')) EquipmentRevision.fromJson(e),
@@ -334,6 +358,8 @@ final class TrainingArchive {
   final List<ExerciseRevision> exercises;
   final List<ImplementationRevision> implementations;
   final List<ProgressionPresetRevision> presets;
+  final List<BlueprintRevision> blueprints;
+  final List<BlueprintInstance> blueprintInstances;
   final List<EquipmentRevision> equipment;
   final List<GymRevision> gyms;
   final List<EquipmentInstanceRevision> instances;
@@ -363,6 +389,8 @@ final class TrainingArchive {
     'exercises': [for (final e in exercises) e.toJson()],
     'implementations': [for (final i in implementations) i.toJson()],
     'presets': [for (final p in presets) p.toJson()],
+    'blueprints': [for (final b in blueprints) b.toJson()],
+    'blueprintInstances': [for (final b in blueprintInstances) b.toJson()],
     'equipment': [for (final e in equipment) e.toJson()],
     'gyms': [for (final g in gyms) g.toJson()],
     'instances': [for (final i in instances) i.toJson()],
@@ -394,6 +422,8 @@ final class TrainingArchive {
     'exercises': exercises.length,
     'implementations': implementations.length,
     'presets': presets.length,
+    'blueprints': blueprints.length,
+    'blueprintInstances': blueprintInstances.length,
     'equipment': equipment.length,
     'gyms': gyms.length,
     'instances': instances.length,
@@ -435,6 +465,13 @@ final class TrainingArchive {
     validateImplementationRevisions(implementations, exercises);
     validateProgressionPresetRevisions(presets);
     validatePresetProvenance(progressions, presets);
+    validateBlueprintInstances(blueprintInstances, blueprints);
+    validateBlueprintLineage(
+      blueprintInstances,
+      workouts: revisions,
+      programs: programRevisions,
+      presets: presets,
+    );
     final catalogOwners = implementationOwners(implementations);
     for (final revision in revisions)
       validateCatalogSlotAdoption(revision.definition.slots, catalogOwners);

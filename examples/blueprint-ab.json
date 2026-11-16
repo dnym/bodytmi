@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "blueprint": {
+    "id": "example-ab",
+    "name": "Example A/B blueprint",
+    "notes": "A developer example of the blueprint format, not a curated programme.",
+    "choices": [
+      {"id": "lower", "kind": "exercise", "label": "Lower-body lift", "options": ["back-squat", "front-squat"], "default": "back-squat"},
+      {"id": "lower-5rm", "kind": "quantity", "label": "Lower-body 5-rep max", "dimension": "mass", "minimum": {"value": "20", "unit": "kg"}},
+      {"id": "row-machine", "kind": "equipment", "label": "Row machine at your gym"},
+      {"id": "step", "kind": "quantity", "dimension": "mass", "default": {"value": "2.5", "unit": "kg"}}
+    ],
+    "workouts": {
+      "a": {
+        "name": "Day A",
+        "slots": [{
+          "id": "lower", "exercise": {"$choice": "lower"}, "implementation": "barbell", "equipment": "barbell",
+          "targets": {
+            "mass": {"$scale": {"choice": "lower-5rm", "factor": "0.85", "step": "2.5", "rounding": "down"}},
+            "reps": {"value": "5", "unit": "rep"}
+          }
+        }],
+        "plan": {"id": "w", "type": "repeat", "count": 3, "child": {"id": "set", "type": "effort", "slot": "lower"}}
+      },
+      "b": {
+        "name": "Day B",
+        "slots": [{
+          "id": "row", "exercise": "row", "implementation": "machine", "equipment": {"$choice": "row-machine"},
+          "targets": {"mass": {"value": "40", "unit": "kg"}, "reps": {"value": "10", "unit": "rep"}}
+        }],
+        "plan": {"id": "w", "type": "repeat", "count": 3, "child": {"id": "set", "type": "effort", "slot": "row"}}
+      }
+    },
+    "program": {
+      "name": "Example A/B",
+      "plan": {"id": "cycle", "type": "group", "children": [
+        {"id": "a", "type": "day", "templateId": {"$workoutId": "a"}, "revision": {"$workoutRevision": "a"}},
+        {"id": "b", "type": "day", "templateId": {"$workoutId": "b"}, "revision": {"$workoutRevision": "b"}}
+      ]}
+    },
+    "presets": {
+      "lower": {
+        "name": "Lower-body double progression",
+        "ruleType": "double",
+        "rule": {
+          "objective": "reps", "lever": "mass",
+          "lower": {"value": "5", "unit": "rep"}, "upper": {"value": "8", "unit": "rep"},
+          "objectiveStep": {"value": "1", "unit": "rep"},
+          "leverStep": {"$choice": "step"},
+          "deloadAfter": 3, "deloadPercent": "10"
+        }
+      }
+    }
+  }
+}

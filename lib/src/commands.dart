@@ -50,6 +50,7 @@ const commandNames = [
   'history repeat-rounds',
   'history records',
   'family validate',
+  'blueprint validate',
   'session mass-status',
   'session mass-refresh',
   'session mass-rebind',
@@ -846,6 +847,9 @@ final class Commands {
               ? null
               : LoadingSpec.fromJson(request['loading']),
         );
+      case 'blueprint validate':
+        keys({'blueprint'});
+        data = Blueprint.fromJson(request['blueprint']).toJson();
       case 'family validate':
         keys({'family'});
         data = ExerciseFamily.fromJson(request['family']).toJson();

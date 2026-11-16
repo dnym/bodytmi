@@ -27,6 +27,10 @@ const schema = {
       'CREATE TABLE "gym_revisions" ("gym_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("gym_id", "number"))',
   'implementation_revisions':
       'CREATE TABLE "implementation_revisions" ("implementation_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("implementation_id", "number"))',
+  'blueprint_instances':
+      'CREATE TABLE "blueprint_instances" ("instance_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("instance_id", "number"))',
+  'blueprint_revisions':
+      'CREATE TABLE "blueprint_revisions" ("blueprint_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("blueprint_id", "number"))',
   'imported_sessions':
       'CREATE TABLE "imported_sessions" ("namespace" TEXT NOT NULL, "source_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("namespace", "source_id"))',
   'lever_link_revisions':

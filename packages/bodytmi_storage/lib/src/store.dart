@@ -138,6 +138,8 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM exercise_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM implementation_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM progression_preset_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM blueprint_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM blueprint_instances), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM equipment_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM gym_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM equipment_instance_revisions), 0)
@@ -288,6 +290,56 @@ final class TrainingStore implements TrainingRepository {
         validateProgressionPresetRevisions(result);
         return result;
       });
+
+  @override
+  Future<List<BlueprintRevision>> blueprintRevisions() =>
+      _cache.list('blueprintRevisions', () async {
+        final result = <BlueprintRevision>[];
+        for (final row in await _db.select(_db.blueprintRevisions).get()) {
+          final revision = BlueprintRevision.fromJson(jsonDecode(row.snapshot));
+          if (revision.blueprint.id != row.blueprintId ||
+              revision.number != row.number)
+            invalid('Stored blueprint revision identity is inconsistent.');
+          result.add(revision);
+        }
+        validateBlueprintRevisions(result);
+        return result;
+      });
+
+  @override
+  Future<void> insertBlueprintRevision(BlueprintRevision revision) => _db
+      .into(_db.blueprintRevisions)
+      .insert(
+        BlueprintRevisionsCompanion.insert(
+          blueprintId: revision.blueprint.id,
+          number: revision.number,
+          snapshot: _snapshot(revision.toJson()),
+        ),
+      );
+
+  @override
+  Future<List<BlueprintInstance>> blueprintInstances() =>
+      _cache.list('blueprintInstances', () async {
+        final result = <BlueprintInstance>[];
+        for (final row in await _db.select(_db.blueprintInstances).get()) {
+          final instance = BlueprintInstance.fromJson(jsonDecode(row.snapshot));
+          if (instance.id != row.instanceId || instance.number != row.number)
+            invalid('Stored blueprint instance identity is inconsistent.');
+          result.add(instance);
+        }
+        return result;
+      });
+
+  @override
+  Future<void> insertBlueprintInstance(BlueprintInstance instance) => _db
+      .into(_db.blueprintInstances)
+      .insert(
+        BlueprintInstancesCompanion.insert(
+          instanceId: instance.id,
+          number: instance.number,
+          snapshot: _snapshot(instance.toJson()),
+        ),
+      );
 
   @override
   Future<void> insertProgressionPresetRevision(

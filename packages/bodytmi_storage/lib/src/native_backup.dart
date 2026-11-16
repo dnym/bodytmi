@@ -225,6 +225,8 @@ final class NativeBackup {
         'exercise_revisions',
         'implementation_revisions',
         'progression_preset_revisions',
+        'blueprint_revisions',
+        'blueprint_instances',
         'equipment_revisions',
         'gym_revisions',
         'equipment_instance_revisions',
@@ -298,6 +300,62 @@ final class NativeBackup {
           presets.add(preset);
         }
         validateProgressionPresetRevisions(presets);
+      }
+      {
+        final blueprints = <BlueprintRevision>[];
+        for (final row in db.select('SELECT * FROM blueprint_revisions')) {
+          final b = BlueprintRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (b.blueprint.id != row['blueprint_id'] ||
+              b.number != row['number'])
+            invalid('Blueprint revision row identity mismatch.');
+          blueprints.add(b);
+        }
+        validateBlueprintRevisions(blueprints);
+        final instances = <BlueprintInstance>[];
+        for (final row in db.select('SELECT * FROM blueprint_instances')) {
+          final i = BlueprintInstance.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (i.id != row['instance_id'] || i.number != row['number'])
+            invalid('Blueprint instance row identity mismatch.');
+          instances.add(i);
+        }
+        validateBlueprintInstances(instances, blueprints);
+        bool exists(String table, String column, String id, int number) =>
+            db.select('SELECT 1 FROM $table WHERE $column = ? AND number = ?', [
+              id,
+              number,
+            ]).isNotEmpty;
+        for (final i in instances) {
+          if (i.workouts.entries.any(
+                (e) => !exists(
+                  'revisions',
+                  'template_id',
+                  i.workoutId(e.key),
+                  e.value,
+                ),
+              ) ||
+              (i.programRevision != null &&
+                  !exists(
+                    'program_revisions',
+                    'program_id',
+                    i.id,
+                    i.programRevision!,
+                  )) ||
+              i.presets.entries.any(
+                (e) => !exists(
+                  'progression_preset_revisions',
+                  'preset_id',
+                  i.presetId(e.key),
+                  e.value,
+                ),
+              ))
+            invalid(
+              'Blueprint instance ${i.id} names an unpublished revision.',
+            );
+        }
       }
       {
         final equipment = <EquipmentRevision>[];

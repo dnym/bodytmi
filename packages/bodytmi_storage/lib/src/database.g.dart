@@ -1366,6 +1366,557 @@ class ProgressionPresetRevisionsCompanion
   }
 }
 
+class $BlueprintRevisionsTable extends BlueprintRevisions
+    with TableInfo<$BlueprintRevisionsTable, StoredBlueprintRevision> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BlueprintRevisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _blueprintIdMeta = const VerificationMeta(
+    'blueprintId',
+  );
+  @override
+  late final GeneratedColumn<String> blueprintId = GeneratedColumn<String>(
+    'blueprint_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [blueprintId, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'blueprint_revisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBlueprintRevision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('blueprint_id')) {
+      context.handle(
+        _blueprintIdMeta,
+        blueprintId.isAcceptableOrUnknown(
+          data['blueprint_id']!,
+          _blueprintIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_blueprintIdMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {blueprintId, number};
+  @override
+  StoredBlueprintRevision map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBlueprintRevision(
+      blueprintId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}blueprint_id'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $BlueprintRevisionsTable createAlias(String alias) {
+    return $BlueprintRevisionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBlueprintRevision extends DataClass
+    implements Insertable<StoredBlueprintRevision> {
+  final String blueprintId;
+  final int number;
+  final String snapshot;
+  const StoredBlueprintRevision({
+    required this.blueprintId,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['blueprint_id'] = Variable<String>(blueprintId);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  BlueprintRevisionsCompanion toCompanion(bool nullToAbsent) {
+    return BlueprintRevisionsCompanion(
+      blueprintId: Value(blueprintId),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredBlueprintRevision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBlueprintRevision(
+      blueprintId: serializer.fromJson<String>(json['blueprintId']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'blueprintId': serializer.toJson<String>(blueprintId),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredBlueprintRevision copyWith({
+    String? blueprintId,
+    int? number,
+    String? snapshot,
+  }) => StoredBlueprintRevision(
+    blueprintId: blueprintId ?? this.blueprintId,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredBlueprintRevision copyWithCompanion(BlueprintRevisionsCompanion data) {
+    return StoredBlueprintRevision(
+      blueprintId: data.blueprintId.present
+          ? data.blueprintId.value
+          : this.blueprintId,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBlueprintRevision(')
+          ..write('blueprintId: $blueprintId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(blueprintId, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBlueprintRevision &&
+          other.blueprintId == this.blueprintId &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class BlueprintRevisionsCompanion
+    extends UpdateCompanion<StoredBlueprintRevision> {
+  final Value<String> blueprintId;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const BlueprintRevisionsCompanion({
+    this.blueprintId = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BlueprintRevisionsCompanion.insert({
+    required String blueprintId,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : blueprintId = Value(blueprintId),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredBlueprintRevision> custom({
+    Expression<String>? blueprintId,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (blueprintId != null) 'blueprint_id': blueprintId,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BlueprintRevisionsCompanion copyWith({
+    Value<String>? blueprintId,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return BlueprintRevisionsCompanion(
+      blueprintId: blueprintId ?? this.blueprintId,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (blueprintId.present) {
+      map['blueprint_id'] = Variable<String>(blueprintId.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BlueprintRevisionsCompanion(')
+          ..write('blueprintId: $blueprintId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BlueprintInstancesTable extends BlueprintInstances
+    with TableInfo<$BlueprintInstancesTable, StoredBlueprintInstance> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BlueprintInstancesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _instanceIdMeta = const VerificationMeta(
+    'instanceId',
+  );
+  @override
+  late final GeneratedColumn<String> instanceId = GeneratedColumn<String>(
+    'instance_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [instanceId, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'blueprint_instances';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBlueprintInstance> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('instance_id')) {
+      context.handle(
+        _instanceIdMeta,
+        instanceId.isAcceptableOrUnknown(data['instance_id']!, _instanceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_instanceIdMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {instanceId, number};
+  @override
+  StoredBlueprintInstance map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBlueprintInstance(
+      instanceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}instance_id'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $BlueprintInstancesTable createAlias(String alias) {
+    return $BlueprintInstancesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBlueprintInstance extends DataClass
+    implements Insertable<StoredBlueprintInstance> {
+  final String instanceId;
+  final int number;
+  final String snapshot;
+  const StoredBlueprintInstance({
+    required this.instanceId,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['instance_id'] = Variable<String>(instanceId);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  BlueprintInstancesCompanion toCompanion(bool nullToAbsent) {
+    return BlueprintInstancesCompanion(
+      instanceId: Value(instanceId),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredBlueprintInstance.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBlueprintInstance(
+      instanceId: serializer.fromJson<String>(json['instanceId']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'instanceId': serializer.toJson<String>(instanceId),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredBlueprintInstance copyWith({
+    String? instanceId,
+    int? number,
+    String? snapshot,
+  }) => StoredBlueprintInstance(
+    instanceId: instanceId ?? this.instanceId,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredBlueprintInstance copyWithCompanion(BlueprintInstancesCompanion data) {
+    return StoredBlueprintInstance(
+      instanceId: data.instanceId.present
+          ? data.instanceId.value
+          : this.instanceId,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBlueprintInstance(')
+          ..write('instanceId: $instanceId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(instanceId, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBlueprintInstance &&
+          other.instanceId == this.instanceId &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class BlueprintInstancesCompanion
+    extends UpdateCompanion<StoredBlueprintInstance> {
+  final Value<String> instanceId;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const BlueprintInstancesCompanion({
+    this.instanceId = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BlueprintInstancesCompanion.insert({
+    required String instanceId,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : instanceId = Value(instanceId),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredBlueprintInstance> custom({
+    Expression<String>? instanceId,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (instanceId != null) 'instance_id': instanceId,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BlueprintInstancesCompanion copyWith({
+    Value<String>? instanceId,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return BlueprintInstancesCompanion(
+      instanceId: instanceId ?? this.instanceId,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (instanceId.present) {
+      map['instance_id'] = Variable<String>(instanceId.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BlueprintInstancesCompanion(')
+          ..write('instanceId: $instanceId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $EquipmentRevisionsTable extends EquipmentRevisions
     with TableInfo<$EquipmentRevisionsTable, StoredEquipmentRevision> {
   @override
@@ -7517,6 +8068,10 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
       $ImplementationRevisionsTable(this);
   late final $ProgressionPresetRevisionsTable progressionPresetRevisions =
       $ProgressionPresetRevisionsTable(this);
+  late final $BlueprintRevisionsTable blueprintRevisions =
+      $BlueprintRevisionsTable(this);
+  late final $BlueprintInstancesTable blueprintInstances =
+      $BlueprintInstancesTable(this);
   late final $EquipmentRevisionsTable equipmentRevisions =
       $EquipmentRevisionsTable(this);
   late final $GymRevisionsTable gymRevisions = $GymRevisionsTable(this);
@@ -7583,6 +8138,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     exerciseRevisions,
     implementationRevisions,
     progressionPresetRevisions,
+    blueprintRevisions,
+    blueprintInstances,
     equipmentRevisions,
     gymRevisions,
     equipmentInstanceRevisions,
@@ -8538,6 +9095,384 @@ typedef $$ProgressionPresetRevisionsTableProcessedTableManager =
         >,
       ),
       StoredProgressionPresetRevision,
+      PrefetchHooks Function()
+    >;
+typedef $$BlueprintRevisionsTableCreateCompanionBuilder =
+    BlueprintRevisionsCompanion Function({
+      required String blueprintId,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$BlueprintRevisionsTableUpdateCompanionBuilder =
+    BlueprintRevisionsCompanion Function({
+      Value<String> blueprintId,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$BlueprintRevisionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $BlueprintRevisionsTable> {
+  $$BlueprintRevisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get blueprintId => $composableBuilder(
+    column: $table.blueprintId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BlueprintRevisionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $BlueprintRevisionsTable> {
+  $$BlueprintRevisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get blueprintId => $composableBuilder(
+    column: $table.blueprintId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BlueprintRevisionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $BlueprintRevisionsTable> {
+  $$BlueprintRevisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get blueprintId => $composableBuilder(
+    column: $table.blueprintId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$BlueprintRevisionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $BlueprintRevisionsTable,
+          StoredBlueprintRevision,
+          $$BlueprintRevisionsTableFilterComposer,
+          $$BlueprintRevisionsTableOrderingComposer,
+          $$BlueprintRevisionsTableAnnotationComposer,
+          $$BlueprintRevisionsTableCreateCompanionBuilder,
+          $$BlueprintRevisionsTableUpdateCompanionBuilder,
+          (
+            StoredBlueprintRevision,
+            BaseReferences<
+              _$TrainingDatabase,
+              $BlueprintRevisionsTable,
+              StoredBlueprintRevision
+            >,
+          ),
+          StoredBlueprintRevision,
+          PrefetchHooks Function()
+        > {
+  $$BlueprintRevisionsTableTableManager(
+    _$TrainingDatabase db,
+    $BlueprintRevisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BlueprintRevisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BlueprintRevisionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BlueprintRevisionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> blueprintId = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BlueprintRevisionsCompanion(
+                blueprintId: blueprintId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String blueprintId,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => BlueprintRevisionsCompanion.insert(
+                blueprintId: blueprintId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $BlueprintRevisionsTable,
+                    StoredBlueprintRevision
+                  >(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $BlueprintRevisionsTable,
+                    StoredBlueprintRevision
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BlueprintRevisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $BlueprintRevisionsTable,
+      StoredBlueprintRevision,
+      $$BlueprintRevisionsTableFilterComposer,
+      $$BlueprintRevisionsTableOrderingComposer,
+      $$BlueprintRevisionsTableAnnotationComposer,
+      $$BlueprintRevisionsTableCreateCompanionBuilder,
+      $$BlueprintRevisionsTableUpdateCompanionBuilder,
+      (
+        StoredBlueprintRevision,
+        BaseReferences<
+          _$TrainingDatabase,
+          $BlueprintRevisionsTable,
+          StoredBlueprintRevision
+        >,
+      ),
+      StoredBlueprintRevision,
+      PrefetchHooks Function()
+    >;
+typedef $$BlueprintInstancesTableCreateCompanionBuilder =
+    BlueprintInstancesCompanion Function({
+      required String instanceId,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$BlueprintInstancesTableUpdateCompanionBuilder =
+    BlueprintInstancesCompanion Function({
+      Value<String> instanceId,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$BlueprintInstancesTableFilterComposer
+    extends Composer<_$TrainingDatabase, $BlueprintInstancesTable> {
+  $$BlueprintInstancesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get instanceId => $composableBuilder(
+    column: $table.instanceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BlueprintInstancesTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $BlueprintInstancesTable> {
+  $$BlueprintInstancesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get instanceId => $composableBuilder(
+    column: $table.instanceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BlueprintInstancesTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $BlueprintInstancesTable> {
+  $$BlueprintInstancesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get instanceId => $composableBuilder(
+    column: $table.instanceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$BlueprintInstancesTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $BlueprintInstancesTable,
+          StoredBlueprintInstance,
+          $$BlueprintInstancesTableFilterComposer,
+          $$BlueprintInstancesTableOrderingComposer,
+          $$BlueprintInstancesTableAnnotationComposer,
+          $$BlueprintInstancesTableCreateCompanionBuilder,
+          $$BlueprintInstancesTableUpdateCompanionBuilder,
+          (
+            StoredBlueprintInstance,
+            BaseReferences<
+              _$TrainingDatabase,
+              $BlueprintInstancesTable,
+              StoredBlueprintInstance
+            >,
+          ),
+          StoredBlueprintInstance,
+          PrefetchHooks Function()
+        > {
+  $$BlueprintInstancesTableTableManager(
+    _$TrainingDatabase db,
+    $BlueprintInstancesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BlueprintInstancesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BlueprintInstancesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BlueprintInstancesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> instanceId = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BlueprintInstancesCompanion(
+                instanceId: instanceId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String instanceId,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => BlueprintInstancesCompanion.insert(
+                instanceId: instanceId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $BlueprintInstancesTable,
+                    StoredBlueprintInstance
+                  >(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $BlueprintInstancesTable,
+                    StoredBlueprintInstance
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BlueprintInstancesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $BlueprintInstancesTable,
+      StoredBlueprintInstance,
+      $$BlueprintInstancesTableFilterComposer,
+      $$BlueprintInstancesTableOrderingComposer,
+      $$BlueprintInstancesTableAnnotationComposer,
+      $$BlueprintInstancesTableCreateCompanionBuilder,
+      $$BlueprintInstancesTableUpdateCompanionBuilder,
+      (
+        StoredBlueprintInstance,
+        BaseReferences<
+          _$TrainingDatabase,
+          $BlueprintInstancesTable,
+          StoredBlueprintInstance
+        >,
+      ),
+      StoredBlueprintInstance,
       PrefetchHooks Function()
     >;
 typedef $$EquipmentRevisionsTableCreateCompanionBuilder =
@@ -14628,6 +15563,10 @@ class $TrainingDatabaseManager {
         _db,
         _db.progressionPresetRevisions,
       );
+  $$BlueprintRevisionsTableTableManager get blueprintRevisions =>
+      $$BlueprintRevisionsTableTableManager(_db, _db.blueprintRevisions);
+  $$BlueprintInstancesTableTableManager get blueprintInstances =>
+      $$BlueprintInstancesTableTableManager(_db, _db.blueprintInstances);
   $$EquipmentRevisionsTableTableManager get equipmentRevisions =>
       $$EquipmentRevisionsTableTableManager(_db, _db.equipmentRevisions);
   $$GymRevisionsTableTableManager get gymRevisions =>

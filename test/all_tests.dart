@@ -82,6 +82,7 @@ import 'set_scheme_test.dart';
 import 'staged_threshold_test.dart';
 import 'performed_on_test.dart';
 import 'gym_test.dart';
+import 'blueprint_test.dart';
 import 'unplanned_sets_test.dart';
 import 'tempo_lever_test.dart';
 import 'structures_trace_test.dart';
@@ -167,6 +168,7 @@ Future<void> main() async {
   stagedThresholdTests();
   performedOnTests();
   gymTests();
+  blueprintTests();
   unplannedSetsTests();
   tempoLeverTests();
   structuresTraceTests();

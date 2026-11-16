@@ -90,6 +90,12 @@ const storedCommandNames = [
   'preset publish',
   'preset show',
   'preset list',
+  'blueprint publish',
+  'blueprint show',
+  'blueprint list',
+  'blueprint preview',
+  'blueprint instantiate',
+  'blueprint instances',
   'implementation publish',
   'implementation show',
   'implementation list',
@@ -567,6 +573,19 @@ Future<Map<String, Object?>> executeStored(
     'preset publish' => {'preset', 'expectedRevision'},
     'preset show' => {'presetId', 'revision'},
     'preset list' => <String>{},
+    'blueprint publish' => {'blueprint', 'expectedRevision'},
+    'blueprint show' => {'blueprintId', 'revision'},
+    'blueprint list' => <String>{},
+    'blueprint preview' => {'blueprintId', 'revision', 'name', 'choices'},
+    'blueprint instantiate' => {
+      'blueprintId',
+      'revision',
+      'name',
+      'choices',
+      'expectedInstance',
+      'requireCatalog',
+    },
+    'blueprint instances' => {'name'},
     'implementation publish' => {'implementation', 'expectedRevision'},
     'implementation show' => {'implementationId', 'revision'},
     'implementation list' => <String>{},
@@ -2426,6 +2445,53 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final p in presets) p.toJson()];
+      case 'blueprint publish':
+        data = (await BlueprintService(store).publish(
+          Blueprint.fromJson(request['blueprint']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'blueprint show':
+        data = (await BlueprintService(store).revision(
+          identifier(request, 'blueprintId'),
+          request.containsKey('revision') ? integer('revision') : null,
+        )).toJson();
+      case 'blueprint list':
+        final all = await store.blueprintRevisions();
+        all.sort((a, b) {
+          final id = a.blueprint.id.compareTo(b.blueprint.id);
+          return id == 0 ? a.number.compareTo(b.number) : id;
+        });
+        data = [for (final b in all) b.toJson()];
+      case 'blueprint preview':
+        data = await BlueprintService(store).preview(
+          identifier(request, 'blueprintId'),
+          integer('revision'),
+          identifier(request, 'name'),
+          jsonObject(request['choices'] ?? <String, Object?>{}, 'choices'),
+        );
+      case 'blueprint instantiate':
+        data = (await BlueprintService(store).instantiate(
+          identifier(request, 'blueprintId'),
+          integer('revision'),
+          identifier(request, 'name'),
+          jsonObject(request['choices'] ?? <String, Object?>{}, 'choices'),
+          expectedInstance: integer('expectedInstance', min: 0),
+          requireCatalog: flag('requireCatalog'),
+        )).toJson();
+      case 'blueprint instances':
+        final all =
+            (await store.blueprintInstances())
+                .where(
+                  (i) =>
+                      !request.containsKey('name') ||
+                      i.id == identifier(request, 'name'),
+                )
+                .toList()
+              ..sort((a, b) {
+                final id = a.id.compareTo(b.id);
+                return id == 0 ? a.number.compareTo(b.number) : id;
+              });
+        data = [for (final i in all) i.toJson()];
       case 'store save-back':
         data = await SaveBackService(store).saveBack(
           identifier(request, 'id'),
