@@ -1917,6 +1917,274 @@ class BlueprintInstancesCompanion
   }
 }
 
+class $MeasureRevisionsTable extends MeasureRevisions
+    with TableInfo<$MeasureRevisionsTable, StoredMeasureRevision> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MeasureRevisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _measureIdMeta = const VerificationMeta(
+    'measureId',
+  );
+  @override
+  late final GeneratedColumn<String> measureId = GeneratedColumn<String>(
+    'measure_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [measureId, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'measure_revisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredMeasureRevision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('measure_id')) {
+      context.handle(
+        _measureIdMeta,
+        measureId.isAcceptableOrUnknown(data['measure_id']!, _measureIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_measureIdMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {measureId, number};
+  @override
+  StoredMeasureRevision map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredMeasureRevision(
+      measureId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}measure_id'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $MeasureRevisionsTable createAlias(String alias) {
+    return $MeasureRevisionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredMeasureRevision extends DataClass
+    implements Insertable<StoredMeasureRevision> {
+  final String measureId;
+  final int number;
+  final String snapshot;
+  const StoredMeasureRevision({
+    required this.measureId,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['measure_id'] = Variable<String>(measureId);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  MeasureRevisionsCompanion toCompanion(bool nullToAbsent) {
+    return MeasureRevisionsCompanion(
+      measureId: Value(measureId),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredMeasureRevision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredMeasureRevision(
+      measureId: serializer.fromJson<String>(json['measureId']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'measureId': serializer.toJson<String>(measureId),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredMeasureRevision copyWith({
+    String? measureId,
+    int? number,
+    String? snapshot,
+  }) => StoredMeasureRevision(
+    measureId: measureId ?? this.measureId,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredMeasureRevision copyWithCompanion(MeasureRevisionsCompanion data) {
+    return StoredMeasureRevision(
+      measureId: data.measureId.present ? data.measureId.value : this.measureId,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredMeasureRevision(')
+          ..write('measureId: $measureId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(measureId, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredMeasureRevision &&
+          other.measureId == this.measureId &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class MeasureRevisionsCompanion extends UpdateCompanion<StoredMeasureRevision> {
+  final Value<String> measureId;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const MeasureRevisionsCompanion({
+    this.measureId = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MeasureRevisionsCompanion.insert({
+    required String measureId,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : measureId = Value(measureId),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredMeasureRevision> custom({
+    Expression<String>? measureId,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (measureId != null) 'measure_id': measureId,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MeasureRevisionsCompanion copyWith({
+    Value<String>? measureId,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return MeasureRevisionsCompanion(
+      measureId: measureId ?? this.measureId,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (measureId.present) {
+      map['measure_id'] = Variable<String>(measureId.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MeasureRevisionsCompanion(')
+          ..write('measureId: $measureId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $EquipmentRevisionsTable extends EquipmentRevisions
     with TableInfo<$EquipmentRevisionsTable, StoredEquipmentRevision> {
   @override
@@ -8176,6 +8444,9 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
       $BlueprintRevisionsTable(this);
   late final $BlueprintInstancesTable blueprintInstances =
       $BlueprintInstancesTable(this);
+  late final $MeasureRevisionsTable measureRevisions = $MeasureRevisionsTable(
+    this,
+  );
   late final $EquipmentRevisionsTable equipmentRevisions =
       $EquipmentRevisionsTable(this);
   late final $GymRevisionsTable gymRevisions = $GymRevisionsTable(this);
@@ -8246,6 +8517,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     progressionPresetRevisions,
     blueprintRevisions,
     blueprintInstances,
+    measureRevisions,
     equipmentRevisions,
     gymRevisions,
     equipmentInstanceRevisions,
@@ -9580,6 +9852,189 @@ typedef $$BlueprintInstancesTableProcessedTableManager =
         >,
       ),
       StoredBlueprintInstance,
+      PrefetchHooks Function()
+    >;
+typedef $$MeasureRevisionsTableCreateCompanionBuilder =
+    MeasureRevisionsCompanion Function({
+      required String measureId,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$MeasureRevisionsTableUpdateCompanionBuilder =
+    MeasureRevisionsCompanion Function({
+      Value<String> measureId,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$MeasureRevisionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $MeasureRevisionsTable> {
+  $$MeasureRevisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get measureId => $composableBuilder(
+    column: $table.measureId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MeasureRevisionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $MeasureRevisionsTable> {
+  $$MeasureRevisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get measureId => $composableBuilder(
+    column: $table.measureId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MeasureRevisionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $MeasureRevisionsTable> {
+  $$MeasureRevisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get measureId =>
+      $composableBuilder(column: $table.measureId, builder: (column) => column);
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$MeasureRevisionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $MeasureRevisionsTable,
+          StoredMeasureRevision,
+          $$MeasureRevisionsTableFilterComposer,
+          $$MeasureRevisionsTableOrderingComposer,
+          $$MeasureRevisionsTableAnnotationComposer,
+          $$MeasureRevisionsTableCreateCompanionBuilder,
+          $$MeasureRevisionsTableUpdateCompanionBuilder,
+          (
+            StoredMeasureRevision,
+            BaseReferences<
+              _$TrainingDatabase,
+              $MeasureRevisionsTable,
+              StoredMeasureRevision
+            >,
+          ),
+          StoredMeasureRevision,
+          PrefetchHooks Function()
+        > {
+  $$MeasureRevisionsTableTableManager(
+    _$TrainingDatabase db,
+    $MeasureRevisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MeasureRevisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MeasureRevisionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MeasureRevisionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> measureId = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MeasureRevisionsCompanion(
+                measureId: measureId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String measureId,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => MeasureRevisionsCompanion.insert(
+                measureId: measureId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$MeasureRevisionsTable, StoredMeasureRevision>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $MeasureRevisionsTable,
+                    StoredMeasureRevision
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MeasureRevisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $MeasureRevisionsTable,
+      StoredMeasureRevision,
+      $$MeasureRevisionsTableFilterComposer,
+      $$MeasureRevisionsTableOrderingComposer,
+      $$MeasureRevisionsTableAnnotationComposer,
+      $$MeasureRevisionsTableCreateCompanionBuilder,
+      $$MeasureRevisionsTableUpdateCompanionBuilder,
+      (
+        StoredMeasureRevision,
+        BaseReferences<
+          _$TrainingDatabase,
+          $MeasureRevisionsTable,
+          StoredMeasureRevision
+        >,
+      ),
+      StoredMeasureRevision,
       PrefetchHooks Function()
     >;
 typedef $$EquipmentRevisionsTableCreateCompanionBuilder =
@@ -15712,6 +16167,8 @@ class $TrainingDatabaseManager {
       $$BlueprintRevisionsTableTableManager(_db, _db.blueprintRevisions);
   $$BlueprintInstancesTableTableManager get blueprintInstances =>
       $$BlueprintInstancesTableTableManager(_db, _db.blueprintInstances);
+  $$MeasureRevisionsTableTableManager get measureRevisions =>
+      $$MeasureRevisionsTableTableManager(_db, _db.measureRevisions);
   $$EquipmentRevisionsTableTableManager get equipmentRevisions =>
       $$EquipmentRevisionsTableTableManager(_db, _db.equipmentRevisions);
   $$GymRevisionsTableTableManager get gymRevisions =>

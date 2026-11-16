@@ -48,6 +48,15 @@ class ProgressionPresetRevisions extends Table {
   Set<Column> get primaryKey => {presetId, number};
 }
 
+@DataClassName('StoredMeasureRevision')
+class MeasureRevisions extends Table {
+  TextColumn get measureId => text()();
+  IntColumn get number => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {measureId, number};
+}
+
 @DataClassName('StoredBlueprintRevision')
 class BlueprintRevisions extends Table {
   TextColumn get blueprintId => text()();
@@ -300,6 +309,7 @@ class ProgramUpgradeReceipts extends Table {
     ProgressionPresetRevisions,
     BlueprintRevisions,
     BlueprintInstances,
+    MeasureRevisions,
     EquipmentRevisions,
     GymRevisions,
     EquipmentInstanceRevisions,

@@ -33,6 +33,7 @@ final class TrainingArchive {
     List<ProgramReceipt> programReceipts = const [],
     List<ProgramUpgradeReceipt> programUpgrades = const [],
     List<ObservationRecord> observations = const [],
+    List<MeasureRevision> measures = const [],
     List<ImportedSessionRecord> importedSessions = const [],
     List<BlockProgressionDecision> blockProgressions = const [],
     List<TimingActivity> timers = const [],
@@ -158,6 +159,12 @@ final class TrainingArchive {
            return ns == 0 ? a.sourceId.compareTo(b.sourceId) : ns;
          }),
        ),
+       measures = List<MeasureRevision>.unmodifiable(
+         <MeasureRevision>[...measures]..sort((a, b) {
+           final id = a.measure.id.compareTo(b.measure.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
        observations = List<ObservationRecord>.unmodifiable(
          <ObservationRecord>[...observations]
            ..sort((a, b) => a.observation.id.compareTo(b.observation.id)),
@@ -219,6 +226,7 @@ final class TrainingArchive {
       'programReceipts',
       'programUpgrades',
       'observations',
+      'measures',
       'importedSessions',
       'blockProgressions',
       'timers',
@@ -307,6 +315,9 @@ final class TrainingArchive {
         for (final j in optional('importedSessions'))
           ImportedSessionRecord.fromJson(j),
       ],
+      measures: [
+        for (final j in optional('measures')) MeasureRevision.fromJson(j),
+      ],
       observations: [
         for (final j in optional('observations')) ObservationRecord.fromJson(j),
       ],
@@ -368,6 +379,8 @@ final class TrainingArchive {
   final List<WindowCheckpoint> windowCheckpoints;
   final List<RepeatCheckpoint> repeatCheckpoints;
 
+  final List<MeasureRevision> measures;
+
   /// Observations of every measure, body mass included.
   final List<ObservationRecord> observations;
 
@@ -409,6 +422,7 @@ final class TrainingArchive {
     'windowCheckpoints': [for (final c in windowCheckpoints) c.toJson()],
     'repeatCheckpoints': [for (final c in repeatCheckpoints) c.toJson()],
     'observations': [for (final r in observations) r.toJson()],
+    'measures': [for (final m in measures) m.toJson()],
     'importedSessions': [for (final r in importedSessions) r.toJson()],
     'blockProgressions': [for (final d in blockProgressions) d.toJson()],
     'revisions': [for (final r in revisions) r.toJson()],
@@ -442,6 +456,7 @@ final class TrainingArchive {
     'windowCheckpoints': windowCheckpoints.length,
     'repeatCheckpoints': repeatCheckpoints.length,
     'observations': observations.length,
+    'measures': measures.length,
     'importedSessions': importedSessions.length,
     'blockProgressions': blockProgressions.length,
     'revisions': revisions.length,
@@ -500,7 +515,11 @@ final class TrainingArchive {
     );
     validateExecutionData(executions, sessions, timers);
     validatePlacementCheckpoints(executions, sessions, repeatCheckpoints);
-    validateObservationRecords(observations);
+    validateMeasureRevisions(measures);
+    validateObservationRecords(
+      observations,
+      measures: currentMeasures(measures),
+    );
     validateImportedSessions(importedSessions);
     validateBlockProgressions(
       blockProgressions,

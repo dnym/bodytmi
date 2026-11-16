@@ -60,6 +60,8 @@ const schema = {
       'CREATE TABLE "session_programs" ("session_id" TEXT NOT NULL REFERENCES sessions (id), "run_id" TEXT NOT NULL REFERENCES program_runs (id), "ordinal" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("session_id"), UNIQUE ("run_id", "ordinal"))',
   'sessions':
       'CREATE TABLE "sessions" ("id" TEXT NOT NULL, "template_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+  'measure_revisions':
+      'CREATE TABLE "measure_revisions" ("measure_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("measure_id", "number"))',
   'observations':
       'CREATE TABLE "observations" ("id" TEXT NOT NULL, "measure_id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'observations_measure':

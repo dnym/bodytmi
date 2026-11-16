@@ -212,6 +212,7 @@ final class NativeBackup {
         'sessions',
         'progression_decisions',
         'observations',
+        'measure_revisions',
         'timing_activities',
         'window_checkpoints',
         'repeat_checkpoints',
@@ -749,7 +750,20 @@ final class NativeBackup {
             invalid('Observation row identity mismatch.');
           observations.add(record);
         }
-        validateObservationRecords(observations);
+        final measureRevisions = <MeasureRevision>[];
+        for (final row in db.select('SELECT * FROM measure_revisions')) {
+          final m = MeasureRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (m.measure.id != row['measure_id'] || m.number != row['number'])
+            invalid('Measure revision row identity mismatch.');
+          measureRevisions.add(m);
+        }
+        validateMeasureRevisions(measureRevisions);
+        validateObservationRecords(
+          observations,
+          measures: currentMeasures(measureRevisions),
+        );
         final massRecords = [
           for (final r in observations)
             if (r.observation.isBodyMass)

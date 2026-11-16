@@ -90,6 +90,14 @@ const storedCommandNames = [
   'preset publish',
   'preset show',
   'preset list',
+  'measure define',
+  'measure show',
+  'measure list',
+  'observation record',
+  'observation update',
+  'observation delete',
+  'observation show',
+  'observation list',
   'catalog preview',
   'catalog apply',
   'blueprint publish',
@@ -575,6 +583,20 @@ Future<Map<String, Object?>> executeStored(
     'preset publish' => {'preset', 'expectedRevision'},
     'preset show' => {'presetId', 'revision'},
     'preset list' => <String>{},
+    'measure define' => {'measure', 'expectedRevision'},
+    'measure show' => {'measureId', 'revision'},
+    'measure list' => <String>{},
+    'observation record' => {'observation'},
+    'observation update' => {'observation', 'expectedVersion'},
+    'observation delete' => {'id', 'expectedVersion', 'confirm'},
+    'observation show' => {'id'},
+    'observation list' => {
+      'measure',
+      'from',
+      'until',
+      'attributes',
+      'includeDeleted',
+    },
     'catalog preview' => {'document'},
     'catalog apply' => {'document', 'onChanged', 'confirm'},
     'blueprint publish' => {'blueprint', 'expectedRevision'},
@@ -2449,6 +2471,84 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final p in presets) p.toJson()];
+      case 'measure define':
+        data = (await ObservationService(store).define(
+          MeasureDefinition.fromJson(request['measure']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'measure show':
+        final id = identifier(request, 'measureId');
+        final builtIn = builtInMeasures.where((m) => m.id == id).firstOrNull;
+        if (builtIn != null) {
+          if (request.containsKey('revision'))
+            invalid('Built-in measures have no stored revisions.');
+          data = {
+            'builtIn': true,
+            'revision': builtInMeasureRevision,
+            'measure': builtIn.toJson(),
+          };
+        } else {
+          data = {
+            'builtIn': false,
+            ...(await ObservationService(store).measureRevision(
+              id,
+              request.containsKey('revision') ? integer('revision') : null,
+            )).toJson(),
+          };
+        }
+      case 'measure list':
+        data = [
+          for (final m in await ObservationService(store).measures())
+            {
+              'builtIn': builtInMeasures.any((b) => b.id == m.id),
+              'measure': m.toJson(),
+            },
+        ];
+      case 'observation record':
+        data = (await ObservationService(
+          store,
+        ).save(jsonObject(request['observation'], 'observation'), 0)).toJson();
+      case 'observation update':
+        data = (await ObservationService(store).save(
+          jsonObject(request['observation'], 'observation'),
+          integer('expectedVersion'),
+        )).toJson();
+      case 'observation delete':
+        data = (await ObservationService(store).delete(
+          identifier(request, 'id'),
+          integer('expectedVersion'),
+          confirm: flag('confirm'),
+        )).toJson();
+      case 'observation show':
+        data = (await ObservationService(
+          store,
+        ).show(identifier(request, 'id'))).toJson();
+      case 'observation list':
+        String? day(String key) {
+          final v = request[key];
+          if (v == null) return null;
+          if (v is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(v))
+            invalid('$key is a YYYY-MM-DD local date.');
+          return v;
+        }
+        data = [
+          for (final r in await ObservationService(store).list(
+            measureId: request.containsKey('measure')
+                ? identifier(request, 'measure')
+                : null,
+            fromDate: day('from'),
+            untilDate: day('until'),
+            attributes: {
+              for (final e in jsonObject(
+                request['attributes'] ?? <String, Object?>{},
+                'attributes',
+              ).entries)
+                e.key: identifier({e.key: e.value}, e.key),
+            },
+            includeDeleted: flag('includeDeleted'),
+          ))
+            r.toJson(),
+        ];
       case 'catalog preview':
         data = await CatalogImportService(
           store,

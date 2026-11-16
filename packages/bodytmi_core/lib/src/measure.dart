@@ -457,3 +457,68 @@ const _builtIns = <Map<String, Object?>>[
     'resolution': {'policy': 'latest'},
   },
 ];
+
+/// A custom measure's immutable numbered revision. Kind and dimension never
+/// change across revisions, so earlier observations stay meaningful.
+final class MeasureRevision {
+  MeasureRevision._(this.number, this.measure);
+  factory MeasureRevision.publish(
+    MeasureDefinition measure, {
+    MeasureRevision? previous,
+  }) {
+    if (builtInMeasures.any((m) => m.id == measure.id))
+      invalid('Measure ${measure.id} is built in; choose another identity.');
+    if (previous != null &&
+        (previous.measure.id != measure.id ||
+            previous.measure.kind != measure.kind ||
+            previous.measure.dimension != measure.dimension))
+      invalid('A measure revision keeps its identity, kind and dimension.');
+    return MeasureRevision._((previous?.number ?? 0) + 1, measure);
+  }
+  factory MeasureRevision.fromJson(Object? input) {
+    final j = jsonObject(input, 'measure revision');
+    checkKeys(j, {'schemaVersion', 'revision', 'measure'});
+    final revision = j['revision'];
+    if (j['schemaVersion'] != 1 || revision is! int || revision < 1)
+      invalid('Invalid measure revision.');
+    final measure = MeasureDefinition.fromJson(j['measure']);
+    if (builtInMeasures.any((m) => m.id == measure.id))
+      invalid('Measure ${measure.id} is built in.');
+    return MeasureRevision._(revision, measure);
+  }
+  final int number;
+  final MeasureDefinition measure;
+  Map<String, Object?> toJson() => {
+    'schemaVersion': 1,
+    'revision': number,
+    'measure': measure.toJson(),
+  };
+}
+
+/// Contiguous numbering and a stable kind and dimension per identity.
+void validateMeasureRevisions(List<MeasureRevision> revisions) {
+  final numbers = <String, Set<int>>{};
+  final shape = <String, String>{};
+  for (final r in revisions) {
+    if (!numbers.putIfAbsent(r.measure.id, () => <int>{}).add(r.number))
+      invalid('Duplicate measure revision.');
+    final s = '${r.measure.kind}/${r.measure.dimension?.name}';
+    if (shape.putIfAbsent(r.measure.id, () => s) != s)
+      invalid('Measure ${r.measure.id} changed its kind or dimension.');
+  }
+  for (final versions in numbers.values)
+    if (versions.any((n) => n > versions.length))
+      invalid('Measure revisions must start at one with no gaps.');
+}
+
+/// Built-in measures followed by the latest revision of each custom one.
+List<MeasureDefinition> currentMeasures(List<MeasureRevision> revisions) {
+  final latest = <String, MeasureRevision>{};
+  for (final r in revisions) {
+    final prior = latest[r.measure.id];
+    if (prior == null || r.number > prior.number) latest[r.measure.id] = r;
+  }
+  final custom = latest.values.map((r) => r.measure).toList()
+    ..sort((a, b) => a.id.compareTo(b.id));
+  return [...builtInMeasures, ...custom];
+}

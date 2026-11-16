@@ -128,6 +128,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM session_programs), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM observations), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM measure_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM window_checkpoints), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM repeat_checkpoints), 0)
@@ -1105,6 +1106,32 @@ final class TrainingStore implements TrainingRepository {
           ),
         );
   }
+
+  @override
+  Future<List<MeasureRevision>> measureRevisions() =>
+      _cache.list('measureRevisions', () async {
+        final result = <MeasureRevision>[];
+        for (final row in await _db.select(_db.measureRevisions).get()) {
+          final revision = MeasureRevision.fromJson(jsonDecode(row.snapshot));
+          if (revision.measure.id != row.measureId ||
+              revision.number != row.number)
+            invalid('Stored measure revision identity is inconsistent.');
+          result.add(revision);
+        }
+        validateMeasureRevisions(result);
+        return result;
+      });
+
+  @override
+  Future<void> insertMeasureRevision(MeasureRevision revision) => _db
+      .into(_db.measureRevisions)
+      .insert(
+        MeasureRevisionsCompanion.insert(
+          measureId: revision.measure.id,
+          number: revision.number,
+          snapshot: _snapshot(revision.toJson()),
+        ),
+      );
 
   /// Body-mass records are observations of measure `body-mass`.
   @override

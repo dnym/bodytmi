@@ -255,9 +255,16 @@ void validateObservationRecords(
     for (final m in [...builtInMeasures, ...measures]) m.id: m,
   };
   final ids = <String>{};
+  final imports = <String>{};
   for (final r in records) {
     final o = r.observation;
     if (!ids.add(o.id)) invalid('Duplicate observation identity ${o.id}.');
+    if (o.importNamespace != null &&
+        !imports.add('${o.importNamespace}\u0000${o.importSourceId}'))
+      invalid(
+        'Two observations share import identity '
+        '${o.importNamespace}/${o.importSourceId}.',
+      );
     final measure = byId[o.measureId];
     if (measure == null)
       invalid('Observation ${o.id} names an unknown measure ${o.measureId}.');
