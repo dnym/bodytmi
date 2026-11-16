@@ -407,6 +407,119 @@ void blueprintTests() {
     },
   );
 
+  test(
+    'equipment blueprints publish instances with their open specifics',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'bodytmi-eq-blueprint-',
+      );
+      final store = await TrainingStore.open('${dir.path}/db.sqlite');
+      try {
+        final blueprints = BlueprintService(store);
+        final equipment = EquipmentService(store);
+        for (final id in ['barbell', 'leg-press']) {
+          await equipment.publishEquipment(
+            EquipmentDefinition.fromJson({'id': id}),
+            0,
+          );
+        }
+        await equipment.publishGym(GymDefinition.fromJson({'id': 'home'}), 0);
+        for (final name in [
+          'blueprint-olympic-bar',
+          'blueprint-selectorized',
+        ]) {
+          await blueprints.publish(
+            Blueprint.fromJson(example(name)['blueprint']),
+            0,
+          );
+        }
+        final plates = [
+          {'mass': _q('20', 'kg'), 'count': 4},
+          {'mass': _q('10', 'kg'), 'count': 2},
+          {'mass': _q('2.5', 'kg'), 'count': 2},
+        ];
+        equal(
+          (await _failure(
+            () => blueprints.instantiate('olympic-barbell', 1, 'rack', {
+              'gym': 'home',
+              'plates': <Object?>[],
+            }, expectedInstance: 0),
+          )).code,
+          'validation',
+        );
+        final bar = await blueprints.instantiate('olympic-barbell', 1, 'rack', {
+          'gym': 'home',
+          'plates': plates,
+        }, expectedInstance: 0);
+        jsonEqual(bar.instances, {'bar': 1});
+        equal(bar.workouts.isEmpty, true);
+        final plan = await equipment.platePlan(
+          'rack-bar',
+          Quantity.fromJson(_q('65', 'kg')),
+        );
+        equal(jsonObject(plan['plan'], 'plan')['status'], 'exact');
+
+        final machine = {
+          'machine': 'leg-press',
+          'gym': 'home',
+          'first': _q('10', 'lb'),
+          'step': '10',
+          'pins': 20,
+        };
+        for (final bad in [
+          {...machine, 'pins': 0},
+          {...machine, 'pins': '20'},
+          {...machine, 'step': '0.25'},
+          {...machine, 'step': 10},
+        ]) {
+          equal(
+            (await _failure(
+              () => blueprints.preview('selectorized-machine', 1, 'press', bad),
+            )).code,
+            'validation',
+          );
+        }
+        await blueprints.instantiate(
+          'selectorized-machine',
+          1,
+          'press',
+          machine,
+          expectedInstance: 0,
+        );
+        final stack = await equipment.instanceRevision('press-stack');
+        equal(stack.instance.equipmentId, 'leg-press');
+        equal(stack.instance.gymId, 'home');
+        equal(stack.instance.scale!.ticks.length, 20);
+        equal(stack.instance.scale!.ticks.last.quantity.enteredValue, '200');
+        // Filling in again with another plate stock publishes revision 2.
+        final again = await blueprints.instantiate(
+          'olympic-barbell',
+          1,
+          'rack',
+          {
+            'gym': 'home',
+            'plates': [
+              ...plates,
+              {'mass': _q('1.25', 'kg'), 'count': 2},
+            ],
+          },
+          expectedInstance: 1,
+        );
+        jsonEqual(again.instances, {'bar': 2});
+        // The instance is ordinary inventory: a gym binds it.
+        final archive = await StoredTrainingService(store).exportArchive();
+        TrainingArchive.fromJson(archive.toJson());
+        final forged = jsonDecode(jsonEncode(archive.toJson())) as Map;
+        final receipt = (forged['blueprintInstances'] as List).first as Map;
+        (receipt['instances'] as Map)['bar'] = 7;
+        rejects(() => TrainingArchive.fromJson(forged.cast<String, Object?>()));
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+
   test('CLI blueprint commands and portability', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-blueprint-cli-');
     final db = '${dir.path}/db.sqlite';

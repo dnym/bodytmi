@@ -351,6 +351,14 @@ final class NativeBackup {
                   i.presetId(e.key),
                   e.value,
                 ),
+              ) ||
+              i.instances.entries.any(
+                (e) => !exists(
+                  'equipment_instance_revisions',
+                  'instance_id',
+                  i.instanceId(e.key),
+                  e.value,
+                ),
               ))
             invalid(
               'Blueprint instance ${i.id} names an unpublished revision.',

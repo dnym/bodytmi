@@ -1,6 +1,8 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
+import 'equipment_service.dart';
 import 'family_service.dart';
+import 'gym_binding.dart';
 import 'preset_service.dart';
 import 'program_service.dart';
 import 'training_repository.dart';
@@ -11,10 +13,14 @@ void validateBlueprintLineage(
   required List<WorkoutRevision> workouts,
   required List<ProgramRevision> programs,
   required List<ProgressionPresetRevision> presets,
+  required List<EquipmentInstanceRevision> equipmentInstances,
 }) {
   final w = {for (final r in workouts) '${r.definition.id}/${r.number}'};
   final p = {for (final r in programs) '${r.definition.id}/${r.number}'};
   final s = {for (final r in presets) '${r.preset.id}/${r.number}'};
+  final e = {
+    for (final r in equipmentInstances) '${r.instance.id}/${r.number}',
+  };
   for (final i in instances) {
     if (i.workouts.entries.any(
           (e) => !w.contains('${i.workoutId(e.key)}/${e.value}'),
@@ -22,7 +28,10 @@ void validateBlueprintLineage(
         (i.programRevision != null &&
             !p.contains('${i.id}/${i.programRevision}')) ||
         i.presets.entries.any(
-          (e) => !s.contains('${i.presetId(e.key)}/${e.value}'),
+          (p) => !s.contains('${i.presetId(p.key)}/${p.value}'),
+        ) ||
+        i.instances.entries.any(
+          (x) => !e.contains('${i.instanceId(x.key)}/${x.value}'),
         ))
       invalid('Blueprint instance ${i.id} names an unpublished revision.');
   }
@@ -34,6 +43,7 @@ typedef FilledBlueprint = ({
   Map<String, Object> choices,
   Map<String, WorkoutDefinition> workouts,
   Map<String, ProgressionPreset> presets,
+  Map<String, EquipmentInstance> instances,
   ProgramDefinition? program,
 });
 
@@ -121,6 +131,10 @@ final class BlueprintService {
         for (final e in docs.presets.entries)
           e.key: ProgressionPreset.fromJson(e.value),
       },
+      instances: {
+        for (final e in docs.instances.entries)
+          e.key: EquipmentInstance.fromJson(e.value),
+      },
       program: docs.program == null
           ? null
           : ProgramDefinition.fromJson(docs.program),
@@ -153,6 +167,10 @@ final class BlueprintService {
       if (filled.presets.isNotEmpty)
         'presets': {
           for (final e in filled.presets.entries) e.key: e.value.toJson(),
+        },
+      if (filled.instances.isNotEmpty)
+        'instances': {
+          for (final e in filled.instances.entries) e.key: e.value.toJson(),
         },
     };
   });
@@ -232,6 +250,21 @@ final class BlueprintService {
       presetHeads[key] = await presetHead(id);
       owned('Preset $id', presetHeads[key]!, head?.presets[key]);
     }
+    final equipment = EquipmentService(repository);
+    final instanceHeads = <String, int>{};
+    for (final key in blueprint.instances.keys) {
+      final id = '$name-$key';
+      instanceHeads[key] =
+          latestInstances(
+            await repository.equipmentInstanceRevisions(),
+          )[id]?.number ??
+          0;
+      owned(
+        'Equipment instance $id',
+        instanceHeads[key]!,
+        head?.instances[key],
+      );
+    }
     final programCurrent = blueprint.program == null
         ? 0
         : await programHead(name);
@@ -256,6 +289,13 @@ final class BlueprintService {
         presetHeads[e.key]!,
       )).number;
     }
+    final instances = <String, int>{};
+    for (final e in filled.instances.entries) {
+      instances[e.key] = (await equipment.publishInstance(
+        e.value,
+        instanceHeads[e.key]!,
+      )).number;
+    }
     final program = filled.program == null
         ? null
         : (await programs.publish(filled.program!, programCurrent)).number;
@@ -268,6 +308,7 @@ final class BlueprintService {
       workouts: workouts,
       programRevision: program,
       presets: presets,
+      instances: instances,
     );
     await repository.insertBlueprintInstance(receipt);
     return receipt;

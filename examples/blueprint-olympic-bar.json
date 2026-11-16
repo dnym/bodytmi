@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "blueprint": {
+    "id": "olympic-barbell",
+    "name": "Olympic barbell with plates",
+    "notes": "Two sleeves loaded symmetrically. Fill in your gym, the bar's own mass and the plates you have.",
+    "choices": [
+      {"id": "gym", "kind": "gym", "label": "Gym"},
+      {"id": "bar-mass", "kind": "quantity", "label": "Bar mass", "dimension": "mass", "minimum": {"value": "5", "unit": "kg"}, "default": {"value": "20", "unit": "kg"}},
+      {"id": "plates", "kind": "plates", "label": "Plates (total count per denomination)"}
+    ],
+    "instances": {
+      "bar": {
+        "equipmentId": "barbell",
+        "gym": {"$choice": "gym"},
+        "name": "Olympic barbell",
+        "loading": {
+          "components": [{"id": "bar", "kind": "bar", "mass": {"$choice": "bar-mass"}}],
+          "channel": {"id": "sleeves", "sides": 2, "symmetry": "required"},
+          "plates": {"$choice": "plates"}
+        }
+      }
+    }
+  }
+}

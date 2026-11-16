@@ -1,3 +1,4 @@
+import 'equipment.dart';
 import 'errors.dart';
 import 'quantity.dart';
 
@@ -55,10 +56,11 @@ final class BlueprintChoice {
     }
     final family = j['family'] == null ? null : identifier(j, 'family');
     final quantity = kind == 'quantity';
+    final numeric = kind == 'number' || kind == 'integer';
     if (kind == 'setting' && options == null)
       invalid('A setting choice lists its options.');
-    if (quantity && options != null)
-      invalid('A quantity choice has no options.');
+    if (!_identifierKinds.contains(kind) && options != null)
+      invalid('Only identifier choices have options.');
     if (family != null && kind != 'exercise')
       invalid('Only an exercise choice can be limited to a family.');
     Dimension? dimension;
@@ -66,13 +68,20 @@ final class BlueprintChoice {
       final name = requiredString(j, 'dimension');
       dimension = Dimension.values.where((d) => d.name == name).firstOrNull;
       if (dimension == null) invalid('Unknown choice dimension $name.');
-    } else if (j.containsKey('dimension') ||
-        j.containsKey('minimum') ||
-        j.containsKey('maximum')) {
-      invalid('Only a quantity choice has a dimension and bounds.');
+    } else if (j.containsKey('dimension')) {
+      invalid('Only a quantity choice has a dimension.');
     }
-    Quantity? bound(String key) {
+    if (!quantity &&
+        !numeric &&
+        (j.containsKey('minimum') || j.containsKey('maximum')))
+      invalid('Only quantity, number and integer choices have bounds.');
+    Object? bound(String key) {
       if (!j.containsKey(key)) return null;
+      if (kind == 'number') return Decimal.parse(requiredString(j, key));
+      if (kind == 'integer') {
+        final v = j[key];
+        return v is int ? v : invalid('Integer choice $key is an integer.');
+      }
       final q = Quantity.fromJson(j[key]);
       if (q.dimension != dimension)
         invalid('Choice $key must have the choice dimension.');
@@ -81,7 +90,9 @@ final class BlueprintChoice {
 
     final minimum = bound('minimum');
     final maximum = bound('maximum');
-    if (minimum != null && maximum != null && minimum.compareTo(maximum) > 0)
+    if (minimum != null &&
+        maximum != null &&
+        (minimum as Comparable).compareTo(maximum) > 0)
       invalid('Choice minimum exceeds its maximum.');
     final choice = BlueprintChoice._(
       identifier(j, 'id'),
@@ -110,19 +121,33 @@ final class BlueprintChoice {
     );
   }
 
-  static const _kinds = {
+  static const _identifierKinds = {
     'exercise',
     'implementation',
     'equipment',
+    'gym',
     'setting',
+  };
+  static const _kinds = {
+    ..._identifierKinds,
     'quantity',
+    'number',
+    'integer',
+    'plates',
   };
 
   final String id, kind;
   final String? label, notes, family;
   final List<String>? options;
   final Dimension? dimension;
-  final Quantity? minimum, maximum;
+
+  /// A [Quantity] for quantity choices, a [Decimal] for number choices, an
+  /// int for integer choices.
+  final Object? minimum, maximum;
+
+  bool _outside(Comparable<Object?> value) =>
+      (minimum != null && value.compareTo(minimum) < 0) ||
+      (maximum != null && value.compareTo(maximum) > 0);
 
   /// The validated default (an identifier string or a quantity JSON map).
   final Object? defaultValue;
@@ -130,19 +155,45 @@ final class BlueprintChoice {
   /// Validates a supplied value, returning its JSON form. Family membership
   /// needs stored families and is checked by the caller.
   Object resolve(Object? value) {
-    if (kind != 'quantity') {
-      final text = identifier({id: value}, id);
-      if (options != null && !options!.contains(text))
-        invalid('Choice $id must be one of ${options!.join(', ')}.');
-      return text;
+    switch (kind) {
+      case 'quantity':
+        final q = Quantity.fromJson(value);
+        if (q.dimension != dimension)
+          invalid('Choice $id needs a ${dimension!.name} quantity.');
+        if (_outside(q)) invalid('Choice $id is outside its bounds.');
+        return {'value': q.enteredValue, 'unit': q.enteredUnit.name};
+      case 'number':
+        if (value is! String) invalid('Choice $id is a decimal string.');
+        if (_outside(Decimal.parse(value)))
+          invalid('Choice $id is outside its bounds.');
+        return value;
+      case 'integer':
+        if (value is! int) invalid('Choice $id is an integer.');
+        if (_outside(value)) invalid('Choice $id is outside its bounds.');
+        return value;
+      case 'plates':
+        if (value is! List || value.isEmpty || value.length > 64)
+          invalid('Choice $id lists 1 to 64 plate denominations.');
+        final stock = [for (final p in value) PlateStock.fromJson(p)];
+        if (stock.map((p) => p.mass.value.toString()).toSet().length !=
+            stock.length)
+          invalid('Choice $id plate denominations must be distinct.');
+        return [
+          for (final p in stock)
+            {
+              'mass': {
+                'value': p.mass.enteredValue,
+                'unit': p.mass.enteredUnit.name,
+              },
+              'count': p.count,
+            },
+        ];
+      default:
+        final text = identifier({id: value}, id);
+        if (options != null && !options!.contains(text))
+          invalid('Choice $id must be one of ${options!.join(', ')}.');
+        return text;
     }
-    final q = Quantity.fromJson(value);
-    if (q.dimension != dimension)
-      invalid('Choice $id needs a ${dimension!.name} quantity.');
-    if ((minimum != null && q.compareTo(minimum!) < 0) ||
-        (maximum != null && q.compareTo(maximum!) > 0))
-      invalid('Choice $id is outside its bounds.');
-    return {'value': q.enteredValue, 'unit': q.enteredUnit.name};
   }
 
   Map<String, Object?> toJson() => {
@@ -153,19 +204,17 @@ final class BlueprintChoice {
     if (options != null) 'options': options,
     if (family != null) 'family': family,
     if (dimension != null) 'dimension': dimension!.name,
-    if (minimum != null)
-      'minimum': {
-        'value': minimum!.enteredValue,
-        'unit': minimum!.enteredUnit.name,
-      },
-    if (maximum != null)
-      'maximum': {
-        'value': maximum!.enteredValue,
-        'unit': maximum!.enteredUnit.name,
-      },
+    if (minimum != null) 'minimum': _boundJson(minimum!),
+    if (maximum != null) 'maximum': _boundJson(maximum!),
     if (defaultValue != null) 'default': defaultValue,
   };
 }
+
+Object _boundJson(Object bound) => switch (bound) {
+  Quantity q => {'value': q.enteredValue, 'unit': q.enteredUnit.name},
+  Decimal d => d.toString(),
+  _ => bound,
+};
 
 String? _text(Map<String, Object?> j, String key, int max) {
   final value = j[key];
@@ -190,7 +239,13 @@ String? _text(Map<String, Object?> j, String key, int max) {
 ///   choice's entered unit) `down`, `up` or `nearest` (half up);
 /// * `{"$workoutId": key}` / `{"$workoutRevision": key}` — the identity and
 ///   revision a workout of this blueprint is published as;
-/// * `{"$presetId": key}` — a preset's published identity.
+/// * `{"$presetId": key}` — a preset's published identity;
+/// * `{"$value": choice}` / `{"$unit": choice}` — the entered value string or
+///   unit name of a quantity choice (e.g. a scale range start and unit).
+///
+/// `instances` maps local keys to equipment instance JSON without `id`
+/// (equipment blueprints: an Olympic barbell with its bar mass and plates
+/// left open), published as `<name>-<key>`.
 ///
 /// An unfilled blueprint can never be started: it is a separate record, and
 /// instantiation parses every document with the ordinary validators.
@@ -204,6 +259,7 @@ final class Blueprint {
     this.workouts,
     this.program,
     this.presets,
+    this.instances,
   );
 
   factory Blueprint.fromJson(Object? input) {
@@ -217,6 +273,7 @@ final class Blueprint {
       'workouts',
       'program',
       'presets',
+      'instances',
     });
     final choiceList = j['choices'] == null
         ? const <Object?>[]
@@ -246,7 +303,9 @@ final class Blueprint {
 
     final workouts = documents('workouts', 32);
     final presets = documents('presets', 64);
-    if (workouts.isEmpty) invalid('A blueprint defines at least one workout.');
+    final instances = documents('instances', 64);
+    if (workouts.isEmpty && instances.isEmpty)
+      invalid('A blueprint defines a workout or an equipment instance.');
     final program = j['program'] == null
         ? null
         : jsonObject(j['program'], 'program');
@@ -261,9 +320,15 @@ final class Blueprint {
       workouts,
       program,
       presets,
+      instances,
     );
     final used = <String>{};
-    for (final doc in [...workouts.values, ...presets.values, ?program]) {
+    for (final doc in [
+      ...workouts.values,
+      ...presets.values,
+      ...instances.values,
+      ?program,
+    ]) {
       blueprint._walk(doc, (kind, argument) {
         switch (kind) {
           case r'$choice':
@@ -280,6 +345,12 @@ final class Blueprint {
               invalid(r'$scale needs a declared quantity choice.');
             used.add(id);
             _scaleArguments(s);
+          case r'$value' || r'$unit':
+            final id = identifier({'choice': argument}, 'choice');
+            final choice = choices.where((c) => c.id == id).firstOrNull;
+            if (choice == null || choice.kind != 'quantity')
+              invalid('$kind needs a declared quantity choice.');
+            used.add(id);
           case r'$workoutId' || r'$workoutRevision':
             if (!workouts.containsKey(argument))
               invalid('Placeholder names undeclared workout $argument.');
@@ -301,7 +372,7 @@ final class Blueprint {
   final String id, name;
   final String? notes, source;
   final List<BlueprintChoice> choices;
-  final Map<String, Map<String, Object?>> workouts, presets;
+  final Map<String, Map<String, Object?>> workouts, presets, instances;
   final Map<String, Object?>? program;
 
   /// Every choice value: supplied, else its default. Missing required
@@ -333,6 +404,7 @@ final class Blueprint {
   ({
     Map<String, Map<String, Object?>> workouts,
     Map<String, Map<String, Object?>> presets,
+    Map<String, Map<String, Object?>> instances,
     Map<String, Object?>? program,
   })
   fill(
@@ -349,6 +421,8 @@ final class Blueprint {
         workoutRevisions[argument] ??
             invalid('No revision for workout $argument.'),
       r'$presetId' => '$name-$argument',
+      r'$value' => (resolved[argument]! as Map<String, Object?>)['value'],
+      r'$unit' => (resolved[argument]! as Map<String, Object?>)['unit'],
       _ => invalid('Unknown blueprint placeholder $kind.'),
     };
     Map<String, Object?> fillDoc(Map<String, Object?> doc, String id) => {
@@ -362,6 +436,10 @@ final class Blueprint {
       },
       presets: {
         for (final e in presets.entries)
+          e.key: fillDoc(e.value, '$name-${e.key}'),
+      },
+      instances: {
+        for (final e in instances.entries)
           e.key: fillDoc(e.value, '$name-${e.key}'),
       },
       program: program == null ? null : fillDoc(program!, name),
@@ -389,9 +467,10 @@ final class Blueprint {
     if (notes != null) 'notes': notes,
     if (source != null) 'source': source,
     if (choices.isNotEmpty) 'choices': [for (final c in choices) c.toJson()],
-    'workouts': workouts,
+    if (workouts.isNotEmpty) 'workouts': workouts,
     if (program != null) 'program': program,
     if (presets.isNotEmpty) 'presets': presets,
+    if (instances.isNotEmpty) 'instances': instances,
   };
 }
 
@@ -481,16 +560,23 @@ final class BlueprintInstance {
     required Map<String, int> workouts,
     required this.programRevision,
     required Map<String, int> presets,
+    Map<String, int> instances = const {},
   }) : choices = Map.unmodifiable(choices),
        workouts = Map.unmodifiable(workouts),
-       presets = Map.unmodifiable(presets) {
+       presets = Map.unmodifiable(presets),
+       instances = Map.unmodifiable(instances) {
     identifier({'id': id}, 'id');
     identifier({'id': blueprintId}, 'id');
     if (number < 1 || blueprintRevision < 1 || (programRevision ?? 1) < 1)
       invalid('Invalid blueprint instance numbering.');
-    if ([...workouts.values, ...presets.values].any((n) => n < 1))
+    if ([
+      ...workouts.values,
+      ...presets.values,
+      ...instances.values,
+    ].any((n) => n < 1))
       invalid('Invalid blueprint instance revision.');
-    if (workouts.isEmpty) invalid('A blueprint instance publishes a workout.');
+    if (workouts.isEmpty && instances.isEmpty)
+      invalid('A blueprint instance publishes a workout or an instance.');
   }
 
   factory BlueprintInstance.fromJson(Object? input) {
@@ -505,6 +591,7 @@ final class BlueprintInstance {
       'workouts',
       'programRevision',
       'presets',
+      'instances',
     });
     if (j['schemaVersion'] != 1) invalid('Invalid blueprint instance.');
     int count(Object? v) =>
@@ -530,6 +617,7 @@ final class BlueprintInstance {
           ? null
           : count(j['programRevision']),
       presets: revisions('presets'),
+      instances: revisions('instances'),
     );
   }
 
@@ -539,9 +627,10 @@ final class BlueprintInstance {
   final Map<String, Object> choices;
 
   /// Local key → published revision (identity `<id>-<key>`).
-  final Map<String, int> workouts, presets;
+  final Map<String, int> workouts, presets, instances;
 
   String workoutId(String key) => '$id-$key';
+  String instanceId(String key) => '$id-$key';
   String presetId(String key) => '$id-$key';
 
   Map<String, Object?> toJson() => {
@@ -551,9 +640,10 @@ final class BlueprintInstance {
     'blueprint': blueprintId,
     'blueprintRevision': blueprintRevision,
     if (choices.isNotEmpty) 'choices': choices,
-    'workouts': workouts,
+    if (workouts.isNotEmpty) 'workouts': workouts,
     if (programRevision != null) 'programRevision': programRevision,
     if (presets.isNotEmpty) 'presets': presets,
+    if (instances.isNotEmpty) 'instances': instances,
   };
 }
 
@@ -591,7 +681,9 @@ void validateBlueprintInstances(
             .isNotEmpty ||
         (blueprint.program == null) != (i.programRevision == null) ||
         blueprint.presets.length != i.presets.length ||
-        !blueprint.presets.keys.every(i.presets.containsKey))
+        !blueprint.presets.keys.every(i.presets.containsKey) ||
+        blueprint.instances.length != i.instances.length ||
+        !blueprint.instances.keys.every(i.instances.containsKey))
       invalid('Blueprint instance ${i.id} does not match its blueprint.');
     blueprint.resolveChoices(i.choices);
   }

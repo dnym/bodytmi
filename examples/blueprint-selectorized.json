@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "expectedRevision": 0,
+  "blueprint": {
+    "id": "selectorized-machine",
+    "name": "Selectorized machine",
+    "notes": "A weight stack with evenly spaced pin positions. Fill in which machine, your gym, the first marked weight, the step between pins and the number of pins.",
+    "choices": [
+      {"id": "machine", "kind": "equipment", "label": "Which machine"},
+      {"id": "gym", "kind": "gym", "label": "Gym"},
+      {"id": "first", "kind": "quantity", "label": "First marked weight", "dimension": "mass"},
+      {"id": "step", "kind": "number", "label": "Step between pins, in the same unit", "minimum": "0.5"},
+      {"id": "pins", "kind": "integer", "label": "Number of pin positions", "minimum": 1, "maximum": 1000}
+    ],
+    "instances": {
+      "stack": {
+        "equipmentId": {"$choice": "machine"},
+        "gym": {"$choice": "gym"},
+        "scale": {
+          "id": "stack",
+          "unit": {"$unit": "first"},
+          "range": {"start": {"$value": "first"}, "step": {"$choice": "step"}, "count": {"$choice": "pins"}}
+        }
+      }
+    }
+  }
+}

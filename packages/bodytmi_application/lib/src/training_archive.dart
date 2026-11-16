@@ -471,6 +471,7 @@ final class TrainingArchive {
       workouts: revisions,
       programs: programRevisions,
       presets: presets,
+      equipmentInstances: instances,
     );
     final catalogOwners = implementationOwners(implementations);
     for (final revision in revisions)
