@@ -1189,6 +1189,7 @@ void sessionBodyMassTests() {
             extraSets: s.extraSets,
             revision: s.revision,
             variantSelections: s.variantSelections,
+            gymId: s.gymId,
             startedAt: s.startedAt,
             startOffsetMinutes: s.startOffsetMinutes,
             finishOffsetMinutes: s.finishOffsetMinutes,

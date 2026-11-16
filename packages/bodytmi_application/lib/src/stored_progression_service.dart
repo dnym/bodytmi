@@ -440,6 +440,7 @@ final class StoredProgressionService {
     String role = 'work',
     PresetReference? preset,
     bool countSubstitutes = false,
+    bool countOtherInstance = false,
   }) => repository.transaction(() async {
     if (!{'work', 'warmup', 'backoff', 'drop'}.contains(role))
       invalid('Unknown progression role.');
@@ -525,6 +526,24 @@ final class StoredProgressionService {
       at: session.startedAt,
       sessionStartedAt: session.startedAt,
     );
+    // A session bound to another, non-interchangeable instance (another
+    // gym's machine) is neutral for this track unless the person explicitly
+    // counts it. A set marked performed on another instance is an explicit
+    // per-set choice that progression already follows.
+    final trackInstance = anchorInstance(before);
+    final bound = session.loadInputs[slotId]?.instance;
+    final otherInstance = comparableInstances(bound, trackInstance)
+        ? null
+        : bound;
+    if (otherInstance != null && !countOtherInstance)
+      invalid(
+        '$role sets were performed on ${otherInstance.instanceId}, not '
+        '${trackInstance!.instanceId} where this track progressed; that '
+        'equipment is not interchangeable, so the exposure is neutral for '
+        'progression unless countOtherInstance is true.',
+      );
+    if (countOtherInstance && otherInstance == null)
+      invalid('countOtherInstance needs work on another instance.');
     if (before case SharedTrackView(
       :final link,
     ) when link.cadence == 'each-exposure') {
@@ -585,6 +604,7 @@ final class StoredProgressionService {
       preset: preset,
       previousReference: before?.cycleReference,
       countSubstitutes: countSubstitutes,
+      countOtherInstance: countOtherInstance,
     );
     final comparable = next.toJson()
       ..['version'] = existing?.version ?? next.version;
@@ -913,6 +933,7 @@ final class StoredProgressionService {
             (s) =>
                 s.slotId == slotId && s.role == role && s.substitution != null,
           ),
+      countOtherInstance: resolved.countOtherInstance,
     );
     await repository.saveProgressionDecision(reopened, reopening: true);
     return reopened;

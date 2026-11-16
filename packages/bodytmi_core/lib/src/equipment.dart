@@ -175,16 +175,24 @@ final class LoadingSpec {
 /// One catalog equipment kind. Entries are descriptive only: they prescribe
 /// nothing, and a published identity never implies bar mass, plate loading,
 /// channels or any other loading topology.
+///
+/// [interchangeable] declares that results on one instance of this kind are
+/// comparable with results on another (barbells, plates, dumbbells). It is
+/// false unless stated: results on a different instance of most machines are
+/// not comparable, so they neither prefill nor progress the usual track.
 final class EquipmentDefinition {
   EquipmentDefinition._(
     this.id,
     this.name,
     this.notes, [
     this.labels = CatalogLabels.empty,
+    this.interchangeable = false,
   ]);
   factory EquipmentDefinition.fromJson(Object? input) {
     final j = jsonObject(input, 'equipment definition');
-    checkKeys(j, {'id', 'name', 'notes', 'labels'});
+    checkKeys(j, {'id', 'name', 'notes', 'labels', 'interchangeable'});
+    if (j.containsKey('interchangeable') && j['interchangeable'] != true)
+      invalid('interchangeable is either true or omitted.');
     final name = j['name'];
     if (name != null &&
         (name is! String || name.trim().isEmpty || name.length > 200)) {
@@ -206,16 +214,19 @@ final class EquipmentDefinition {
       j.containsKey('labels')
           ? CatalogLabels.fromJson(j['labels'])
           : CatalogLabels.empty,
+      j['interchangeable'] == true,
     );
   }
   final String id;
   final String? name, notes;
   final CatalogLabels labels;
+  final bool interchangeable;
   Map<String, Object?> toJson() => {
     'id': id,
     if (name != null) 'name': name,
     if (notes != null) 'notes': notes,
     if (!labels.isEmpty) 'labels': labels.toJson(),
+    if (interchangeable) 'interchangeable': true,
   };
 }
 

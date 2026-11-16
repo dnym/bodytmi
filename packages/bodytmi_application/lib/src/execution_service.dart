@@ -513,6 +513,7 @@ final class ExecutionService {
           extraSets: current.extraSets,
           revision: current.revision,
           variantSelections: current.variantSelections,
+          gymId: current.gymId,
           startedAt: current.startedAt,
           startOffsetMinutes: current.startOffsetMinutes,
           sets: [

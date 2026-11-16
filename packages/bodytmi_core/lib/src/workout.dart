@@ -1005,6 +1005,7 @@ final class TrainingSession {
     List<PrescriptionOverrideRecord> prescriptionOverrides = const [],
     Map<String, LoadInputSnapshot> loadInputs = const {},
     required Map<String, String> variantSelections,
+    required this.gymId,
   }) : sets = List.unmodifiable(sets),
        extraSets = List.unmodifiable(extraSets),
        variantSelections = Map.unmodifiable({
@@ -1017,6 +1018,7 @@ final class TrainingSession {
        initialBodyMassOverrides = initialBodyMassOverrides == null
            ? null
            : Map.unmodifiable(initialBodyMassOverrides) {
+    if (gymId != null) identifier({'gym': gymId}, 'gym');
     checkOffsetMinutes(startOffsetMinutes, 'startedAt');
     checkOffsetMinutes(finishOffsetMinutes, 'finishedAt');
     if (finishedAt == null && finishOffsetMinutes != 0)
@@ -1102,6 +1104,10 @@ final class TrainingSession {
       set.performedOn ?? loadInputs[set.slotId]?.instance;
   final String id;
   final WorkoutRevision revision;
+
+  /// The gym the session was started at, when one was selected. It records
+  /// where the work happened; instance bindings stay per slot.
+  final String? gymId;
 
   /// Frozen variant selections (variant ID → branch value) chosen at start.
   final Map<String, String> variantSelections;
@@ -1223,6 +1229,7 @@ final class TrainingSession {
       derivedPlanInput: derivedPlanInput,
       prescriptionOverrides: prescriptionOverrides,
       variantSelections: variantSelections,
+      gymId: gymId,
     );
   }
 
@@ -1254,6 +1261,7 @@ final class TrainingSession {
       endedAt: endedAt,
       contentVersion: contentVersion + 1,
       variantSelections: variantSelections,
+      gymId: gymId,
     );
   }
 
@@ -1274,6 +1282,7 @@ final class TrainingSession {
       'endedAt': formatInstant(endedAt!, finishOffsetMinutes),
     'status': status.name,
     'contentVersion': contentVersion,
+    if (gymId != null) 'gym': gymId,
     if (variantSelections.isNotEmpty) 'variantSelections': variantSelections,
     'sets': [
       for (final set in sets)

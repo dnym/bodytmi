@@ -1,4 +1,5 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'gym_binding.dart';
 import 'load_arrangement_status.dart';
 import 'training_repository.dart';
 
@@ -52,10 +53,9 @@ final class EquipmentService {
           final frozen = session.instanceOf(entry);
           if (frozen == null) continue;
           final latest = await instanceRevision(frozen.instanceId);
-          current[frozen.instanceId] = LoadInstanceReference(
-            latest.instance.id,
-            latest.instance,
-            latest.number,
+          current[frozen.instanceId] = instanceReference(
+            latest,
+            await repository.equipmentRevisions(),
           );
         }
         return arrangementStatus(session, currentInstances: current);

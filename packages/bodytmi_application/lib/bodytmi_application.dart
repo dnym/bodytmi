@@ -36,6 +36,7 @@ export 'src/training_analytics.dart';
 export 'src/family_service.dart';
 export 'src/catalog_service.dart';
 export 'src/equipment_service.dart';
+export 'src/gym_binding.dart';
 export 'src/preset_service.dart';
 export 'src/catalog_search.dart';
 export 'src/save_back.dart';

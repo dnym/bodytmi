@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "id": "legs-at-brothers",
+  "templateId": "legs",
+  "revision": 1,
+  "startedAt": "2026-11-20T10:00:00+01:00",
+  "gym": "brothers-garage",
+  "loadBindings": {"press": "garage-leg-press"},
+  "unboundSlots": ["pulldown"]
+}

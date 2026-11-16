@@ -16,6 +16,7 @@ final class TrainingService {
     Map<String, LoadConvention> loadConventions = const {},
     Map<String, Map<String, String>> progressedSettings = const {},
     Map<String, String>? variantSelections,
+    String? gymId,
   }) {
     identifier({'id': sessionId}, 'id');
     // Variants resolve once: explicit selections, else each lever's default.
@@ -128,6 +129,12 @@ final class TrainingService {
                   canonicalJson(set.performedSettings) ==
                       canonicalJson(planned) &&
                   set.ordinal == ordinal &&
+                  // Another machine of a non-interchangeable kind (another
+                  // gym's leg press) is not this slot's history.
+                  comparableInstances(
+                    past.instanceOf(set),
+                    loadInstances[slot.id],
+                  ) &&
                   set.eligibleForPerformance &&
                   !set.maxEffortMetrics.contains(metric) &&
                   set.criteria[metric]?.mode != 'observe' &&
@@ -180,6 +187,7 @@ final class TrainingService {
       bodyMassInputs: massInputs,
       loadInputs: loadInputs,
       variantSelections: selections,
+      gymId: gymId,
     );
   }
 
@@ -220,6 +228,7 @@ final class TrainingService {
       extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
+      gymId: session.gymId,
       startedAt: session.startedAt,
       startOffsetMinutes: session.startOffsetMinutes,
       sets: session.sets,
@@ -290,6 +299,7 @@ final class TrainingService {
       extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
+      gymId: session.gymId,
       startedAt: session.startedAt,
       startOffsetMinutes: session.startOffsetMinutes,
       sets: session.sets,
@@ -470,6 +480,7 @@ final class TrainingService {
     id: session.id,
     revision: session.revision,
     variantSelections: session.variantSelections,
+    gymId: session.gymId,
     startedAt: session.startedAt,
     startOffsetMinutes: session.startOffsetMinutes,
     sets: session.sets,
@@ -702,6 +713,7 @@ final class TrainingService {
       extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
+      gymId: session.gymId,
       startedAt: session.startedAt,
       startOffsetMinutes: session.startOffsetMinutes,
       sets: sets,
@@ -778,6 +790,7 @@ final class TrainingService {
       extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
+      gymId: session.gymId,
       startedAt: session.startedAt,
       startOffsetMinutes: session.startOffsetMinutes,
       sets: [
@@ -1038,6 +1051,7 @@ final class TrainingService {
     extraSets: [for (final set in session.extraSets) replaced[set.id] ?? set],
     revision: session.revision,
     variantSelections: session.variantSelections,
+    gymId: session.gymId,
     startedAt: session.startedAt,
     startOffsetMinutes: session.startOffsetMinutes,
     sets: [for (final set in session.sets) replaced[set.id] ?? set],

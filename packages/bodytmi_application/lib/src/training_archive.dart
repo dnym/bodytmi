@@ -441,7 +441,7 @@ final class TrainingArchive {
     validateEquipmentRevisions(equipment);
     validateGymRevisions(gyms);
     validateEquipmentInstanceRevisions(instances, equipment, gyms);
-    validateLoadInputReferences(sessions, instances);
+    validateLoadInputReferences(sessions, instances, gyms);
     validateDerivedTargetGraphRevisions(graphs);
     validateProgramPlanReferences(programRevisions, graphs);
     validateTimingData(timers, sessions);
@@ -581,15 +581,20 @@ final class TrainingArchive {
 }
 
 /// A frozen session instance reference must exist as the corresponding
-/// published instance revision with exactly the same snapshot content.
+/// published instance revision with exactly the same snapshot content, and a
+/// session's gym must be a published gym.
 void validateLoadInputReferences(
   List<TrainingSession> sessions,
   List<EquipmentInstanceRevision> instances,
+  List<GymRevision> gyms,
 ) {
   final published = {
     for (final r in instances) '${r.instance.id}\u0000${r.number}': r,
   };
+  final gymIds = {for (final r in gyms) r.gym.id};
   for (final session in sessions) {
+    if (session.gymId != null && !gymIds.contains(session.gymId))
+      invalid('Session ${session.id} names an unpublished gym.');
     for (final reference in [
       for (final entry in session.loadInputs.entries) entry.value.instance,
       for (final set in session.sets) set.performedOn,

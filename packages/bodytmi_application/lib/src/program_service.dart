@@ -385,6 +385,8 @@ final class ProgramService {
     Map<String, String> loadBindings = const {},
     Map<String, LoadConvention> loadConventions = const {},
     Map<String, Map<String, String>> variantSettings = const {},
+    String? gym,
+    Set<String> unboundSlots = const {},
   }) => repository.transaction(() async {
     final current = await run(runId);
     final bindings = await repository.sessionPrograms();
@@ -405,7 +407,13 @@ final class ProgramService {
           session.startedAt != at ||
           session.startOffsetMinutes != offsetMinutes ||
           !sameBodyMassOverrides(session, bodyMassOverrides) ||
-          !sameLoadInputs(session, loadBindings, loadConventions) ||
+          !sameLoadInputs(
+            session,
+            loadBindings,
+            loadConventions,
+            gym: gym,
+            unbound: unboundSlots,
+          ) ||
           canonicalJson(session.derivedPlanInput?.reference.toJson()) !=
               canonicalJson(effectivePlan?.toJson()))
         programConflict('Session identity belongs to another occurrence.');
@@ -446,6 +454,8 @@ final class ProgramService {
       loadBindings: loadBindings,
       loadConventions: loadConventions,
       variantSettings: variantSettings,
+      gym: gym,
+      unboundSlots: unboundSlots,
     );
   });
   Future<ProgramReceipt> skip(

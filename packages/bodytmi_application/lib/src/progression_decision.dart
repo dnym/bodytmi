@@ -28,6 +28,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     this.preset,
     Metrics? previousReference,
     this.countSubstitutes = false,
+    this.countOtherInstance = false,
   }) : rule = _freeze(rule) as Map<String, Object?>,
        previousReference = previousReference == null
            ? null
@@ -94,7 +95,10 @@ final class ProgressionDecision implements ProgressionAnchor {
       'preset',
       'previousReference',
       'countSubstitutes',
+      'countOtherInstance',
     });
+    if (j.containsKey('countOtherInstance') && j['countOtherInstance'] != true)
+      invalid('countOtherInstance must be true when stored.');
     if (j.containsKey('countSubstitutes') && j['countSubstitutes'] != true)
       invalid('countSubstitutes must be true when stored.');
     int count(String key, int min) {
@@ -140,6 +144,7 @@ final class ProgressionDecision implements ProgressionAnchor {
           ? metricsFromJson(j['previousReference'])
           : null,
       countSubstitutes: j['countSubstitutes'] == true,
+      countOtherInstance: j['countOtherInstance'] == true,
     );
     if (canonicalJson(j['proposal']) !=
         canonicalJson(decision.proposal.toJson()))
@@ -180,6 +185,11 @@ final class ProgressionDecision implements ProgressionAnchor {
   /// the slot's own track: they read as the original prescription, with the
   /// controlled lever done as planned and performance as recorded.
   final bool countSubstitutes;
+
+  /// Provenance: the person explicitly counted work done on another,
+  /// non-interchangeable instance (another gym's machine) toward this track,
+  /// which then continues from that instance.
+  final bool countOtherInstance;
   int get cursor => declinedAt != null ? previousCursor : proposal.cursor;
   late final Set<String> controlledMetrics = ruleType == 'double'
       ? {
@@ -343,6 +353,7 @@ final class ProgressionDecision implements ProgressionAnchor {
         preset: preset,
         previousReference: previousReference,
         countSubstitutes: countSubstitutes,
+        countOtherInstance: countOtherInstance,
       );
   ProgressionDecision decline(DateTime at) => ProgressionDecision(
     session: session,
@@ -361,6 +372,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     preset: preset,
     previousReference: previousReference,
     countSubstitutes: countSubstitutes,
+    countOtherInstance: countOtherInstance,
   );
   Map<String, Object?> toJson() => {
     'session': session.toJson(),
@@ -383,6 +395,7 @@ final class ProgressionDecision implements ProgressionAnchor {
     if (preset case (:final id, :final revision))
       'preset': {'id': id, 'revision': revision},
     if (countSubstitutes) 'countSubstitutes': true,
+    if (countOtherInstance) 'countOtherInstance': true,
   };
 }
 

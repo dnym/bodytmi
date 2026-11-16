@@ -368,6 +368,7 @@ void analyticsTests() {
             extraSets: const [],
             revision: session.revision,
             variantSelections: session.variantSelections,
+            gymId: session.gymId,
             startedAt: session.startedAt,
             startOffsetMinutes: session.startOffsetMinutes,
             sets: session.sets,

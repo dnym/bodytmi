@@ -1,5 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'canonical_json.dart';
+import 'progression_decision.dart';
+import 'shared_track_view.dart';
 
 /// One durable progression baseline for a run/slot/role context. It is either a
 /// resolved exposure decision or an explicit reconciliation that re-anchors the
@@ -167,4 +169,13 @@ List<Map<String, String>> resizedSettings(
   final first = canonicalJson(settings.first);
   if (settings.any((s) => canonicalJson(s) != first)) return settings;
   return List.filled(count, settings.first);
+}
+
+/// The instance the track last progressed on: the anchoring decision's
+/// frozen session binding for its slot. Receipts and retirements record no
+/// instance, so they never separate a visit from the usual equipment.
+LoadInstanceReference? anchorInstance(ProgressionAnchor? anchor) {
+  final local = anchor is SharedTrackView ? anchor.local : anchor;
+  if (local is! ProgressionDecision) return null;
+  return local.session.loadInputs[local.slotId]?.instance;
 }

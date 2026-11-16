@@ -135,6 +135,7 @@ const storedCommandNames = [
   'store add-set',
   'store remove-set',
   'store arrange-status',
+  'store gym-check',
   'store skip',
   'store skip-remaining',
   'store skip-slot',
@@ -310,8 +311,17 @@ Future<Map<String, Object?>> executeStored(
       'loadBindings',
       'loadConventions',
       'variants',
+      'gym',
+      'unboundSlots',
     },
     'store show' => {'id'},
+    'store gym-check' => {
+      'templateId',
+      'revision',
+      'gym',
+      'loadBindings',
+      'unboundSlots',
+    },
     'store load-status' => {'id'},
     'store arrange-status' => {'id'},
     'store assess-objectives' => {'id', 'setId', 'objectives'},
@@ -720,6 +730,7 @@ Future<Map<String, Object?>> executeStored(
       'ruleType',
       'preset',
       'countSubstitutes',
+      'countOtherInstance',
     },
     'progression track' => {
       'templateId',
@@ -848,6 +859,8 @@ Future<Map<String, Object?>> executeStored(
       'loadBindings',
       'loadConventions',
       'variants',
+      'gym',
+      'unboundSlots',
     },
     'run skip' => {'runId', 'expectedVersion', 'requestId', 'skippedAt'},
     'run upgrade' => {
@@ -874,6 +887,17 @@ Future<Map<String, Object?>> executeStored(
     final value = request[key] ?? false;
     if (value is! bool) invalid('$key must be a boolean.');
     return value;
+  }
+
+  Set<String> unboundSlots() {
+    if (request['unboundSlots'] == null) return const {};
+    final ids = <String>{};
+    for (final item in jsonList(request, 'unboundSlots')) {
+      if (!ids.add(identifier({'unboundSlots': item}, 'unboundSlots')))
+        invalid('unboundSlots names a slot twice.');
+    }
+    if (ids.isEmpty) invalid('unboundSlots, when given, names a slot.');
+    return ids;
   }
 
   if (command == 'archive validate') {
@@ -1721,6 +1745,8 @@ Future<Map<String, Object?>> executeStored(
           loadBindings: loadBindingsFromJson(request['loadBindings']),
           loadConventions: loadConventionsFromJson(request['loadConventions']),
           variantSettings: variantSettingsFromJson(request['variants']),
+          gym: request['gym'] == null ? null : identifier(request, 'gym'),
+          unboundSlots: unboundSlots(),
         )).toJson();
       case 'run skip':
         final runId = identifier(request, 'runId');
@@ -1907,6 +1933,7 @@ Future<Map<String, Object?>> executeStored(
                   ? null
                   : (id: preset.preset.id, revision: preset.number),
               countSubstitutes: flag('countSubstitutes'),
+              countOtherInstance: flag('countOtherInstance'),
             ),
             'progression accept' => await progression.accept(
               sessionId,
@@ -1996,11 +2023,22 @@ Future<Map<String, Object?>> executeStored(
           loadBindings: loadBindingsFromJson(request['loadBindings']),
           loadConventions: loadConventionsFromJson(request['loadConventions']),
           variantSettings: variantSettingsFromJson(request['variants']),
+          gym: request['gym'] == null ? null : identifier(request, 'gym'),
+          unboundSlots: unboundSlots(),
+        )).toJson();
+      case 'store gym-check':
+        data = (await service.gymCheck(
+          identifier(request, 'templateId'),
+          integer('revision'),
+          identifier(request, 'gym'),
+          loadBindings: loadBindingsFromJson(request['loadBindings']),
+          unboundSlots: unboundSlots(),
         )).toJson();
       case 'store load-status':
         data = await store.transaction(() async {
           final session = await service.session(identifier(request, 'id'));
           final revisions = await store.equipmentInstanceRevisions();
+          final equipment = await store.equipmentRevisions();
           final latest = <String, EquipmentInstanceRevision>{};
           for (final r in revisions) {
             final prior = latest[r.instance.id];
@@ -2020,11 +2058,7 @@ Future<Map<String, Object?>> executeStored(
                   final found = id == null ? null : latest[id];
                   return found == null
                       ? null
-                      : LoadInstanceReference(
-                          found.instance.id,
-                          found.instance,
-                          found.number,
-                        );
+                      : instanceReference(found, equipment);
                 })(),
             },
           );
@@ -2712,11 +2746,7 @@ Future<Map<String, Object?>> executeStored(
                 ).instanceRevision(identifier(request, 'instanceId'));
           final reference = instance == null
               ? null
-              : LoadInstanceReference(
-                  instance.instance.id,
-                  instance.instance,
-                  instance.number,
-                );
+              : instanceReference(instance, await store.equipmentRevisions());
           final session = await service.edit(
             identifier(request, 'id'),
             integer('expectedVersion'),

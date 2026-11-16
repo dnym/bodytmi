@@ -6,9 +6,15 @@ import 'load_convention.dart';
 
 /// One equipment instance snapshot frozen into a session start. The snapshot
 /// is authoritative provenance: later instance revisions, gym moves or
-/// loading changes never rewrite it.
+/// loading changes never rewrite it. [interchangeable] freezes the equipment
+/// definition's declaration at the same moment.
 final class LoadInstanceReference {
-  LoadInstanceReference(this.instanceId, this.snapshot, this.revision) {
+  LoadInstanceReference(
+    this.instanceId,
+    this.snapshot,
+    this.revision, {
+    this.interchangeable = false,
+  }) {
     if (revision < 1)
       invalid('An instance reference needs a positive revision.');
     if (snapshot.id != instanceId)
@@ -17,27 +23,42 @@ final class LoadInstanceReference {
 
   factory LoadInstanceReference.fromJson(Object? input) {
     final j = jsonObject(input, 'load instance reference');
-    checkKeys(j, {'instanceId', 'revision', 'snapshot'});
+    checkKeys(j, {'instanceId', 'revision', 'snapshot', 'interchangeable'});
     final revision = j['revision'];
     if (revision is! int)
       invalid('An instance reference needs a positive revision.');
+    if (j.containsKey('interchangeable') && j['interchangeable'] != true)
+      invalid('interchangeable is either true or omitted.');
     return LoadInstanceReference(
       identifier(j, 'instanceId'),
       EquipmentInstance.fromJson(j['snapshot']),
       revision,
+      interchangeable: j['interchangeable'] == true,
     );
   }
 
   final String instanceId;
   final EquipmentInstance snapshot;
   final int revision;
+  final bool interchangeable;
 
   Map<String, Object?> toJson() => {
     'instanceId': instanceId,
     'revision': revision,
     'snapshot': snapshot.toJson(),
+    if (interchangeable) 'interchangeable': true,
   };
 }
+
+/// Whether results on [a] and [b] belong to one comparable context. Unknown
+/// instances never separate history (older sessions bound nothing); the same
+/// instance always compares; different instances compare only when both
+/// froze an interchangeable equipment declaration.
+bool comparableInstances(LoadInstanceReference? a, LoadInstanceReference? b) =>
+    a == null ||
+    b == null ||
+    a.instanceId == b.instanceId ||
+    (a.interchangeable && b.interchangeable);
 
 /// Frozen load entry context for one slot: which equipment instance the
 /// session bound (with its pinned revision snapshot), which entry convention

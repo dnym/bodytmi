@@ -336,10 +336,14 @@ final class NativeBackup {
         }
         validateEquipmentInstanceRevisions(instances, equipment, gyms);
         {
-          validateLoadInputReferences([
-            for (final row in db.select('SELECT snapshot FROM sessions'))
-              sessionFromJson(jsonDecode(row['snapshot'] as String)),
-          ], instances);
+          validateLoadInputReferences(
+            [
+              for (final row in db.select('SELECT snapshot FROM sessions'))
+                sessionFromJson(jsonDecode(row['snapshot'] as String)),
+            ],
+            instances,
+            gyms,
+          );
         }
       }
       {

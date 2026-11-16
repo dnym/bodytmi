@@ -132,6 +132,7 @@ TrainingSession _sessionFromJson(Object? input) {
     'derivedPlanInput',
     'prescriptionOverrides',
     'variantSelections',
+    'gym',
     'extraSets',
   });
   if (json['schemaVersion'] != 1)
@@ -157,6 +158,9 @@ TrainingSession _sessionFromJson(Object? input) {
   if ((status == SessionStatus.finalized) != (finishedAt != null) ||
       (finishedAt?.isBefore(startedAt) ?? false))
     invalid('Inconsistent session finish state/time.');
+  final gymId = json['gym'] == null ? null : identifier(json, 'gym');
+  if (json.containsKey('gym') && json['gym'] == null)
+    invalid('A session without a gym omits gym.');
   final variantSelections = json.containsKey('variantSelections')
       ? variantSelectionsFromJson(json['variantSelections'])
       : const <String, String>{};
@@ -452,6 +456,7 @@ TrainingSession _sessionFromJson(Object? input) {
     id: id,
     revision: revision,
     variantSelections: variantSelections,
+    gymId: gymId,
     startedAt: startedAt,
     startOffsetMinutes: startOffset,
     sets: sets,

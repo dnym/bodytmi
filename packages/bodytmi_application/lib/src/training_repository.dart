@@ -1,4 +1,5 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'gym_binding.dart';
 import 'training_service.dart';
 import 'session_codec.dart';
 import 'training_archive.dart';
@@ -281,6 +282,49 @@ final class StoredTrainingService {
   Future<TrainingSession> session(String id) async =>
       await repository.session(id) ?? _missing('Session');
 
+  /// Read-only plan of how gym [gym] binds the slot equipment of a pinned
+  /// workout revision (policy bodytmi-gym-binding/1).
+  Future<GymBindingPlan> gymCheck(
+    String templateId,
+    int number,
+    String gym, {
+    Map<String, String> loadBindings = const {},
+    Set<String> unboundSlots = const {},
+  }) => repository.transaction(() async {
+    final prescription = await revision(templateId, number);
+    return _gymPlan(prescription.definition, gym, loadBindings, unboundSlots);
+  });
+
+  Future<GymBindingPlan> _gymPlan(
+    WorkoutDefinition definition,
+    String gym,
+    Map<String, String> explicit,
+    Set<String> unbound,
+  ) async {
+    if (!(await repository.gymRevisions()).any((r) => r.gym.id == gym))
+      throw BodyTmiException('not_found', 'Gym not found: $gym.');
+    return GymBindingPlan.plan(
+      definition: definition,
+      gymId: gym,
+      instances: await repository.equipmentInstanceRevisions(),
+      explicit: explicit,
+      unbound: unbound,
+    );
+  }
+
+  /// The bindings a start at [gym] uses; refuses before anything is stored
+  /// when a slot's equipment is missing or ambiguous there.
+  Future<Map<String, String>> gymBindings(
+    WorkoutDefinition definition,
+    String gym,
+    Map<String, String> explicit,
+    Set<String> unbound,
+  ) async {
+    final plan = await _gymPlan(definition, gym, explicit, unbound);
+    if (!plan.ready) plan.refuse();
+    return plan.bindings;
+  }
+
   Future<TrainingSession> start(
     String id,
     String templateId,
@@ -293,9 +337,13 @@ final class StoredTrainingService {
     Map<String, String> loadBindings = const {},
     Map<String, LoadConvention> loadConventions = const {},
     Map<String, Map<String, String>> variantSettings = const {},
+    String? gym,
+    Set<String> unboundSlots = const {},
   }) => repository.transaction(() async {
     final runId = programRun?.id;
     final prescription = await revision(templateId, number);
+    if (gym == null && unboundSlots.isNotEmpty)
+      invalid('unboundSlots needs a gym.');
     final existing = await repository.session(id);
     final bindings = await repository.sessionPrograms();
     final runBySession = {for (final b in bindings) b.sessionId: b.runId};
@@ -306,7 +354,13 @@ final class StoredTrainingService {
           existing.startedAt != startedAt ||
           existing.startOffsetMinutes != startOffsetMinutes ||
           !sameBodyMassOverrides(existing, bodyMassOverrides) ||
-          !sameLoadInputs(existing, loadBindings, loadConventions) ||
+          !sameLoadInputs(
+            existing,
+            loadBindings,
+            loadConventions,
+            gym: gym,
+            unbound: unboundSlots,
+          ) ||
           !sameVariantRequest(existing, variantSettings) ||
           canonicalJson(existing.derivedPlanInput?.reference.toJson()) !=
               canonicalJson(derivedPlan?.toJson()))
@@ -469,9 +523,18 @@ final class StoredTrainingService {
       startOffsetMinutes: startOffsetMinutes,
       loadInstances: await _resolveLoadBindings(
         prescription,
-        loadBindings,
+        gym == null
+            ? loadBindings
+            : await gymBindings(
+                prescription.definition,
+                gym,
+                loadBindings,
+                unboundSlots,
+              ),
         await repository.equipmentInstanceRevisions(),
+        await repository.equipmentRevisions(),
       ),
+      gymId: gym,
       loadConventions: loadConventions,
       // Prefill is opt-in per slot and scoped to this workout template, so
       // other templates' sessions (and all history, when nothing prefills)
@@ -679,6 +742,7 @@ final class StoredTrainingService {
       extraSets: next.extraSets,
       revision: next.revision,
       variantSelections: next.variantSelections,
+      gymId: next.gymId,
       startedAt: next.startedAt,
       startOffsetMinutes: next.startOffsetMinutes,
       finishOffsetMinutes: next.finishOffsetMinutes,
@@ -920,6 +984,7 @@ final class StoredTrainingService {
       extraSets: current.extraSets,
       revision: current.revision,
       variantSelections: current.variantSelections,
+      gymId: current.gymId,
       startedAt: current.startedAt,
       startOffsetMinutes: current.startOffsetMinutes,
       sets: result.$1,
@@ -1386,14 +1451,10 @@ Future<Map<String, LoadInstanceReference>> _resolveLoadBindings(
   WorkoutRevision revision,
   Map<String, String> bindings,
   List<EquipmentInstanceRevision> instances,
+  List<EquipmentRevision> equipment,
 ) async {
   if (bindings.isEmpty) return const {};
-  final latest = <String, EquipmentInstanceRevision>{};
-  for (final revisionRow in instances) {
-    final prior = latest[revisionRow.instance.id];
-    if (prior == null || revisionRow.number > prior.number)
-      latest[revisionRow.instance.id] = revisionRow;
-  }
+  final latest = latestInstances(instances);
   for (final slotId in bindings.keys) {
     if (!revision.definition.slots.any((s) => s.id == slotId))
       invalid('Load binding names an unknown slot.');
@@ -1407,11 +1468,7 @@ Future<Map<String, LoadInstanceReference>> _resolveLoadBindings(
             'not_found',
             'Equipment instance not found: ${entry.value}.',
           );
-        return LoadInstanceReference(
-          found.instance.id,
-          found.instance,
-          found.number,
-        );
+        return instanceReference(found, equipment);
       })(),
   };
 }
@@ -1422,11 +1479,20 @@ Future<Map<String, LoadInstanceReference>> _resolveLoadBindings(
 bool sameLoadInputs(
   TrainingSession session,
   Map<String, String> bindings,
-  Map<String, LoadConvention> conventions,
-) {
-  if (bindings.length !=
-      session.loadInputs.values.where((s) => s.instance != null).length)
+  Map<String, LoadConvention> conventions, {
+  String? gym,
+  Set<String> unbound = const {},
+}) {
+  if (session.gymId != gym) return false;
+  // At a gym, automatic bindings came from its inventory at the original
+  // start; the retry must repeat the explicit choices, not the inventory.
+  if (gym != null) {
+    if (unbound.any((id) => session.loadInputs[id]?.instance != null))
+      return false;
+  } else if (bindings.length !=
+      session.loadInputs.values.where((s) => s.instance != null).length) {
     return false;
+  }
   for (final entry in bindings.entries) {
     if (session.loadInputs[entry.key]?.instance?.instanceId != entry.value)
       return false;

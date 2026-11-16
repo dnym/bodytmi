@@ -505,6 +505,7 @@ final class Commands {
           'loadInstances',
           'loadConventions',
           'variants',
+          'gym',
         });
         final history = request['history'] ?? <Object?>[];
         final startRevision = WorkoutRevision.fromJson(request['revision']);
@@ -546,6 +547,7 @@ final class Commands {
               loadConventions: loadConventionsFromJson(
                 request['loadConventions'],
               ),
+              gymId: request['gym'] == null ? null : identifier(request, 'gym'),
             )
             .toJson();
       case 'session load-status':

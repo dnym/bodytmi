@@ -921,6 +921,7 @@ final class WindowCheckpointService {
       extraSets: session.extraSets,
       revision: session.revision,
       variantSelections: session.variantSelections,
+      gymId: session.gymId,
       startedAt: session.startedAt,
       startOffsetMinutes: session.startOffsetMinutes,
       sets: sets,
