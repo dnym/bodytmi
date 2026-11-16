@@ -32,7 +32,7 @@ final class TrainingArchive {
     List<SessionProgramBinding> sessionPrograms = const [],
     List<ProgramReceipt> programReceipts = const [],
     List<ProgramUpgradeReceipt> programUpgrades = const [],
-    List<BodyMassRecord> bodyMass = const [],
+    List<ObservationRecord> observations = const [],
     List<ImportedSessionRecord> importedSessions = const [],
     List<BlockProgressionDecision> blockProgressions = const [],
     List<TimingActivity> timers = const [],
@@ -158,9 +158,9 @@ final class TrainingArchive {
            return ns == 0 ? a.sourceId.compareTo(b.sourceId) : ns;
          }),
        ),
-       bodyMass = List<BodyMassRecord>.unmodifiable(
-         <BodyMassRecord>[...bodyMass]
-           ..sort((a, b) => a.measurement.id.compareTo(b.measurement.id)),
+       observations = List<ObservationRecord>.unmodifiable(
+         <ObservationRecord>[...observations]
+           ..sort((a, b) => a.observation.id.compareTo(b.observation.id)),
        ),
        revisions = List<WorkoutRevision>.unmodifiable(
          <WorkoutRevision>[...revisions]..sort((a, b) {
@@ -218,7 +218,7 @@ final class TrainingArchive {
       'sessionPrograms',
       'programReceipts',
       'programUpgrades',
-      'bodyMass',
+      'observations',
       'importedSessions',
       'blockProgressions',
       'timers',
@@ -307,8 +307,8 @@ final class TrainingArchive {
         for (final j in optional('importedSessions'))
           ImportedSessionRecord.fromJson(j),
       ],
-      bodyMass: [
-        for (final j in optional('bodyMass')) BodyMassRecord.fromJson(j),
+      observations: [
+        for (final j in optional('observations')) ObservationRecord.fromJson(j),
       ],
       programRevisions: [
         for (final j in optional('programRevisions'))
@@ -367,7 +367,16 @@ final class TrainingArchive {
   final List<TimingActivity> timers;
   final List<WindowCheckpoint> windowCheckpoints;
   final List<RepeatCheckpoint> repeatCheckpoints;
-  final List<BodyMassRecord> bodyMass;
+
+  /// Observations of every measure, body mass included.
+  final List<ObservationRecord> observations;
+
+  /// The body-mass observations as body-mass records.
+  late final List<BodyMassRecord> bodyMass = [
+    for (final r in observations)
+      if (r.observation.isBodyMass)
+        BodyMassRecord(r.observation.toBodyMass(), deleted: r.deleted),
+  ];
   final List<ImportedSessionRecord> importedSessions;
   final List<BlockProgressionDecision> blockProgressions;
   final List<WorkoutRevision> revisions;
@@ -399,7 +408,7 @@ final class TrainingArchive {
     'timers': [for (final t in timers) t.toJson()],
     'windowCheckpoints': [for (final c in windowCheckpoints) c.toJson()],
     'repeatCheckpoints': [for (final c in repeatCheckpoints) c.toJson()],
-    'bodyMass': [for (final r in bodyMass) r.toJson()],
+    'observations': [for (final r in observations) r.toJson()],
     'importedSessions': [for (final r in importedSessions) r.toJson()],
     'blockProgressions': [for (final d in blockProgressions) d.toJson()],
     'revisions': [for (final r in revisions) r.toJson()],
@@ -432,7 +441,7 @@ final class TrainingArchive {
     'timers': timers.length,
     'windowCheckpoints': windowCheckpoints.length,
     'repeatCheckpoints': repeatCheckpoints.length,
-    'bodyMass': bodyMass.length,
+    'observations': observations.length,
     'importedSessions': importedSessions.length,
     'blockProgressions': blockProgressions.length,
     'revisions': revisions.length,
@@ -491,8 +500,7 @@ final class TrainingArchive {
     );
     validateExecutionData(executions, sessions, timers);
     validatePlacementCheckpoints(executions, sessions, repeatCheckpoints);
-    if (bodyMass.map((r) => r.measurement.id).toSet().length != bodyMass.length)
-      invalid('Duplicate body-mass observation identity.');
+    validateObservationRecords(observations);
     validateImportedSessions(importedSessions);
     validateBlockProgressions(
       blockProgressions,

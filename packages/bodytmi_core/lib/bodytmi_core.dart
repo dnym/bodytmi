@@ -22,6 +22,7 @@ export 'src/progression_preset.dart';
 export 'src/blueprint.dart';
 export 'src/catalog_import.dart';
 export 'src/measure.dart';
+export 'src/observation.dart';
 
 export 'src/instant.dart';
 export 'src/body_mass.dart';

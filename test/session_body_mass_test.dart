@@ -511,7 +511,7 @@ void sessionBodyMassTests() {
         confirm: true,
       );
       final doc = copyJson((await store.archive()).toJson());
-      jsonList(doc, 'bodyMass').clear();
+      jsonList(doc, 'observations').clear();
       rejects(() => TrainingArchive.fromJson(doc));
       final forged = copyJson(rebound.toJson());
       forged['contentVersion'] = 1;
@@ -1291,7 +1291,7 @@ void sessionBodyMassTests() {
       // never a rewrite of what the session used.
       final archive = (await store.archive()).toJson();
       final missing = copyJson(archive);
-      jsonList(missing, 'bodyMass').clear();
+      jsonList(missing, 'observations').clear();
       jsonEqual(
         TrainingArchive.fromJson(missing).sessions.single.toJson(),
         s.toJson(),
@@ -1299,11 +1299,11 @@ void sessionBodyMassTests() {
       final changed = copyJson(archive);
       jsonObject(
         jsonObject(
-          jsonList(changed, 'bodyMass').single,
+          jsonList(changed, 'observations').single,
           'record',
-        )['measurement'],
-        'measurement',
-      )['mass'] = {
+        )['observation'],
+        'observation',
+      )['value'] = {
         'value': '76',
         'unit': 'kg',
       };

@@ -76,7 +76,7 @@ final class LogicalArchiveFiles {
       'programRuns',
       'sessionPrograms',
       'programReceipts',
-      'bodyMass',
+      'observations',
       'timers',
       'windowCheckpoints',
       'repeatCheckpoints',
@@ -311,10 +311,15 @@ final class LogicalArchiveFiles {
               'INSERT INTO program_upgrade_receipts(run_id,request_id,snapshot) VALUES (?,?,?)',
               [u.runId, u.requestId, canonicalJson(u.toJson())],
             );
-          for (final r in archive.bodyMass) {
+          for (final r in archive.observations) {
             db.execute(
-              'INSERT INTO body_mass_records(id,snapshot) VALUES (?,?)',
-              [r.measurement.id, canonicalJson(r.toJson())],
+              'INSERT INTO observations(id,measure_id,local_date,snapshot) VALUES (?,?,?,?)',
+              [
+                r.observation.id,
+                r.observation.measureId,
+                r.observation.localDate,
+                canonicalJson(r.toJson()),
+              ],
             );
           }
           for (final t in archive.timers) {

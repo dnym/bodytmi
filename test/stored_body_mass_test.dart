@@ -292,7 +292,7 @@ void storedBodyMassTests() {
         }),
       );
       final duplicated = (await store.archive()).toJson();
-      final rows = duplicated['bodyMass']! as List<Object?>;
+      final rows = duplicated['observations']! as List<Object?>;
       rows.add(rows.first);
       rejects(() => TrainingArchive.fromJson(duplicated));
     }),
@@ -357,7 +357,7 @@ void storedBodyMassTests() {
       }
       final raw = sqlite3.open('$dir/native/database.sqlite');
       try {
-        raw.execute("UPDATE body_mass_records SET id='forged' WHERE id='one'");
+        raw.execute("UPDATE observations SET id='forged' WHERE id='one'");
       } finally {
         raw.close();
       }

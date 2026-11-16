@@ -211,7 +211,7 @@ final class NativeBackup {
         'revisions',
         'sessions',
         'progression_decisions',
-        'body_mass_records',
+        'observations',
         'timing_activities',
         'window_checkpoints',
         'repeat_checkpoints',
@@ -736,18 +736,25 @@ final class NativeBackup {
         }
       }
       {
-        final massRecords = <BodyMassRecord>[];
+        final observations = <ObservationRecord>[];
         for (final row in db.select(
-          'SELECT id,snapshot FROM body_mass_records',
+          'SELECT id,measure_id,local_date,snapshot FROM observations',
         )) {
-          final record = BodyMassRecord.fromJson(
+          final record = ObservationRecord.fromJson(
             jsonDecode(row['snapshot'] as String),
           );
-
-          if (record.measurement.id != row['id'])
-            invalid('Body-mass row identity mismatch.');
-          massRecords.add(record);
+          if (record.observation.id != row['id'] ||
+              record.observation.measureId != row['measure_id'] ||
+              record.observation.localDate != row['local_date'])
+            invalid('Observation row identity mismatch.');
+          observations.add(record);
         }
+        validateObservationRecords(observations);
+        final massRecords = [
+          for (final r in observations)
+            if (r.observation.isBodyMass)
+              BodyMassRecord(r.observation.toBodyMass(), deleted: r.deleted),
+        ];
         validateBodyMassInputReferences([
           for (final row in db.select('SELECT snapshot FROM sessions'))
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
@@ -787,8 +794,18 @@ final class NativeBackup {
           runs[binding.sessionId] = binding.runId;
         }
         final records = [
-          for (final row in db.select('SELECT snapshot FROM body_mass_records'))
-            BodyMassRecord.fromJson(jsonDecode(row['snapshot'] as String)),
+          for (final row in db.select(
+            "SELECT snapshot FROM observations WHERE measure_id = 'body-mass'",
+          ))
+            (() {
+              final r = ObservationRecord.fromJson(
+                jsonDecode(row['snapshot'] as String),
+              );
+              return BodyMassRecord(
+                r.observation.toBodyMass(),
+                deleted: r.deleted,
+              );
+            })(),
         ];
         validateDerivedPlanReferences(sessions, graphs, runs, records);
         validateProgramPlanReferences([

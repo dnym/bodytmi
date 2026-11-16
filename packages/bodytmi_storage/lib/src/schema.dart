@@ -9,8 +9,6 @@ const supportedSchemaVersion = 1;
 const schema = {
   'block_progressions':
       'CREATE TABLE "block_progressions" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
-  'body_mass_records':
-      'CREATE TABLE "body_mass_records" ("id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'derived_target_graphs':
       'CREATE TABLE "derived_target_graphs" ("graph_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("graph_id", "number"))',
   'equipment_instance_revisions':
@@ -62,6 +60,10 @@ const schema = {
       'CREATE TABLE "session_programs" ("session_id" TEXT NOT NULL REFERENCES sessions (id), "run_id" TEXT NOT NULL REFERENCES program_runs (id), "ordinal" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("session_id"), UNIQUE ("run_id", "ordinal"))',
   'sessions':
       'CREATE TABLE "sessions" ("id" TEXT NOT NULL, "template_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+  'observations':
+      'CREATE TABLE "observations" ("id" TEXT NOT NULL, "measure_id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+  'observations_measure':
+      'CREATE INDEX observations_measure ON observations (measure_id, local_date)',
   'sessions_template':
       'CREATE INDEX sessions_template ON sessions (template_id)',
   'shared_lever_applications':

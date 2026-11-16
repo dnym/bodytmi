@@ -119,6 +119,17 @@ abstract interface class TrainingRepository {
   Future<void> saveWindowCheckpoint(WindowCheckpoint checkpoint);
   Future<void> deleteWindowCheckpoint(String id);
   Future<List<BodyMassRecord>> bodyMassRecords();
+
+  /// Observations of every measure (body mass included), optionally one
+  /// measure's within local dates [fromDate] (inclusive) to [untilDate]
+  /// (exclusive), YYYY-MM-DD.
+  Future<List<ObservationRecord>> observationRecords({
+    String? measureId,
+    String? fromDate,
+    String? untilDate,
+  });
+  Future<ObservationRecord?> observationRecord(String id);
+  Future<void> saveObservationRecord(ObservationRecord record);
   Future<void> saveBodyMassRecord(BodyMassRecord record);
   Future<List<ImportedSessionRecord>> importedSessions();
   Future<void> saveImportedSession(ImportedSessionRecord record);
@@ -214,7 +225,7 @@ final class StoredTrainingService {
       finalizations: await repository.finalizationIds(),
       progressions: await repository.progressionDecisions(),
       programRevisions: await repository.programRevisions(),
-      bodyMass: await repository.bodyMassRecords(),
+      observations: await repository.observationRecords(),
       importedSessions: await repository.importedSessions(),
       blockProgressions: await repository.blockProgressions(),
       timers: await repository.timingActivities(),

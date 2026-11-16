@@ -4767,16 +4767,38 @@ class ProgramReceiptsCompanion extends UpdateCompanion<ProgramReceipt> {
   }
 }
 
-class $BodyMassRecordsTable extends BodyMassRecords
-    with TableInfo<$BodyMassRecordsTable, BodyMassRecord> {
+class $ObservationsTable extends Observations
+    with TableInfo<$ObservationsTable, StoredObservation> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $BodyMassRecordsTable(this.attachedDatabase, [this._alias]);
+  $ObservationsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _measureIdMeta = const VerificationMeta(
+    'measureId',
+  );
+  @override
+  late final GeneratedColumn<String> measureId = GeneratedColumn<String>(
+    'measure_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localDateMeta = const VerificationMeta(
+    'localDate',
+  );
+  @override
+  late final GeneratedColumn<String> localDate = GeneratedColumn<String>(
+    'local_date',
     aliasedName,
     false,
     type: DriftSqlType.string,
@@ -4794,15 +4816,15 @@ class $BodyMassRecordsTable extends BodyMassRecords
     requiredDuringInsert: true,
   );
   @override
-  List<GeneratedColumn> get $columns => [id, snapshot];
+  List<GeneratedColumn> get $columns => [id, measureId, localDate, snapshot];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'body_mass_records';
+  static const String $name = 'observations';
   @override
   VerificationContext validateIntegrity(
-    Insertable<BodyMassRecord> instance, {
+    Insertable<StoredObservation> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -4811,6 +4833,22 @@ class $BodyMassRecordsTable extends BodyMassRecords
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('measure_id')) {
+      context.handle(
+        _measureIdMeta,
+        measureId.isAcceptableOrUnknown(data['measure_id']!, _measureIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_measureIdMeta);
+    }
+    if (data.containsKey('local_date')) {
+      context.handle(
+        _localDateMeta,
+        localDate.isAcceptableOrUnknown(data['local_date']!, _localDateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localDateMeta);
     }
     if (data.containsKey('snapshot')) {
       context.handle(
@@ -4826,12 +4864,20 @@ class $BodyMassRecordsTable extends BodyMassRecords
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  BodyMassRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+  StoredObservation map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return BodyMassRecord(
+    return StoredObservation(
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
+      )!,
+      measureId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}measure_id'],
+      )!,
+      localDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_date'],
       )!,
       snapshot: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -4841,34 +4887,51 @@ class $BodyMassRecordsTable extends BodyMassRecords
   }
 
   @override
-  $BodyMassRecordsTable createAlias(String alias) {
-    return $BodyMassRecordsTable(attachedDatabase, alias);
+  $ObservationsTable createAlias(String alias) {
+    return $ObservationsTable(attachedDatabase, alias);
   }
 }
 
-class BodyMassRecord extends DataClass implements Insertable<BodyMassRecord> {
+class StoredObservation extends DataClass
+    implements Insertable<StoredObservation> {
   final String id;
+  final String measureId;
+  final String localDate;
   final String snapshot;
-  const BodyMassRecord({required this.id, required this.snapshot});
+  const StoredObservation({
+    required this.id,
+    required this.measureId,
+    required this.localDate,
+    required this.snapshot,
+  });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['measure_id'] = Variable<String>(measureId);
+    map['local_date'] = Variable<String>(localDate);
     map['snapshot'] = Variable<String>(snapshot);
     return map;
   }
 
-  BodyMassRecordsCompanion toCompanion(bool nullToAbsent) {
-    return BodyMassRecordsCompanion(id: Value(id), snapshot: Value(snapshot));
+  ObservationsCompanion toCompanion(bool nullToAbsent) {
+    return ObservationsCompanion(
+      id: Value(id),
+      measureId: Value(measureId),
+      localDate: Value(localDate),
+      snapshot: Value(snapshot),
+    );
   }
 
-  factory BodyMassRecord.fromJson(
+  factory StoredObservation.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return BodyMassRecord(
+    return StoredObservation(
       id: serializer.fromJson<String>(json['id']),
+      measureId: serializer.fromJson<String>(json['measureId']),
+      localDate: serializer.fromJson<String>(json['localDate']),
       snapshot: serializer.fromJson<String>(json['snapshot']),
     );
   }
@@ -4877,72 +4940,105 @@ class BodyMassRecord extends DataClass implements Insertable<BodyMassRecord> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'measureId': serializer.toJson<String>(measureId),
+      'localDate': serializer.toJson<String>(localDate),
       'snapshot': serializer.toJson<String>(snapshot),
     };
   }
 
-  BodyMassRecord copyWith({String? id, String? snapshot}) =>
-      BodyMassRecord(id: id ?? this.id, snapshot: snapshot ?? this.snapshot);
-  BodyMassRecord copyWithCompanion(BodyMassRecordsCompanion data) {
-    return BodyMassRecord(
+  StoredObservation copyWith({
+    String? id,
+    String? measureId,
+    String? localDate,
+    String? snapshot,
+  }) => StoredObservation(
+    id: id ?? this.id,
+    measureId: measureId ?? this.measureId,
+    localDate: localDate ?? this.localDate,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredObservation copyWithCompanion(ObservationsCompanion data) {
+    return StoredObservation(
       id: data.id.present ? data.id.value : this.id,
+      measureId: data.measureId.present ? data.measureId.value : this.measureId,
+      localDate: data.localDate.present ? data.localDate.value : this.localDate,
       snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('BodyMassRecord(')
+    return (StringBuffer('StoredObservation(')
           ..write('id: $id, ')
+          ..write('measureId: $measureId, ')
+          ..write('localDate: $localDate, ')
           ..write('snapshot: $snapshot')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, snapshot);
+  int get hashCode => Object.hash(id, measureId, localDate, snapshot);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is BodyMassRecord &&
+      (other is StoredObservation &&
           other.id == this.id &&
+          other.measureId == this.measureId &&
+          other.localDate == this.localDate &&
           other.snapshot == this.snapshot);
 }
 
-class BodyMassRecordsCompanion extends UpdateCompanion<BodyMassRecord> {
+class ObservationsCompanion extends UpdateCompanion<StoredObservation> {
   final Value<String> id;
+  final Value<String> measureId;
+  final Value<String> localDate;
   final Value<String> snapshot;
   final Value<int> rowid;
-  const BodyMassRecordsCompanion({
+  const ObservationsCompanion({
     this.id = const Value.absent(),
+    this.measureId = const Value.absent(),
+    this.localDate = const Value.absent(),
     this.snapshot = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  BodyMassRecordsCompanion.insert({
+  ObservationsCompanion.insert({
     required String id,
+    required String measureId,
+    required String localDate,
     required String snapshot,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
+       measureId = Value(measureId),
+       localDate = Value(localDate),
        snapshot = Value(snapshot);
-  static Insertable<BodyMassRecord> custom({
+  static Insertable<StoredObservation> custom({
     Expression<String>? id,
+    Expression<String>? measureId,
+    Expression<String>? localDate,
     Expression<String>? snapshot,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (measureId != null) 'measure_id': measureId,
+      if (localDate != null) 'local_date': localDate,
       if (snapshot != null) 'snapshot': snapshot,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  BodyMassRecordsCompanion copyWith({
+  ObservationsCompanion copyWith({
     Value<String>? id,
+    Value<String>? measureId,
+    Value<String>? localDate,
     Value<String>? snapshot,
     Value<int>? rowid,
   }) {
-    return BodyMassRecordsCompanion(
+    return ObservationsCompanion(
       id: id ?? this.id,
+      measureId: measureId ?? this.measureId,
+      localDate: localDate ?? this.localDate,
       snapshot: snapshot ?? this.snapshot,
       rowid: rowid ?? this.rowid,
     );
@@ -4953,6 +5049,12 @@ class BodyMassRecordsCompanion extends UpdateCompanion<BodyMassRecord> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (measureId.present) {
+      map['measure_id'] = Variable<String>(measureId.value);
+    }
+    if (localDate.present) {
+      map['local_date'] = Variable<String>(localDate.value);
     }
     if (snapshot.present) {
       map['snapshot'] = Variable<String>(snapshot.value);
@@ -4965,8 +5067,10 @@ class BodyMassRecordsCompanion extends UpdateCompanion<BodyMassRecord> {
 
   @override
   String toString() {
-    return (StringBuffer('BodyMassRecordsCompanion(')
+    return (StringBuffer('ObservationsCompanion(')
           ..write('id: $id, ')
+          ..write('measureId: $measureId, ')
+          ..write('localDate: $localDate, ')
           ..write('snapshot: $snapshot, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -8091,9 +8195,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
   late final $ProgramReceiptsTable programReceipts = $ProgramReceiptsTable(
     this,
   );
-  late final $BodyMassRecordsTable bodyMassRecords = $BodyMassRecordsTable(
-    this,
-  );
+  late final $ObservationsTable observations = $ObservationsTable(this);
   late final $TimingActivitiesTable timingActivities = $TimingActivitiesTable(
     this,
   );
@@ -8128,6 +8230,10 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     'progression_decisions_track',
     'CREATE INDEX progression_decisions_track ON progression_decisions (template_id, slot_id, run_id, sequence)',
   );
+  late final Index observationsMeasure = Index(
+    'observations_measure',
+    'CREATE INDEX observations_measure ON observations (measure_id, local_date)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -8150,7 +8256,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     programRuns,
     sessionPrograms,
     programReceipts,
-    bodyMassRecords,
+    observations,
     timingActivities,
     workoutExecutions,
     derivedTargetGraphs,
@@ -8165,6 +8271,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     blockProgressions,
     sessionsTemplate,
     progressionDecisionsTrack,
+    observationsMeasure,
   ];
 }
 
@@ -12849,22 +12956,26 @@ typedef $$ProgramReceiptsTableProcessedTableManager =
       ProgramReceipt,
       PrefetchHooks Function({bool runId, bool sessionId})
     >;
-typedef $$BodyMassRecordsTableCreateCompanionBuilder =
-    BodyMassRecordsCompanion Function({
+typedef $$ObservationsTableCreateCompanionBuilder =
+    ObservationsCompanion Function({
       required String id,
+      required String measureId,
+      required String localDate,
       required String snapshot,
       Value<int> rowid,
     });
-typedef $$BodyMassRecordsTableUpdateCompanionBuilder =
-    BodyMassRecordsCompanion Function({
+typedef $$ObservationsTableUpdateCompanionBuilder =
+    ObservationsCompanion Function({
       Value<String> id,
+      Value<String> measureId,
+      Value<String> localDate,
       Value<String> snapshot,
       Value<int> rowid,
     });
 
-class $$BodyMassRecordsTableFilterComposer
-    extends Composer<_$TrainingDatabase, $BodyMassRecordsTable> {
-  $$BodyMassRecordsTableFilterComposer({
+class $$ObservationsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $ObservationsTable> {
+  $$ObservationsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -12876,15 +12987,25 @@ class $$BodyMassRecordsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get measureId => $composableBuilder(
+    column: $table.measureId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get snapshot => $composableBuilder(
     column: $table.snapshot,
     builder: (column) => ColumnFilters(column),
   );
 }
 
-class $$BodyMassRecordsTableOrderingComposer
-    extends Composer<_$TrainingDatabase, $BodyMassRecordsTable> {
-  $$BodyMassRecordsTableOrderingComposer({
+class $$ObservationsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $ObservationsTable> {
+  $$ObservationsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -12896,15 +13017,25 @@ class $$BodyMassRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get measureId => $composableBuilder(
+    column: $table.measureId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get snapshot => $composableBuilder(
     column: $table.snapshot,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$BodyMassRecordsTableAnnotationComposer
-    extends Composer<_$TrainingDatabase, $BodyMassRecordsTable> {
-  $$BodyMassRecordsTableAnnotationComposer({
+class $$ObservationsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $ObservationsTable> {
+  $$ObservationsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -12914,73 +13045,87 @@ class $$BodyMassRecordsTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get measureId =>
+      $composableBuilder(column: $table.measureId, builder: (column) => column);
+
+  GeneratedColumn<String> get localDate =>
+      $composableBuilder(column: $table.localDate, builder: (column) => column);
+
   GeneratedColumn<String> get snapshot =>
       $composableBuilder(column: $table.snapshot, builder: (column) => column);
 }
 
-class $$BodyMassRecordsTableTableManager
+class $$ObservationsTableTableManager
     extends
         RootTableManager<
           _$TrainingDatabase,
-          $BodyMassRecordsTable,
-          BodyMassRecord,
-          $$BodyMassRecordsTableFilterComposer,
-          $$BodyMassRecordsTableOrderingComposer,
-          $$BodyMassRecordsTableAnnotationComposer,
-          $$BodyMassRecordsTableCreateCompanionBuilder,
-          $$BodyMassRecordsTableUpdateCompanionBuilder,
+          $ObservationsTable,
+          StoredObservation,
+          $$ObservationsTableFilterComposer,
+          $$ObservationsTableOrderingComposer,
+          $$ObservationsTableAnnotationComposer,
+          $$ObservationsTableCreateCompanionBuilder,
+          $$ObservationsTableUpdateCompanionBuilder,
           (
-            BodyMassRecord,
+            StoredObservation,
             BaseReferences<
               _$TrainingDatabase,
-              $BodyMassRecordsTable,
-              BodyMassRecord
+              $ObservationsTable,
+              StoredObservation
             >,
           ),
-          BodyMassRecord,
+          StoredObservation,
           PrefetchHooks Function()
         > {
-  $$BodyMassRecordsTableTableManager(
+  $$ObservationsTableTableManager(
     _$TrainingDatabase db,
-    $BodyMassRecordsTable table,
+    $ObservationsTable table,
   ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$BodyMassRecordsTableFilterComposer($db: db, $table: table),
+              $$ObservationsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$BodyMassRecordsTableOrderingComposer($db: db, $table: table),
+              $$ObservationsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$BodyMassRecordsTableAnnotationComposer($db: db, $table: table),
+              $$ObservationsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> measureId = const Value.absent(),
+                Value<String> localDate = const Value.absent(),
                 Value<String> snapshot = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => BodyMassRecordsCompanion(
+              }) => ObservationsCompanion(
                 id: id,
+                measureId: measureId,
+                localDate: localDate,
                 snapshot: snapshot,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String id,
+                required String measureId,
+                required String localDate,
                 required String snapshot,
                 Value<int> rowid = const Value.absent(),
-              }) => BodyMassRecordsCompanion.insert(
+              }) => ObservationsCompanion.insert(
                 id: id,
+                measureId: measureId,
+                localDate: localDate,
                 snapshot: snapshot,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable<$BodyMassRecordsTable, BodyMassRecord>(table),
+                  e.readTable<$ObservationsTable, StoredObservation>(table),
                   BaseReferences<
                     _$TrainingDatabase,
-                    $BodyMassRecordsTable,
-                    BodyMassRecord
+                    $ObservationsTable,
+                    StoredObservation
                   >(db, table, e),
                 ),
               )
@@ -12990,25 +13135,25 @@ class $$BodyMassRecordsTableTableManager
       );
 }
 
-typedef $$BodyMassRecordsTableProcessedTableManager =
+typedef $$ObservationsTableProcessedTableManager =
     ProcessedTableManager<
       _$TrainingDatabase,
-      $BodyMassRecordsTable,
-      BodyMassRecord,
-      $$BodyMassRecordsTableFilterComposer,
-      $$BodyMassRecordsTableOrderingComposer,
-      $$BodyMassRecordsTableAnnotationComposer,
-      $$BodyMassRecordsTableCreateCompanionBuilder,
-      $$BodyMassRecordsTableUpdateCompanionBuilder,
+      $ObservationsTable,
+      StoredObservation,
+      $$ObservationsTableFilterComposer,
+      $$ObservationsTableOrderingComposer,
+      $$ObservationsTableAnnotationComposer,
+      $$ObservationsTableCreateCompanionBuilder,
+      $$ObservationsTableUpdateCompanionBuilder,
       (
-        BodyMassRecord,
+        StoredObservation,
         BaseReferences<
           _$TrainingDatabase,
-          $BodyMassRecordsTable,
-          BodyMassRecord
+          $ObservationsTable,
+          StoredObservation
         >,
       ),
-      BodyMassRecord,
+      StoredObservation,
       PrefetchHooks Function()
     >;
 typedef $$TimingActivitiesTableCreateCompanionBuilder =
@@ -15591,8 +15736,8 @@ class $TrainingDatabaseManager {
       $$SessionProgramsTableTableManager(_db, _db.sessionPrograms);
   $$ProgramReceiptsTableTableManager get programReceipts =>
       $$ProgramReceiptsTableTableManager(_db, _db.programReceipts);
-  $$BodyMassRecordsTableTableManager get bodyMassRecords =>
-      $$BodyMassRecordsTableTableManager(_db, _db.bodyMassRecords);
+  $$ObservationsTableTableManager get observations =>
+      $$ObservationsTableTableManager(_db, _db.observations);
   $$TimingActivitiesTableTableManager get timingActivities =>
       $$TimingActivitiesTableTableManager(_db, _db.timingActivities);
   $$WorkoutExecutionsTableTableManager get workoutExecutions =>

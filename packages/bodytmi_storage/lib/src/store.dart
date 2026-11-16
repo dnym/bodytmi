@@ -11,7 +11,6 @@ import 'database.dart'
         ProgramRevision,
         ProgramRun,
         ProgramReceipt,
-        BodyMassRecord,
         TimingActivity,
         WorkoutExecution;
 import 'database.dart' as rows show ProgressionDecision, Session;
@@ -128,7 +127,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_runs), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM session_programs), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0)
-           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_mass_records), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM observations), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM window_checkpoints), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM repeat_checkpoints), 0)
@@ -1054,29 +1053,83 @@ final class TrainingStore implements TrainingRepository {
     )..where((t) => t.id.equals(id))).go();
   }
 
+  ObservationRecord _observationRow(StoredObservation row) {
+    final record = ObservationRecord.fromJson(jsonDecode(row.snapshot));
+    if (record.observation.id != row.id ||
+        record.observation.measureId != row.measureId ||
+        record.observation.localDate != row.localDate)
+      invalid('Observation row identity mismatch.');
+    return record;
+  }
+
+  @override
+  Future<List<ObservationRecord>> observationRecords({
+    String? measureId,
+    String? fromDate,
+    String? untilDate,
+  }) async {
+    final query = _db.select(_db.observations)
+      ..where(
+        (t) =>
+            (measureId == null
+                ? const Constant(true)
+                : t.measureId.equals(measureId)) &
+            (fromDate == null
+                ? const Constant(true)
+                : t.localDate.isBiggerOrEqualValue(fromDate)) &
+            (untilDate == null
+                ? const Constant(true)
+                : t.localDate.isSmallerThanValue(untilDate)),
+      );
+    return [for (final row in await query.get()) _observationRow(row)];
+  }
+
+  @override
+  Future<ObservationRecord?> observationRecord(String id) async {
+    final row = await (_db.select(
+      _db.observations,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    return row == null ? null : _observationRow(row);
+  }
+
+  @override
+  Future<void> saveObservationRecord(ObservationRecord record) async {
+    await _db
+        .into(_db.observations)
+        .insertOnConflictUpdate(
+          ObservationsCompanion.insert(
+            id: record.observation.id,
+            measureId: record.observation.measureId,
+            localDate: record.observation.localDate,
+            snapshot: _snapshot(record.toJson()),
+          ),
+        );
+  }
+
+  /// Body-mass records are observations of measure `body-mass`.
   @override
   Future<List<BodyMassRecord>> bodyMassRecords() =>
       _cache.list('bodyMassRecords', () async {
-        final result = <BodyMassRecord>[];
-        for (final row in await _db.select(_db.bodyMassRecords).get()) {
-          final record = BodyMassRecord.fromJson(jsonDecode(row.snapshot));
-          if (record.measurement.id != row.id)
-            invalid('Body-mass row identity mismatch.');
-          result.add(record);
-        }
-        return result;
+        return [
+          for (final r in await observationRecords(measureId: 'body-mass'))
+            BodyMassRecord(r.observation.toBodyMass(), deleted: r.deleted),
+        ];
       });
 
   @override
   Future<void> saveBodyMassRecord(BodyMassRecord record) async {
-    await _db
-        .into(_db.bodyMassRecords)
-        .insertOnConflictUpdate(
-          BodyMassRecordsCompanion.insert(
-            id: record.measurement.id,
-            snapshot: _snapshot(record.toJson()),
-          ),
-        );
+    final existing = await observationRecord(record.measurement.id);
+    if (existing != null && !existing.observation.isBodyMass)
+      throw BodyTmiException(
+        'conflict',
+        'Observation ${record.measurement.id} belongs to another measure.',
+      );
+    await saveObservationRecord(
+      ObservationRecord(
+        Observation.fromBodyMass(record.measurement),
+        deleted: record.deleted,
+      ),
+    );
   }
 
   @override

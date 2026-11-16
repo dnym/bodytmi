@@ -171,8 +171,15 @@ class ProgramReceipts extends Table {
   ];
 }
 
-class BodyMassRecords extends Table {
+/// Observations of every measure, including body mass. [measureId] and
+/// [localDate] mirror the snapshot so one measure's history in a date range
+/// is read without decoding the rest; reads verify they match.
+@DataClassName('StoredObservation')
+@TableIndex(name: 'observations_measure', columns: {#measureId, #localDate})
+class Observations extends Table {
   TextColumn get id => text()();
+  TextColumn get measureId => text()();
+  TextColumn get localDate => text()();
   TextColumn get snapshot => text()();
   @override
   Set<Column> get primaryKey => {id};
@@ -303,7 +310,7 @@ class ProgramUpgradeReceipts extends Table {
     ProgramRuns,
     SessionPrograms,
     ProgramReceipts,
-    BodyMassRecords,
+    Observations,
     TimingActivities,
     WorkoutExecutions,
     DerivedTargetGraphs,
