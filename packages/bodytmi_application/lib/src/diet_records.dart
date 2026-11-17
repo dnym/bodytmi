@@ -1,6 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'diary_service.dart';
 import 'diet_service.dart';
+import 'planning_service.dart';
 import 'practice_service.dart';
 import 'sleep_service.dart';
 import 'plan_service.dart';
@@ -29,6 +30,18 @@ final Map<String, _Decoder> _decoders = {
     return ('d${m.date.replaceAll('-', '')}', 1);
   },
   diarySettingsKind: (s) => ('diary', DiarySettingsRevision.fromJson(s).number),
+  goalKind: (s) => (Goal.fromJson(s).id, 1),
+  routineKind: (s) => (Routine.fromJson(s).id, 1),
+  routineCheckKind: (s) {
+    checkKeys(s, {'routineId', 'date', 'at', 'status'});
+    final date = checkDate(s['date'], 'date');
+    parseInstant(s['at'], 'at');
+    if (s['status'] != 'checked' && s['status'] != 'unchecked')
+      invalid('A routine check is checked or unchecked.');
+    return (routineCheckId(identifier(s, 'routineId'), date), 1);
+  },
+  trialKind: (s) => (Trial.fromJson(s).id, 1),
+  savedReviewKind: (s) => (SavedReview.fromJson(s).id, 1),
   practiceKind: (s) {
     final r = PracticeRevision.fromJson(s);
     return (r.practice.id, r.number);
@@ -79,6 +92,7 @@ void validateDietRecords(List<DietRecord> records) {
     [for (final s in of(bodyPlanKind)) BodyPlan.fromJson(s)],
     [for (final s in of(dietRunKind)) DietRun.fromJson(s)],
   );
+  validatePlanningRecords(records);
   validatePlanProposals(
     [for (final s in of(planProposalKind)) PlanProposal.fromJson(s)],
     [for (final s in of(bodyPlanKind)) BodyPlan.fromJson(s)],

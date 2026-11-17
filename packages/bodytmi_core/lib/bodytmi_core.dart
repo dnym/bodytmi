@@ -15,6 +15,7 @@ export 'src/sleep.dart';
 export 'src/sleep_import.dart';
 export 'src/practice.dart';
 export 'src/activity_record.dart';
+export 'src/planning.dart';
 export 'src/activity.dart';
 export 'src/window_repeat.dart';
 export 'src/workout.dart';

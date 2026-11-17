@@ -50,6 +50,8 @@ export 'src/sleep_service.dart';
 export 'src/sleep_import_service.dart';
 export 'src/practice_service.dart';
 export 'src/activity_service.dart';
+export 'src/daily_metrics.dart';
+export 'src/planning_service.dart';
 export 'src/energy_service.dart';
 export 'src/diet_service.dart';
 export 'src/programme_service.dart';
