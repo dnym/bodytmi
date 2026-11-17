@@ -173,6 +173,7 @@ final class PlanService {
     List<String> pauseRuns = const [],
     String context = 'health',
   }) => repository.transaction(() async {
+    if (planId.length > 80) invalid('planId is at most 80 characters.');
     final existing = (await plans()).where((p) => p.id == planId).firstOrNull;
     if (existing != null) {
       if (existing.json['requestId'] == requestId) return existing;

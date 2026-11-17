@@ -102,6 +102,10 @@ const storedCommandNames = [
   'plan activate',
   'plan end',
   'plan show',
+  'plan review',
+  'plan proposals',
+  'plan accept',
+  'plan decline',
   'plan list',
   'stepgoal set',
   'stepgoal list',
@@ -670,6 +674,10 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'plan show' => {'planId'},
+    'plan review' => {'planId', 'asOf', 'policy', 'performanceDropping'},
+    'plan proposals' => {'planId'},
+    'plan accept' => {'proposalId', 'from', 'choices'},
+    'plan decline' => {'proposalId'},
     'plan list' => <String>{},
     'stepgoal set' => {'from', 'steps', 'expectedRevision'},
     'stepgoal list' => <String>{},
@@ -2729,6 +2737,40 @@ Future<Map<String, Object?>> executeStored(
           ],
           confirm: flag('confirm'),
         )).toJson();
+      case 'plan review':
+        final dropping = request['performanceDropping'];
+        if (dropping != null && dropping is! bool)
+          invalid('performanceDropping is true or false.');
+        data = await ReviewService(store).review(
+          identifier(request, 'planId'),
+          requiredString(request, 'asOf'),
+          policy: request['policy'] == null
+              ? 'bodytmi-plan-review/1'
+              : requiredString(request, 'policy'),
+          performanceDropping: dropping == true,
+        );
+      case 'plan proposals':
+        data = [
+          for (final p in await ReviewService(store).proposals(
+            planId: request['planId'] == null
+                ? null
+                : identifier(request, 'planId'),
+          ))
+            p.toJson(),
+        ];
+      case 'plan accept':
+        data = (await ReviewService(store).accept(
+          requiredString(request, 'proposalId'),
+          requiredString(request, 'from'),
+          choices: jsonObject(
+            request['choices'] ?? <String, Object?>{},
+            'choices',
+          ),
+        )).toJson();
+      case 'plan decline':
+        data = (await ReviewService(
+          store,
+        ).decline(requiredString(request, 'proposalId'))).toJson();
       case 'plan show':
         data = (await PlanService(
           store,

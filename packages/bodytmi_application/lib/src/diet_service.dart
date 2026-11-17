@@ -167,8 +167,9 @@ final class DietService {
 
   Future<Map<String, Object?>> _targets(
     Iterable<DayTypeRef> refs,
-    DietInputs inputs,
-  ) async {
+    DietInputs inputs, {
+    double energyOffset = 0,
+  }) async {
     final targets = <String, Object?>{};
     for (final ref in refs) {
       final key = '${ref.id}/${ref.revision}';
@@ -176,7 +177,7 @@ final class DietService {
       final goals = (await dayType(
         ref.id,
         ref.revision,
-      )).dayType.resolve(inputs);
+      )).dayType.resolve(inputs, energyOffset: energyOffset);
       final unavailable = [
         for (final e in goals.entries)
           if ((e.value! as Map)['status'] != 'resolved')
@@ -327,7 +328,8 @@ final class DietService {
     requireDate(from, 'from');
     requireDate(to, 'to');
     if (from == to) invalid('from and to differ.');
-    final a = dietDayOn(run, cycle, from), b = dietDayOn(run, cycle, to);
+    final a = dietDayOn(run, await _cycleOn(run, from), from),
+        b = dietDayOn(run, await _cycleOn(run, to), to);
     if (a == null || b == null) invalid('Both dates must be days of the run.');
     final rest = [
       for (final o in run.overrides)
@@ -354,7 +356,65 @@ final class DietService {
       invalid('A run ends after its start date.');
     if (run.overrides.any((o) => o.date.compareTo(date) >= 0))
       invalid('Remove overrides on or after $date first.');
+    if (run.segments.any((x) => (x['from']! as String).compareTo(date) >= 0))
+      invalid('The run has changes on or after $date.');
     return {'endDate': date};
+  });
+
+  Future<DietCycle> _cycleOn(DietRun run, String date) async {
+    final seg = run.segmentOn(date);
+    return (await cycle(seg.cycleId, seg.cycleRevision)).cycle;
+  }
+
+  /// Adds a dated change to an open run (an accepted review proposal):
+  /// from [from], new frozen [inputs] and/or [energyOffset] (kcal, signed,
+  /// for adjustable day types) and/or another cycle counted from [anchor].
+  /// Earlier dates keep their targets.
+  Future<DietRun> addSegment(
+    String runId,
+    int expectedVersion, {
+    required String from,
+    String? anchor,
+    String? cycleId,
+    int? cycleRevision,
+    Map<String, Object?>? inputs,
+    double? energyOffset,
+    required String reason,
+    String? proposal,
+  }) => _update(runId, expectedVersion, (run, _) async {
+    requireDate(from, 'from');
+    if (run.endDate != null) invalid('The run has ended.');
+    final current = run.segmentOn(from);
+    if (from.compareTo(run.startDate) <= 0 ||
+        run.segments.any((x) => (x['from']! as String).compareTo(from) >= 0))
+      invalid('A change starts after the run start and its latest change.');
+    final cycleRef = (
+      id: cycleId ?? current.cycleId,
+      revision: cycleRevision ?? current.cycleRevision,
+    );
+    final cycle = (await this.cycle(cycleRef.id, cycleRef.revision)).cycle;
+    final frozen = inputs ?? current.inputs;
+    final offset = energyOffset ?? current.energyOffset;
+    final targets = await _targets(
+      cycle.dayTypes,
+      dietInputsOf(frozen),
+      energyOffset: offset,
+    );
+    return {
+      'segments': [
+        ...run.segments,
+        {
+          'from': from,
+          'anchor': anchor ?? current.anchor,
+          'cycle': {'id': cycleRef.id, 'revision': cycleRef.revision},
+          'inputs': frozen,
+          'targets': targets,
+          'energyOffset': round9(offset),
+          'reason': reason,
+          'proposal': ?proposal,
+        },
+      ],
+    };
   });
 
   /// Policy bodytmi-diet-schedule/1: [days] dates from [from], each with
@@ -378,8 +438,9 @@ final class DietService {
         out.add({'date': date, 'run': null});
         continue;
       }
-      final cycle = cycles['${run.cycleId}/${run.cycleRevision}'] ??=
-          (await this.cycle(run.cycleId, run.cycleRevision)).cycle;
+      final seg = run.segmentOn(date);
+      final cycle = cycles['${seg.cycleId}/${seg.cycleRevision}'] ??=
+          (await this.cycle(seg.cycleId, seg.cycleRevision)).cycle;
       final day = dietDayOn(run, cycle, date);
       if (day == null) {
         out.add({
@@ -407,7 +468,11 @@ final class DietService {
         if (day.index != null) 'cycleDay': day.index! + 1,
         if (day.day?.label != null) 'label': day.day!.label,
         if (day.day != null && day.day!.path.isNotEmpty) 'path': day.day!.path,
-        'goals': run.targets[key],
+        if (seg.index > 0) 'segment': seg.index,
+        'goals': type.dayType.resolve(
+          dietInputsOf(seg.inputs),
+          energyOffset: seg.energyOffset,
+        ),
         'steps': ?type.dayType.json['steps'],
         'notes': ?type.dayType.json['notes'],
       });
@@ -457,6 +522,33 @@ void validateDietReferences(
     if (run.endDate != null &&
         run.overrides.any((o) => o.date.compareTo(run.endDate!) >= 0))
       invalid('Diet run ${run.id} has overrides after its end.');
+    for (final seg in run.segments) {
+      final c = seg['cycle']! as Map;
+      final segCycle =
+          cycleKeys['${c['id']}/${c['revision']}'] ??
+          invalid('Diet run ${run.id} changes to an unpublished cycle.');
+      final targets = seg['targets']! as Map<String, Object?>;
+      final segKeys = {
+        for (final r in segCycle.dayTypes) '${r.id}/${r.revision}',
+      };
+      if (segKeys.length != targets.length ||
+          !segKeys.every(targets.containsKey))
+        invalid('Diet run ${run.id} change targets do not match its cycle.');
+      final offset = double.parse(seg['energyOffset']! as String);
+      for (final key in segKeys) {
+        final type =
+            types[key] ??
+            invalid('Diet run ${run.id} uses an unpublished day type.');
+        if (canonicalJson(
+              type.dayType.resolve(
+                dietInputsOf(seg['inputs']! as Map<String, Object?>),
+                energyOffset: offset,
+              ),
+            ) !=
+            canonicalJson(targets[key]))
+          invalid('Diet run ${run.id} change targets do not match inputs.');
+      }
+    }
     if (i > 0) {
       final previous = sorted[i - 1];
       if (previous.endDate == null ||

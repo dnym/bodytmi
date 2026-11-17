@@ -174,6 +174,13 @@ final class DayType {
   String get id => json['id']! as String;
   String get name => json['name']! as String;
 
+  /// Whether review adjustments can shift its energy goal: a single-valued
+  /// energy goal that is not the macro sum (RFL days are their own floor).
+  bool get adjustable {
+    final e = goals['energy'];
+    return e != null && !e.isSum && !e.json.containsKey('minimum');
+  }
+
   /// Inputs this day type needs: maintenance, mass, fat-free-mass.
   Set<String> get needs => {
     for (final g in goals.values)
@@ -182,7 +189,11 @@ final class DayType {
 
   /// Every goal resolved against [inputs], in kcal or g, rounded once to
   /// nine fractional digits; unavailable goals name what is missing.
-  Map<String, Object?> resolve(DietInputs inputs) {
+  ///
+  /// [energyOffset] (kcal, signed) shifts a single-valued energy goal that
+  /// is not the macro sum (an accepted review proposal); a remainder macro
+  /// follows it. An offset that would make energy negative is unavailable.
+  Map<String, Object?> resolve(DietInputs inputs, {double energyOffset = 0}) {
     final values = <String, double>{};
     final out = <String, Map<String, Object?>>{};
     for (final e in goals.entries) {
@@ -216,6 +227,18 @@ final class DayType {
         };
       } else {
         values[e.key] = v;
+      }
+    }
+    if (energyOffset != 0 && values.containsKey('energy')) {
+      final shifted = values['energy']! + energyOffset;
+      if (shifted < 0) {
+        values.remove('energy');
+        out['energy'] = {
+          'status': 'unavailable',
+          'reason': 'The energy adjustment makes the goal negative.',
+        };
+      } else {
+        values['energy'] = shifted;
       }
     }
     const kcalPerGram = {'protein': 4.0, 'carbohydrate': 4.0, 'fat': 9.0};
@@ -263,6 +286,8 @@ final class DayType {
       out[e.key] = {
         'status': 'resolved',
         'value': {'value': round9(e.value), 'unit': goals[e.key]!.unit},
+        if (e.key == 'energy' && energyOffset != 0)
+          'adjustment': {'value': round9(energyOffset), 'unit': 'kcal'},
       };
     }
     return {
@@ -438,6 +463,7 @@ final class DietRun {
       'inputs',
       'targets',
       'overrides',
+      'segments',
       'contentVersion',
     });
     if (j['schemaVersion'] != 1) invalid('Unsupported diet run schemaVersion.');
@@ -467,6 +493,44 @@ final class DietRun {
       if (reason is! String || reason.trim().isEmpty || reason.length > 1000)
         invalid('An override reason is nonempty, at most 1000 characters.');
     }
+    var previous = start;
+    for (final x
+        in j['segments'] == null
+            ? const <Object?>[]
+            : jsonList(j, 'segments')) {
+      final seg = jsonObject(x, 'segment');
+      checkKeys(seg, {
+        'from',
+        'anchor',
+        'cycle',
+        'inputs',
+        'targets',
+        'energyOffset',
+        'reason',
+        'proposal',
+      });
+      final from = requireDate(seg['from'], 'segment from');
+      if (from.compareTo(previous) <= 0)
+        invalid('Segments start after the run start, in order.');
+      previous = from;
+      final anchor = requireDate(seg['anchor'], 'segment anchor');
+      if (anchor.compareTo(start) < 0 || anchor.compareTo(from) > 0)
+        invalid('A segment anchor lies between the run start and its from.');
+      final c = jsonObject(seg['cycle'], 'segment cycle');
+      checkKeys(c, {'id', 'revision'});
+      identifier(c, 'id');
+      if (c['revision'] is! int)
+        invalid('segment cycle revision is an integer.');
+      jsonObject(seg['inputs'], 'segment inputs');
+      jsonObject(seg['targets'], 'segment targets');
+      Decimal.parse(requiredString(seg, 'energyOffset'));
+      requiredString(seg, 'reason');
+      if (seg['proposal'] != null) identifier(seg, 'proposal');
+    }
+    if (j['endDate'] != null &&
+        previous != start &&
+        previous.compareTo(j['endDate']! as String) >= 0)
+      invalid('Segments start before the run end.');
     final version = j['contentVersion'];
     if (version is! int || version < 1) invalid('contentVersion is positive.');
     return DietRun._(Map.unmodifiable(j));
@@ -490,17 +554,46 @@ final class DietRun {
       ),
   ];
 
-  /// The frozen numbers the targets were computed from.
-  DietInputs get frozenInputs {
-    double? v(String key) {
-      final x = inputs[key];
-      return x == null ? null : double.parse((x as Map)['value']! as String);
-    }
+  /// The frozen numbers the start targets were computed from.
+  DietInputs get frozenInputs => dietInputsOf(inputs);
 
+  /// Dated changes after the start (accepted review proposals).
+  List<Map<String, Object?>> get segments => [
+    for (final s in (json['segments'] as List?) ?? const [])
+      s as Map<String, Object?>,
+  ];
+
+  /// The segment in force on [date]: the start, or the latest change.
+  DietSegment segmentOn(String date) {
+    Map<String, Object?>? best;
+    var index = 0;
+    for (final (i, s) in segments.indexed) {
+      if ((s['from']! as String).compareTo(date) <= 0) {
+        best = s;
+        index = i + 1;
+      }
+    }
+    if (best == null)
+      return (
+        from: startDate,
+        anchor: startDate,
+        cycleId: cycleId,
+        cycleRevision: cycleRevision,
+        inputs: inputs,
+        targets: targets,
+        energyOffset: 0,
+        index: 0,
+      );
+    final c = best['cycle']! as Map;
     return (
-      maintenanceKcal: v('maintenance'),
-      massKg: v('mass'),
-      fatFreeMassKg: v('fatFreeMass'),
+      from: best['from']! as String,
+      anchor: best['anchor']! as String,
+      cycleId: c['id']! as String,
+      cycleRevision: c['revision']! as int,
+      inputs: best['inputs']! as Map<String, Object?>,
+      targets: best['targets']! as Map<String, Object?>,
+      energyOffset: double.parse(best['energyOffset']! as String),
+      index: index,
     );
   }
 
@@ -511,6 +604,32 @@ final class DietRun {
   Map<String, Object?> toJson() => json;
   DietRun copyWith(Map<String, Object?> changes) =>
       DietRun.fromJson({...json, ...changes});
+}
+
+/// One stretch of a run with its cycle, frozen inputs and targets, energy
+/// offset and the date its calendar counts from.
+typedef DietSegment = ({
+  String from,
+  String anchor,
+  String cycleId,
+  int cycleRevision,
+  Map<String, Object?> inputs,
+  Map<String, Object?> targets,
+  double energyOffset,
+  int index,
+});
+
+DietInputs dietInputsOf(Map<String, Object?> inputs) {
+  double? v(String key) {
+    final x = inputs[key];
+    return x == null ? null : double.parse((x as Map)['value']! as String);
+  }
+
+  return (
+    maintenanceKcal: v('maintenance'),
+    massKg: v('mass'),
+    fatFreeMassKg: v('fatFreeMass'),
+  );
 }
 
 /// Whole days from [from] to [to].
@@ -534,9 +653,10 @@ String addDays(String date, int days) => DateTime.parse(
 })?
 dietDayOn(DietRun run, DietCycle cycle, String date) {
   if (!run.covers(date)) return null;
+  final anchor = run.segmentOn(date).anchor;
   for (final o in run.overrides) {
     if (o.date == date) {
-      final index = daysBetween(run.startDate, date);
+      final index = daysBetween(anchor, date);
       final inCycle = cycle.loop || index < cycle.days.length;
       return (
         dayType: o.dayType,
@@ -547,7 +667,7 @@ dietDayOn(DietRun run, DietCycle cycle, String date) {
       );
     }
   }
-  final index = daysBetween(run.startDate, date);
+  final index = daysBetween(anchor, date);
   if (!cycle.loop && index >= cycle.days.length) return null;
   final day = cycle.days[index % cycle.days.length];
   return (
