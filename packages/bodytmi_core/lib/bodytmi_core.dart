@@ -28,6 +28,8 @@ export 'src/series_query.dart';
 export 'src/energy.dart';
 export 'src/diet_record.dart';
 export 'src/diet.dart';
+export 'src/programme.dart';
+export 'src/simulation.dart';
 export 'src/resolution.dart';
 export 'src/calculation.dart';
 export 'src/body_profile.dart';

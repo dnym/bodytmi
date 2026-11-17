@@ -56,6 +56,7 @@ const commandNames = [
   'observation import-validate',
   'measure builtins',
   'calc list',
+  'programme list',
   'calc evaluate',
   'session mass-status',
   'session mass-refresh',
@@ -905,6 +906,9 @@ final class Commands {
                 ..sort()),
           'uncheckedCustomMeasures': custom.toList()..sort(),
         };
+      case 'programme list':
+        keys(<String>{});
+        data = [for (final p in dietProgrammes) p.toJson()];
       case 'catalog validate':
         keys({'document'});
         data = CatalogImportDocument.fromJson(request['document']).summary;

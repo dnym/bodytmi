@@ -98,6 +98,9 @@ const storedCommandNames = [
   'energy method',
   'energy methods',
   'energy estimate',
+  'programme guide',
+  'programme compare',
+  'programme apply',
   'daytype publish',
   'daytype show',
   'daytype list',
@@ -105,6 +108,7 @@ const storedCommandNames = [
   'cycle publish',
   'cycle show',
   'cycle list',
+  'cycle guide',
   'diet start',
   'diet show',
   'diet list',
@@ -621,6 +625,25 @@ Future<Map<String, Object?>> executeStored(
     'energy method' => {'from', 'method', 'expectedRevision'},
     'energy methods' => <String>{},
     'energy estimate' => {'asOf', 'context', 'method'},
+    'programme guide' => {
+      'programme',
+      'choices',
+      'asOf',
+      'context',
+      'method',
+      'simulateDays',
+    },
+    'programme compare' => {'choices', 'asOf', 'context', 'simulateDays'},
+    'cycle guide' => {
+      'cycleId',
+      'revision',
+      'asOf',
+      'startDate',
+      'context',
+      'method',
+      'simulateDays',
+    },
+    'programme apply' => {'programme', 'choices', 'asOf', 'prefix', 'context'},
     'daytype publish' => {'dayType', 'expectedRevision'},
     'daytype show' => {'dayTypeId', 'revision'},
     'daytype list' => <String>{},
@@ -2591,6 +2614,66 @@ Future<Map<String, Object?>> executeStored(
         data = [
           for (final m in await EnergyService(store).methods()) m.toJson(),
         ];
+      case 'programme guide':
+        data = await ProgrammeService(store).guide(
+          identifier(request, 'programme'),
+          jsonObject(request['choices'] ?? <String, Object?>{}, 'choices'),
+          requiredString(request, 'asOf'),
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+          method: request['method'] == null
+              ? null
+              : MaintenanceMethod.fromJson(request['method']),
+          simulateDays: request['simulateDays'] == null
+              ? null
+              : integer('simulateDays', min: 1),
+        );
+      case 'cycle guide':
+        data = await ProgrammeService(store).cycleGuide(
+          identifier(request, 'cycleId'),
+          integer('revision', min: 1),
+          requiredString(request, 'asOf'),
+          startDate: request['startDate'] == null
+              ? null
+              : requireDate(request['startDate'], 'startDate'),
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+          method: request['method'] == null
+              ? null
+              : MaintenanceMethod.fromJson(request['method']),
+          simulateDays: request['simulateDays'] == null
+              ? null
+              : integer('simulateDays', min: 1),
+        );
+      case 'programme compare':
+        data = await ProgrammeService(store).compare(
+          {
+            for (final e in jsonObject(
+              request['choices'] ?? <String, Object?>{},
+              'choices',
+            ).entries)
+              e.key: jsonObject(e.value, e.key),
+          },
+          requiredString(request, 'asOf'),
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+          simulateDays: request['simulateDays'] == null
+              ? null
+              : integer('simulateDays', min: 1),
+        );
+      case 'programme apply':
+        data = await ProgrammeService(store).apply(
+          identifier(request, 'programme'),
+          jsonObject(request['choices'] ?? <String, Object?>{}, 'choices'),
+          requiredString(request, 'asOf'),
+          identifier(request, 'prefix'),
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+        );
       case 'daytype publish':
         data = (await DietService(store).publishDayType(
           DayType.fromJson(request['dayType']),

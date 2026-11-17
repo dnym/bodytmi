@@ -108,13 +108,21 @@ final class EnergyService {
     );
   }
 
-  /// Policy bodytmi-energy-estimate/1: the maintenance method in force (or
-  /// [method]) evaluated at [asOfText] from the body report.
-  Future<Map<String, Object?>> estimate(
+  /// Inputs at [asOfText] and the method in force (or [method]).
+  Future<
+    ({
+      EnergyInputs inputs,
+      Map<String, Object?> shown,
+      MaintenanceMethod? method,
+      int? methodRevision,
+      Profile profile,
+    })
+  >
+  resolveInputs(
     String asOfText, {
     String context = 'health',
     MaintenanceMethod? method,
-  }) => repository.transaction(() async {
+  }) async {
     parseInstant(asOfText, 'asOf');
     final asOfDate = asOfText.substring(0, 10);
     final body = BodyService(repository);
@@ -124,26 +132,42 @@ final class EnergyService {
     final selected = method == null
         ? maintenanceMethodOn(asOfDate, await methods())
         : null;
-    final chosen = method ?? selected?.method;
+    return (
+      inputs: inputs,
+      shown: shown,
+      method: method ?? selected?.method,
+      methodRevision: selected?.number,
+      profile: profile,
+    );
+  }
+
+  /// Policy bodytmi-energy-estimate/1: the maintenance method in force (or
+  /// [method]) evaluated at [asOfText] from the body report.
+  Future<Map<String, Object?>> estimate(
+    String asOfText, {
+    String context = 'health',
+    MaintenanceMethod? method,
+  }) => repository.transaction(() async {
+    final r = await resolveInputs(asOfText, context: context, method: method);
     return {
       'policy': 'bodytmi-energy-estimate/1',
       'asOf': asOfText,
       'context': context,
       'methodOrigin': method != null
           ? 'request'
-          : selected == null
+          : r.method == null
           ? 'none'
           : 'selected',
-      'methodRevision': ?selected?.number,
-      'inputs': shown,
-      'maintenance': chosen == null
+      'methodRevision': ?r.methodRevision,
+      'inputs': r.shown,
+      'maintenance': r.method == null
           ? {
               'status': 'unavailable',
               'reason':
                   'No maintenance method is selected; choose one with '
                   'energy method.',
             }
-          : chosen.evaluate(inputs),
+          : r.method!.evaluate(r.inputs),
     };
   });
 }
