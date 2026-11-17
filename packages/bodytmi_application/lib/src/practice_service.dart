@@ -92,10 +92,13 @@ final class PracticeService {
     int? revision,
     required String at,
     Object? before,
+    String? trackId,
   }) => repository.transaction(() async {
     if (id.length > 80) invalid('A practice session id is at most 80.');
     final p = await this.revision(practiceId, revision);
     final ratings = p.practice.checkRatings(before, 'before');
+    if (trackId != null && !p.practice.playlist.any((t) => t['id'] == trackId))
+      invalid('Practice $practiceId has no track $trackId.');
     final next = PracticeSession.fromJson({
       'schemaVersion': 1,
       'id': id,
@@ -105,6 +108,7 @@ final class PracticeService {
       'clockId': clockIdOf(id),
       'status': 'active',
       if (ratings.isNotEmpty) 'before': ratings,
+      'trackId': ?trackId,
     });
     final existing = (await sessions()).where((s) => s.id == id).firstOrNull;
     if (existing != null) {

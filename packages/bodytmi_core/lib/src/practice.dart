@@ -45,6 +45,7 @@ final class PracticeDefinition {
       'preparationSeconds',
       'phases',
       'ratings',
+      'playlist',
     });
     identifier(j, 'id');
     final name = requiredString(j, 'name');
@@ -69,6 +70,29 @@ final class PracticeDefinition {
       ratings.add(rating);
     }
     if (ratings.length > 16) invalid('A practice has at most 16 ratings.');
+    if (j['playlist'] != null) {
+      final tracks = jsonList(j, 'playlist');
+      if (tracks.isEmpty || tracks.length > 200)
+        invalid('A playlist has 1–200 tracks.');
+      final trackIds = <String>{};
+      for (final t in tracks) {
+        final x = jsonObject(t, 'track');
+        checkKeys(x, {'id', 'title', 'file', 'sha256', 'durationSeconds'});
+        if (!trackIds.add(identifier(x, 'id')))
+          invalid('Duplicate track ${x['id']}.');
+        final title = requiredString(x, 'title');
+        if (title.length > 200) invalid('A track title is at most 200.');
+        final file = requiredString(x, 'file');
+        if (file.length > 1000) invalid('A track file is at most 1000.');
+        final hash = x['sha256'];
+        if (hash != null &&
+            (hash is! String || !RegExp(r'^[0-9a-f]{64}$').hasMatch(hash)))
+          invalid('A track sha256 is 64 lowercase hex digits.');
+        final d = x['durationSeconds'];
+        if (d != null && (d is! int || d < 1 || d > 86400))
+          invalid('A track duration is 1–86400 seconds.');
+      }
+    }
     final def = PracticeDefinition._(Map.unmodifiable(j), ratings);
     def.plan;
     return def;
@@ -77,6 +101,14 @@ final class PracticeDefinition {
   final List<PracticeRating> ratings;
   String get id => json['id']! as String;
   int? get durationSeconds => json['durationSeconds'] as int?;
+
+  /// Your own audio for a guided practice: references to files you supply
+  /// (the app stores the reference and an optional SHA-256 to recognise the
+  /// file, never the audio). Playback belongs to the GUI.
+  List<Map<String, Object?>> get playlist => [
+    for (final t in (json['playlist'] as List?) ?? const [])
+      t as Map<String, Object?>,
+  ];
 
   /// The clock plan: the duration as the effort target (a timer running out
   /// awaits confirmation), or open-ended without one.
@@ -156,8 +188,10 @@ final class PracticeSession {
       'actual',
       'confirmedAt',
       'notes',
+      'trackId',
     });
     if (j['schemaVersion'] != 1) invalid('Invalid practice session.');
+    if (j['trackId'] != null) identifier(j, 'trackId');
     identifier(j, 'id');
     final v = j['version'];
     if (v is! int || v < 1) invalid('version must be positive.');
@@ -235,6 +269,9 @@ void validatePractices(
         byKey['${s.practiceId}/${s.practiceRevision}'] ??
         invalid('Practice session ${s.id} pins an unpublished practice.');
     p.practice.checkRatings(s.json['before'], 'before');
+    final track = s.json['trackId'];
+    if (track != null && !p.practice.playlist.any((t) => t['id'] == track))
+      invalid('Practice session ${s.id} names a track not in its playlist.');
     p.practice.checkRatings(s.json['after'], 'after');
     if (s.clockId == null) continue;
     final clock =
@@ -256,4 +293,38 @@ void validatePractices(
     if (!sessions.any((s) => s.clockId == c.id))
       invalid('Practice clock ${c.id} has no session.');
   }
+}
+
+/// Box breathing: inhale, hold, exhale and hold for equal durations,
+/// repeated. Shipped with its source (D22).
+PracticeDefinition boxBreathingPractice({
+  String id = 'box-breathing',
+  required int secondsPerSide,
+  int durationSeconds = 300,
+}) {
+  if (secondsPerSide < 2 || secondsPerSide > 20)
+    invalid('secondsPerSide is from 2 to 20.');
+  final ms = secondsPerSide * 1000;
+  return PracticeDefinition.fromJson({
+    'id': id,
+    'name': 'Box breathing ($secondsPerSide s per side)',
+    'kind': 'breathing',
+    'durationSeconds': durationSeconds,
+    'phases': {
+      'phases': [
+        {'id': 'inhale', 'milliseconds': ms},
+        {'id': 'hold-in', 'milliseconds': ms},
+        {'id': 'exhale', 'milliseconds': ms},
+        {'id': 'hold-out', 'milliseconds': ms},
+      ],
+    },
+    'source':
+        'Box breathing as defined in Balban MY, Neri E, Kogon MM, et al. '
+        '"Brief structured respiration practices enhance mood and reduce '
+        'physiological arousal." Cell Reports Medicine 2023;4(1):100895 '
+        '(doi:10.1016/j.xcrm.2022.100895, PMC9873947): equal inhalation, '
+        'retention and exhalation, practised 5 minutes daily in a randomised '
+        'study. All breathwork conditions improved mood more than '
+        'mindfulness meditation; exhale-focused cyclic sighing did most.',
+  });
 }

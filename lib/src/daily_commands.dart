@@ -7,6 +7,7 @@ import 'timing_runner.dart';
 /// Practice and activity commands (stage 5).
 const dailyCommandNames = [
   'practice define',
+  'practice box-breathing',
   'practice show',
   'practice list',
   'practice start',
@@ -38,7 +39,20 @@ Future<Map<String, Object?>> executeDaily(
     'practice define' => {'practice', 'expectedRevision'},
     'practice show' => {'practiceId', 'revision'},
     'practice list' => <String>{},
-    'practice start' => {'id', 'practiceId', 'revision', 'at', 'before'},
+    'practice start' => {
+      'id',
+      'practiceId',
+      'revision',
+      'at',
+      'before',
+      'trackId',
+    },
+    'practice box-breathing' => {
+      'id',
+      'secondsPerSide',
+      'durationSeconds',
+      'expectedRevision',
+    },
     'practice run' => {'id', 'runForMilliseconds', 'stream'},
     'practice recover' => {'id', 'at', 'adjustmentMilliseconds'},
     'practice end' => {'id', 'at'},
@@ -120,6 +134,19 @@ Future<Map<String, Object?>> executeDaily(
             integer('expectedRevision', min: 0),
           )).toJson(),
         );
+      case 'practice box-breathing':
+        return ok(
+          (await practices.define(
+            boxBreathingPractice(
+              id: request['id'] == null
+                  ? 'box-breathing'
+                  : identifier(request, 'id'),
+              secondsPerSide: integer('secondsPerSide'),
+              durationSeconds: optionalInt('durationSeconds') ?? 300,
+            ),
+            integer('expectedRevision', min: 0),
+          )).toJson(),
+        );
       case 'practice show':
         return ok(
           (await practices.revision(
@@ -141,6 +168,9 @@ Future<Map<String, Object?>> executeDaily(
           revision: optionalInt('revision'),
           at: requiredString(request, 'at'),
           before: request['before'],
+          trackId: request['trackId'] == null
+              ? null
+              : identifier(request, 'trackId'),
         );
         return ok({
           ...started.session.toJson(),

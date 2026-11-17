@@ -111,4 +111,52 @@ void practiceTests() {
     // Confirmation needs an ended clock.
     rejects(() => clock('a').confirmPractice(DateTime.utc(2026, 11, 18, 8), 2));
   });
+
+  test('box breathing and guided playlists', () {
+    final box = boxBreathingPractice(secondsPerSide: 10);
+    final phases = box.plan.tempo!.toJson()['phases']! as List;
+    equal(phases.length, 4);
+    check(phases.every((p) => (p as Map)['milliseconds'] == 10000));
+    equal(box.plan.effortMilliseconds, 300000);
+    check((box.json['source']! as String).contains('PMC9873947'));
+    rejects(() => boxBreathingPractice(secondsPerSide: 30));
+    final guided = PracticeDefinition.fromJson({
+      'id': 'body-scan',
+      'name': 'Body scan',
+      'kind': 'meditation',
+      'playlist': [
+        {
+          'id': 'scan-20',
+          'title': 'Body scan, 20 min',
+          'file': 'meditation/body-scan-20.mp3',
+          'sha256': '0' * 64,
+          'durationSeconds': 1200,
+        },
+      ],
+    });
+    equal(guided.playlist.single['id'], 'scan-20');
+    rejects(
+      () => PracticeDefinition.fromJson({
+        'id': 'x',
+        'name': 'X',
+        'playlist': [
+          {'id': 'a', 'title': 'A', 'file': 'a.mp3', 'sha256': 'abc'},
+        ],
+      }),
+    );
+    final revision = PracticeRevision.publish(guided);
+    PracticeSession session(String track) => PracticeSession.fromJson({
+      'schemaVersion': 1,
+      'id': 's',
+      'version': 1,
+      'practice': {'id': 'body-scan', 'revision': 1},
+      'startedAt': '2026-11-18T21:00:00+01:00',
+      'status': 'confirmed',
+      'confirmedAt': '2026-11-18T21:20:00+01:00',
+      'actual': {'milliseconds': 1200000, 'source': 'manual'},
+      'trackId': track,
+    });
+    validatePractices([revision], [session('scan-20')], []);
+    rejects(() => validatePractices([revision], [session('other')], []));
+  });
 }
