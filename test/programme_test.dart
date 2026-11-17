@@ -103,6 +103,26 @@ void programmeTests() {
       ((fat * 39.5 + lean * 7.6) + 180000 * 0.004184).abs() < 0.01,
       'energy',
     );
+    // Hall 2008 (Int J Obes 32:573, eq. on p. 2), closed form with the
+    // Lambert W function: ΔL/ΔBW = 1 + Fi/ΔBW − (10.4/ΔBW)
+    // W{e^(ΔBW/10.4) Fi e^(Fi/10.4) / 10.4}. The simulated path matches it.
+    double lambertW(double x) {
+      var w = math.log(x + 1);
+      for (var i = 0; i < 100; i++) {
+        w -= (w * math.exp(w) - x) / (math.exp(w) * (w + 1));
+      }
+      return w;
+    }
+
+    final dBW = fat + lean;
+    final hall =
+        1 +
+        30 / dBW -
+        10.4 /
+            dBW *
+            lambertW(math.exp(dBW / 10.4) * 30 * math.exp(30 / 10.4) / 10.4);
+    check((lean / dBW - hall).abs() < 1e-3, 'Hall share $hall');
+
     // The lean share grows as fat falls: leaner people lose more lean.
     final lean20 = simulateEnergyBalance(
       startDate: '2026-01-01',
