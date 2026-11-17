@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "dataset": "data/food/slv.json.gz",
+  "number": 202
+}

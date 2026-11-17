@@ -144,6 +144,17 @@ abstract interface class TrainingRepository {
   Future<void> saveDietRecord(DietRecord record);
   Future<void> insertBodyFatSourceRevision(BodyFatSourceRevision revision);
   Future<void> saveObservationRecord(ObservationRecord record);
+
+  /// Food revisions, all or one food's, ordered by id then number.
+  Future<List<FoodRevision>> foodRevisions({String? foodId});
+  Future<void> insertFoodRevision(FoodRevision revision);
+
+  /// Diary entries with diary dates from [fromDate] (inclusive) to
+  /// [untilDate] (exclusive), ordered by time then id.
+  Future<List<DiaryEntry>> diaryEntries({String? fromDate, String? untilDate});
+  Future<DiaryEntry?> diaryEntry(String id);
+  Future<void> saveDiaryEntry(DiaryEntry entry);
+  Future<void> deleteDiaryEntry(String id);
   Future<void> saveBodyMassRecord(BodyMassRecord record);
   Future<List<ImportedSessionRecord>> importedSessions();
   Future<void> saveImportedSession(ImportedSessionRecord record);
@@ -240,6 +251,8 @@ final class StoredTrainingService {
       progressions: await repository.progressionDecisions(),
       programRevisions: await repository.programRevisions(),
       observations: await repository.observationRecords(),
+      foods: await repository.foodRevisions(),
+      diaryEntries: await repository.diaryEntries(),
       measures: await repository.measureRevisions(),
       seriesPolicies: await repository.seriesPolicies(),
       profile: await repository.profileRevisions(),

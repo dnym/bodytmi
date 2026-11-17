@@ -77,6 +77,8 @@ final class LogicalArchiveFiles {
       'sessionPrograms',
       'programReceipts',
       'observations',
+      'foods',
+      'diaryEntries',
       'measures',
       'seriesPolicies',
       'profile',
@@ -355,6 +357,18 @@ final class LogicalArchiveFiles {
                 r.observation.localDate,
                 canonicalJson(r.toJson()),
               ],
+            );
+          }
+          for (final f in archive.foods) {
+            db.execute(
+              'INSERT INTO food_revisions(food_id,number,snapshot) VALUES (?,?,?)',
+              [f.food.id, f.number, canonicalJson(f.toJson())],
+            );
+          }
+          for (final e in archive.diaryEntries) {
+            db.execute(
+              'INSERT INTO diary_entries(id,local_date,snapshot) VALUES (?,?,?)',
+              [e.id, e.date, canonicalJson(e.toJson())],
             );
           }
           for (final t in archive.timers) {

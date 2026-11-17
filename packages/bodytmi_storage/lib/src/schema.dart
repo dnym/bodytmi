@@ -70,6 +70,12 @@ const schema = {
       'CREATE TABLE "body_fat_sources" ("number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("number"))',
   'diet_records':
       'CREATE TABLE "diet_records" ("kind" TEXT NOT NULL, "id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("kind", "id", "number"))',
+  'food_revisions':
+      'CREATE TABLE "food_revisions" ("food_id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("food_id", "number"))',
+  'diary_entries':
+      'CREATE TABLE "diary_entries" ("id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+  'diary_entries_date':
+      'CREATE INDEX diary_entries_date ON diary_entries (local_date)',
   'observations':
       'CREATE TABLE "observations" ("id" TEXT NOT NULL, "measure_id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'observations_measure':

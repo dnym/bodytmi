@@ -3,6 +3,11 @@ library;
 
 export 'src/errors.dart';
 export 'src/quantity.dart';
+export 'src/fraction.dart';
+export 'src/nutrient.dart';
+export 'src/food.dart';
+export 'src/diary.dart';
+export 'src/food_dataset.dart';
 export 'src/activity.dart';
 export 'src/window_repeat.dart';
 export 'src/workout.dart';

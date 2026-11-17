@@ -6327,6 +6327,537 @@ class ObservationsCompanion extends UpdateCompanion<StoredObservation> {
   }
 }
 
+class $FoodRevisionsTable extends FoodRevisions
+    with TableInfo<$FoodRevisionsTable, StoredFoodRevision> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FoodRevisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _foodIdMeta = const VerificationMeta('foodId');
+  @override
+  late final GeneratedColumn<String> foodId = GeneratedColumn<String>(
+    'food_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [foodId, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'food_revisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredFoodRevision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('food_id')) {
+      context.handle(
+        _foodIdMeta,
+        foodId.isAcceptableOrUnknown(data['food_id']!, _foodIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_foodIdMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {foodId, number};
+  @override
+  StoredFoodRevision map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredFoodRevision(
+      foodId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}food_id'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $FoodRevisionsTable createAlias(String alias) {
+    return $FoodRevisionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredFoodRevision extends DataClass
+    implements Insertable<StoredFoodRevision> {
+  final String foodId;
+  final int number;
+  final String snapshot;
+  const StoredFoodRevision({
+    required this.foodId,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['food_id'] = Variable<String>(foodId);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  FoodRevisionsCompanion toCompanion(bool nullToAbsent) {
+    return FoodRevisionsCompanion(
+      foodId: Value(foodId),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredFoodRevision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredFoodRevision(
+      foodId: serializer.fromJson<String>(json['foodId']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'foodId': serializer.toJson<String>(foodId),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredFoodRevision copyWith({
+    String? foodId,
+    int? number,
+    String? snapshot,
+  }) => StoredFoodRevision(
+    foodId: foodId ?? this.foodId,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredFoodRevision copyWithCompanion(FoodRevisionsCompanion data) {
+    return StoredFoodRevision(
+      foodId: data.foodId.present ? data.foodId.value : this.foodId,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredFoodRevision(')
+          ..write('foodId: $foodId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(foodId, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredFoodRevision &&
+          other.foodId == this.foodId &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class FoodRevisionsCompanion extends UpdateCompanion<StoredFoodRevision> {
+  final Value<String> foodId;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const FoodRevisionsCompanion({
+    this.foodId = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FoodRevisionsCompanion.insert({
+    required String foodId,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : foodId = Value(foodId),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredFoodRevision> custom({
+    Expression<String>? foodId,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (foodId != null) 'food_id': foodId,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FoodRevisionsCompanion copyWith({
+    Value<String>? foodId,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return FoodRevisionsCompanion(
+      foodId: foodId ?? this.foodId,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (foodId.present) {
+      map['food_id'] = Variable<String>(foodId.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FoodRevisionsCompanion(')
+          ..write('foodId: $foodId, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DiaryEntriesTable extends DiaryEntries
+    with TableInfo<$DiaryEntriesTable, StoredDiaryEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DiaryEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localDateMeta = const VerificationMeta(
+    'localDate',
+  );
+  @override
+  late final GeneratedColumn<String> localDate = GeneratedColumn<String>(
+    'local_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, localDate, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'diary_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredDiaryEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('local_date')) {
+      context.handle(
+        _localDateMeta,
+        localDate.isAcceptableOrUnknown(data['local_date']!, _localDateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localDateMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredDiaryEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredDiaryEntry(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      localDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_date'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $DiaryEntriesTable createAlias(String alias) {
+    return $DiaryEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredDiaryEntry extends DataClass
+    implements Insertable<StoredDiaryEntry> {
+  final String id;
+  final String localDate;
+  final String snapshot;
+  const StoredDiaryEntry({
+    required this.id,
+    required this.localDate,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['local_date'] = Variable<String>(localDate);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  DiaryEntriesCompanion toCompanion(bool nullToAbsent) {
+    return DiaryEntriesCompanion(
+      id: Value(id),
+      localDate: Value(localDate),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredDiaryEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredDiaryEntry(
+      id: serializer.fromJson<String>(json['id']),
+      localDate: serializer.fromJson<String>(json['localDate']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'localDate': serializer.toJson<String>(localDate),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredDiaryEntry copyWith({
+    String? id,
+    String? localDate,
+    String? snapshot,
+  }) => StoredDiaryEntry(
+    id: id ?? this.id,
+    localDate: localDate ?? this.localDate,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredDiaryEntry copyWithCompanion(DiaryEntriesCompanion data) {
+    return StoredDiaryEntry(
+      id: data.id.present ? data.id.value : this.id,
+      localDate: data.localDate.present ? data.localDate.value : this.localDate,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredDiaryEntry(')
+          ..write('id: $id, ')
+          ..write('localDate: $localDate, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, localDate, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredDiaryEntry &&
+          other.id == this.id &&
+          other.localDate == this.localDate &&
+          other.snapshot == this.snapshot);
+}
+
+class DiaryEntriesCompanion extends UpdateCompanion<StoredDiaryEntry> {
+  final Value<String> id;
+  final Value<String> localDate;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const DiaryEntriesCompanion({
+    this.id = const Value.absent(),
+    this.localDate = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DiaryEntriesCompanion.insert({
+    required String id,
+    required String localDate,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       localDate = Value(localDate),
+       snapshot = Value(snapshot);
+  static Insertable<StoredDiaryEntry> custom({
+    Expression<String>? id,
+    Expression<String>? localDate,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (localDate != null) 'local_date': localDate,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DiaryEntriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? localDate,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return DiaryEntriesCompanion(
+      id: id ?? this.id,
+      localDate: localDate ?? this.localDate,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (localDate.present) {
+      map['local_date'] = Variable<String>(localDate.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DiaryEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('localDate: $localDate, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TimingActivitiesTable extends TimingActivities
     with TableInfo<$TimingActivitiesTable, TimingActivity> {
   @override
@@ -9454,6 +9985,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     this,
   );
   late final $ObservationsTable observations = $ObservationsTable(this);
+  late final $FoodRevisionsTable foodRevisions = $FoodRevisionsTable(this);
+  late final $DiaryEntriesTable diaryEntries = $DiaryEntriesTable(this);
   late final $TimingActivitiesTable timingActivities = $TimingActivitiesTable(
     this,
   );
@@ -9492,6 +10025,10 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     'observations_measure',
     'CREATE INDEX observations_measure ON observations (measure_id, local_date)',
   );
+  late final Index diaryEntriesDate = Index(
+    'diary_entries_date',
+    'CREATE INDEX diary_entries_date ON diary_entries (local_date)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -9520,6 +10057,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     sessionPrograms,
     programReceipts,
     observations,
+    foodRevisions,
+    diaryEntries,
     timingActivities,
     workoutExecutions,
     derivedTargetGraphs,
@@ -9535,6 +10074,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     sessionsTemplate,
     progressionDecisionsTrack,
     observationsMeasure,
+    diaryEntriesDate,
   ];
 }
 
@@ -15286,6 +15826,368 @@ typedef $$ObservationsTableProcessedTableManager =
       StoredObservation,
       PrefetchHooks Function()
     >;
+typedef $$FoodRevisionsTableCreateCompanionBuilder =
+    FoodRevisionsCompanion Function({
+      required String foodId,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$FoodRevisionsTableUpdateCompanionBuilder =
+    FoodRevisionsCompanion Function({
+      Value<String> foodId,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$FoodRevisionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $FoodRevisionsTable> {
+  $$FoodRevisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get foodId => $composableBuilder(
+    column: $table.foodId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FoodRevisionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $FoodRevisionsTable> {
+  $$FoodRevisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get foodId => $composableBuilder(
+    column: $table.foodId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FoodRevisionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $FoodRevisionsTable> {
+  $$FoodRevisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get foodId =>
+      $composableBuilder(column: $table.foodId, builder: (column) => column);
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$FoodRevisionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $FoodRevisionsTable,
+          StoredFoodRevision,
+          $$FoodRevisionsTableFilterComposer,
+          $$FoodRevisionsTableOrderingComposer,
+          $$FoodRevisionsTableAnnotationComposer,
+          $$FoodRevisionsTableCreateCompanionBuilder,
+          $$FoodRevisionsTableUpdateCompanionBuilder,
+          (
+            StoredFoodRevision,
+            BaseReferences<
+              _$TrainingDatabase,
+              $FoodRevisionsTable,
+              StoredFoodRevision
+            >,
+          ),
+          StoredFoodRevision,
+          PrefetchHooks Function()
+        > {
+  $$FoodRevisionsTableTableManager(
+    _$TrainingDatabase db,
+    $FoodRevisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FoodRevisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FoodRevisionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FoodRevisionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> foodId = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FoodRevisionsCompanion(
+                foodId: foodId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String foodId,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => FoodRevisionsCompanion.insert(
+                foodId: foodId,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$FoodRevisionsTable, StoredFoodRevision>(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $FoodRevisionsTable,
+                    StoredFoodRevision
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FoodRevisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $FoodRevisionsTable,
+      StoredFoodRevision,
+      $$FoodRevisionsTableFilterComposer,
+      $$FoodRevisionsTableOrderingComposer,
+      $$FoodRevisionsTableAnnotationComposer,
+      $$FoodRevisionsTableCreateCompanionBuilder,
+      $$FoodRevisionsTableUpdateCompanionBuilder,
+      (
+        StoredFoodRevision,
+        BaseReferences<
+          _$TrainingDatabase,
+          $FoodRevisionsTable,
+          StoredFoodRevision
+        >,
+      ),
+      StoredFoodRevision,
+      PrefetchHooks Function()
+    >;
+typedef $$DiaryEntriesTableCreateCompanionBuilder =
+    DiaryEntriesCompanion Function({
+      required String id,
+      required String localDate,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$DiaryEntriesTableUpdateCompanionBuilder =
+    DiaryEntriesCompanion Function({
+      Value<String> id,
+      Value<String> localDate,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$DiaryEntriesTableFilterComposer
+    extends Composer<_$TrainingDatabase, $DiaryEntriesTable> {
+  $$DiaryEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DiaryEntriesTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $DiaryEntriesTable> {
+  $$DiaryEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DiaryEntriesTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $DiaryEntriesTable> {
+  $$DiaryEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get localDate =>
+      $composableBuilder(column: $table.localDate, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$DiaryEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $DiaryEntriesTable,
+          StoredDiaryEntry,
+          $$DiaryEntriesTableFilterComposer,
+          $$DiaryEntriesTableOrderingComposer,
+          $$DiaryEntriesTableAnnotationComposer,
+          $$DiaryEntriesTableCreateCompanionBuilder,
+          $$DiaryEntriesTableUpdateCompanionBuilder,
+          (
+            StoredDiaryEntry,
+            BaseReferences<
+              _$TrainingDatabase,
+              $DiaryEntriesTable,
+              StoredDiaryEntry
+            >,
+          ),
+          StoredDiaryEntry,
+          PrefetchHooks Function()
+        > {
+  $$DiaryEntriesTableTableManager(
+    _$TrainingDatabase db,
+    $DiaryEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DiaryEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DiaryEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DiaryEntriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> localDate = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DiaryEntriesCompanion(
+                id: id,
+                localDate: localDate,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String localDate,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => DiaryEntriesCompanion.insert(
+                id: id,
+                localDate: localDate,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$DiaryEntriesTable, StoredDiaryEntry>(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $DiaryEntriesTable,
+                    StoredDiaryEntry
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DiaryEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $DiaryEntriesTable,
+      StoredDiaryEntry,
+      $$DiaryEntriesTableFilterComposer,
+      $$DiaryEntriesTableOrderingComposer,
+      $$DiaryEntriesTableAnnotationComposer,
+      $$DiaryEntriesTableCreateCompanionBuilder,
+      $$DiaryEntriesTableUpdateCompanionBuilder,
+      (
+        StoredDiaryEntry,
+        BaseReferences<
+          _$TrainingDatabase,
+          $DiaryEntriesTable,
+          StoredDiaryEntry
+        >,
+      ),
+      StoredDiaryEntry,
+      PrefetchHooks Function()
+    >;
 typedef $$TimingActivitiesTableCreateCompanionBuilder =
     TimingActivitiesCompanion Function({
       required String id,
@@ -17878,6 +18780,10 @@ class $TrainingDatabaseManager {
       $$ProgramReceiptsTableTableManager(_db, _db.programReceipts);
   $$ObservationsTableTableManager get observations =>
       $$ObservationsTableTableManager(_db, _db.observations);
+  $$FoodRevisionsTableTableManager get foodRevisions =>
+      $$FoodRevisionsTableTableManager(_db, _db.foodRevisions);
+  $$DiaryEntriesTableTableManager get diaryEntries =>
+      $$DiaryEntriesTableTableManager(_db, _db.diaryEntries);
   $$TimingActivitiesTableTableManager get timingActivities =>
       $$TimingActivitiesTableTableManager(_db, _db.timingActivities);
   $$WorkoutExecutionsTableTableManager get workoutExecutions =>

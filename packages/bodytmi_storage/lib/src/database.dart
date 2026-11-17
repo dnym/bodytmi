@@ -229,6 +229,28 @@ class Observations extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Immutable numbered food revisions (base and composite foods).
+@DataClassName('StoredFoodRevision')
+class FoodRevisions extends Table {
+  TextColumn get foodId => text()();
+  IntColumn get number => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {foodId, number};
+}
+
+/// Diary entries. [localDate] mirrors the snapshot's diary date so one day
+/// is read without decoding the rest; reads verify it matches.
+@DataClassName('StoredDiaryEntry')
+@TableIndex(name: 'diary_entries_date', columns: {#localDate})
+class DiaryEntries extends Table {
+  TextColumn get id => text()();
+  TextColumn get localDate => text()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('StoredBlockProgression')
 class BlockProgressions extends Table {
   TextColumn get id => text()();
@@ -360,6 +382,8 @@ class ProgramUpgradeReceipts extends Table {
     SessionPrograms,
     ProgramReceipts,
     Observations,
+    FoodRevisions,
+    DiaryEntries,
     TimingActivities,
     WorkoutExecutions,
     DerivedTargetGraphs,

@@ -212,6 +212,8 @@ final class NativeBackup {
         'sessions',
         'progression_decisions',
         'observations',
+        'food_revisions',
+        'diary_entries',
         'measure_revisions',
         'series_policies',
         'profile_revisions',
@@ -812,6 +814,24 @@ final class NativeBackup {
               jsonObject(jsonDecode(row['snapshot'] as String), 'snapshot'),
             ),
         ]);
+        final foods = <FoodRevision>[];
+        for (final row in db.select('SELECT * FROM food_revisions')) {
+          final f = FoodRevision.fromJson(
+            jsonDecode(row['snapshot'] as String),
+          );
+          if (f.food.id != row['food_id'] || f.number != row['number'])
+            invalid('Food revision row identity mismatch.');
+          foods.add(f);
+        }
+        validateFoodRevisions(foods);
+        final entries = <DiaryEntry>[];
+        for (final row in db.select('SELECT * FROM diary_entries')) {
+          final e = DiaryEntry.fromJson(jsonDecode(row['snapshot'] as String));
+          if (e.id != row['id'] || e.date != row['local_date'])
+            invalid('Diary entry row identity mismatch.');
+          entries.add(e);
+        }
+        validateDiaryEntries(entries, foods);
         final massRecords = [
           for (final r in observations)
             if (r.observation.isBodyMass)

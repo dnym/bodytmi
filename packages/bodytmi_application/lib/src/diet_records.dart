@@ -1,4 +1,5 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'diary_service.dart';
 import 'diet_service.dart';
 import 'plan_service.dart';
 import 'review_service.dart';
@@ -21,6 +22,11 @@ final Map<String, _Decoder> _decoders = {
   bodyPlanKind: (s) => (BodyPlan.fromJson(s).id, 1),
   stepGoalKind: (s) => ('daily', StepGoalRevision.fromJson(s).number),
   planProposalKind: (s) => (PlanProposal.fromJson(s).id, 1),
+  diaryDayKind: (s) {
+    final m = DiaryDayMark.fromJson(s);
+    return ('d${m.date.replaceAll('-', '')}', 1);
+  },
+  diarySettingsKind: (s) => ('diary', DiarySettingsRevision.fromJson(s).number),
   'maintenance-method': (s) {
     final r = MaintenanceMethodRevision.fromJson(s);
     return ('maintenance', r.number);

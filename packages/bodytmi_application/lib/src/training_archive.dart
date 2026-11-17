@@ -34,6 +34,8 @@ final class TrainingArchive {
     List<ProgramReceipt> programReceipts = const [],
     List<ProgramUpgradeReceipt> programUpgrades = const [],
     List<ObservationRecord> observations = const [],
+    List<FoodRevision> foods = const [],
+    List<DiaryEntry> diaryEntries = const [],
     List<MeasureRevision> measures = const [],
     List<SeriesPolicy> seriesPolicies = const [],
     List<ProfileRevision> profile = const [],
@@ -187,6 +189,15 @@ final class TrainingArchive {
            return id == 0 ? a.number.compareTo(b.number) : id;
          }),
        ),
+       foods = List<FoodRevision>.unmodifiable(
+         <FoodRevision>[...foods]..sort((a, b) {
+           final id = a.food.id.compareTo(b.food.id);
+           return id == 0 ? a.number.compareTo(b.number) : id;
+         }),
+       ),
+       diaryEntries = List<DiaryEntry>.unmodifiable(
+         <DiaryEntry>[...diaryEntries]..sort((a, b) => a.id.compareTo(b.id)),
+       ),
        observations = List<ObservationRecord>.unmodifiable(
          <ObservationRecord>[...observations]
            ..sort((a, b) => a.observation.id.compareTo(b.observation.id)),
@@ -248,6 +259,8 @@ final class TrainingArchive {
       'programReceipts',
       'programUpgrades',
       'observations',
+      'foods',
+      'diaryEntries',
       'measures',
       'seriesPolicies',
       'profile',
@@ -360,6 +373,10 @@ final class TrainingArchive {
       observations: [
         for (final j in optional('observations')) ObservationRecord.fromJson(j),
       ],
+      foods: [for (final j in optional('foods')) FoodRevision.fromJson(j)],
+      diaryEntries: [
+        for (final j in optional('diaryEntries')) DiaryEntry.fromJson(j),
+      ],
       programRevisions: [
         for (final j in optional('programRevisions'))
           ProgramRevision.fromJson(j),
@@ -424,6 +441,9 @@ final class TrainingArchive {
   final List<BodyFatSourceRevision> bodyFatSources;
   final List<DietRecord> dietRecords;
 
+  final List<FoodRevision> foods;
+  final List<DiaryEntry> diaryEntries;
+
   /// Observations of every measure, body mass included.
   final List<ObservationRecord> observations;
 
@@ -465,6 +485,8 @@ final class TrainingArchive {
     'windowCheckpoints': [for (final c in windowCheckpoints) c.toJson()],
     'repeatCheckpoints': [for (final c in repeatCheckpoints) c.toJson()],
     'observations': [for (final r in observations) r.toJson()],
+    'foods': [for (final f in foods) f.toJson()],
+    'diaryEntries': [for (final e in diaryEntries) e.toJson()],
     'measures': [for (final m in measures) m.toJson()],
     'seriesPolicies': [for (final p in seriesPolicies) p.toJson()],
     'profile': [for (final p in profile) p.toJson()],
@@ -503,6 +525,8 @@ final class TrainingArchive {
     'windowCheckpoints': windowCheckpoints.length,
     'repeatCheckpoints': repeatCheckpoints.length,
     'observations': observations.length,
+    'foods': foods.length,
+    'diaryEntries': diaryEntries.length,
     'measures': measures.length,
     'seriesPolicies': seriesPolicies.length,
     'profile': profile.length,
@@ -577,6 +601,8 @@ final class TrainingArchive {
       for (final s in bodyFatSources) s.number,
     ], 'Body-fat source');
     validateDietRecords(dietRecords);
+    validateFoodRevisions(foods);
+    validateDiaryEntries(diaryEntries, foods);
     validateImportedSessions(importedSessions);
     validateBlockProgressions(
       blockProgressions,

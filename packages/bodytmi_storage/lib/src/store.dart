@@ -128,6 +128,8 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM session_programs), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM program_receipts), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM observations), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM food_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM diary_entries), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM measure_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM series_policies), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM profile_revisions), 0)
@@ -1110,6 +1112,90 @@ final class TrainingStore implements TrainingRepository {
           ),
         );
   }
+
+  @override
+  Future<List<FoodRevision>> foodRevisions({String? foodId}) =>
+      _cache.list('foodRevisions:${foodId ?? ''}', () async {
+        final query = _db.select(_db.foodRevisions);
+        if (foodId != null) query.where((t) => t.foodId.equals(foodId));
+        query.orderBy([
+          (t) => OrderingTerm(expression: t.foodId),
+          (t) => OrderingTerm(expression: t.number),
+        ]);
+        return [
+          for (final row in await query.get())
+            (() {
+              final r = FoodRevision.fromJson(jsonDecode(row.snapshot));
+              if (r.food.id != row.foodId || r.number != row.number)
+                invalid('Stored food revision identity is inconsistent.');
+              return r;
+            })(),
+        ];
+      });
+
+  @override
+  Future<void> insertFoodRevision(FoodRevision revision) => _db
+      .into(_db.foodRevisions)
+      .insert(
+        FoodRevisionsCompanion.insert(
+          foodId: revision.food.id,
+          number: revision.number,
+          snapshot: _snapshot(revision.toJson()),
+        ),
+      );
+
+  DiaryEntry _diaryRow(StoredDiaryEntry row) {
+    final e = DiaryEntry.fromJson(jsonDecode(row.snapshot));
+    if (e.id != row.id || e.date != row.localDate)
+      invalid('Diary entry row identity mismatch.');
+    return e;
+  }
+
+  @override
+  Future<List<DiaryEntry>> diaryEntries({
+    String? fromDate,
+    String? untilDate,
+  }) async {
+    final query = _db.select(_db.diaryEntries)
+      ..where(
+        (t) =>
+            (fromDate == null
+                ? const Constant(true)
+                : t.localDate.isBiggerOrEqualValue(fromDate)) &
+            (untilDate == null
+                ? const Constant(true)
+                : t.localDate.isSmallerThanValue(untilDate)),
+      );
+    final result = [for (final row in await query.get()) _diaryRow(row)];
+    result.sort((a, b) {
+      final t = a.instant.compareTo(b.instant);
+      return t != 0 ? t : a.id.compareTo(b.id);
+    });
+    return result;
+  }
+
+  @override
+  Future<DiaryEntry?> diaryEntry(String id) async {
+    final row = await (_db.select(
+      _db.diaryEntries,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    return row == null ? null : _diaryRow(row);
+  }
+
+  @override
+  Future<void> saveDiaryEntry(DiaryEntry entry) => _db
+      .into(_db.diaryEntries)
+      .insertOnConflictUpdate(
+        DiaryEntriesCompanion.insert(
+          id: entry.id,
+          localDate: entry.date,
+          snapshot: _snapshot(entry.toJson()),
+        ),
+      );
+
+  @override
+  Future<void> deleteDiaryEntry(String id) =>
+      (_db.delete(_db.diaryEntries)..where((t) => t.id.equals(id))).go();
 
   @override
   Future<List<MeasureRevision>> measureRevisions() =>

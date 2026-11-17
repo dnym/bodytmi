@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "food": {
+    "id": "my-breakfast",
+    "name": "My breakfast",
+    "kind": "composite",
+    "components": [
+      {"food": {"id": "oat-drink", "revision": 1}, "amount": {"value": "200", "unit": "ml"}},
+      {"food": {"id": "slv-202", "revision": 1}, "amount": {"value": "40", "unit": "g"}}
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "entry": {
+    "id": "2026-11-17-breakfast",
+    "at": "2026-11-17T07:30:00+01:00",
+    "meal": "breakfast",
+    "food": {"id": "my-breakfast"},
+    "amount": {"portion": "whole", "count": "1"}
+  }
+}

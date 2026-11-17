@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "food": {
+    "id": "bread-pudding",
+    "name": "Bread pudding",
+    "kind": "composite",
+    "components": [
+      {"food": {"id": "slv-202", "revision": 1}, "amount": {"value": "100", "unit": "g"}},
+      {"food": {"id": "oat-drink", "revision": 1}, "amount": {"value": "5", "unit": "dl"}}
+    ],
+    "batch": {"finalMass": {"value": "1200", "unit": "g"}, "portions": 4}
+  }
+}

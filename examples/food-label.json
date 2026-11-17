@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "food": {
+    "id": "oat-drink",
+    "name": "Oat drink",
+    "labels": {"sv": {"name": "Havredryck"}},
+    "source": {"kind": "label"},
+    "kind": "base",
+    "basis": "100ml",
+    "nutrients": {
+      "energy": {"value": "46", "unit": "kcal"},
+      "protein": {"value": "1", "unit": "g"},
+      "carbohydrate": {"value": "6.7", "unit": "g"},
+      "fat": {"value": "1.5", "unit": "g"},
+      "fibre": {"value": "0.8", "unit": "g"},
+      "salt": {"value": "0.1", "unit": "g"}
+    },
+    "density": {
+      "mass": {"value": "103", "unit": "g"},
+      "volume": {"value": "100", "unit": "ml"}
+    },
+    "portions": [{"id": "glass", "name": "1 glas", "amount": {"value": "2", "unit": "dl"}}]
+  }
+}

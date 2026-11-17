@@ -3,3 +3,4 @@ library;
 
 export 'src/commands.dart';
 export 'src/stored_commands.dart';
+export 'src/food_commands.dart';
