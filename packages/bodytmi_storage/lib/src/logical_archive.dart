@@ -81,6 +81,7 @@ final class LogicalArchiveFiles {
       'seriesPolicies',
       'profile',
       'bodyFatSources',
+      'dietRecords',
       'timers',
       'windowCheckpoints',
       'repeatCheckpoints',
@@ -319,6 +320,12 @@ final class LogicalArchiveFiles {
             db.execute(
               'INSERT INTO profile_revisions(number,snapshot) VALUES (?,?)',
               [p.number, canonicalJson(p.toJson())],
+            );
+          }
+          for (final r in archive.dietRecords) {
+            db.execute(
+              'INSERT INTO diet_records(kind,id,number,snapshot) VALUES (?,?,?,?)',
+              [r.kind, r.id, r.number, canonicalJson(r.snapshot)],
             );
           }
           for (final s in archive.bodyFatSources) {

@@ -74,6 +74,16 @@ class ProfileRevisions extends Table {
   Set<Column> get primaryKey => {number};
 }
 
+@DataClassName('StoredDietRecord')
+class DietRecords extends Table {
+  TextColumn get kind => text()();
+  TextColumn get id => text()();
+  IntColumn get number => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {kind, id, number};
+}
+
 @DataClassName('StoredBodyFatSource')
 class BodyFatSources extends Table {
   IntColumn get number => integer()();
@@ -338,6 +348,7 @@ class ProgramUpgradeReceipts extends Table {
     SeriesPolicies,
     ProfileRevisions,
     BodyFatSources,
+    DietRecords,
     EquipmentRevisions,
     GymRevisions,
     EquipmentInstanceRevisions,

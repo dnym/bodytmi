@@ -25,6 +25,8 @@ export 'src/measure.dart';
 export 'src/observation.dart';
 export 'src/observation_import.dart';
 export 'src/series_query.dart';
+export 'src/energy.dart';
+export 'src/diet_record.dart';
 export 'src/resolution.dart';
 export 'src/calculation.dart';
 export 'src/body_profile.dart';

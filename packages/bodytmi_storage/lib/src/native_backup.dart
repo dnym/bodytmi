@@ -216,6 +216,7 @@ final class NativeBackup {
         'series_policies',
         'profile_revisions',
         'body_fat_sources',
+        'diet_records',
         'timing_activities',
         'window_checkpoints',
         'repeat_checkpoints',
@@ -802,6 +803,15 @@ final class NativeBackup {
               return r.number;
             })(),
         ], 'Body-fat source');
+        validateDietRecords([
+          for (final row in db.select('SELECT * FROM diet_records'))
+            DietRecord(
+              row['kind'] as String,
+              row['id'] as String,
+              row['number'] as int,
+              jsonObject(jsonDecode(row['snapshot'] as String), 'snapshot'),
+            ),
+        ]);
         final massRecords = [
           for (final r in observations)
             if (r.observation.isBodyMass)

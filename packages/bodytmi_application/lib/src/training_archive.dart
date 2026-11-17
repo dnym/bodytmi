@@ -1,3 +1,4 @@
+import 'diet_records.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'blueprint_service.dart';
 import 'derived_plan_session.dart';
@@ -37,6 +38,7 @@ final class TrainingArchive {
     List<SeriesPolicy> seriesPolicies = const [],
     List<ProfileRevision> profile = const [],
     List<BodyFatSourceRevision> bodyFatSources = const [],
+    List<DietRecord> dietRecords = const [],
     List<ImportedSessionRecord> importedSessions = const [],
     List<BlockProgressionDecision> blockProgressions = const [],
     List<TimingActivity> timers = const [],
@@ -166,6 +168,9 @@ final class TrainingArchive {
          <ProfileRevision>[...profile]
            ..sort((a, b) => a.number.compareTo(b.number)),
        ),
+       dietRecords = List<DietRecord>.unmodifiable(
+         <DietRecord>[...dietRecords]..sort((a, b) => a.key.compareTo(b.key)),
+       ),
        bodyFatSources = List<BodyFatSourceRevision>.unmodifiable(
          <BodyFatSourceRevision>[...bodyFatSources]
            ..sort((a, b) => a.number.compareTo(b.number)),
@@ -247,6 +252,7 @@ final class TrainingArchive {
       'seriesPolicies',
       'profile',
       'bodyFatSources',
+      'dietRecords',
       'importedSessions',
       'blockProgressions',
       'timers',
@@ -348,6 +354,9 @@ final class TrainingArchive {
         for (final j in optional('bodyFatSources'))
           BodyFatSourceRevision.fromJson(j),
       ],
+      dietRecords: [
+        for (final j in optional('dietRecords')) DietRecord.fromJson(j),
+      ],
       observations: [
         for (final j in optional('observations')) ObservationRecord.fromJson(j),
       ],
@@ -413,6 +422,7 @@ final class TrainingArchive {
   final List<SeriesPolicy> seriesPolicies;
   final List<ProfileRevision> profile;
   final List<BodyFatSourceRevision> bodyFatSources;
+  final List<DietRecord> dietRecords;
 
   /// Observations of every measure, body mass included.
   final List<ObservationRecord> observations;
@@ -459,6 +469,7 @@ final class TrainingArchive {
     'seriesPolicies': [for (final p in seriesPolicies) p.toJson()],
     'profile': [for (final p in profile) p.toJson()],
     'bodyFatSources': [for (final s in bodyFatSources) s.toJson()],
+    'dietRecords': [for (final r in dietRecords) r.toJson()],
     'importedSessions': [for (final r in importedSessions) r.toJson()],
     'blockProgressions': [for (final d in blockProgressions) d.toJson()],
     'revisions': [for (final r in revisions) r.toJson()],
@@ -496,6 +507,7 @@ final class TrainingArchive {
     'seriesPolicies': seriesPolicies.length,
     'profile': profile.length,
     'bodyFatSources': bodyFatSources.length,
+    'dietRecords': dietRecords.length,
     'importedSessions': importedSessions.length,
     'blockProgressions': blockProgressions.length,
     'revisions': revisions.length,
@@ -564,6 +576,7 @@ final class TrainingArchive {
     validateNumbered([
       for (final s in bodyFatSources) s.number,
     ], 'Body-fat source');
+    validateDietRecords(dietRecords);
     validateImportedSessions(importedSessions);
     validateBlockProgressions(
       blockProgressions,

@@ -41,6 +41,8 @@ export 'src/blueprint_service.dart';
 export 'src/catalog_import_service.dart';
 export 'src/observation_service.dart';
 export 'src/observation_import_service.dart';
+export 'src/diet_records.dart';
+export 'src/energy_service.dart';
 export 'src/body_service.dart';
 export 'src/preset_service.dart';
 export 'src/catalog_search.dart';

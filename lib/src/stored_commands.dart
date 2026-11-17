@@ -95,6 +95,9 @@ const storedCommandNames = [
   'body source',
   'body sources',
   'body report',
+  'energy method',
+  'energy methods',
+  'energy estimate',
   'measure define',
   'measure show',
   'measure list',
@@ -601,6 +604,9 @@ Future<Map<String, Object?>> executeStored(
     'body source' => {'from', 'source', 'expectedRevision'},
     'body sources' => <String>{},
     'body report' => {'asOf', 'context'},
+    'energy method' => {'from', 'method', 'expectedRevision'},
+    'energy methods' => <String>{},
+    'energy estimate' => {'asOf', 'context', 'method'},
     'measure define' => {'measure', 'expectedRevision'},
     'measure show' => {'measureId', 'revision'},
     'measure list' => <String>{},
@@ -2533,6 +2539,26 @@ Future<Map<String, Object?>> executeStored(
         final all = await store.bodyFatSourceRevisions()
           ..sort((a, b) => a.number.compareTo(b.number));
         data = [for (final s in all) s.toJson()];
+      case 'energy method':
+        data = (await EnergyService(store).selectMethod(
+          requiredString(request, 'from'),
+          MaintenanceMethod.fromJson(request['method']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'energy methods':
+        data = [
+          for (final m in await EnergyService(store).methods()) m.toJson(),
+        ];
+      case 'energy estimate':
+        data = await EnergyService(store).estimate(
+          requiredString(request, 'asOf'),
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+          method: request['method'] == null
+              ? null
+              : MaintenanceMethod.fromJson(request['method']),
+        );
       case 'body report':
         data = await BodyService(store).report(
           requiredString(request, 'asOf'),

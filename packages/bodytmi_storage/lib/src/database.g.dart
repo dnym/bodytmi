@@ -2859,6 +2859,313 @@ class BodyFatSourcesCompanion extends UpdateCompanion<StoredBodyFatSource> {
   }
 }
 
+class $DietRecordsTable extends DietRecords
+    with TableInfo<$DietRecordsTable, StoredDietRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DietRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [kind, id, number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'diet_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredDietRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numberMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {kind, id, number};
+  @override
+  StoredDietRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredDietRecord(
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $DietRecordsTable createAlias(String alias) {
+    return $DietRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredDietRecord extends DataClass
+    implements Insertable<StoredDietRecord> {
+  final String kind;
+  final String id;
+  final int number;
+  final String snapshot;
+  const StoredDietRecord({
+    required this.kind,
+    required this.id,
+    required this.number,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['kind'] = Variable<String>(kind);
+    map['id'] = Variable<String>(id);
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  DietRecordsCompanion toCompanion(bool nullToAbsent) {
+    return DietRecordsCompanion(
+      kind: Value(kind),
+      id: Value(id),
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredDietRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredDietRecord(
+      kind: serializer.fromJson<String>(json['kind']),
+      id: serializer.fromJson<String>(json['id']),
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'kind': serializer.toJson<String>(kind),
+      'id': serializer.toJson<String>(id),
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredDietRecord copyWith({
+    String? kind,
+    String? id,
+    int? number,
+    String? snapshot,
+  }) => StoredDietRecord(
+    kind: kind ?? this.kind,
+    id: id ?? this.id,
+    number: number ?? this.number,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredDietRecord copyWithCompanion(DietRecordsCompanion data) {
+    return StoredDietRecord(
+      kind: data.kind.present ? data.kind.value : this.kind,
+      id: data.id.present ? data.id.value : this.id,
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredDietRecord(')
+          ..write('kind: $kind, ')
+          ..write('id: $id, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(kind, id, number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredDietRecord &&
+          other.kind == this.kind &&
+          other.id == this.id &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class DietRecordsCompanion extends UpdateCompanion<StoredDietRecord> {
+  final Value<String> kind;
+  final Value<String> id;
+  final Value<int> number;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const DietRecordsCompanion({
+    this.kind = const Value.absent(),
+    this.id = const Value.absent(),
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DietRecordsCompanion.insert({
+    required String kind,
+    required String id,
+    required int number,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : kind = Value(kind),
+       id = Value(id),
+       number = Value(number),
+       snapshot = Value(snapshot);
+  static Insertable<StoredDietRecord> custom({
+    Expression<String>? kind,
+    Expression<String>? id,
+    Expression<int>? number,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (kind != null) 'kind': kind,
+      if (id != null) 'id': id,
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DietRecordsCompanion copyWith({
+    Value<String>? kind,
+    Value<String>? id,
+    Value<int>? number,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return DietRecordsCompanion(
+      kind: kind ?? this.kind,
+      id: id ?? this.id,
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DietRecordsCompanion(')
+          ..write('kind: $kind, ')
+          ..write('id: $id, ')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $EquipmentRevisionsTable extends EquipmentRevisions
     with TableInfo<$EquipmentRevisionsTable, StoredEquipmentRevision> {
   @override
@@ -9126,6 +9433,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     this,
   );
   late final $BodyFatSourcesTable bodyFatSources = $BodyFatSourcesTable(this);
+  late final $DietRecordsTable dietRecords = $DietRecordsTable(this);
   late final $EquipmentRevisionsTable equipmentRevisions =
       $EquipmentRevisionsTable(this);
   late final $GymRevisionsTable gymRevisions = $GymRevisionsTable(this);
@@ -9200,6 +9508,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     seriesPolicies,
     profileRevisions,
     bodyFatSources,
+    dietRecords,
     equipmentRevisions,
     gymRevisions,
     equipmentInstanceRevisions,
@@ -11207,6 +11516,200 @@ typedef $$BodyFatSourcesTableProcessedTableManager =
         >,
       ),
       StoredBodyFatSource,
+      PrefetchHooks Function()
+    >;
+typedef $$DietRecordsTableCreateCompanionBuilder =
+    DietRecordsCompanion Function({
+      required String kind,
+      required String id,
+      required int number,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$DietRecordsTableUpdateCompanionBuilder =
+    DietRecordsCompanion Function({
+      Value<String> kind,
+      Value<String> id,
+      Value<int> number,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$DietRecordsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $DietRecordsTable> {
+  $$DietRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DietRecordsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $DietRecordsTable> {
+  $$DietRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DietRecordsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $DietRecordsTable> {
+  $$DietRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$DietRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $DietRecordsTable,
+          StoredDietRecord,
+          $$DietRecordsTableFilterComposer,
+          $$DietRecordsTableOrderingComposer,
+          $$DietRecordsTableAnnotationComposer,
+          $$DietRecordsTableCreateCompanionBuilder,
+          $$DietRecordsTableUpdateCompanionBuilder,
+          (
+            StoredDietRecord,
+            BaseReferences<
+              _$TrainingDatabase,
+              $DietRecordsTable,
+              StoredDietRecord
+            >,
+          ),
+          StoredDietRecord,
+          PrefetchHooks Function()
+        > {
+  $$DietRecordsTableTableManager(_$TrainingDatabase db, $DietRecordsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DietRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DietRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DietRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> kind = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DietRecordsCompanion(
+                kind: kind,
+                id: id,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String kind,
+                required String id,
+                required int number,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => DietRecordsCompanion.insert(
+                kind: kind,
+                id: id,
+                number: number,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$DietRecordsTable, StoredDietRecord>(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $DietRecordsTable,
+                    StoredDietRecord
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DietRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $DietRecordsTable,
+      StoredDietRecord,
+      $$DietRecordsTableFilterComposer,
+      $$DietRecordsTableOrderingComposer,
+      $$DietRecordsTableAnnotationComposer,
+      $$DietRecordsTableCreateCompanionBuilder,
+      $$DietRecordsTableUpdateCompanionBuilder,
+      (
+        StoredDietRecord,
+        BaseReferences<_$TrainingDatabase, $DietRecordsTable, StoredDietRecord>,
+      ),
+      StoredDietRecord,
       PrefetchHooks Function()
     >;
 typedef $$EquipmentRevisionsTableCreateCompanionBuilder =
@@ -17347,6 +17850,8 @@ class $TrainingDatabaseManager {
       $$ProfileRevisionsTableTableManager(_db, _db.profileRevisions);
   $$BodyFatSourcesTableTableManager get bodyFatSources =>
       $$BodyFatSourcesTableTableManager(_db, _db.bodyFatSources);
+  $$DietRecordsTableTableManager get dietRecords =>
+      $$DietRecordsTableTableManager(_db, _db.dietRecords);
   $$EquipmentRevisionsTableTableManager get equipmentRevisions =>
       $$EquipmentRevisionsTableTableManager(_db, _db.equipmentRevisions);
   $$GymRevisionsTableTableManager get gymRevisions =>

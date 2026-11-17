@@ -136,6 +136,12 @@ abstract interface class TrainingRepository {
   Future<List<ProfileRevision>> profileRevisions();
   Future<void> insertProfileRevision(ProfileRevision revision);
   Future<List<BodyFatSourceRevision>> bodyFatSourceRevisions();
+
+  /// Energy and diet records of one [kind] (all kinds when null).
+  Future<List<DietRecord>> dietRecords({String? kind});
+
+  /// Inserts or replaces one diet record row.
+  Future<void> saveDietRecord(DietRecord record);
   Future<void> insertBodyFatSourceRevision(BodyFatSourceRevision revision);
   Future<void> saveObservationRecord(ObservationRecord record);
   Future<void> saveBodyMassRecord(BodyMassRecord record);
@@ -238,6 +244,7 @@ final class StoredTrainingService {
       seriesPolicies: await repository.seriesPolicies(),
       profile: await repository.profileRevisions(),
       bodyFatSources: await repository.bodyFatSourceRevisions(),
+      dietRecords: await repository.dietRecords(),
       importedSessions: await repository.importedSessions(),
       blockProgressions: await repository.blockProgressions(),
       timers: await repository.timingActivities(),

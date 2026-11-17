@@ -132,6 +132,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM series_policies), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM profile_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_fat_sources), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM diet_records), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM window_checkpoints), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM repeat_checkpoints), 0)
@@ -1208,6 +1209,42 @@ final class TrainingStore implements TrainingRepository {
               snapshot: _snapshot(revision.toJson()),
             ),
           );
+
+  @override
+  Future<List<DietRecord>> dietRecords({String? kind}) =>
+      _cache.list('dietRecords:${kind ?? ''}', () async {
+        final query = _db.select(_db.dietRecords);
+        if (kind != null) query.where((t) => t.kind.equals(kind));
+        final result = <DietRecord>[];
+        for (final row in await query.get()) {
+          final record = DietRecord(
+            row.kind,
+            row.id,
+            row.number,
+            jsonObject(jsonDecode(row.snapshot), 'snapshot'),
+          );
+          result.add(record);
+        }
+        result.sort((a, b) {
+          final k = a.kind.compareTo(b.kind);
+          if (k != 0) return k;
+          final i = a.id.compareTo(b.id);
+          return i != 0 ? i : a.number.compareTo(b.number);
+        });
+        return result;
+      });
+
+  @override
+  Future<void> saveDietRecord(DietRecord record) => _db
+      .into(_db.dietRecords)
+      .insertOnConflictUpdate(
+        DietRecordsCompanion.insert(
+          kind: record.kind,
+          id: record.id,
+          number: record.number,
+          snapshot: _snapshot(record.snapshot),
+        ),
+      );
 
   /// Body-mass records are observations of measure `body-mass`.
   @override

@@ -68,6 +68,8 @@ const schema = {
       'CREATE TABLE "profile_revisions" ("number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("number"))',
   'body_fat_sources':
       'CREATE TABLE "body_fat_sources" ("number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("number"))',
+  'diet_records':
+      'CREATE TABLE "diet_records" ("kind" TEXT NOT NULL, "id" TEXT NOT NULL, "number" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("kind", "id", "number"))',
   'observations':
       'CREATE TABLE "observations" ("id" TEXT NOT NULL, "measure_id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'observations_measure':
