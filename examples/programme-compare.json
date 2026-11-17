@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "asOf": "2026-11-16T20:00:00+01:00",
+  "simulateDays": 28,
+  "choices": {
+    "normal": {},
+    "rfl": {"activity": "weights", "breakActivity": "light", "breakDays": 14, "dietWeeks": 3, "refeedCarbohydratePerLb": "3"},
+    "erfl": {"walking": {"distanceKm": "20"}, "afterDays": 3},
+    "imf": {"activity": "weights", "pattern": "4:3", "arrangement": "MMRMMRR", "fatPerLb": "0.38"}
+  }
+}

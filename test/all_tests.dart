@@ -99,6 +99,7 @@ import 'diet_test.dart';
 import 'programme_test.dart';
 import 'plan_test.dart';
 import 'review_test.dart';
+import 'stage2_acceptance_test.dart';
 import 'body_report_test.dart';
 import 'unplanned_sets_test.dart';
 import 'tempo_lever_test.dart';
@@ -203,6 +204,7 @@ Future<void> main() async {
   planTests();
   reviewTests();
   reviewBreakTests();
+  stage2AcceptanceTests();
   bodyReportTests();
   unplannedSetsTests();
   tempoLeverTests();

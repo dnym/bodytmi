@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "planId": "erfl-before-wedding",
+  "programme": "erfl",
+  "choices": {"walking": {"steps": 40000}, "afterDays": 3},
+  "startDate": "2026-11-23",
+  "asOf": "2026-11-22T20:00:00+01:00",
+  "requestId": "activate-1",
+  "companions": {"steps": true, "pauseRuns": ["strength"]}
+}
