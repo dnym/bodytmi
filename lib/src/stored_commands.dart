@@ -98,6 +98,20 @@ const storedCommandNames = [
   'energy method',
   'energy methods',
   'energy estimate',
+  'daytype publish',
+  'daytype show',
+  'daytype list',
+  'daytype resolve',
+  'cycle publish',
+  'cycle show',
+  'cycle list',
+  'diet start',
+  'diet show',
+  'diet list',
+  'diet override',
+  'diet move',
+  'diet end',
+  'diet schedule',
   'measure define',
   'measure show',
   'measure list',
@@ -607,6 +621,34 @@ Future<Map<String, Object?>> executeStored(
     'energy method' => {'from', 'method', 'expectedRevision'},
     'energy methods' => <String>{},
     'energy estimate' => {'asOf', 'context', 'method'},
+    'daytype publish' => {'dayType', 'expectedRevision'},
+    'daytype show' => {'dayTypeId', 'revision'},
+    'daytype list' => <String>{},
+    'daytype resolve' => {'dayTypeId', 'revision', 'asOf', 'context', 'method'},
+    'cycle publish' => {'cycle', 'expectedRevision'},
+    'cycle show' => {'cycleId', 'revision'},
+    'cycle list' => <String>{},
+    'diet start' => {
+      'runId',
+      'cycleId',
+      'cycleRevision',
+      'startDate',
+      'asOf',
+      'context',
+      'requestId',
+    },
+    'diet show' => {'runId'},
+    'diet list' => <String>{},
+    'diet override' => {
+      'runId',
+      'date',
+      'dayType',
+      'reason',
+      'expectedVersion',
+    },
+    'diet move' => {'runId', 'from', 'to', 'reason', 'expectedVersion'},
+    'diet end' => {'runId', 'date', 'expectedVersion', 'confirm'},
+    'diet schedule' => {'runId', 'from', 'days'},
     'measure define' => {'measure', 'expectedRevision'},
     'measure show' => {'measureId', 'revision'},
     'measure list' => <String>{},
@@ -2549,6 +2591,98 @@ Future<Map<String, Object?>> executeStored(
         data = [
           for (final m in await EnergyService(store).methods()) m.toJson(),
         ];
+      case 'daytype publish':
+        data = (await DietService(store).publishDayType(
+          DayType.fromJson(request['dayType']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'daytype show':
+        data = (await DietService(store).dayType(
+          identifier(request, 'dayTypeId'),
+          request['revision'] == null ? null : integer('revision', min: 1),
+        )).toJson();
+      case 'daytype list':
+        data = [
+          for (final r in (await DietService(
+            store,
+          ).dayTypes())..sort((a, b) => a.key.compareTo(b.key)))
+            r.toJson(),
+        ];
+      case 'daytype resolve':
+        data = await DietService(store).resolveDayType(
+          identifier(request, 'dayTypeId'),
+          requiredString(request, 'asOf'),
+          revision: request['revision'] == null
+              ? null
+              : integer('revision', min: 1),
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+          method: request['method'] == null
+              ? null
+              : MaintenanceMethod.fromJson(request['method']),
+        );
+      case 'cycle publish':
+        data = (await DietService(store).publishCycle(
+          DietCycle.fromJson(request['cycle']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'cycle show':
+        data = (await DietService(store).cycle(
+          identifier(request, 'cycleId'),
+          request['revision'] == null ? null : integer('revision', min: 1),
+        )).toJson();
+      case 'cycle list':
+        data = [for (final r in await DietService(store).cycles()) r.toJson()];
+      case 'diet start':
+        data = (await DietService(store).start(
+          runId: identifier(request, 'runId'),
+          cycleId: identifier(request, 'cycleId'),
+          cycleRevision: integer('cycleRevision', min: 1),
+          startDate: requiredString(request, 'startDate'),
+          asOfText: requiredString(request, 'asOf'),
+          requestId: identifier(request, 'requestId'),
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+        )).toJson();
+      case 'diet show':
+        data = (await DietService(
+          store,
+        ).run(identifier(request, 'runId'))).toJson();
+      case 'diet list':
+        data = [for (final r in await DietService(store).runs()) r.toJson()];
+      case 'diet override':
+        data = (await DietService(store).override(
+          identifier(request, 'runId'),
+          requiredString(request, 'date'),
+          request['dayType'] == null
+              ? null
+              : dayTypeRefFromJson(request['dayType'], 'dayType'),
+          requiredString(request, 'reason'),
+          integer('expectedVersion', min: 1),
+        )).toJson();
+      case 'diet move':
+        data = (await DietService(store).move(
+          identifier(request, 'runId'),
+          requiredString(request, 'from'),
+          requiredString(request, 'to'),
+          requiredString(request, 'reason'),
+          integer('expectedVersion', min: 1),
+        )).toJson();
+      case 'diet end':
+        data = (await DietService(store).end(
+          identifier(request, 'runId'),
+          requiredString(request, 'date'),
+          integer('expectedVersion', min: 1),
+          confirm: flag('confirm'),
+        )).toJson();
+      case 'diet schedule':
+        data = await DietService(store).schedule(
+          requiredString(request, 'from'),
+          request.containsKey('days') ? integer('days', min: 1) : 14,
+          runId: request['runId'] == null ? null : identifier(request, 'runId'),
+        );
       case 'energy estimate':
         data = await EnergyService(store).estimate(
           requiredString(request, 'asOf'),

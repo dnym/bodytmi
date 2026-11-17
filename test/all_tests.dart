@@ -95,6 +95,7 @@ import 'observation_import_test.dart';
 import 'series_query_test.dart';
 import 'stage1_acceptance_test.dart';
 import 'energy_test.dart';
+import 'diet_test.dart';
 import 'body_report_test.dart';
 import 'unplanned_sets_test.dart';
 import 'tempo_lever_test.dart';
@@ -194,6 +195,7 @@ Future<void> main() async {
   seriesQueryTests();
   stage1AcceptanceTests();
   energyTests();
+  dietTests();
   bodyReportTests();
   unplannedSetsTests();
   tempoLeverTests();

@@ -1,4 +1,5 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'diet_service.dart';
 
 /// Record kinds of the energy and diet domain and how each is decoded.
 /// A decoder checks the snapshot and returns the identity it carries, which
@@ -6,6 +7,15 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 typedef _Decoder = (String, int) Function(Map<String, Object?> snapshot);
 
 final Map<String, _Decoder> _decoders = {
+  dayTypeKind: (s) {
+    final r = DayTypeRevision.fromJson(s);
+    return (r.dayType.id, r.number);
+  },
+  dietCycleKind: (s) {
+    final r = DietCycleRevision.fromJson(s);
+    return (r.cycle.id, r.number);
+  },
+  dietRunKind: (s) => (DietRun.fromJson(s).id, 1),
   'maintenance-method': (s) {
     final r = MaintenanceMethodRevision.fromJson(s);
     return ('maintenance', r.number);
@@ -32,4 +42,13 @@ void validateDietRecords(List<DietRecord> records) {
   for (final e in numbers.entries) {
     validateNumbered(e.value, e.key);
   }
+  List<Map<String, Object?>> of(String kind) => [
+    for (final r in records)
+      if (r.kind == kind) r.snapshot,
+  ];
+  validateDietReferences(
+    [for (final s in of(dayTypeKind)) DayTypeRevision.fromJson(s)],
+    [for (final s in of(dietCycleKind)) DietCycleRevision.fromJson(s)],
+    [for (final s in of(dietRunKind)) DietRun.fromJson(s)],
+  );
 }
