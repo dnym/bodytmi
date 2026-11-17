@@ -130,6 +130,8 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM observations), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM measure_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM series_policies), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM profile_revisions), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM body_fat_sources), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM timing_activities), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM window_checkpoints), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM repeat_checkpoints), 0)
@@ -1157,6 +1159,55 @@ final class TrainingStore implements TrainingRepository {
           snapshot: _snapshot(policy.toJson()),
         ),
       );
+
+  @override
+  Future<List<ProfileRevision>> profileRevisions() =>
+      _cache.list('profileRevisions', () async {
+        final result = <ProfileRevision>[];
+        for (final row in await _db.select(_db.profileRevisions).get()) {
+          final revision = ProfileRevision.fromJson(jsonDecode(row.snapshot));
+          if (revision.number != row.number)
+            invalid('Stored profile revision identity is inconsistent.');
+          result.add(revision);
+        }
+        return result;
+      });
+
+  @override
+  Future<void> insertProfileRevision(ProfileRevision revision) => _db
+      .into(_db.profileRevisions)
+      .insert(
+        ProfileRevisionsCompanion.insert(
+          number: Value(revision.number),
+          snapshot: _snapshot(revision.toJson()),
+        ),
+      );
+
+  @override
+  Future<List<BodyFatSourceRevision>> bodyFatSourceRevisions() =>
+      _cache.list('bodyFatSources', () async {
+        final result = <BodyFatSourceRevision>[];
+        for (final row in await _db.select(_db.bodyFatSources).get()) {
+          final revision = BodyFatSourceRevision.fromJson(
+            jsonDecode(row.snapshot),
+          );
+          if (revision.number != row.number)
+            invalid('Stored body-fat source identity is inconsistent.');
+          result.add(revision);
+        }
+        return result;
+      });
+
+  @override
+  Future<void> insertBodyFatSourceRevision(BodyFatSourceRevision revision) =>
+      _db
+          .into(_db.bodyFatSources)
+          .insert(
+            BodyFatSourcesCompanion.insert(
+              number: Value(revision.number),
+              snapshot: _snapshot(revision.toJson()),
+            ),
+          );
 
   /// Body-mass records are observations of measure `body-mass`.
   @override

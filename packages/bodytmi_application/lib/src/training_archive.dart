@@ -35,6 +35,8 @@ final class TrainingArchive {
     List<ObservationRecord> observations = const [],
     List<MeasureRevision> measures = const [],
     List<SeriesPolicy> seriesPolicies = const [],
+    List<ProfileRevision> profile = const [],
+    List<BodyFatSourceRevision> bodyFatSources = const [],
     List<ImportedSessionRecord> importedSessions = const [],
     List<BlockProgressionDecision> blockProgressions = const [],
     List<TimingActivity> timers = const [],
@@ -160,6 +162,14 @@ final class TrainingArchive {
            return ns == 0 ? a.sourceId.compareTo(b.sourceId) : ns;
          }),
        ),
+       profile = List<ProfileRevision>.unmodifiable(
+         <ProfileRevision>[...profile]
+           ..sort((a, b) => a.number.compareTo(b.number)),
+       ),
+       bodyFatSources = List<BodyFatSourceRevision>.unmodifiable(
+         <BodyFatSourceRevision>[...bodyFatSources]
+           ..sort((a, b) => a.number.compareTo(b.number)),
+       ),
        seriesPolicies = List<SeriesPolicy>.unmodifiable(
          <SeriesPolicy>[...seriesPolicies]..sort((a, b) {
            final key = a.key.compareTo(b.key);
@@ -235,6 +245,8 @@ final class TrainingArchive {
       'observations',
       'measures',
       'seriesPolicies',
+      'profile',
+      'bodyFatSources',
       'importedSessions',
       'blockProgressions',
       'timers',
@@ -329,6 +341,13 @@ final class TrainingArchive {
       seriesPolicies: [
         for (final j in optional('seriesPolicies')) SeriesPolicy.fromJson(j),
       ],
+      profile: [
+        for (final j in optional('profile')) ProfileRevision.fromJson(j),
+      ],
+      bodyFatSources: [
+        for (final j in optional('bodyFatSources'))
+          BodyFatSourceRevision.fromJson(j),
+      ],
       observations: [
         for (final j in optional('observations')) ObservationRecord.fromJson(j),
       ],
@@ -392,6 +411,8 @@ final class TrainingArchive {
 
   final List<MeasureRevision> measures;
   final List<SeriesPolicy> seriesPolicies;
+  final List<ProfileRevision> profile;
+  final List<BodyFatSourceRevision> bodyFatSources;
 
   /// Observations of every measure, body mass included.
   final List<ObservationRecord> observations;
@@ -436,6 +457,8 @@ final class TrainingArchive {
     'observations': [for (final r in observations) r.toJson()],
     'measures': [for (final m in measures) m.toJson()],
     'seriesPolicies': [for (final p in seriesPolicies) p.toJson()],
+    'profile': [for (final p in profile) p.toJson()],
+    'bodyFatSources': [for (final s in bodyFatSources) s.toJson()],
     'importedSessions': [for (final r in importedSessions) r.toJson()],
     'blockProgressions': [for (final d in blockProgressions) d.toJson()],
     'revisions': [for (final r in revisions) r.toJson()],
@@ -471,6 +494,8 @@ final class TrainingArchive {
     'observations': observations.length,
     'measures': measures.length,
     'seriesPolicies': seriesPolicies.length,
+    'profile': profile.length,
+    'bodyFatSources': bodyFatSources.length,
     'importedSessions': importedSessions.length,
     'blockProgressions': blockProgressions.length,
     'revisions': revisions.length,
@@ -535,6 +560,10 @@ final class TrainingArchive {
       measures: currentMeasures(measures),
     );
     validateSeriesPolicies(seriesPolicies, currentMeasures(measures));
+    validateNumbered([for (final p in profile) p.number], 'Profile');
+    validateNumbered([
+      for (final s in bodyFatSources) s.number,
+    ], 'Body-fat source');
     validateImportedSessions(importedSessions);
     validateBlockProgressions(
       blockProgressions,

@@ -90,6 +90,11 @@ const storedCommandNames = [
   'preset publish',
   'preset show',
   'preset list',
+  'profile show',
+  'profile set',
+  'body source',
+  'body sources',
+  'body report',
   'measure define',
   'measure show',
   'measure list',
@@ -586,6 +591,11 @@ Future<Map<String, Object?>> executeStored(
     'preset publish' => {'preset', 'expectedRevision'},
     'preset show' => {'presetId', 'revision'},
     'preset list' => <String>{},
+    'profile show' => <String>{},
+    'profile set' => {'profile', 'expectedRevision'},
+    'body source' => {'from', 'source', 'expectedRevision'},
+    'body sources' => <String>{},
+    'body report' => {'asOf', 'context'},
     'measure define' => {'measure', 'expectedRevision'},
     'measure show' => {'measureId', 'revision'},
     'measure list' => <String>{},
@@ -2488,6 +2498,30 @@ Future<Map<String, Object?>> executeStored(
           return id == 0 ? a.number.compareTo(b.number) : id;
         });
         data = [for (final p in presets) p.toJson()];
+      case 'profile show':
+        data = (await BodyService(store).profile())?.toJson();
+      case 'profile set':
+        data = (await BodyService(store).setProfile(
+          Profile.fromJson(request['profile']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'body source':
+        data = (await BodyService(store).selectSource(
+          requiredString(request, 'from'),
+          BodyFatSource.fromJson(request['source']),
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'body sources':
+        final all = await store.bodyFatSourceRevisions()
+          ..sort((a, b) => a.number.compareTo(b.number));
+        data = [for (final s in all) s.toJson()];
+      case 'body report':
+        data = await BodyService(store).report(
+          requiredString(request, 'asOf'),
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+        );
       case 'measure define':
         data = (await ObservationService(store).define(
           MeasureDefinition.fromJson(request['measure']),

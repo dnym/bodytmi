@@ -214,6 +214,8 @@ final class NativeBackup {
         'observations',
         'measure_revisions',
         'series_policies',
+        'profile_revisions',
+        'body_fat_sources',
         'timing_activities',
         'window_checkpoints',
         'repeat_checkpoints',
@@ -778,6 +780,28 @@ final class NativeBackup {
           seriesPolicies,
           currentMeasures(measureRevisions),
         );
+        validateNumbered([
+          for (final row in db.select('SELECT * FROM profile_revisions'))
+            (() {
+              final r = ProfileRevision.fromJson(
+                jsonDecode(row['snapshot'] as String),
+              );
+              if (r.number != row['number'])
+                invalid('Profile revision row identity mismatch.');
+              return r.number;
+            })(),
+        ], 'Profile');
+        validateNumbered([
+          for (final row in db.select('SELECT * FROM body_fat_sources'))
+            (() {
+              final r = BodyFatSourceRevision.fromJson(
+                jsonDecode(row['snapshot'] as String),
+              );
+              if (r.number != row['number'])
+                invalid('Body-fat source row identity mismatch.');
+              return r.number;
+            })(),
+        ], 'Body-fat source');
         final massRecords = [
           for (final r in observations)
             if (r.observation.isBodyMass)

@@ -66,6 +66,22 @@ class SeriesPolicies extends Table {
   Set<Column> get primaryKey => {seriesKey, number};
 }
 
+@DataClassName('StoredProfileRevision')
+class ProfileRevisions extends Table {
+  IntColumn get number => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {number};
+}
+
+@DataClassName('StoredBodyFatSource')
+class BodyFatSources extends Table {
+  IntColumn get number => integer()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {number};
+}
+
 @DataClassName('StoredBlueprintRevision')
 class BlueprintRevisions extends Table {
   TextColumn get blueprintId => text()();
@@ -320,6 +336,8 @@ class ProgramUpgradeReceipts extends Table {
     BlueprintInstances,
     MeasureRevisions,
     SeriesPolicies,
+    ProfileRevisions,
+    BodyFatSources,
     EquipmentRevisions,
     GymRevisions,
     EquipmentInstanceRevisions,

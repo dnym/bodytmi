@@ -79,6 +79,8 @@ final class LogicalArchiveFiles {
       'observations',
       'measures',
       'seriesPolicies',
+      'profile',
+      'bodyFatSources',
       'timers',
       'windowCheckpoints',
       'repeatCheckpoints',
@@ -313,6 +315,18 @@ final class LogicalArchiveFiles {
               'INSERT INTO program_upgrade_receipts(run_id,request_id,snapshot) VALUES (?,?,?)',
               [u.runId, u.requestId, canonicalJson(u.toJson())],
             );
+          for (final p in archive.profile) {
+            db.execute(
+              'INSERT INTO profile_revisions(number,snapshot) VALUES (?,?)',
+              [p.number, canonicalJson(p.toJson())],
+            );
+          }
+          for (final s in archive.bodyFatSources) {
+            db.execute(
+              'INSERT INTO body_fat_sources(number,snapshot) VALUES (?,?)',
+              [s.number, canonicalJson(s.toJson())],
+            );
+          }
           for (final p in archive.seriesPolicies) {
             db.execute(
               'INSERT INTO series_policies(series_key,number,snapshot) VALUES (?,?,?)',

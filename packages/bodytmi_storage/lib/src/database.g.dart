@@ -2453,6 +2453,412 @@ class SeriesPoliciesCompanion extends UpdateCompanion<StoredSeriesPolicy> {
   }
 }
 
+class $ProfileRevisionsTable extends ProfileRevisions
+    with TableInfo<$ProfileRevisionsTable, StoredProfileRevision> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProfileRevisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'profile_revisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredProfileRevision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {number};
+  @override
+  StoredProfileRevision map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredProfileRevision(
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $ProfileRevisionsTable createAlias(String alias) {
+    return $ProfileRevisionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredProfileRevision extends DataClass
+    implements Insertable<StoredProfileRevision> {
+  final int number;
+  final String snapshot;
+  const StoredProfileRevision({required this.number, required this.snapshot});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  ProfileRevisionsCompanion toCompanion(bool nullToAbsent) {
+    return ProfileRevisionsCompanion(
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredProfileRevision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredProfileRevision(
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredProfileRevision copyWith({int? number, String? snapshot}) =>
+      StoredProfileRevision(
+        number: number ?? this.number,
+        snapshot: snapshot ?? this.snapshot,
+      );
+  StoredProfileRevision copyWithCompanion(ProfileRevisionsCompanion data) {
+    return StoredProfileRevision(
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredProfileRevision(')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredProfileRevision &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class ProfileRevisionsCompanion extends UpdateCompanion<StoredProfileRevision> {
+  final Value<int> number;
+  final Value<String> snapshot;
+  const ProfileRevisionsCompanion({
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+  });
+  ProfileRevisionsCompanion.insert({
+    this.number = const Value.absent(),
+    required String snapshot,
+  }) : snapshot = Value(snapshot);
+  static Insertable<StoredProfileRevision> custom({
+    Expression<int>? number,
+    Expression<String>? snapshot,
+  }) {
+    return RawValuesInsertable({
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+    });
+  }
+
+  ProfileRevisionsCompanion copyWith({
+    Value<int>? number,
+    Value<String>? snapshot,
+  }) {
+    return ProfileRevisionsCompanion(
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProfileRevisionsCompanion(')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BodyFatSourcesTable extends BodyFatSources
+    with TableInfo<$BodyFatSourcesTable, StoredBodyFatSource> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BodyFatSourcesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<int> number = GeneratedColumn<int>(
+    'number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [number, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'body_fat_sources';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBodyFatSource> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {number};
+  @override
+  StoredBodyFatSource map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBodyFatSource(
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}number'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $BodyFatSourcesTable createAlias(String alias) {
+    return $BodyFatSourcesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBodyFatSource extends DataClass
+    implements Insertable<StoredBodyFatSource> {
+  final int number;
+  final String snapshot;
+  const StoredBodyFatSource({required this.number, required this.snapshot});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['number'] = Variable<int>(number);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  BodyFatSourcesCompanion toCompanion(bool nullToAbsent) {
+    return BodyFatSourcesCompanion(
+      number: Value(number),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredBodyFatSource.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBodyFatSource(
+      number: serializer.fromJson<int>(json['number']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'number': serializer.toJson<int>(number),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredBodyFatSource copyWith({int? number, String? snapshot}) =>
+      StoredBodyFatSource(
+        number: number ?? this.number,
+        snapshot: snapshot ?? this.snapshot,
+      );
+  StoredBodyFatSource copyWithCompanion(BodyFatSourcesCompanion data) {
+    return StoredBodyFatSource(
+      number: data.number.present ? data.number.value : this.number,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBodyFatSource(')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(number, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBodyFatSource &&
+          other.number == this.number &&
+          other.snapshot == this.snapshot);
+}
+
+class BodyFatSourcesCompanion extends UpdateCompanion<StoredBodyFatSource> {
+  final Value<int> number;
+  final Value<String> snapshot;
+  const BodyFatSourcesCompanion({
+    this.number = const Value.absent(),
+    this.snapshot = const Value.absent(),
+  });
+  BodyFatSourcesCompanion.insert({
+    this.number = const Value.absent(),
+    required String snapshot,
+  }) : snapshot = Value(snapshot);
+  static Insertable<StoredBodyFatSource> custom({
+    Expression<int>? number,
+    Expression<String>? snapshot,
+  }) {
+    return RawValuesInsertable({
+      if (number != null) 'number': number,
+      if (snapshot != null) 'snapshot': snapshot,
+    });
+  }
+
+  BodyFatSourcesCompanion copyWith({
+    Value<int>? number,
+    Value<String>? snapshot,
+  }) {
+    return BodyFatSourcesCompanion(
+      number: number ?? this.number,
+      snapshot: snapshot ?? this.snapshot,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (number.present) {
+      map['number'] = Variable<int>(number.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BodyFatSourcesCompanion(')
+          ..write('number: $number, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $EquipmentRevisionsTable extends EquipmentRevisions
     with TableInfo<$EquipmentRevisionsTable, StoredEquipmentRevision> {
   @override
@@ -8716,6 +9122,10 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     this,
   );
   late final $SeriesPoliciesTable seriesPolicies = $SeriesPoliciesTable(this);
+  late final $ProfileRevisionsTable profileRevisions = $ProfileRevisionsTable(
+    this,
+  );
+  late final $BodyFatSourcesTable bodyFatSources = $BodyFatSourcesTable(this);
   late final $EquipmentRevisionsTable equipmentRevisions =
       $EquipmentRevisionsTable(this);
   late final $GymRevisionsTable gymRevisions = $GymRevisionsTable(this);
@@ -8788,6 +9198,8 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     blueprintInstances,
     measureRevisions,
     seriesPolicies,
+    profileRevisions,
+    bodyFatSources,
     equipmentRevisions,
     gymRevisions,
     equipmentInstanceRevisions,
@@ -10486,6 +10898,315 @@ typedef $$SeriesPoliciesTableProcessedTableManager =
         >,
       ),
       StoredSeriesPolicy,
+      PrefetchHooks Function()
+    >;
+typedef $$ProfileRevisionsTableCreateCompanionBuilder =
+    ProfileRevisionsCompanion Function({
+      Value<int> number,
+      required String snapshot,
+    });
+typedef $$ProfileRevisionsTableUpdateCompanionBuilder =
+    ProfileRevisionsCompanion Function({
+      Value<int> number,
+      Value<String> snapshot,
+    });
+
+class $$ProfileRevisionsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $ProfileRevisionsTable> {
+  $$ProfileRevisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ProfileRevisionsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $ProfileRevisionsTable> {
+  $$ProfileRevisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ProfileRevisionsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $ProfileRevisionsTable> {
+  $$ProfileRevisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$ProfileRevisionsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $ProfileRevisionsTable,
+          StoredProfileRevision,
+          $$ProfileRevisionsTableFilterComposer,
+          $$ProfileRevisionsTableOrderingComposer,
+          $$ProfileRevisionsTableAnnotationComposer,
+          $$ProfileRevisionsTableCreateCompanionBuilder,
+          $$ProfileRevisionsTableUpdateCompanionBuilder,
+          (
+            StoredProfileRevision,
+            BaseReferences<
+              _$TrainingDatabase,
+              $ProfileRevisionsTable,
+              StoredProfileRevision
+            >,
+          ),
+          StoredProfileRevision,
+          PrefetchHooks Function()
+        > {
+  $$ProfileRevisionsTableTableManager(
+    _$TrainingDatabase db,
+    $ProfileRevisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProfileRevisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProfileRevisionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProfileRevisionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+              }) =>
+                  ProfileRevisionsCompanion(number: number, snapshot: snapshot),
+          createCompanionCallback:
+              ({
+                Value<int> number = const Value.absent(),
+                required String snapshot,
+              }) => ProfileRevisionsCompanion.insert(
+                number: number,
+                snapshot: snapshot,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ProfileRevisionsTable, StoredProfileRevision>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $ProfileRevisionsTable,
+                    StoredProfileRevision
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ProfileRevisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $ProfileRevisionsTable,
+      StoredProfileRevision,
+      $$ProfileRevisionsTableFilterComposer,
+      $$ProfileRevisionsTableOrderingComposer,
+      $$ProfileRevisionsTableAnnotationComposer,
+      $$ProfileRevisionsTableCreateCompanionBuilder,
+      $$ProfileRevisionsTableUpdateCompanionBuilder,
+      (
+        StoredProfileRevision,
+        BaseReferences<
+          _$TrainingDatabase,
+          $ProfileRevisionsTable,
+          StoredProfileRevision
+        >,
+      ),
+      StoredProfileRevision,
+      PrefetchHooks Function()
+    >;
+typedef $$BodyFatSourcesTableCreateCompanionBuilder =
+    BodyFatSourcesCompanion Function({
+      Value<int> number,
+      required String snapshot,
+    });
+typedef $$BodyFatSourcesTableUpdateCompanionBuilder =
+    BodyFatSourcesCompanion Function({
+      Value<int> number,
+      Value<String> snapshot,
+    });
+
+class $$BodyFatSourcesTableFilterComposer
+    extends Composer<_$TrainingDatabase, $BodyFatSourcesTable> {
+  $$BodyFatSourcesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BodyFatSourcesTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $BodyFatSourcesTable> {
+  $$BodyFatSourcesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BodyFatSourcesTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $BodyFatSourcesTable> {
+  $$BodyFatSourcesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$BodyFatSourcesTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $BodyFatSourcesTable,
+          StoredBodyFatSource,
+          $$BodyFatSourcesTableFilterComposer,
+          $$BodyFatSourcesTableOrderingComposer,
+          $$BodyFatSourcesTableAnnotationComposer,
+          $$BodyFatSourcesTableCreateCompanionBuilder,
+          $$BodyFatSourcesTableUpdateCompanionBuilder,
+          (
+            StoredBodyFatSource,
+            BaseReferences<
+              _$TrainingDatabase,
+              $BodyFatSourcesTable,
+              StoredBodyFatSource
+            >,
+          ),
+          StoredBodyFatSource,
+          PrefetchHooks Function()
+        > {
+  $$BodyFatSourcesTableTableManager(
+    _$TrainingDatabase db,
+    $BodyFatSourcesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BodyFatSourcesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BodyFatSourcesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BodyFatSourcesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> number = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+              }) => BodyFatSourcesCompanion(number: number, snapshot: snapshot),
+          createCompanionCallback:
+              ({
+                Value<int> number = const Value.absent(),
+                required String snapshot,
+              }) => BodyFatSourcesCompanion.insert(
+                number: number,
+                snapshot: snapshot,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$BodyFatSourcesTable, StoredBodyFatSource>(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $BodyFatSourcesTable,
+                    StoredBodyFatSource
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BodyFatSourcesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $BodyFatSourcesTable,
+      StoredBodyFatSource,
+      $$BodyFatSourcesTableFilterComposer,
+      $$BodyFatSourcesTableOrderingComposer,
+      $$BodyFatSourcesTableAnnotationComposer,
+      $$BodyFatSourcesTableCreateCompanionBuilder,
+      $$BodyFatSourcesTableUpdateCompanionBuilder,
+      (
+        StoredBodyFatSource,
+        BaseReferences<
+          _$TrainingDatabase,
+          $BodyFatSourcesTable,
+          StoredBodyFatSource
+        >,
+      ),
+      StoredBodyFatSource,
       PrefetchHooks Function()
     >;
 typedef $$EquipmentRevisionsTableCreateCompanionBuilder =
@@ -16622,6 +17343,10 @@ class $TrainingDatabaseManager {
       $$MeasureRevisionsTableTableManager(_db, _db.measureRevisions);
   $$SeriesPoliciesTableTableManager get seriesPolicies =>
       $$SeriesPoliciesTableTableManager(_db, _db.seriesPolicies);
+  $$ProfileRevisionsTableTableManager get profileRevisions =>
+      $$ProfileRevisionsTableTableManager(_db, _db.profileRevisions);
+  $$BodyFatSourcesTableTableManager get bodyFatSources =>
+      $$BodyFatSourcesTableTableManager(_db, _db.bodyFatSources);
   $$EquipmentRevisionsTableTableManager get equipmentRevisions =>
       $$EquipmentRevisionsTableTableManager(_db, _db.equipmentRevisions);
   $$GymRevisionsTableTableManager get gymRevisions =>
