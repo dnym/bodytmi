@@ -202,6 +202,7 @@ Future<void> main() async {
   programmeTests();
   planTests();
   reviewTests();
+  reviewBreakTests();
   bodyReportTests();
   unplannedSetsTests();
   tempoLeverTests();

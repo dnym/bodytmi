@@ -171,6 +171,7 @@ final class PlanService {
     required String requestId,
     bool steps = false,
     List<String> pauseRuns = const [],
+    String? namedDiet,
     String context = 'health',
   }) => repository.transaction(() async {
     if (planId.length > 80) invalid('planId is at most 80 characters.');
@@ -255,6 +256,7 @@ final class PlanService {
           )['description'],
       },
       'status': 'active',
+      'namedDiet': ?namedDiet,
       'contentVersion': 1,
     });
     await repository.saveDietRecord(

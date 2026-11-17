@@ -57,6 +57,7 @@ const commandNames = [
   'measure builtins',
   'calc list',
   'programme list',
+  'diet references',
   'calc evaluate',
   'session mass-status',
   'session mass-refresh',
@@ -906,6 +907,9 @@ final class Commands {
                 ..sort()),
           'uncheckedCustomMeasures': custom.toList()..sort(),
         };
+      case 'diet references':
+        keys(<String>{});
+        data = [for (final d in namedDiets) namedDietToJson(d)];
       case 'programme list':
         keys(<String>{});
         data = [for (final p in dietProgrammes) p.toJson()];

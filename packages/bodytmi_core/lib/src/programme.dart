@@ -11,6 +11,9 @@ typedef ProgrammeBuild = ({
   bool loop,
   Map<String, Object?> schedule,
   List<String> warnings,
+
+  /// Day-type id → goal → where its number comes from.
+  Map<String, Map<String, String>> sources,
 });
 
 Map<String, Object?> _g(String value) => {'value': value, 'unit': 'g'};
@@ -170,9 +173,25 @@ final class DietProgramme {
               'energy': energy,
               'protein': {'basis': 'mass', 'perKg': protein},
             }),
+            // Not in the cycle: used when a review proposes a diet break.
+            day('break', 'Diet break day', {
+              'energy': {'basis': 'maintenance'},
+              'protein': {'basis': 'mass', 'perKg': protein},
+            }, notes: 'Two weeks at maintenance (handbook ch. 15).'),
           ],
           cycleDays: [_ref(id_('day'))],
           loop: true,
+          sources: {
+            id_('day'): {
+              'energy':
+                  '$described (D4; maintenance by your chosen method, F4)',
+              'protein': '$protein g per kg body mass (F6)',
+            },
+            id_('break'): {
+              'energy': 'maintenance by your chosen method (handbook ch. 15)',
+              'protein': '$protein g per kg body mass (F6)',
+            },
+          },
           schedule: {
             'intake': described,
             'protein': '$protein g per kg body mass',
@@ -333,12 +352,47 @@ final class DietProgramme {
           }
         }
         days.add(_repeat(breakDays, [_ref(id_('break'))], 'Diet break'));
+        final rflProtein =
+            'Rapid Fat Loss Handbook ch. 8 table 1: category $category, '
+            '$activity: $perLb g per lb fat-free mass';
+        final rflSources = {
+          'protein': rflProtein,
+          'carbohydrate': '$carbs g (F13: about 20 g a day, tunable)',
+          'fat': '$fat g including fish oil (F13: about 20 g a day, tunable)',
+          'energy': 'protein × 4 + carbohydrate × 4 + fat × 9',
+        };
         return (
           dayTypes: types,
           cycleDays: days,
           loop: true,
           schedule: schedule,
           warnings: const [],
+          sources: {
+            id_('rfl'): rflSources,
+            if (category > 1) id_('free-meal'): rflSources,
+            id_('break'): {
+              'energy': 'maintenance by your chosen method (F4)',
+              'protein':
+                  'Handbook ch. 14: ${breakProtein[activity]} g per lb '
+                  'fat-free mass ($activity)',
+              'carbohydrate':
+                  'Handbook ch. 14: 100 g + ${breakCarbs[breakActivity]} g '
+                  'per lb fat-free mass ($breakActivity)',
+              'fat': 'Handbook ch. 14: the remainder of maintenance energy',
+            },
+            for (final t in types)
+              if (t.id.contains('refeed'))
+                t.id: {
+                  'protein': rflProtein,
+                  'carbohydrate': category == 1
+                      ? 'Handbook ch. 10 table 1: category 1 end refeed, '
+                            'day 1 12–16 g per kg fat-free mass, then about '
+                            'half, then half again'
+                      : 'Handbook ch. 10: category 2 refeed, 1.5–3 g per lb '
+                            'fat-free mass in 5 hours, at most 50 g fat',
+                  if (category == 2) 'fat': 'Handbook ch. 10: at most 50 g',
+                },
+          },
         );
 
       case 'erfl':
@@ -411,6 +465,20 @@ final class DietProgramme {
             _repeat(afterDays, [_ref(id_('after'))], 'After'),
           ],
           loop: false,
+          sources: {
+            id_('day'): {
+              'protein':
+                  'Extreme Rapid Fat Loss: the aerobic-only column of the RFL '
+                  'handbook ch. 8 table 1, category $category: '
+                  '${aerobic[category - 1]} g per lb fat-free mass',
+              'carbohydrate': 'ERFL: leanest protein only (default 0 g)',
+              'fat': 'ERFL: no fish oil (default 0 g)',
+              'energy': 'protein × 4 + carbohydrate × 4 + fat × 9',
+            },
+            id_('after'): {
+              'energy': 'normal eating at maintenance by your chosen method',
+            },
+          },
           schedule: {
             'category': category,
             'protein':
@@ -493,6 +561,24 @@ final class DietProgramme {
               _ref(id_(c == 'M' ? 'maintenance' : 'rfl')),
           ],
           loop: true,
+          sources: {
+            id_('rfl'): {
+              'protein':
+                  'Intermittent Modified Fasting ch. 15 table: category '
+                  '$category, $activity: $perLb g per lb fat-free mass',
+              'carbohydrate': 'IMF ch. 15: tag-along carbohydrate about 20 g',
+              'fat': 'IMF ch. 15: tag-along fat about 20 g',
+              'energy': 'protein × 4 + carbohydrate × 4 + fat × 9',
+            },
+            id_('maintenance'): {
+              'energy':
+                  'maintenance by your chosen method (IMF ch. 14)'
+                  '${adjustment == '0' ? '' : ' × (1 + $adjustment)'}',
+              'protein': 'IMF ch. 16: the same as the RFL day ($perLb g/lb)',
+              'fat': 'IMF ch. 16: $fatPerLb g per lb body mass (0.25–0.5)',
+              'carbohydrate': 'IMF ch. 16: the rest of maintenance energy',
+            },
+          },
           schedule: {
             'category': category,
             'pattern': pattern,

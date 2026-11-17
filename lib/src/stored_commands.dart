@@ -664,6 +664,7 @@ Future<Map<String, Object?>> executeStored(
       'asOf',
       'requestId',
       'companions',
+      'namedDiet',
       'context',
     },
     'plan end' => {
@@ -2711,6 +2712,9 @@ Future<Map<String, Object?>> executeStored(
           asOfText: requiredString(request, 'asOf'),
           requestId: identifier(request, 'requestId'),
           steps: companions['steps'] == true,
+          namedDiet: request['namedDiet'] == null
+              ? null
+              : identifier(request, 'namedDiet'),
           pauseRuns: [
             for (final (i, _)
                 in (companions['pauseRuns'] == null

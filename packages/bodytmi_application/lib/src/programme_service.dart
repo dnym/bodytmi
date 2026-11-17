@@ -108,6 +108,7 @@ final class ProgrammeService {
         ctx,
         asOfText.substring(0, 10),
         simulateDays,
+        sources: build.sources,
         walking: walkingKm == null
             ? const {}
             : {'$programmeId-day/1': walkingKm},
@@ -164,6 +165,7 @@ final class ProgrammeService {
     int? simulateDays, {
     Map<String, double> walking = const {},
     String? walkingReason,
+    Map<String, Map<String, String>> sources = const {},
   }) {
     final goals = {
       for (final e in types.entries) e.key: e.value.resolve(ctx.inputs),
@@ -236,6 +238,7 @@ final class ProgrammeService {
             'goals': goals[e.key],
             'steps': ?e.value.json['steps'],
             'notes': ?e.value.json['notes'],
+            'sources': ?sources[e.value.id],
           },
       ],
       'cycle': _summary(cycle),

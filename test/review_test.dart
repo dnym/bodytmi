@@ -131,8 +131,16 @@ void reviewTests() {
       review = await reviews.review('cut', _at(30));
       equal((review['created']! as List).length, 0);
       review = await reviews.review('cut', _at(48));
-      equal((review['created']! as List).length, 1);
-      final second = jsonObject((review['pending']! as List).single, 'p');
+      // A second intake proposal, and (six weeks in) a break.
+      final second = (review['pending']! as List)
+          .cast<Map<String, Object?>>()
+          .firstWhere((p) => p['kind'] == 'lower-intake');
+      check(
+        (review['pending']! as List).cast<Map<String, Object?>>().any(
+          (p) => p['kind'] == 'break',
+        ),
+        'break proposed',
+      );
       await reviews.decline(second['id']! as String);
       equal(
         (await _failure(
@@ -343,6 +351,117 @@ void reviewTests() {
         3,
       );
     } finally {
+      await dir.delete(recursive: true);
+    }
+  });
+}
+
+void reviewBreakTests() {
+  test('break and inserted RFL day proposals', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-review-4-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    try {
+      // Losing steadily, so only the stint length triggers a proposal.
+      await _setUp(store, mass: (day) => '${95 - day * 0.1}');
+      final plans = PlanService(store);
+      final reviews = ReviewService(store);
+      await plans.activate(
+        planId: 'cut',
+        programme: 'normal',
+        startDate: _date(1),
+        asOfText: _at(0),
+        requestId: 'r',
+        namedDiet: 'mediterranean',
+      );
+      equal((await plans.plan('cut')).json['namedDiet'], 'mediterranean');
+      var review = await reviews.review('cut', _at(40));
+      check(
+        !(review['pending']! as List).cast<Map<String, Object?>>().any(
+          (p) => p['kind'] == 'break',
+        ),
+        'category 2 needs 6 weeks',
+      );
+      review = await reviews.review('cut', _at(43));
+      final proposal = (review['pending']! as List)
+          .cast<Map<String, Object?>>()
+          .firstWhere((p) => p['kind'] == 'break');
+      await reviews.accept(proposal['id']! as String, _date(44));
+      final schedule = await DietService(
+        store,
+      ).schedule(_date(43), 16, runId: 'cut');
+      List<Object?> ids() => [
+        for (final d
+            in (schedule['days']! as List).cast<Map<String, Object?>>())
+          jsonObject(d['dayType'], 'd')['id'],
+      ];
+      equal(ids().first, 'cut-day');
+      equal(ids().where((d) => d == 'cut-break').length, 14);
+      equal(ids().last, 'cut-day');
+      // Break energy is maintenance: 500 kcal above the deficit day.
+      check(
+        (_energyOn(schedule, 1) - _energyOn(schedule, 0) - 500).abs() < 1e-6,
+        'break at maintenance',
+      );
+      // The next stint counts from the end of the break.
+      review = await reviews.review('cut', _at(60));
+      check(
+        !(review['pending']! as List).cast<Map<String, Object?>>().any(
+          (p) => p['kind'] == 'break',
+        ),
+        'no second break yet',
+      );
+      TrainingArchive.fromJson((await store.archive()).toJson());
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
+
+  test('a regain above baseline proposes inserted RFL days', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-review-5-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    try {
+      // Stable at 90 kg, then 92.5 kg from day 20 (2.8 % above).
+      await _setUp(store, mass: (day) => day < 20 ? '90' : '92.5', days: 40);
+      final plans = PlanService(store);
+      final reviews = ReviewService(store);
+      await plans.activate(
+        planId: 'keep',
+        programme: 'imf',
+        choices: {
+          'activity': 'weights',
+          'pattern': '6:1',
+          'arrangement': 'MMMMMMR',
+          'fatPerLb': '0.38',
+        },
+        startDate: _date(1),
+        asOfText: _at(0),
+        requestId: 'r',
+      );
+      var review = await reviews.review('keep', _at(10));
+      check(
+        !(review['pending']! as List).cast<Map<String, Object?>>().any(
+          (p) => p['kind'] == 'insert-rfl',
+        ),
+        'at baseline',
+      );
+      review = await reviews.review('keep', _at(35));
+      final proposal = (review['pending']! as List)
+          .cast<Map<String, Object?>>()
+          .firstWhere((p) => p['kind'] == 'insert-rfl');
+      await reviews.accept(proposal['id']! as String, _date(36));
+      final schedule = await DietService(
+        store,
+      ).schedule(_date(36), 7, runId: 'keep');
+      final rfl = [
+        for (final d
+            in (schedule['days']! as List).cast<Map<String, Object?>>())
+          if (jsonObject(d['dayType'], 'd')['id'] == 'keep-rfl') d['date'],
+      ];
+      equal(rfl.length, 3);
+      TrainingArchive.fromJson((await store.archive()).toJson());
+    } finally {
+      await store.close();
       await dir.delete(recursive: true);
     }
   });

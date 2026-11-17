@@ -37,6 +37,8 @@ final class PlanProposal {
       'recompute',
       'category',
       'end',
+      'break',
+      'insert-rfl',
     }.contains(j['kind']))
       invalid('Unknown proposal kind.');
     if (!reviewPolicies.contains(j['policy']))
@@ -185,6 +187,40 @@ final class ReviewService {
       });
     }
 
+    // Start a break: a Normal plan has run its moderate-diet stint
+    // (handbook ch. 15: category 1 4–6, 2 6–12, 3 12–16 weeks).
+    if (programme == 'normal' && planCategory != null) {
+      final breakType = '${plan.id}-break';
+      var since = run.startDate;
+      for (final o in run.overrides) {
+        if (o.dayType.id == breakType && o.date.compareTo(date) < 0)
+          since = addDays(o.date, 1);
+      }
+      final weeks = const {1: 4, 2: 6, 3: 12}[planCategory]!;
+      final ran = daysBetween(since, date);
+      final types = await diets.dayTypes();
+      final latest = [
+        for (final t in types)
+          if (t.dayType.id == breakType) t.number,
+      ];
+      if (ran >= weeks * 7 && latest.isNotEmpty)
+        offers.add({
+          'kind': 'break',
+          'explanation':
+              'The diet has run $ran days since $since; category '
+              '$planCategory stints are $weeks weeks or more before a '
+              '2-week break at maintenance (handbook ch. 15).',
+          'evidence': {'since': since, 'days': ran, 'minimumWeeks': weeks},
+          'change': {
+            'dayType': {
+              'id': breakType,
+              'revision': latest.reduce((a, b) => a > b ? a : b),
+            },
+            'days': 14,
+          },
+        });
+    }
+
     // Intake: trend loss over the last 21 days against the plan.
     final trend = await _trendWindow(run, seg, cycle, date, asOfText);
     findings.add(trend);
@@ -226,6 +262,37 @@ final class ReviewService {
             'change': {'energyDelta': round9(0.1 * energy)},
           });
         }
+      }
+    }
+
+    // Insert RFL days: the trend is 2 % above the plan's baseline mass
+    // (IMF ch. 34: act at +1–3 %; 3–4 RFL days a week until back).
+    DayTypeRef? rfl;
+    for (final ref in cycle.dayTypes) {
+      final type = (await diets.dayType(ref.id, ref.revision)).dayType;
+      if (type.goals['energy']?.isSum ?? false) rfl = ref;
+    }
+    final baseline = dietInputsOf(run.inputs).massKg;
+    if (rfl != null && baseline != null) {
+      final now = await ObservationService(
+        repository,
+      ).resolve('body-mass', asOfText, attributes: const {'context': 'health'});
+      final j = now.toJson();
+      if (j['status'] == 'resolved') {
+        final mass = double.parse(
+          Quantity.fromJson(j['value']).value.toString(),
+        );
+        if (mass >= baseline * 1.02)
+          offers.add({
+            'kind': 'insert-rfl',
+            'explanation':
+                'The mass trend ${round9(mass)} kg is '
+                '${round9((mass / baseline - 1) * 100)} % above the plan '
+                'baseline ${round9(baseline)} kg; make 3 of the next 7 days '
+                'RFL days (IMF ch. 34).',
+            'evidence': {'trend': round9(mass), 'baseline': round9(baseline)},
+            'change': {'dayType': dayTypeRefToJson(rfl), 'perWeek': 3},
+          });
       }
     }
 
@@ -485,6 +552,41 @@ final class ReviewService {
           reason: reason,
           proposal: id,
         );
+      case 'break':
+        final ref = dayTypeRefFromJson(p.change['dayType'], 'dayType');
+        var current = run;
+        for (var i = 0; i < (p.change['days']! as int); i++) {
+          final day = addDays(from, i);
+          if (!current.covers(day)) break;
+          current = await diets.override(
+            run.id,
+            day,
+            ref,
+            'Diet break ($id)',
+            current.contentVersion,
+          );
+        }
+      case 'insert-rfl':
+        final ref = dayTypeRefFromJson(p.change['dayType'], 'dayType');
+        var current = run;
+        final schedule = await diets.schedule(from, 7, runId: run.id);
+        final days = (schedule['days']! as List).cast<Map<String, Object?>>();
+        var rflDays = days
+            .where((d) => (d['dayType'] as Map?)?['id'] == ref.id)
+            .length;
+        for (final d in days) {
+          if (rflDays >= (p.change['perWeek']! as int)) break;
+          final type = d['dayType'] as Map?;
+          if (type == null || type['id'] == ref.id) continue;
+          current = await diets.override(
+            run.id,
+            d['date']! as String,
+            ref,
+            'Inserted RFL day ($id)',
+            current.contentVersion,
+          );
+          rflDays++;
+        }
       default: // end
         await plans.end(
           plan.id,
@@ -536,7 +638,14 @@ void validatePlanProposals(
   for (final p in proposals) {
     if (!planIds.contains(p.planId))
       invalid('Proposal ${p.id} names an unknown plan.');
-    if (p.status == 'accepted' && p.kind != 'end') accepted.add(p.id);
+    if (p.status == 'accepted' &&
+        const {
+          'lower-intake',
+          'raise-intake',
+          'recompute',
+          'category',
+        }.contains(p.kind))
+      accepted.add(p.id);
   }
   if (accepted.length != segmentProposals.length ||
       !accepted.every(segmentProposals.contains))

@@ -1,5 +1,6 @@
 import 'energy.dart' show requireDate;
 import 'errors.dart';
+import 'named_diet.dart';
 
 /// The current body plan: one programme (or your own cycle) as a diet run,
 /// with the companion changes applied at activation (D14) and what ending
@@ -19,8 +20,10 @@ final class BodyPlan {
       'status',
       'endDate',
       'undone',
+      'namedDiet',
       'contentVersion',
     });
+    if (j['namedDiet'] != null) namedDiet(identifier(j, 'namedDiet'));
     if (j['schemaVersion'] != 1)
       invalid('Unsupported body plan schemaVersion.');
     identifier(j, 'id');
