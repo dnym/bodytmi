@@ -270,6 +270,82 @@ void foodTests() {
     equal(dataset.search('smör', 1).single.food.number, 29);
   });
 
+  test('NNR 2023 adult reference values match the published tables', () {
+    String? v(List<ReferenceValue> refs, String id, String kind) =>
+        refs.where((r) => r.nutrient == id && r.kind == kind).single.value;
+    final woman30 = nnr2023References('female', 30);
+    equal(v(woman30, 'iron', 'ri'), '15'); // Table 14
+    equal(v(woman30, 'vitamin-a', 'ri'), '700'); // Table 12
+    equal(v(woman30, 'zinc', 'ri'), '9.7');
+    equal(v(woman30, 'calcium', 'ri'), '950');
+    equal(v(woman30, 'selenium', 'ai'), '75'); // Table 15
+    equal(v(woman30, 'vitamin-d', 'ri'), '10');
+    equal(v(woman30, 'retinol', 'ul'), '3000'); // Table 21
+    equal(v(nnr2023References('female', 60), 'iron', 'ri'), '8');
+    equal(v(nnr2023References('female', 71), 'iron', 'ri'), '7');
+    equal(v(nnr2023References('female', 20), 'calcium', 'ri'), '1000');
+    equal(v(nnr2023References('male', 72), 'vitamin-d', 'ri'), '10');
+    final man80 = nnr2023References('male', 80);
+    equal(v(man80, 'vitamin-d', 'ri'), '20');
+    equal(v(man80, 'vitamin-b6', 'ri'), '1.7');
+    equal(v(man80, 'selenium', 'ai'), '85');
+    equal(v(man80, 'zinc', 'ri'), '12.1');
+    equal(v(man80, 'vitamin-c', 'ri'), '110');
+    equal(v(man80, 'magnesium', 'ai'), '350');
+    equal(v(man80, 'sodium', 'limit'), '2300'); // Table 16
+    rejects(() => nnr2023References('male', 17));
+    rejects(() => nnr2023References('other', 30));
+  });
+
+  test('NNR 2023 assessment computes E%, per-MJ and per-kg exactly', () {
+    final means = {
+      'energy': Fraction.integer(2000),
+      'protein': Fraction.integer(100),
+      'fat': Fraction.integer(70),
+      'carbohydrate': Fraction.integer(250),
+      'fibre': Fraction.integer(30),
+      'sodium': Fraction.integer(2500),
+      'iron': Fraction.integer(8),
+    };
+    final rows = assessReferences(
+      nnr2023References('female', 30),
+      mean: (id) => (value: means[id], days: 7, partialDays: 0),
+      joint: (parts) => parts.every(means.containsKey)
+          ? (
+              energyKcal: means['energy'],
+              parts: {for (final p in parts) p: means[p]!},
+              days: 7,
+            )
+          : (energyKcal: null, parts: const {}, days: 0),
+      bodyMassKg: Fraction.integer(80),
+    );
+    Map<String, Object?> row(String id, String kind) =>
+        rows.singleWhere((r) => r['nutrient'] == id && r['kind'] == kind);
+    String intake(Map<String, Object?> r) =>
+        jsonObject(r['intake'], 'i')['value']! as String;
+    // 100 g × 17 kJ / (2000 kcal × 4.184) = 20.315 E%: above 10–20.
+    equal(intake(row('protein', 'energyRange')), '20.315');
+    equal(row('protein', 'energyRange')['relation'], 'above');
+    equal(intake(row('fat', 'energyRange')), '30.951');
+    // (250 × 17 + 30 × 8) / 8368 kJ, fibre energy included.
+    equal(intake(row('carbohydrate', 'energyRange')), '53.657');
+    // 3 g/MJ × 8.368 MJ = 25.104 g.
+    equal(
+      jsonObject(row('fibre', 'minimumPerMJ')['amount'], 'a')['value'],
+      '25.104',
+    );
+    equal(row('fibre', 'minimumPerMJ')['relation'], 'meets');
+    equal(
+      jsonObject(row('protein', 'riPerKg')['amount'], 'a')['value'],
+      '66.4',
+    );
+    equal(row('sodium', 'limit')['relation'], 'above');
+    equal(row('iron', 'ri')['relation'], 'below');
+    equal(row('iron', 'ul')['relation'], 'within');
+    equal(row('zinc', 'ri')['relation'], 'unknown');
+    equal(row('saturated-fat', 'energyBelow')['relation'], 'unknown');
+  });
+
   test('stored foods and diary entries validate in archives', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-food-');
     try {

@@ -507,6 +507,24 @@ void stage3AcceptanceTests() {
         'band $band',
       );
 
+      // Nordic reference values over the tracked complete days, kept
+      // apart from the plan: 150 g protein against 0.83 g/kg of 91 kg.
+      final nordic = await ok('diary reference', {
+        'from': _date(1),
+        'until': _date(21),
+      });
+      equal(nordic['completeDays'], 20);
+      final rows = (nordic['references']! as List).cast<Map<String, Object?>>();
+      final protein = rows.singleWhere(
+        (r) => r['nutrient'] == 'protein' && r['kind'] == 'riPerKg',
+      );
+      equal(at(protein, ['amount'])['value'], '75.53');
+      equal(protein['relation'], 'meets');
+      equal(
+        rows.singleWhere((r) => r['nutrient'] == 'fat')['relation'],
+        'unknown',
+      );
+
       // Backup and logical export round trips keep the diary exactly.
       final reference = await ok('diary day', {'date': day2});
       final backup = '${dir.path}/backup';

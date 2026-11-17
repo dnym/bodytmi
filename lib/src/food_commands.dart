@@ -32,6 +32,7 @@ const foodCommandNames = [
   'diary settings',
   'diary set-day-start',
   'energy calibrate',
+  'diary reference',
 ];
 
 const _maxDatasetBytes = 64 * 1024 * 1024;
@@ -107,6 +108,7 @@ Future<Map<String, Object?>> executeFood(
     'diary adherence' => {'from', 'until', 'tolerancePercent'},
     'diary settings' => <String>{},
     'diary set-day-start' => {'dayStart', 'expectedRevision'},
+    'diary reference' => {'from', 'until', 'context'},
     'energy calibrate' => {'from', 'until', 'context', 'minimumDays'},
     _ => invalid('Unknown food command.'),
   };
@@ -327,6 +329,16 @@ Future<Map<String, Object?>> executeFood(
             tolerancePercent: tolerance == null
                 ? null
                 : Decimal.parse(tolerance as String),
+          ),
+        );
+      case 'diary reference':
+        return ok(
+          await ReferenceService(store).assess(
+            checkDate(request['from'], 'from'),
+            checkDate(request['until'], 'until'),
+            context: request['context'] == null
+                ? 'health'
+                : identifier(request, 'context'),
           ),
         );
       case 'energy calibrate':

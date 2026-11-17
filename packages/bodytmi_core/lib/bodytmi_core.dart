@@ -8,6 +8,7 @@ export 'src/nutrient.dart';
 export 'src/food.dart';
 export 'src/diary.dart';
 export 'src/food_dataset.dart';
+export 'src/nnr2023.dart';
 export 'src/activity.dart';
 export 'src/window_repeat.dart';
 export 'src/workout.dart';
