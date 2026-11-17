@@ -251,6 +251,17 @@ class DiaryEntries extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Sleep records; [localDate] mirrors the wake date of the snapshot.
+@DataClassName('StoredSleepRecord')
+@TableIndex(name: 'sleep_records_date', columns: {#localDate})
+class SleepRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get localDate => text()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('StoredBlockProgression')
 class BlockProgressions extends Table {
   TextColumn get id => text()();
@@ -384,6 +395,7 @@ class ProgramUpgradeReceipts extends Table {
     Observations,
     FoodRevisions,
     DiaryEntries,
+    SleepRecords,
     TimingActivities,
     WorkoutExecutions,
     DerivedTargetGraphs,

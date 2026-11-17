@@ -296,6 +296,7 @@ const nutrients = <NutrientDefinition>[
     'Vitamin B12',
   ),
   NutrientDefinition('vitamin-c', Unit.mg, 'VITC', 'Vitamin C', 'Vitamin C'),
+  NutrientDefinition('caffeine', Unit.mg, 'CAFFN', 'Caffeine', 'Koffein'),
 ];
 
 final Map<String, NutrientDefinition> nutrientsById = {

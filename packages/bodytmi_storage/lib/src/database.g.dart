@@ -6858,6 +6858,271 @@ class DiaryEntriesCompanion extends UpdateCompanion<StoredDiaryEntry> {
   }
 }
 
+class $SleepRecordsTable extends SleepRecords
+    with TableInfo<$SleepRecordsTable, StoredSleepRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SleepRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localDateMeta = const VerificationMeta(
+    'localDate',
+  );
+  @override
+  late final GeneratedColumn<String> localDate = GeneratedColumn<String>(
+    'local_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, localDate, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sleep_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredSleepRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('local_date')) {
+      context.handle(
+        _localDateMeta,
+        localDate.isAcceptableOrUnknown(data['local_date']!, _localDateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localDateMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredSleepRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredSleepRecord(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      localDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_date'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+    );
+  }
+
+  @override
+  $SleepRecordsTable createAlias(String alias) {
+    return $SleepRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredSleepRecord extends DataClass
+    implements Insertable<StoredSleepRecord> {
+  final String id;
+  final String localDate;
+  final String snapshot;
+  const StoredSleepRecord({
+    required this.id,
+    required this.localDate,
+    required this.snapshot,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['local_date'] = Variable<String>(localDate);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  SleepRecordsCompanion toCompanion(bool nullToAbsent) {
+    return SleepRecordsCompanion(
+      id: Value(id),
+      localDate: Value(localDate),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory StoredSleepRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredSleepRecord(
+      id: serializer.fromJson<String>(json['id']),
+      localDate: serializer.fromJson<String>(json['localDate']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'localDate': serializer.toJson<String>(localDate),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  StoredSleepRecord copyWith({
+    String? id,
+    String? localDate,
+    String? snapshot,
+  }) => StoredSleepRecord(
+    id: id ?? this.id,
+    localDate: localDate ?? this.localDate,
+    snapshot: snapshot ?? this.snapshot,
+  );
+  StoredSleepRecord copyWithCompanion(SleepRecordsCompanion data) {
+    return StoredSleepRecord(
+      id: data.id.present ? data.id.value : this.id,
+      localDate: data.localDate.present ? data.localDate.value : this.localDate,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSleepRecord(')
+          ..write('id: $id, ')
+          ..write('localDate: $localDate, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, localDate, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredSleepRecord &&
+          other.id == this.id &&
+          other.localDate == this.localDate &&
+          other.snapshot == this.snapshot);
+}
+
+class SleepRecordsCompanion extends UpdateCompanion<StoredSleepRecord> {
+  final Value<String> id;
+  final Value<String> localDate;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const SleepRecordsCompanion({
+    this.id = const Value.absent(),
+    this.localDate = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SleepRecordsCompanion.insert({
+    required String id,
+    required String localDate,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       localDate = Value(localDate),
+       snapshot = Value(snapshot);
+  static Insertable<StoredSleepRecord> custom({
+    Expression<String>? id,
+    Expression<String>? localDate,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (localDate != null) 'local_date': localDate,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SleepRecordsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? localDate,
+    Value<String>? snapshot,
+    Value<int>? rowid,
+  }) {
+    return SleepRecordsCompanion(
+      id: id ?? this.id,
+      localDate: localDate ?? this.localDate,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (localDate.present) {
+      map['local_date'] = Variable<String>(localDate.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SleepRecordsCompanion(')
+          ..write('id: $id, ')
+          ..write('localDate: $localDate, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TimingActivitiesTable extends TimingActivities
     with TableInfo<$TimingActivitiesTable, TimingActivity> {
   @override
@@ -9987,6 +10252,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
   late final $ObservationsTable observations = $ObservationsTable(this);
   late final $FoodRevisionsTable foodRevisions = $FoodRevisionsTable(this);
   late final $DiaryEntriesTable diaryEntries = $DiaryEntriesTable(this);
+  late final $SleepRecordsTable sleepRecords = $SleepRecordsTable(this);
   late final $TimingActivitiesTable timingActivities = $TimingActivitiesTable(
     this,
   );
@@ -10029,6 +10295,10 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     'diary_entries_date',
     'CREATE INDEX diary_entries_date ON diary_entries (local_date)',
   );
+  late final Index sleepRecordsDate = Index(
+    'sleep_records_date',
+    'CREATE INDEX sleep_records_date ON sleep_records (local_date)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -10059,6 +10329,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     observations,
     foodRevisions,
     diaryEntries,
+    sleepRecords,
     timingActivities,
     workoutExecutions,
     derivedTargetGraphs,
@@ -10075,6 +10346,7 @@ abstract class _$TrainingDatabase extends GeneratedDatabase {
     progressionDecisionsTrack,
     observationsMeasure,
     diaryEntriesDate,
+    sleepRecordsDate,
   ];
 }
 
@@ -16188,6 +16460,187 @@ typedef $$DiaryEntriesTableProcessedTableManager =
       StoredDiaryEntry,
       PrefetchHooks Function()
     >;
+typedef $$SleepRecordsTableCreateCompanionBuilder =
+    SleepRecordsCompanion Function({
+      required String id,
+      required String localDate,
+      required String snapshot,
+      Value<int> rowid,
+    });
+typedef $$SleepRecordsTableUpdateCompanionBuilder =
+    SleepRecordsCompanion Function({
+      Value<String> id,
+      Value<String> localDate,
+      Value<String> snapshot,
+      Value<int> rowid,
+    });
+
+class $$SleepRecordsTableFilterComposer
+    extends Composer<_$TrainingDatabase, $SleepRecordsTable> {
+  $$SleepRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SleepRecordsTableOrderingComposer
+    extends Composer<_$TrainingDatabase, $SleepRecordsTable> {
+  $$SleepRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SleepRecordsTableAnnotationComposer
+    extends Composer<_$TrainingDatabase, $SleepRecordsTable> {
+  $$SleepRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get localDate =>
+      $composableBuilder(column: $table.localDate, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$SleepRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$TrainingDatabase,
+          $SleepRecordsTable,
+          StoredSleepRecord,
+          $$SleepRecordsTableFilterComposer,
+          $$SleepRecordsTableOrderingComposer,
+          $$SleepRecordsTableAnnotationComposer,
+          $$SleepRecordsTableCreateCompanionBuilder,
+          $$SleepRecordsTableUpdateCompanionBuilder,
+          (
+            StoredSleepRecord,
+            BaseReferences<
+              _$TrainingDatabase,
+              $SleepRecordsTable,
+              StoredSleepRecord
+            >,
+          ),
+          StoredSleepRecord,
+          PrefetchHooks Function()
+        > {
+  $$SleepRecordsTableTableManager(
+    _$TrainingDatabase db,
+    $SleepRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SleepRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SleepRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SleepRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> localDate = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SleepRecordsCompanion(
+                id: id,
+                localDate: localDate,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String localDate,
+                required String snapshot,
+                Value<int> rowid = const Value.absent(),
+              }) => SleepRecordsCompanion.insert(
+                id: id,
+                localDate: localDate,
+                snapshot: snapshot,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SleepRecordsTable, StoredSleepRecord>(table),
+                  BaseReferences<
+                    _$TrainingDatabase,
+                    $SleepRecordsTable,
+                    StoredSleepRecord
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SleepRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TrainingDatabase,
+      $SleepRecordsTable,
+      StoredSleepRecord,
+      $$SleepRecordsTableFilterComposer,
+      $$SleepRecordsTableOrderingComposer,
+      $$SleepRecordsTableAnnotationComposer,
+      $$SleepRecordsTableCreateCompanionBuilder,
+      $$SleepRecordsTableUpdateCompanionBuilder,
+      (
+        StoredSleepRecord,
+        BaseReferences<
+          _$TrainingDatabase,
+          $SleepRecordsTable,
+          StoredSleepRecord
+        >,
+      ),
+      StoredSleepRecord,
+      PrefetchHooks Function()
+    >;
 typedef $$TimingActivitiesTableCreateCompanionBuilder =
     TimingActivitiesCompanion Function({
       required String id,
@@ -18784,6 +19237,8 @@ class $TrainingDatabaseManager {
       $$FoodRevisionsTableTableManager(_db, _db.foodRevisions);
   $$DiaryEntriesTableTableManager get diaryEntries =>
       $$DiaryEntriesTableTableManager(_db, _db.diaryEntries);
+  $$SleepRecordsTableTableManager get sleepRecords =>
+      $$SleepRecordsTableTableManager(_db, _db.sleepRecords);
   $$TimingActivitiesTableTableManager get timingActivities =>
       $$TimingActivitiesTableTableManager(_db, _db.timingActivities);
   $$WorkoutExecutionsTableTableManager get workoutExecutions =>

@@ -155,6 +155,13 @@ abstract interface class TrainingRepository {
   Future<DiaryEntry?> diaryEntry(String id);
   Future<void> saveDiaryEntry(DiaryEntry entry);
   Future<void> deleteDiaryEntry(String id);
+
+  /// Sleep records with wake dates from [fromDate] (inclusive) to
+  /// [untilDate] (exclusive), ordered by start.
+  Future<List<SleepRecord>> sleepRecords({String? fromDate, String? untilDate});
+  Future<SleepRecord?> sleepRecord(String id);
+  Future<void> saveSleepRecord(SleepRecord record);
+  Future<void> deleteSleepRecord(String id);
   Future<void> saveBodyMassRecord(BodyMassRecord record);
   Future<List<ImportedSessionRecord>> importedSessions();
   Future<void> saveImportedSession(ImportedSessionRecord record);
@@ -253,6 +260,7 @@ final class StoredTrainingService {
       observations: await repository.observationRecords(),
       foods: await repository.foodRevisions(),
       diaryEntries: await repository.diaryEntries(),
+      sleep: await repository.sleepRecords(),
       measures: await repository.measureRevisions(),
       seriesPolicies: await repository.seriesPolicies(),
       profile: await repository.profileRevisions(),

@@ -95,6 +95,7 @@ const openFoodFactsNutrients = {
   'iodine': 'iodine',
   'selenium': 'selenium',
   'phosphorus': 'phosphorus',
+  'caffeine': 'caffeine',
 };
 
 const openFoodFactsLicence =

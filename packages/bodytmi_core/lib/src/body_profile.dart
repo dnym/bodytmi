@@ -1,14 +1,43 @@
 import 'errors.dart';
 import 'quantity.dart';
+import 'solar.dart' as solar;
+
+/// Where you live: decimal-degree coordinates (as decimal strings) and the
+/// IANA time zone used for daylight and schedule times.
+final class ProfileLocation {
+  ProfileLocation._(this.latitudeText, this.longitudeText, this.timeZone);
+  factory ProfileLocation.fromJson(Object? input) {
+    final j = jsonObject(input, 'location');
+    checkKeys(j, {'latitude', 'longitude', 'timeZone'});
+    final lat = requiredString(j, 'latitude');
+    final lon = requiredString(j, 'longitude');
+    for (final v in [lat, lon]) {
+      if (!RegExp(r'^-?\d{1,3}(\.\d{1,8})?$').hasMatch(v))
+        invalid('Coordinates are decimal strings with at most 8 decimals.');
+    }
+    solar.checkCoordinates(double.parse(lat), double.parse(lon));
+    final zone = requiredString(j, 'timeZone');
+    solar.timeZone(zone);
+    return ProfileLocation._(lat, lon, zone);
+  }
+  final String latitudeText, longitudeText, timeZone;
+  double get latitude => double.parse(latitudeText);
+  double get longitude => double.parse(longitudeText);
+  Map<String, Object?> toJson() => {
+    'latitude': latitudeText,
+    'longitude': longitudeText,
+    'timeZone': timeZone,
+  };
+}
 
 /// Profile facts used only as formula inputs: sex, birth date and step
 /// length. Every fact is optional; a formula needing a missing one is
 /// unavailable and says so.
 final class Profile {
-  Profile._(this.sex, this.birthDate, this.stepLength);
+  Profile._(this.sex, this.birthDate, this.stepLength, [this.location]);
   factory Profile.fromJson(Object? input) {
     final j = jsonObject(input, 'profile');
-    checkKeys(j, {'sex', 'birthDate', 'stepLength'});
+    checkKeys(j, {'sex', 'birthDate', 'stepLength', 'location'});
     final sex = j['sex'];
     if (sex != null && sex != 'male' && sex != 'female')
       invalid('Profile sex is male or female.');
@@ -20,11 +49,17 @@ final class Profile {
         : Quantity.fromJson(j['stepLength']);
     if (step != null && step.dimension != Dimension.distance)
       invalid('Profile stepLength is a distance.');
-    return Profile._(sex as String?, birth as String?, step);
+    return Profile._(
+      sex as String?,
+      birth as String?,
+      step,
+      j['location'] == null ? null : ProfileLocation.fromJson(j['location']),
+    );
   }
   static final empty = Profile._(null, null, null);
   final String? sex, birthDate;
   final Quantity? stepLength;
+  final ProfileLocation? location;
 
   /// Whole years of age on [date] (YYYY-MM-DD), or null without a birth date.
   int? ageOn(String date) {
@@ -43,6 +78,7 @@ final class Profile {
         'value': stepLength!.enteredValue,
         'unit': stepLength!.enteredUnit.name,
       },
+    if (location != null) 'location': location!.toJson(),
   };
 }
 

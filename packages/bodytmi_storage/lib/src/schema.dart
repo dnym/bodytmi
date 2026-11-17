@@ -76,6 +76,10 @@ const schema = {
       'CREATE TABLE "diary_entries" ("id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'diary_entries_date':
       'CREATE INDEX diary_entries_date ON diary_entries (local_date)',
+  'sleep_records':
+      'CREATE TABLE "sleep_records" ("id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+  'sleep_records_date':
+      'CREATE INDEX sleep_records_date ON sleep_records (local_date)',
   'observations':
       'CREATE TABLE "observations" ("id" TEXT NOT NULL, "measure_id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'observations_measure':

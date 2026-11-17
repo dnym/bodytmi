@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "sleep": {
+    "id": "night-2026-11-17",
+    "kind": "main",
+    "bedAt": "2026-11-16T22:50:00+01:00",
+    "latencyMinutes": 15,
+    "wakeAt": "2026-11-17T06:45:00+01:00",
+    "outOfBedAt": "2026-11-17T07:00:00+01:00",
+    "awakenings": 1,
+    "awakeMinutes": 10,
+    "quality": 4
+  }
+}

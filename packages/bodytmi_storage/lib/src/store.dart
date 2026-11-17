@@ -130,6 +130,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM observations), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM food_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM diary_entries), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sleep_records), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM measure_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM series_policies), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM profile_revisions), 0)
@@ -1196,6 +1197,59 @@ final class TrainingStore implements TrainingRepository {
   @override
   Future<void> deleteDiaryEntry(String id) =>
       (_db.delete(_db.diaryEntries)..where((t) => t.id.equals(id))).go();
+
+  SleepRecord _sleepRow(StoredSleepRecord row) {
+    final r = SleepRecord.fromJson(jsonDecode(row.snapshot));
+    if (r.id != row.id || r.date != row.localDate)
+      invalid('Sleep record row identity mismatch.');
+    return r;
+  }
+
+  @override
+  Future<List<SleepRecord>> sleepRecords({
+    String? fromDate,
+    String? untilDate,
+  }) async {
+    final query = _db.select(_db.sleepRecords)
+      ..where(
+        (t) =>
+            (fromDate == null
+                ? const Constant(true)
+                : t.localDate.isBiggerOrEqualValue(fromDate)) &
+            (untilDate == null
+                ? const Constant(true)
+                : t.localDate.isSmallerThanValue(untilDate)),
+      );
+    final result = [for (final row in await query.get()) _sleepRow(row)];
+    result.sort((a, b) {
+      final t = a.start.compareTo(b.start);
+      return t != 0 ? t : a.id.compareTo(b.id);
+    });
+    return result;
+  }
+
+  @override
+  Future<SleepRecord?> sleepRecord(String id) async {
+    final row = await (_db.select(
+      _db.sleepRecords,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    return row == null ? null : _sleepRow(row);
+  }
+
+  @override
+  Future<void> saveSleepRecord(SleepRecord record) => _db
+      .into(_db.sleepRecords)
+      .insertOnConflictUpdate(
+        SleepRecordsCompanion.insert(
+          id: record.id,
+          localDate: record.date,
+          snapshot: _snapshot(record.toJson()),
+        ),
+      );
+
+  @override
+  Future<void> deleteSleepRecord(String id) =>
+      (_db.delete(_db.sleepRecords)..where((t) => t.id.equals(id))).go();
 
   @override
   Future<List<MeasureRevision>> measureRevisions() =>

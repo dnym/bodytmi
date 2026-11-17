@@ -46,6 +46,8 @@ export 'src/food_service.dart';
 export 'src/diary_service.dart';
 export 'src/energy_calibration.dart';
 export 'src/reference_service.dart';
+export 'src/sleep_service.dart';
+export 'src/sleep_import_service.dart';
 export 'src/energy_service.dart';
 export 'src/diet_service.dart';
 export 'src/programme_service.dart';

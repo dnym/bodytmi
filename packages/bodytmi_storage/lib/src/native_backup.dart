@@ -214,6 +214,7 @@ final class NativeBackup {
         'observations',
         'food_revisions',
         'diary_entries',
+        'sleep_records',
         'measure_revisions',
         'series_policies',
         'profile_revisions',
@@ -832,6 +833,17 @@ final class NativeBackup {
           entries.add(e);
         }
         validateDiaryEntries(entries, foods);
+        validateSleepRecords([
+          for (final row in db.select('SELECT * FROM sleep_records'))
+            (() {
+              final r = SleepRecord.fromJson(
+                jsonDecode(row['snapshot'] as String),
+              );
+              if (r.id != row['id'] || r.date != row['local_date'])
+                invalid('Sleep record row identity mismatch.');
+              return r;
+            })(),
+        ]);
         final massRecords = [
           for (final r in observations)
             if (r.observation.isBodyMass)
