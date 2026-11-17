@@ -106,6 +106,8 @@ const storedCommandNames = [
   'observation show',
   'observation list',
   'observation resolve',
+  'observation import-preview',
+  'observation import-apply',
   'catalog preview',
   'catalog apply',
   'blueprint publish',
@@ -624,6 +626,8 @@ Future<Map<String, Object?>> executeStored(
       'attributes',
       'includeDeleted',
     },
+    'observation import-preview' => {'document'},
+    'observation import-apply' => {'document', 'onChanged', 'confirm'},
     'catalog preview' => {'document'},
     'catalog apply' => {'document', 'onChanged', 'confirm'},
     'blueprint publish' => {'blueprint', 'expectedRevision'},
@@ -2594,6 +2598,18 @@ Future<Map<String, Object?>> executeStored(
           integer('expectedVersion'),
           confirm: flag('confirm'),
         )).toJson();
+      case 'observation import-preview':
+        data = await ObservationImportService(
+          store,
+        ).preview(ObservationImportDocument.fromJson(request['document']));
+      case 'observation import-apply':
+        data = await ObservationImportService(store).apply(
+          ObservationImportDocument.fromJson(request['document']),
+          onChanged: request.containsKey('onChanged')
+              ? requiredString(request, 'onChanged')
+              : 'reject',
+          confirm: flag('confirm'),
+        );
       case 'observation resolve':
         data = (await ObservationService(store).resolve(
           identifier(request, 'measure'),

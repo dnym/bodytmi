@@ -53,6 +53,7 @@ const commandNames = [
   'blueprint validate',
   'catalog validate',
   'measure validate',
+  'observation import-validate',
   'measure builtins',
   'calc list',
   'calc evaluate',
@@ -872,6 +873,37 @@ final class Commands {
         data = {
           'revision': builtInMeasureRevision,
           'measures': [for (final m in builtInMeasures) m.toJson()],
+        };
+      case 'observation import-validate':
+        keys({'document'});
+        final document = ObservationImportDocument.fromJson(
+          request['document'],
+        );
+        // Built-in measures are checked here; custom ones need the profile
+        // that defines them (observation import-preview).
+        final builtIn = {for (final m in builtInMeasures) m.id: m};
+        final custom = <String>{};
+        for (final item in document.observations) {
+          final o = item.observation(document.namespace, 1);
+          final measure = builtIn[o.measureId];
+          if (measure == null) {
+            custom.add(o.measureId);
+            continue;
+          }
+          o.validateAgainst(measure);
+          if (o.isBodyMass) o.toBodyMass();
+        }
+        data = {
+          'format': observationImportFormat,
+          'namespace': document.namespace,
+          'observations': document.observations.length,
+          'measures':
+              (document.observations
+                  .map((o) => o.json['measure'] as String)
+                  .toSet()
+                  .toList()
+                ..sort()),
+          'uncheckedCustomMeasures': custom.toList()..sort(),
         };
       case 'catalog validate':
         keys({'document'});

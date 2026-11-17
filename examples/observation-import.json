@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "document": {
+    "format": "bodytmi-observation-import/1",
+    "source": {"namespace": "workbook", "app": "spreadsheet", "exportedAt": "2026-11-16T21:00:00+01:00"},
+    "observations": [
+      {"sourceId": "mass/2026-11-15", "measure": "body-mass", "value": {"value": "84.6", "unit": "kg"}, "observedAt": "2026-11-15T07:05:00+01:00", "attributes": {"context": "health"}},
+      {"sourceId": "mass/2026-11-16", "measure": "body-mass", "value": {"value": "84.3", "unit": "kg"}, "observedAt": "2026-11-16T07:02:00+01:00", "attributes": {"context": "health"}},
+      {"sourceId": "bia/2026-11-16", "measure": "body-fat", "value": {"value": "22.4", "unit": "percent"}, "date": "2026-11-16", "attributes": {"method": "bio-impedance"}, "source": "bathroom scale"},
+      {"sourceId": "steps/2026-11-15", "measure": "steps", "value": {"value": "9412", "unit": "step"}, "date": "2026-11-15"},
+      {"sourceId": "steps/2026-11-16", "measure": "steps", "value": {"value": "7031", "unit": "step"}, "date": "2026-11-16"},
+      {"sourceId": "waist/2026-11-01", "id": "waist-2026-11-01", "measure": "circumference", "value": {"value": "91.5", "unit": "cm"}, "date": "2026-11-01", "attributes": {"site": "waist"}}
+    ]
+  }
+}

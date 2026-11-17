@@ -23,6 +23,7 @@ export 'src/blueprint.dart';
 export 'src/catalog_import.dart';
 export 'src/measure.dart';
 export 'src/observation.dart';
+export 'src/observation_import.dart';
 export 'src/resolution.dart';
 export 'src/calculation.dart';
 export 'src/body_profile.dart';
