@@ -1,5 +1,6 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'diet_service.dart';
+import 'plan_service.dart';
 
 /// Record kinds of the energy and diet domain and how each is decoded.
 /// A decoder checks the snapshot and returns the identity it carries, which
@@ -16,6 +17,8 @@ final Map<String, _Decoder> _decoders = {
     return (r.cycle.id, r.number);
   },
   dietRunKind: (s) => (DietRun.fromJson(s).id, 1),
+  bodyPlanKind: (s) => (BodyPlan.fromJson(s).id, 1),
+  stepGoalKind: (s) => ('daily', StepGoalRevision.fromJson(s).number),
   'maintenance-method': (s) {
     final r = MaintenanceMethodRevision.fromJson(s);
     return ('maintenance', r.number);
@@ -49,6 +52,10 @@ void validateDietRecords(List<DietRecord> records) {
   validateDietReferences(
     [for (final s in of(dayTypeKind)) DayTypeRevision.fromJson(s)],
     [for (final s in of(dietCycleKind)) DietCycleRevision.fromJson(s)],
+    [for (final s in of(dietRunKind)) DietRun.fromJson(s)],
+  );
+  validateBodyPlans(
+    [for (final s in of(bodyPlanKind)) BodyPlan.fromJson(s)],
     [for (final s in of(dietRunKind)) DietRun.fromJson(s)],
   );
 }

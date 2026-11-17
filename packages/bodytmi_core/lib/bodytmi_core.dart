@@ -30,6 +30,7 @@ export 'src/diet_record.dart';
 export 'src/diet.dart';
 export 'src/programme.dart';
 export 'src/simulation.dart';
+export 'src/body_plan.dart';
 export 'src/resolution.dart';
 export 'src/calculation.dart';
 export 'src/body_profile.dart';

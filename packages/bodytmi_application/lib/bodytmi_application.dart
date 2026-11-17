@@ -45,6 +45,7 @@ export 'src/diet_records.dart';
 export 'src/energy_service.dart';
 export 'src/diet_service.dart';
 export 'src/programme_service.dart';
+export 'src/plan_service.dart';
 export 'src/body_service.dart';
 export 'src/preset_service.dart';
 export 'src/catalog_search.dart';

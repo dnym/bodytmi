@@ -98,6 +98,14 @@ const storedCommandNames = [
   'energy method',
   'energy methods',
   'energy estimate',
+  'plan preview',
+  'plan activate',
+  'plan end',
+  'plan show',
+  'plan list',
+  'stepgoal set',
+  'stepgoal list',
+  'stepgoal show',
   'programme guide',
   'programme compare',
   'programme apply',
@@ -633,6 +641,39 @@ Future<Map<String, Object?>> executeStored(
       'method',
       'simulateDays',
     },
+    'plan preview' => {
+      'programme',
+      'choices',
+      'cycleId',
+      'cycleRevision',
+      'startDate',
+      'asOf',
+      'context',
+    },
+    'plan activate' => {
+      'planId',
+      'programme',
+      'choices',
+      'cycleId',
+      'cycleRevision',
+      'startDate',
+      'asOf',
+      'requestId',
+      'companions',
+      'context',
+    },
+    'plan end' => {
+      'planId',
+      'date',
+      'expectedVersion',
+      'resumeRuns',
+      'confirm',
+    },
+    'plan show' => {'planId'},
+    'plan list' => <String>{},
+    'stepgoal set' => {'from', 'steps', 'expectedRevision'},
+    'stepgoal list' => <String>{},
+    'stepgoal show' => {'date'},
     'programme compare' => {'choices', 'asOf', 'context', 'simulateDays'},
     'cycle guide' => {
       'cycleId',
@@ -2614,6 +2655,103 @@ Future<Map<String, Object?>> executeStored(
         data = [
           for (final m in await EnergyService(store).methods()) m.toJson(),
         ];
+      case 'plan preview':
+        data = await PlanService(store).preview(
+          programme: request['programme'] == null
+              ? null
+              : identifier(request, 'programme'),
+          choices: jsonObject(
+            request['choices'] ?? <String, Object?>{},
+            'choices',
+          ),
+          cycleId: request['cycleId'] == null
+              ? null
+              : identifier(request, 'cycleId'),
+          cycleRevision: request['cycleRevision'] == null
+              ? null
+              : integer('cycleRevision', min: 1),
+          startDate: requiredString(request, 'startDate'),
+          asOfText: requiredString(request, 'asOf'),
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+        );
+      case 'plan activate':
+        final companions = jsonObject(
+          request['companions'] ?? <String, Object?>{},
+          'companions',
+        );
+        checkKeys(companions, {'steps', 'pauseRuns'});
+        if (companions.containsKey('steps') && companions['steps'] is! bool)
+          invalid('companions.steps is true or false.');
+        data = (await PlanService(store).activate(
+          planId: identifier(request, 'planId'),
+          programme: request['programme'] == null
+              ? null
+              : identifier(request, 'programme'),
+          choices: jsonObject(
+            request['choices'] ?? <String, Object?>{},
+            'choices',
+          ),
+          cycleId: request['cycleId'] == null
+              ? null
+              : identifier(request, 'cycleId'),
+          cycleRevision: request['cycleRevision'] == null
+              ? null
+              : integer('cycleRevision', min: 1),
+          startDate: requiredString(request, 'startDate'),
+          asOfText: requiredString(request, 'asOf'),
+          requestId: identifier(request, 'requestId'),
+          steps: companions['steps'] == true,
+          pauseRuns: [
+            for (final (i, _)
+                in (companions['pauseRuns'] == null
+                        ? const <Object?>[]
+                        : jsonList(companions, 'pauseRuns'))
+                    .indexed)
+              identifier({'run': (companions['pauseRuns']! as List)[i]}, 'run'),
+          ],
+          context: request.containsKey('context')
+              ? identifier(request, 'context')
+              : 'health',
+        )).toJson();
+      case 'plan end':
+        data = (await PlanService(store).end(
+          identifier(request, 'planId'),
+          requiredString(request, 'date'),
+          integer('expectedVersion', min: 1),
+          resumeRuns: [
+            for (final r
+                in request['resumeRuns'] == null
+                    ? const <Object?>[]
+                    : jsonList(request, 'resumeRuns'))
+              identifier({'run': r}, 'run'),
+          ],
+          confirm: flag('confirm'),
+        )).toJson();
+      case 'plan show':
+        data = (await PlanService(
+          store,
+        ).plan(identifier(request, 'planId'))).toJson();
+      case 'plan list':
+        data = [for (final p in await PlanService(store).plans()) p.toJson()];
+      case 'stepgoal set':
+        final steps = request['steps'];
+        if (steps != null && steps is! int)
+          invalid('steps is a whole number or null.');
+        data = (await PlanService(store).setStepGoal(
+          requiredString(request, 'from'),
+          steps as int?,
+          integer('expectedRevision', min: 0),
+        )).toJson();
+      case 'stepgoal list':
+        data = [
+          for (final g in await PlanService(store).stepGoals()) g.toJson(),
+        ];
+      case 'stepgoal show':
+        data = await PlanService(
+          store,
+        ).stepGoalOnDate(requiredString(request, 'date'));
       case 'programme guide':
         data = await ProgrammeService(store).guide(
           identifier(request, 'programme'),
