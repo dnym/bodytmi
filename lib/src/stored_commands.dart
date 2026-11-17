@@ -107,6 +107,7 @@ const storedCommandNames = [
   'plan accept',
   'plan decline',
   'plan list',
+  'plan target',
   'stepgoal set',
   'stepgoal list',
   'stepgoal show',
@@ -675,6 +676,7 @@ Future<Map<String, Object?>> executeStored(
       'confirm',
     },
     'plan show' => {'planId'},
+    'plan target' => {'planId', 'expectedVersion', 'target'},
     'plan review' => {'planId', 'asOf', 'policy', 'performanceDropping'},
     'plan proposals' => {'planId'},
     'plan accept' => {'proposalId', 'from', 'choices'},
@@ -2740,6 +2742,14 @@ Future<Map<String, Object?>> executeStored(
               identifier({'run': r}, 'run'),
           ],
           confirm: flag('confirm'),
+        )).toJson();
+      case 'plan target':
+        if (!request.containsKey('target'))
+          invalid('plan target takes target (null clears it).');
+        data = (await PlanService(store).setTarget(
+          identifier(request, 'planId'),
+          integer('expectedVersion', min: 1),
+          request['target'],
         )).toJson();
       case 'plan review':
         final dropping = request['performanceDropping'];

@@ -5,6 +5,7 @@ import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
 
+import 'cli_test.dart';
 import 'support.dart';
 
 Map<String, Object?> _q(String value, String unit) => {
@@ -304,6 +305,126 @@ void foodTests() {
       'quick': {'salt': _q('2.5', 'g')},
     }).nutrition(math);
     equal(quick.display('sodium'), Fraction.integer(1000));
+  });
+
+  test('Open Food Facts products map exactly or are refused', () {
+    equal(plainDecimal('2e-05'), '0.00002');
+    equal(plainDecimal('1.5E+2'), '150');
+    equal(plainDecimal('0.0'), '0');
+    equal(plainDecimal('678'), '678');
+    final text = jsonNumbersAsText(
+      '{"a":"x:1,","b":[1,-2.5e-3],"c":{"d":0.1}}',
+    );
+    equal(text, '{"a":"x:1,","b":["1","-2.5e-3"],"c":{"d":"0.1"}}');
+    Map<String, Object?> product(String per) => jsonObject(
+      jsonDecode(
+        jsonNumbersAsText('''{
+          "code": "7311870010970",
+          "product_name": "Butter blend",
+          "brands": "Brand",
+          "quantity": "500 g",
+          "nutrition_data_per": "$per",
+          "nutriments": {
+            "energy-kcal_100g": 678, "energy-kj_100g": 2789,
+            "fat_100g": 75, "proteins_100g": 0.4,
+            "salt_100g": 1.2, "sodium_100g": 0.48,
+            "vitamin-d_100g": 2e-05, "vitamin-a_100g": 0.0009,
+            "sugars_100g": 0.4, "sugars_modifier": "<",
+            "alcohol_100g": 0
+          },
+          "nutriments_estimated": {"fiber_100g": 3}
+        }'''),
+      ),
+      'p',
+    );
+    final result = foodFromOpenFoodFacts(product('100g'));
+    final food = result.food;
+    equal(food.id, 'off-7311870010970');
+    check(!food.perVolume);
+    equal(food.nutrients['energy']!.enteredValue, '678');
+    equal(food.nutrients['energy']!.enteredUnit, Unit.kcal);
+    equal(food.nutrients['vitamin-d']!.enteredValue, '0.00002');
+    equal(food.valueTypes['sugars'], '<');
+    // Vitamin A, alcohol (% vol) and Open Food Facts' estimates are not used.
+    check(!food.nutrients.containsKey('vitamin-a'));
+    check(!food.nutrients.containsKey('alcohol'));
+    check(!food.nutrients.containsKey('fibre'));
+    equal(food.source!.kind, 'lookup');
+    check(foodFromOpenFoodFacts(product('100ml')).food.perVolume);
+    rejects(() => foodFromOpenFoodFacts(product('serving')), 'not_found');
+  });
+
+  test('food lookup and search use only the endpoint asked', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final paths = <String>[];
+    server.listen((request) async {
+      paths.add(request.uri.toString());
+      final response = request.response..headers.contentType = ContentType.json;
+      if (request.uri.path == '/api/v2/product/7310070005250.json') {
+        response.write(
+          '{"code":"7310070005250","product":{"code":"7310070005250",'
+          '"product_name":"Cola zero","nutrition_data_per":"100ml",'
+          '"nutriments":{"energy-kcal_100g":1,"energy-kcal_modifier":"<",'
+          '"salt_100g":0.01}}}',
+        );
+      } else if (request.uri.path == '/search') {
+        response.write(
+          '{"hits":[{"code":"7310070005250","product_name":"Cola zero",'
+          '"brands":["Brand"]}]}',
+        );
+      } else {
+        response.statusCode = 404;
+        response.write('{"status":0}');
+      }
+      await response.close();
+    });
+    try {
+      final endpoint = 'http://127.0.0.1:${server.port}';
+      Future<({int code, Map<String, Object?> body})> run(
+        String command,
+        Map<String, Object?> fields,
+      ) async {
+        final r = await invoke(
+          command.split(' '),
+          jsonEncode({'schemaVersion': 1, 'endpoint': endpoint, ...fields}),
+        );
+        return (
+          code: r.code,
+          body: jsonObject(jsonDecode(r.code == 0 ? r.output : r.error), 'r'),
+        );
+      }
+
+      final found = await run('food lookup', {'barcode': '7310070005250'});
+      equal(found.code, 0);
+      final food = jsonObject(
+        jsonObject(found.body['data'], 'd')['food'],
+        'food',
+      );
+      equal(food['basis'], '100ml');
+      jsonEqual(food['valueTypes'], {'energy': '<'});
+      final missing = await run('food lookup', {'barcode': '123456'});
+      equal(missing.code, 3);
+      final bad = await run('food lookup', {'barcode': 'abc'});
+      equal(bad.code, 2);
+      final search = await run('food search-online', {'query': 'cola'});
+      equal(search.code, 0);
+      jsonEqual(jsonObject(search.body['data'], 'd')['results'], [
+        {'barcode': '7310070005250', 'name': 'Cola zero', 'brands': 'Brand'},
+      ]);
+      // Only the barcode and the query text left the machine.
+      check(paths.every((p) => !p.contains('database')), '$paths');
+      final down = await invoke(
+        ['food', 'lookup'],
+        jsonEncode({
+          'schemaVersion': 1,
+          'barcode': '7310070005250',
+          'endpoint': 'http://127.0.0.1:1',
+        }),
+      );
+      equal(down.code, 4);
+    } finally {
+      await server.close(force: true);
+    }
   });
 
   test('NNR 2023 adult reference values match the published tables', () {

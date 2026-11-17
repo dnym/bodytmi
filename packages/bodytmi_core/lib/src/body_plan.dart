@@ -1,5 +1,6 @@
 import 'energy.dart' show requireDate;
 import 'errors.dart';
+import 'quantity.dart';
 import 'named_diet.dart';
 
 /// The current body plan: one programme (or your own cycle) as a diet run,
@@ -22,7 +23,9 @@ final class BodyPlan {
       'undone',
       'namedDiet',
       'contentVersion',
+      'target',
     });
+    if (j['target'] != null) PlanTarget.fromJson(j['target']);
     if (j['namedDiet'] != null) namedDiet(identifier(j, 'namedDiet'));
     if (j['schemaVersion'] != 1)
       invalid('Unsupported body plan schemaVersion.');
@@ -94,9 +97,52 @@ final class BodyPlan {
         pausedVersion: r['pausedVersion']! as int,
       ),
   ];
+  PlanTarget? get target =>
+      json['target'] == null ? null : PlanTarget.fromJson(json['target']);
   bool covers(String date) =>
       date.compareTo(startDate) >= 0 &&
       (endDate == null || date.compareTo(endDate!) < 0);
+  Map<String, Object?> toJson() => json;
+}
+
+/// When a plan is done: the trend mass, or body fat from the selected
+/// source, at most (or at least) [value]. Review proposes ending the plan
+/// once it is reached; nothing ends on its own.
+final class PlanTarget {
+  PlanTarget._(this.json, this.value);
+  factory PlanTarget.fromJson(Object? input) {
+    final j = jsonObject(input, 'target');
+    checkKeys(j, {'measure', 'relation', 'value'});
+    final measure = j['measure'];
+    if (measure != 'mass' && measure != 'bodyFat')
+      invalid('A plan target measure is mass or bodyFat.');
+    final relation = j['relation'];
+    if (relation != 'atMost' && relation != 'atLeast')
+      invalid('A plan target relation is atMost or atLeast.');
+    final value = Quantity.fromJson(j['value']);
+    final dimension = measure == 'mass' ? Dimension.mass : Dimension.ratio;
+    if (value.dimension != dimension ||
+        value.value.compareTo(Decimal.zero) <= 0)
+      invalid(
+        measure == 'mass'
+            ? 'A mass target is a positive mass.'
+            : 'A body-fat target is a positive percentage.',
+      );
+    if (measure == 'bodyFat' && value.value.compareTo(Decimal.parse('1')) >= 0)
+      invalid('A body-fat target is below 100 %.');
+    return PlanTarget._(Map.unmodifiable(j), value);
+  }
+  final Map<String, Object?> json;
+  final Quantity value;
+  String get measure => json['measure']! as String;
+  bool get atMost => json['relation'] == 'atMost';
+
+  /// Whether canonical [current] (kg, or a fraction) reaches the target.
+  bool reachedBy(Decimal current) {
+    final c = current.compareTo(value.value);
+    return atMost ? c <= 0 : c >= 0;
+  }
+
   Map<String, Object?> toJson() => json;
 }
 

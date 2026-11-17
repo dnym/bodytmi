@@ -80,6 +80,99 @@ double _energyOn(Map<String, Object?> schedule, int index) {
 }
 
 void reviewTests() {
+  test('a reached plan target proposes ending the plan', () async {
+    final dir = await Directory.systemTemp.createTemp('bodytmi-target-');
+    final store = await TrainingStore.open('${dir.path}/db.sqlite');
+    try {
+      // 90 kg falling 0.1 kg a day; the trend lags behind the scale.
+      await _setUp(
+        store,
+        mass: (day) => (90 - day * 0.1).toStringAsFixed(1),
+        days: 60,
+      );
+      final plans = PlanService(store);
+      final reviews = ReviewService(store);
+      var plan = await plans.activate(
+        planId: 'cut',
+        programme: 'normal',
+        startDate: _date(1),
+        asOfText: _at(0),
+        requestId: 'r',
+      );
+      rejects(
+        () => PlanTarget.fromJson({
+          'measure': 'mass',
+          'relation': 'atMost',
+          'value': _q('20', 'percent'),
+        }),
+      );
+      rejects(
+        () => PlanTarget.fromJson({
+          'measure': 'bodyFat',
+          'relation': 'below',
+          'value': _q('15', 'percent'),
+        }),
+      );
+      final stale = await _failure(
+        () => plans.setTarget('cut', plan.contentVersion + 1, null),
+      );
+      equal(stale.code, 'conflict');
+      plan = await plans.setTarget('cut', plan.contentVersion, {
+        'measure': 'mass',
+        'relation': 'atMost',
+        'value': _q('86', 'kg'),
+      });
+      equal(plan.target!.value.enteredValue, '86');
+      Map<String, Object?> finding(Map<String, Object?> review) =>
+          (review['findings']! as List)
+              .cast<Map<String, Object?>>()
+              .singleWhere((f) => f['kind'] == 'target');
+      var review = await reviews.review('cut', _at(20));
+      equal(finding(review)['status'], 'not-reached');
+      check(
+        !(review['pending']! as List).any((p) => (p as Map)['kind'] == 'end'),
+      );
+      review = await reviews.review('cut', _at(55));
+      equal(finding(review)['status'], 'reached');
+      final end = (review['pending']! as List)
+          .cast<Map<String, Object?>>()
+          .singleWhere((p) => p['kind'] == 'end');
+      jsonEqual(end['change'], {'endDate': _date(56)});
+      await reviews.accept(end['id']! as String, _date(56));
+      plan = await plans.plan('cut');
+      equal(plan.status, 'ended');
+      equal(plan.endDate, _date(56));
+      // A body-fat target needs the selected source; it never guesses.
+      final other = await TrainingStore.open('${dir.path}/other.sqlite');
+      try {
+        await _setUp(other, mass: (_) => '90', days: 30);
+        final p = await PlanService(other).activate(
+          planId: 'bf',
+          programme: 'normal',
+          startDate: _date(1),
+          asOfText: _at(0),
+          requestId: 'r',
+        );
+        await PlanService(other).setTarget('bf', p.contentVersion, {
+          'measure': 'bodyFat',
+          'relation': 'atMost',
+          'value': _q('20', 'percent'),
+        });
+        final r = await ReviewService(other).review('bf', _at(10));
+        equal(finding(r)['status'], 'reached');
+        equal(
+          canonicalJson(finding(r)['current']),
+          canonicalJson({'value': '20', 'unit': 'percent'}),
+        );
+      } finally {
+        await other.close();
+      }
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
+
   test('flat mass proposes −100 kcal a day, accepted once', () async {
     final dir = await Directory.systemTemp.createTemp('bodytmi-review-');
     final store = await TrainingStore.open('${dir.path}/db.sqlite');

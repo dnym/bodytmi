@@ -265,6 +265,29 @@ final class PlanService {
     return plan;
   });
 
+  /// Sets (or with null clears) the target that review checks.
+  Future<BodyPlan> setTarget(
+    String planId,
+    int expectedVersion,
+    Object? target,
+  ) => repository.transaction(() async {
+    final plan = await this.plan(planId);
+    if (plan.status != 'active') invalid('The plan has ended.');
+    if (plan.contentVersion != expectedVersion)
+      throw const BodyTmiException('conflict', 'Body plan changed.');
+    final json = {...plan.json, 'contentVersion': expectedVersion + 1};
+    if (target == null) {
+      json.remove('target');
+    } else {
+      json['target'] = PlanTarget.fromJson(target).toJson();
+    }
+    final next = BodyPlan.fromJson(json);
+    await repository.saveDietRecord(
+      DietRecord(bodyPlanKind, planId, 1, next.toJson()),
+    );
+    return next;
+  });
+
   /// Ends the plan before [date] and undoes the companions named: resumes
   /// each run in [resumeRuns] the plan paused, unless you changed it since
   /// (then it is left alone and reported). The plan's step goals stop with

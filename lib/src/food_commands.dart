@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:bodytmi_application/bodytmi_application.dart';
@@ -19,6 +21,8 @@ const foodCommandNames = [
   'food dataset-search',
   'food dataset-show',
   'food adopt',
+  'food lookup',
+  'food search-online',
   'diary add',
   'diary update',
   'diary delete',
@@ -48,6 +52,49 @@ Future<FoodDataset> _dataset(String path) async {
       invalid('Food dataset exceeds the resource limit.');
   }
   return FoodDataset.fromJson(jsonDecode(utf8.decode(bytes)));
+}
+
+String _endpoint(Map<String, Object?> request, String fallback) {
+  final value = request['endpoint'] ?? fallback;
+  if (value is! String || !RegExp(r'^https?://[^\s?#]+$').hasMatch(value))
+    invalid('endpoint is an http(s) base URL.');
+  return value.endsWith('/') ? value.substring(0, value.length - 1) : value;
+}
+
+/// Online lookups send only the barcode or search text, with a generic
+/// client name and no profile data.
+Future<String> _getText(Uri uri, {bool allowNotFound = false}) async {
+  final client = HttpClient()
+    ..userAgent = 'BodyTMI/0.1 (open source health app)'
+    ..connectionTimeout = const Duration(seconds: 20);
+  try {
+    final request = await client.getUrl(uri);
+    request.headers.set('accept', 'application/json');
+    final response = await request.close().timeout(const Duration(seconds: 30));
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in response.timeout(const Duration(seconds: 30))) {
+      if (bytes.length + chunk.length > 8 * 1024 * 1024)
+        invalid('The online response exceeds 8 MiB.');
+      bytes.add(chunk);
+    }
+    final text = utf8.decode(bytes.takeBytes(), allowMalformed: true);
+    if (response.statusCode == 404 && allowNotFound) return text;
+    if (response.statusCode != 200)
+      throw BodyTmiException(
+        'io',
+        'Open Food Facts answered HTTP ${response.statusCode}.',
+      );
+    return text;
+  } on SocketException catch (e) {
+    throw BodyTmiException(
+      'io',
+      'Open Food Facts is unreachable: ${e.message}',
+    );
+  } on TimeoutException {
+    throw const BodyTmiException('io', 'Open Food Facts did not answer.');
+  } finally {
+    client.close(force: true);
+  }
 }
 
 /// `null` is the primary nutrients; `"all"` every known one.
@@ -96,6 +143,8 @@ Future<Map<String, Object?>> executeFood(
     'food dataset-search' => {'dataset', 'query', 'limit'},
     'food dataset-show' => {'dataset', 'number', 'nutrients'},
     'food adopt' => {'dataset', 'number', 'foodId'},
+    'food lookup' => {'barcode', 'foodId', 'endpoint'},
+    'food search-online' => {'query', 'limit', 'endpoint'},
     'diary add' => {'entry'},
     'diary update' => {'id', 'expectedVersion', 'entry'},
     'diary delete' => {'id', 'expectedVersion', 'confirm'},
@@ -151,6 +200,71 @@ Future<Map<String, Object?>> executeFood(
               'english': ?r.food.english,
               'match': r.match,
             },
+        ],
+      });
+    case 'food lookup':
+      final barcode = requiredString(request, 'barcode');
+      if (!RegExp(r'^\d{4,20}$').hasMatch(barcode))
+        invalid('barcode is 4–20 digits.');
+      final base = _endpoint(request, 'https://world.openfoodfacts.org');
+      final body = await _getText(
+        Uri.parse(
+          '$base/api/v2/product/$barcode.json?fields=code,product_name,'
+          'product_name_sv,brands,quantity,nutrition_data_per,nutriments',
+        ),
+        allowNotFound: true,
+      );
+      final json = jsonObject(jsonDecode(jsonNumbersAsText(body)), 'response');
+      final product = json['product'];
+      if (product is! Map<String, Object?>)
+        throw BodyTmiException(
+          'not_found',
+          'Open Food Facts has no product $barcode.',
+        );
+      final result = foodFromOpenFoodFacts(
+        product,
+        foodId: request['foodId'] == null
+            ? null
+            : identifier(request, 'foodId'),
+      );
+      return ok({
+        'food': result.food.toJson(),
+        'skipped': result.skipped,
+        'licence': openFoodFactsLicence,
+        'saved': false,
+        'next': 'Review the food, then save it with food publish.',
+      });
+    case 'food search-online':
+      final query = requiredString(request, 'query');
+      if (query.length > 200) invalid('query is at most 200 characters.');
+      final limit = optionalInteger('limit') ?? 10;
+      if (limit > 50) invalid('limit is at most 50.');
+      final base = _endpoint(request, 'https://search.openfoodfacts.org');
+      final body = await _getText(
+        Uri.parse(base).replace(
+          path: '${Uri.parse(base).path}/search',
+          queryParameters: {
+            'q': query,
+            'page_size': '$limit',
+            'fields': 'code,product_name,brands',
+          },
+        ),
+      );
+      final json = jsonObject(jsonDecode(body), 'response');
+      return ok({
+        'licence': openFoodFactsLicence,
+        'results': [
+          for (final hit in (json['hits'] as List?) ?? const [])
+            if (hit is Map<String, Object?> && hit['code'] is String)
+              {
+                'barcode': hit['code'],
+                'name': ?hit['product_name'],
+                'brands': ?switch (hit['brands']) {
+                  final List<Object?> b when b.isNotEmpty => b.join(', '),
+                  final String b when b.isNotEmpty => b,
+                  _ => null,
+                },
+              },
         ],
       });
     case 'food dataset-show':

@@ -132,6 +132,56 @@ final class ReviewService {
     }
 
     final (:inputs, :frozen) = await diets.currentInputs(asOfText);
+    // Target: the trend mass or selected body fat reached the plan target.
+    final target = plan.target;
+    if (target != null) {
+      final current = target.measure == 'mass'
+          ? jsonObject(frozen['mass'] ?? {'status': 'unavailable'}, 'mass')
+          : jsonObject(frozen['bodyFat'], 'bodyFat');
+      final resolved =
+          current['status'] == 'resolved' ||
+          (target.measure == 'mass' && frozen['mass'] != null);
+      if (!resolved) {
+        findings.add({
+          'kind': 'target',
+          'status': 'unknown',
+          'target': target.toJson(),
+          'reason': target.measure == 'mass'
+              ? 'The trend mass is unavailable.'
+              : 'The selected body-fat source is unavailable.',
+        });
+      } else {
+        final value = target.measure == 'mass'
+            ? Decimal.parse(current['value']! as String)
+            : Quantity.fromJson(current['value']).value;
+        final reached = target.reachedBy(value);
+        findings.add({
+          'kind': 'target',
+          'status': reached ? 'reached' : 'not-reached',
+          'target': target.toJson(),
+          'current': target.measure == 'mass'
+              ? {'value': current['value'], 'unit': 'kg'}
+              : current['value'],
+          if (target.measure == 'bodyFat') 'source': current['source'],
+        });
+        if (reached && !offers.any((o) => o['kind'] == 'end')) {
+          final end = addDays(date, 1);
+          offers.add({
+            'kind': 'end',
+            'explanation':
+                'The plan target is reached (${target.measure} '
+                '${target.atMost ? 'at most' : 'at least'} '
+                '${target.value.enteredValue} ${target.value.enteredUnit.name}); '
+                'end the plan from $end.',
+            'evidence': {
+              'target': target.toJson(),
+              'current': findings.last['current'],
+            },
+            'change': {'endDate': end},
+          });
+        }
+      }
+    }
     // Category.
     final category = jsonObject(frozen['category'], 'category');
     final planCategory = await _planCategory(plan);
