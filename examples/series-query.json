@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "database": "/path/to/profile.sqlite",
+  "measure": "steps",
+  "from": "2026-11-02",
+  "until": "2026-11-16",
+  "bucket": "week",
+  "summary": "sum"
+}

@@ -177,6 +177,29 @@ final class ObservationService {
     );
   });
 
+  /// One series (measure + exact attributes) of non-deleted observations,
+  /// optionally limited to local dates [fromDate, untilDate).
+  Future<SeriesData> series(
+    String measureId, {
+    Map<String, String> attributes = const {},
+    String? fromDate,
+    String? untilDate,
+  }) => repository.transaction(() async {
+    final definition = await measure(measureId);
+    return SeriesData.select(
+      measure: definition,
+      attributes: attributes,
+      observations: [
+        for (final r in await repository.observationRecords(
+          measureId: measureId,
+          fromDate: fromDate,
+          untilDate: untilDate,
+        ))
+          if (!r.deleted) r.observation,
+      ],
+    );
+  });
+
   /// Sets (or, with a null [policy], clears) the stored resolution policy of
   /// a measure (empty [attributes]) or one series; compare-and-set on the
   /// series' revision.

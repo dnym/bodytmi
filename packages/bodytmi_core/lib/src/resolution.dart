@@ -53,7 +53,7 @@ final class ObservationResolution {
       'resolution': effective.toJson(),
       'policySource': policySource ?? (policy == null ? 'default' : 'request'),
       'sourceCount': eligible.length,
-      'fingerprint': _fingerprint(eligible),
+      'fingerprint': observationFingerprint(eligible),
     };
     if (eligible.isEmpty) {
       return ObservationResolution._({
@@ -387,7 +387,8 @@ String _signed9(double value) {
   return value < 0 && scaled != 0 ? '-$text' : text;
 }
 
-Map<String, Object?> _fingerprint(List<Observation> sources) => {
+/// SHA-256 over the identity, version, time and value of [sources], in order.
+Map<String, Object?> observationFingerprint(List<Observation> sources) => {
   'sourceCount': sources.length,
   'sha256': sha256
       .convert(

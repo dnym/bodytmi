@@ -107,6 +107,9 @@ const storedCommandNames = [
   'observation list',
   'observation resolve',
   'observation import-preview',
+  'series query',
+  'series compare',
+  'series slope',
   'observation import-apply',
   'catalog preview',
   'catalog apply',
@@ -627,6 +630,17 @@ Future<Map<String, Object?>> executeStored(
       'includeDeleted',
     },
     'observation import-preview' => {'document'},
+    'series query' => {
+      'measure',
+      'attributes',
+      'from',
+      'until',
+      'bucket',
+      'summary',
+      'weekStart',
+    },
+    'series compare' => {'measure', 'attributes', 'a', 'b', 'summary'},
+    'series slope' => {'measure', 'attributes', 'from', 'until', 'per'},
     'observation import-apply' => {'document', 'onChanged', 'confirm'},
     'catalog preview' => {'document'},
     'catalog apply' => {'document', 'onChanged', 'confirm'},
@@ -2598,6 +2612,49 @@ Future<Map<String, Object?>> executeStored(
           integer('expectedVersion'),
           confirm: flag('confirm'),
         )).toJson();
+      case 'series query':
+        final range = DateRange(
+          requiredString(request, 'from'),
+          requiredString(request, 'until'),
+        );
+        data =
+            (await ObservationService(store).series(
+              identifier(request, 'measure'),
+              attributes: _attributes(request),
+              fromDate: range.from,
+              untilDate: range.until,
+            )).query(
+              range,
+              bucket: request.containsKey('bucket')
+                  ? requiredString(request, 'bucket')
+                  : 'none',
+              summary: requiredString(request, 'summary'),
+              weekStart: request.containsKey('weekStart')
+                  ? integer('weekStart', min: 1)
+                  : DateTime.monday,
+            );
+      case 'series compare':
+        final a = DateRange.fromJson(request['a'], 'a');
+        final b = DateRange.fromJson(request['b'], 'b');
+        data = (await ObservationService(store).series(
+          identifier(request, 'measure'),
+          attributes: _attributes(request),
+        )).compare(a, b, requiredString(request, 'summary'));
+      case 'series slope':
+        final range = DateRange(
+          requiredString(request, 'from'),
+          requiredString(request, 'until'),
+        );
+        data =
+            (await ObservationService(store).series(
+              identifier(request, 'measure'),
+              attributes: _attributes(request),
+              fromDate: range.from,
+              untilDate: range.until,
+            )).slope(
+              range,
+              perDays: request.containsKey('per') ? integer('per', min: 1) : 7,
+            );
       case 'observation import-preview':
         data = await ObservationImportService(
           store,
@@ -3209,3 +3266,12 @@ Future<Map<String, Object?>> executeStored(
     await store.close();
   }
 }
+
+/// An exact series selector: attribute name → identifier value.
+Map<String, String> _attributes(Map<String, Object?> request) => {
+  for (final e in jsonObject(
+    request['attributes'] ?? <String, Object?>{},
+    'attributes',
+  ).entries)
+    e.key: identifier({e.key: e.value}, e.key),
+};
