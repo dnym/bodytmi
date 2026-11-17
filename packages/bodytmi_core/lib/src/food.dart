@@ -421,8 +421,38 @@ final class FoodRevision {
 /// is one *item*; a nutrient's [known] count says how many items declared
 /// it. A nutrient no item declares is absent, never zero.
 final class Nutrition {
-  Nutrition(this.items, this.values, this.known, this.grams);
+  Nutrition(
+    this.items,
+    this.values,
+    this.known,
+    this.grams, {
+    this.derived = const {},
+  });
   static final empty = Nutrition(0, const {}, const {}, Fraction.zero);
+
+  /// One item with canonical [values]. When it declares only one of salt
+  /// and sodium, the other follows from the EU labelling definition
+  /// salt = sodium × 2.5 (Regulation (EU) 1169/2011, Annex I) and is counted
+  /// in [derived].
+  factory Nutrition.item(Map<String, Fraction> values, Fraction? grams) {
+    final all = {...values};
+    final derived = <String, int>{};
+    final factor = Fraction.parse('2.5');
+    if (all.containsKey('salt') && !all.containsKey('sodium')) {
+      all['sodium'] = all['salt']! / factor;
+      derived['sodium'] = 1;
+    } else if (all.containsKey('sodium') && !all.containsKey('salt')) {
+      all['salt'] = all['sodium']! * factor;
+      derived['salt'] = 1;
+    }
+    return Nutrition(
+      1,
+      all,
+      {for (final k in all.keys) k: 1},
+      grams,
+      derived: derived,
+    );
+  }
 
   final int items;
 
@@ -430,21 +460,30 @@ final class Nutrition {
   final Map<String, Fraction> values;
   final Map<String, int> known;
 
+  /// Items whose value of a nutrient was derived (salt from sodium or the
+  /// reverse) rather than declared.
+  final Map<String, int> derived;
+
   /// Mass eaten, when every part has a known mass.
   final Fraction? grams;
 
   Nutrition operator +(Nutrition o) {
     final values = {...this.values};
     final known = {...this.known};
+    final derived = {...this.derived};
     for (final e in o.values.entries) {
       values[e.key] = (values[e.key] ?? Fraction.zero) + e.value;
       known[e.key] = (known[e.key] ?? 0) + o.known[e.key]!;
+    }
+    for (final e in o.derived.entries) {
+      derived[e.key] = (derived[e.key] ?? 0) + e.value;
     }
     return Nutrition(
       items + o.items,
       values,
       known,
       grams == null || o.grams == null ? null : grams! + o.grams!,
+      derived: derived,
     );
   }
 
@@ -453,6 +492,7 @@ final class Nutrition {
     {for (final e in values.entries) e.key: e.value * factor},
     known,
     grams == null ? null : grams! * factor,
+    derived: derived,
   );
 
   /// Value in the nutrient's display unit.
@@ -493,6 +533,7 @@ final class Nutrition {
       'value': status == 'unavailable' ? null : display(id)!.round().toString(),
       'unit': def.unit.name,
       'knownItems': known[id] ?? 0,
+      if ((derived[id] ?? 0) > 0) 'derivedItems': derived[id],
     };
   }
 }
@@ -517,15 +558,10 @@ final class FoodMath {
       } else if (food.density != null) {
         grams = units * food.density!.gramsPerMl;
       }
-      return Nutrition(
-        1,
-        {
-          for (final e in food.nutrients.entries)
-            e.key: Fraction.decimal(e.value.value) * factor,
-        },
-        {for (final k in food.nutrients.keys) k: 1},
-        grams,
-      );
+      return Nutrition.item({
+        for (final e in food.nutrients.entries)
+          e.key: Fraction.decimal(e.value.value) * factor,
+      }, grams);
     }
     final whole = this.whole(revision);
     return whole.scaled(_compositeFactor(revision, whole, amount));
@@ -551,6 +587,7 @@ final class FoodMath {
               sum.values,
               sum.known,
               _grams(batch.finalMass),
+              derived: sum.derived,
             );
       _wholes[key] = result;
       return result;

@@ -270,6 +270,42 @@ void foodTests() {
     equal(dataset.search('smör', 1).single.food.number, 29);
   });
 
+  test('salt and sodium follow each other by the label definition', () {
+    final math = FoodMath((_) => invalid('none'));
+    Nutrition of(Map<String, Object?> nutrients) => math.of(
+      FoodRevision.publish(_base('x', nutrients)),
+      QuantityAmount(Quantity('100', 'g')),
+    );
+    // A Swedish label declares salt: sodium = salt / 2.5, marked derived.
+    final label = of({'salt': _q('1.2', 'g')});
+    equal(label.display('sodium'), Fraction.integer(480));
+    equal(label.derived['sodium'], 1);
+    equal(label.derived['salt'], null);
+    final json = label.nutrientJson('sodium');
+    equal(json['value'], '480');
+    equal(json['derivedItems'], 1);
+    // Sodium only: salt = sodium × 2.5.
+    final sodiumOnly = of({'sodium': _q('400', 'mg')});
+    equal(sodiumOnly.display('salt'), Fraction.integer(1));
+    equal(sodiumOnly.derived['salt'], 1);
+    // Both declared: both kept as printed, nothing derived.
+    final both = of({'salt': _q('1', 'g'), 'sodium': _q('390', 'mg')});
+    equal(both.display('sodium'), Fraction.integer(390));
+    check(both.derived.isEmpty);
+    // A mix of a label food and a database food is fully known.
+    final sum = label + both;
+    equal(sum.status('sodium'), 'known');
+    equal(sum.derived['sodium'], 1);
+    equal(sum.display('sodium'), Fraction.integer(870));
+    // Quick entries derive the same way.
+    final quick = DiaryEntry.fromJson({
+      'id': 'q',
+      'at': '2026-11-17T12:00:00+01:00',
+      'quick': {'salt': _q('2.5', 'g')},
+    }).nutrition(math);
+    equal(quick.display('sodium'), Fraction.integer(1000));
+  });
+
   test('NNR 2023 adult reference values match the published tables', () {
     String? v(List<ReferenceValue> refs, String id, String kind) =>
         refs.where((r) => r.nutrient == id && r.kind == kind).single.value;
@@ -293,6 +329,7 @@ void foodTests() {
     equal(v(man80, 'vitamin-c', 'ri'), '110');
     equal(v(man80, 'magnesium', 'ai'), '350');
     equal(v(man80, 'sodium', 'limit'), '2300'); // Table 16
+    equal(v(man80, 'salt', 'limit'), '5.75');
     rejects(() => nnr2023References('male', 17));
     rejects(() => nnr2023References('other', 30));
   });
@@ -305,6 +342,7 @@ void foodTests() {
       'carbohydrate': Fraction.integer(250),
       'fibre': Fraction.integer(30),
       'sodium': Fraction.integer(2500),
+      'salt': Fraction.parse('5.5'),
       'iron': Fraction.integer(8),
     };
     final rows = assessReferences(
@@ -340,6 +378,7 @@ void foodTests() {
       '66.4',
     );
     equal(row('sodium', 'limit')['relation'], 'above');
+    equal(row('salt', 'limit')['relation'], 'within');
     equal(row('iron', 'ri')['relation'], 'below');
     equal(row('iron', 'ul')['relation'], 'within');
     equal(row('zinc', 'ri')['relation'], 'unknown');

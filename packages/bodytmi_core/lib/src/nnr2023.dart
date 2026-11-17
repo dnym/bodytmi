@@ -295,7 +295,17 @@ List<ReferenceValue> nnr2023References(String sex, int age) {
       _t16,
       value: '2300',
       unit: 'mg',
-      note: 'Limit to 2.3 g/d sodium, about 5.75 g salt.',
+      note: 'Sodium, the element (Na).',
+    ),
+    ReferenceValue(
+      'salt',
+      'limit',
+      _t16,
+      value: '5.75',
+      unit: 'g',
+      note:
+          'Salt (sodium chloride) as on labels: the 2.3 g sodium limit '
+          '× 2.5, as NNR 2023 states it.',
     ),
     for (final (id, value, unit, note) in const [
       ('calcium', '2500', 'mg', null),

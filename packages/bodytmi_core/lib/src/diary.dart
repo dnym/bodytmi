@@ -159,12 +159,9 @@ final class DiaryEntry {
   /// Nutrition of this entry; a quick entry is one item.
   Nutrition nutrition(FoodMath math) {
     if (food != null) return math.of(math.lookup(food!), amount!);
-    return Nutrition(
-      1,
-      {for (final e in quick.entries) e.key: Fraction.decimal(e.value.value)},
-      {for (final k in quick.keys) k: 1},
-      null,
-    );
+    return Nutrition.item({
+      for (final e in quick.entries) e.key: Fraction.decimal(e.value.value),
+    }, null);
   }
 }
 
