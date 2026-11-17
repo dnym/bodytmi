@@ -291,8 +291,10 @@ final class TimingActivity {
     required String metric,
     required TimingPlan plan,
     required DateTime at,
+    String? owner,
   }) => TimingActivity.fromJson({
     'id': id,
+    'owner': ?owner,
     'sessionId': sessionId,
     'setId': setId,
     'metric': metric,
@@ -334,9 +336,23 @@ final class TimingActivity {
       'ownerElapsedMilliseconds',
       'termination',
       'confirmation',
+      'owner',
     });
-    for (final key in ['id', 'sessionId', 'metric']) identifier(j, key);
+    // A practice clock (owner `practice`) belongs to practice session
+    // `practice:<id>`; the colon keeps it apart from every training session.
+    final practice = j['owner'] == 'practice';
+    if (j.containsKey('owner') && !practice)
+      invalid('A timing owner is practice when given.');
+    for (final key in ['id', if (!practice) 'sessionId', 'metric'])
+      identifier(j, key);
     requiredString(j, 'setId');
+    if (practice &&
+        (!RegExp(
+              r'^practice:[A-Za-z0-9_-]{1,100}$',
+            ).hasMatch(requiredString(j, 'sessionId')) ||
+            j['setId'] != 'practice' ||
+            j['metric'] != 'duration'))
+      invalid('A practice clock names its practice session.');
     TimingPlan.fromJson(j['plan']);
     parseInstant(j['createdAt'], 'createdAt');
     parseInstant(j['checkpointAt'], 'checkpointAt');
@@ -418,7 +434,14 @@ final class TimingActivity {
     if ((j['status'] == 'confirmed') != (j['confirmation'] != null))
       invalid('Inconsistent timing confirmation.');
     // Freeze nested JSON; only bounded, validated domain snapshots are retained.
-    if (j['confirmation'] != null) {
+    if (practice && j['confirmation'] != null) {
+      final c = jsonObject(j['confirmation'], 'confirmation');
+      checkKeys(c, {'sourceVersion', 'at', 'sessionVersion'});
+      parseInstant(c['at'], 'at');
+      final s = c['sessionVersion'];
+      if (c['sourceVersion'] != version - 1 || s is! int || s < 1)
+        invalid('Invalid practice clock confirmation.');
+    } else if (j['confirmation'] != null) {
       final c = jsonObject(j['confirmation'], 'confirmation');
       checkKeys(c, {
         'sourceVersion',
@@ -485,6 +508,23 @@ final class TimingActivity {
       _json['confirmation'] as Map<String, Object?>?;
   TimingPlan get plan => TimingPlan.fromJson(_json['plan']);
   bool get active => status == 'running' || status == 'paused';
+  bool get isPractice => _json['owner'] == 'practice';
+
+  /// Confirms an ended practice clock as reviewed by its practice session.
+  TimingActivity confirmPractice(DateTime at, int sessionVersion) {
+    if (!isPractice) invalid('Only a practice clock is confirmed this way.');
+    if (status != 'awaitingConfirmation')
+      invalid('End the practice clock before confirming it.');
+    return _change({
+      'status': 'confirmed',
+      'confirmation': {
+        'sourceVersion': version,
+        'at': at.toUtc().toIso8601String(),
+        'sessionVersion': sessionVersion,
+      },
+    }, at);
+  }
+
   TempoPosition? get tempoState => phase == 'effort' && active
       ? plan.tempo?.position(effortElapsedMilliseconds)
       : null;

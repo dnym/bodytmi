@@ -456,6 +456,92 @@ const _builtIns = <Map<String, Object?>>[
     'summaries': ['mean', 'sum', 'min', 'max', 'last', 'count'],
     'resolution': {'policy': 'latest'},
   },
+  // Journal (stage 5). Self-ratings on plain 0–10 scales, not validated
+  // questionnaires (those need wording and licence checked per instrument).
+  {
+    'id': 'symptom',
+    'name': 'Symptom',
+    'notes': 'A symptom and how bad it is, 0 none to 10 worst imaginable.',
+    'labels': {
+      'sv': {'name': 'Symtom'},
+    },
+    'kind': 'rating',
+    'scale': {
+      'minimum': 0,
+      'maximum': 10,
+      'anchors': {'0': 'none', '10': 'worst imaginable'},
+    },
+    'attributes': {'name': <String, Object?>{}},
+    'summaries': ['mean', 'max', 'last', 'count'],
+    'resolution': {'policy': 'latest'},
+  },
+  {
+    'id': 'pain',
+    'name': 'Pain',
+    'notes': 'Pain severity 0–10 at a site, with how much it limits you.',
+    'labels': {
+      'sv': {'name': 'Smärta'},
+    },
+    'kind': 'rating',
+    'scale': {
+      'minimum': 0,
+      'maximum': 10,
+      'anchors': {'0': 'no pain', '10': 'worst imaginable'},
+    },
+    'attributes': {
+      'site': <String, Object?>{},
+      'side': {
+        'values': ['left', 'right', 'both'],
+      },
+      'impact': {
+        'values': ['none', 'minor', 'limits-activity', 'prevents-activity'],
+      },
+    },
+    'summaries': ['mean', 'max', 'last', 'count'],
+    'resolution': {'policy': 'latest'},
+  },
+  {
+    'id': 'illness',
+    'name': 'Illness',
+    'notes': 'A period of illness, from its start to its end.',
+    'labels': {
+      'sv': {'name': 'Sjukdom'},
+    },
+    'kind': 'interval',
+    'attributes': {'name': <String, Object?>{}},
+    'resolution': {'policy': 'latest'},
+  },
+  {
+    'id': 'mood',
+    'name': 'Mood',
+    'labels': {
+      'sv': {'name': 'Humör'},
+    },
+    'kind': 'rating',
+    'scale': {
+      'minimum': 0,
+      'maximum': 10,
+      'anchors': {'0': 'very bad', '10': 'very good'},
+    },
+    'summaries': ['mean', 'min', 'max', 'last', 'count'],
+    'resolution': {'policy': 'latest'},
+  },
+  {
+    'id': 'energy-level',
+    'name': 'Energy level',
+    'notes': 'How energetic you feel, not food energy.',
+    'labels': {
+      'sv': {'name': 'Ork'},
+    },
+    'kind': 'rating',
+    'scale': {
+      'minimum': 0,
+      'maximum': 10,
+      'anchors': {'0': 'exhausted', '10': 'full of energy'},
+    },
+    'summaries': ['mean', 'min', 'max', 'last', 'count'],
+    'resolution': {'policy': 'latest'},
+  },
 ];
 
 /// A custom measure's immutable numbered revision. Kind and dimension never

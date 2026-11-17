@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "expectedRevision": 0,
+  "practice": {
+    "id": "slow-breathing",
+    "name": "Slow breathing",
+    "kind": "breathing",
+    "durationSeconds": 600,
+    "phases": {
+      "phases": [
+        {"id": "inhale", "milliseconds": 4000},
+        {"id": "hold", "milliseconds": 2000},
+        {"id": "exhale", "milliseconds": 6000}
+      ]
+    },
+    "ratings": [{"id": "calm", "label": "Calm", "minimum": 0, "maximum": 10}]
+  }
+}

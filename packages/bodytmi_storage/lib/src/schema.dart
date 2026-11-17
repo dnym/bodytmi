@@ -80,6 +80,10 @@ const schema = {
       'CREATE TABLE "sleep_records" ("id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'sleep_records_date':
       'CREATE INDEX sleep_records_date ON sleep_records (local_date)',
+  'activity_records':
+      'CREATE TABLE "activity_records" ("id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+  'activity_records_date':
+      'CREATE INDEX activity_records_date ON activity_records (local_date)',
   'observations':
       'CREATE TABLE "observations" ("id" TEXT NOT NULL, "measure_id" TEXT NOT NULL, "local_date" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'observations_measure':
@@ -89,7 +93,7 @@ const schema = {
   'shared_lever_applications':
       'CREATE TABLE "shared_lever_applications" ("link_id" TEXT NOT NULL, "sequence" INTEGER NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("link_id", "sequence"))',
   'timing_activities':
-      'CREATE TABLE "timing_activities" ("id" TEXT NOT NULL, "session_id" TEXT NOT NULL REFERENCES sessions (id), "set_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
+      'CREATE TABLE "timing_activities" ("id" TEXT NOT NULL, "session_id" TEXT NOT NULL, "set_id" TEXT NOT NULL, "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'window_checkpoints':
       'CREATE TABLE "window_checkpoints" ("id" TEXT NOT NULL, "session_id" TEXT NOT NULL REFERENCES sessions (id), "snapshot" TEXT NOT NULL, PRIMARY KEY ("id"))',
   'workout_executions':

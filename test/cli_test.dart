@@ -7,6 +7,9 @@ import 'fixtures.dart';
 import 'support.dart';
 
 final Future<String> _cliExecutable = _compileCli();
+
+/// The compiled native CLI, for tests that drive a process directly.
+Future<String> cliExecutable() => _cliExecutable;
 Future<String> _compileCli() =>
     compileNative('bin/bodytmi.dart', '.dart_tool/test_cli');
 Future<String> compileNative(String target, String output) async {

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "database": "path/to/profile.sqlite",
+  "activity": {
+    "id": "walk-2026-11-18",
+    "kind": "walk",
+    "start": "2026-11-18T12:00:00+01:00",
+    "end": "2026-11-18T12:40:00+01:00",
+    "outdoor": true,
+    "distance": {"value": "3.2", "unit": "km"},
+    "countsToward": ["movement", "outdoor-light"]
+  }
+}

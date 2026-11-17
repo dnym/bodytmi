@@ -131,6 +131,7 @@ final class TrainingStore implements TrainingRepository {
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM food_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM diary_entries), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM sleep_records), 0)
+           + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM activity_records), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM measure_revisions), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM series_policies), 0)
            + COALESCE((SELECT SUM(length(CAST(snapshot AS BLOB))) FROM profile_revisions), 0)
@@ -1250,6 +1251,59 @@ final class TrainingStore implements TrainingRepository {
   @override
   Future<void> deleteSleepRecord(String id) =>
       (_db.delete(_db.sleepRecords)..where((t) => t.id.equals(id))).go();
+
+  ActivityRecord _activityRow(StoredActivityRecord row) {
+    final r = ActivityRecord.fromJson(jsonDecode(row.snapshot));
+    if (r.id != row.id || r.date != row.localDate)
+      invalid('Activity record row identity mismatch.');
+    return r;
+  }
+
+  @override
+  Future<List<ActivityRecord>> activityRecords({
+    String? fromDate,
+    String? untilDate,
+  }) async {
+    final query = _db.select(_db.activityRecords)
+      ..where(
+        (t) =>
+            (fromDate == null
+                ? const Constant(true)
+                : t.localDate.isBiggerOrEqualValue(fromDate)) &
+            (untilDate == null
+                ? const Constant(true)
+                : t.localDate.isSmallerThanValue(untilDate)),
+      );
+    final result = [for (final row in await query.get()) _activityRow(row)];
+    result.sort((a, b) {
+      final t = a.start.compareTo(b.start);
+      return t != 0 ? t : a.id.compareTo(b.id);
+    });
+    return result;
+  }
+
+  @override
+  Future<ActivityRecord?> activityRecord(String id) async {
+    final row = await (_db.select(
+      _db.activityRecords,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    return row == null ? null : _activityRow(row);
+  }
+
+  @override
+  Future<void> saveActivityRecord(ActivityRecord record) => _db
+      .into(_db.activityRecords)
+      .insertOnConflictUpdate(
+        ActivityRecordsCompanion.insert(
+          id: record.id,
+          localDate: record.date,
+          snapshot: _snapshot(record.toJson()),
+        ),
+      );
+
+  @override
+  Future<void> deleteActivityRecord(String id) =>
+      (_db.delete(_db.activityRecords)..where((t) => t.id.equals(id))).go();
 
   @override
   Future<List<MeasureRevision>> measureRevisions() =>

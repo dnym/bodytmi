@@ -113,6 +113,11 @@ void measureTests() {
       'circumference',
       'skinfold',
       'steps',
+      'symptom',
+      'pain',
+      'illness',
+      'mood',
+      'energy-level',
     ]);
     MeasureDefinition byId(String id) =>
         builtInMeasures.firstWhere((m) => m.id == id);

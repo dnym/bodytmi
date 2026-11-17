@@ -108,6 +108,8 @@ import 'wave_test.dart';
 import 'stage3_acceptance_test.dart';
 import 'stage4_acceptance_test.dart';
 import 'sleep_test.dart';
+import 'stage5_acceptance_test.dart';
+import 'practice_test.dart';
 import 'food_test.dart';
 import 'catalog_acceptance_test.dart';
 import 'variant_derived_plan_test.dart';
@@ -212,6 +214,8 @@ Future<void> main() async {
   stage3AcceptanceTests();
   stage4AcceptanceTests();
   sleepTests();
+  stage5AcceptanceTests();
+  practiceTests();
   foodTests();
   bodyReportTests();
   unplannedSetsTests();

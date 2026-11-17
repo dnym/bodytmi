@@ -18,6 +18,7 @@ import 'window_checkpoint.dart';
 import 'repeat_checkpoint.dart';
 import 'history_import_service.dart';
 import 'block_progression.dart';
+import 'practice_service.dart';
 import 'block_progression_service.dart';
 
 /// Full logical representation of the records currently persisted by training.
@@ -37,6 +38,7 @@ final class TrainingArchive {
     List<FoodRevision> foods = const [],
     List<DiaryEntry> diaryEntries = const [],
     List<SleepRecord> sleep = const [],
+    List<ActivityRecord> activities = const [],
     List<MeasureRevision> measures = const [],
     List<SeriesPolicy> seriesPolicies = const [],
     List<ProfileRevision> profile = const [],
@@ -202,6 +204,9 @@ final class TrainingArchive {
        sleep = List<SleepRecord>.unmodifiable(
          <SleepRecord>[...sleep]..sort((a, b) => a.id.compareTo(b.id)),
        ),
+       activities = List<ActivityRecord>.unmodifiable(
+         <ActivityRecord>[...activities]..sort((a, b) => a.id.compareTo(b.id)),
+       ),
        observations = List<ObservationRecord>.unmodifiable(
          <ObservationRecord>[...observations]
            ..sort((a, b) => a.observation.id.compareTo(b.observation.id)),
@@ -266,6 +271,7 @@ final class TrainingArchive {
       'foods',
       'diaryEntries',
       'sleep',
+      'activities',
       'measures',
       'seriesPolicies',
       'profile',
@@ -383,6 +389,9 @@ final class TrainingArchive {
         for (final j in optional('diaryEntries')) DiaryEntry.fromJson(j),
       ],
       sleep: [for (final j in optional('sleep')) SleepRecord.fromJson(j)],
+      activities: [
+        for (final j in optional('activities')) ActivityRecord.fromJson(j),
+      ],
       programRevisions: [
         for (final j in optional('programRevisions'))
           ProgramRevision.fromJson(j),
@@ -450,6 +459,7 @@ final class TrainingArchive {
   final List<FoodRevision> foods;
   final List<DiaryEntry> diaryEntries;
   final List<SleepRecord> sleep;
+  final List<ActivityRecord> activities;
 
   /// Observations of every measure, body mass included.
   final List<ObservationRecord> observations;
@@ -495,6 +505,7 @@ final class TrainingArchive {
     'foods': [for (final f in foods) f.toJson()],
     'diaryEntries': [for (final e in diaryEntries) e.toJson()],
     'sleep': [for (final r in sleep) r.toJson()],
+    'activities': [for (final r in activities) r.toJson()],
     'measures': [for (final m in measures) m.toJson()],
     'seriesPolicies': [for (final p in seriesPolicies) p.toJson()],
     'profile': [for (final p in profile) p.toJson()],
@@ -536,6 +547,7 @@ final class TrainingArchive {
     'foods': foods.length,
     'diaryEntries': diaryEntries.length,
     'sleep': sleep.length,
+    'activities': activities.length,
     'measures': measures.length,
     'seriesPolicies': seriesPolicies.length,
     'profile': profile.length,
@@ -613,6 +625,8 @@ final class TrainingArchive {
     validateFoodRevisions(foods);
     validateDiaryEntries(diaryEntries, foods);
     validateSleepRecords(sleep);
+    validateActivityRecords(activities);
+    validatePracticeRecords(dietRecords, timers);
     validateImportedSessions(importedSessions);
     validateBlockProgressions(
       blockProgressions,

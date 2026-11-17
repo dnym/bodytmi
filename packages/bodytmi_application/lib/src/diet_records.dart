@@ -1,6 +1,7 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'diary_service.dart';
 import 'diet_service.dart';
+import 'practice_service.dart';
 import 'sleep_service.dart';
 import 'plan_service.dart';
 import 'review_service.dart';
@@ -28,6 +29,11 @@ final Map<String, _Decoder> _decoders = {
     return ('d${m.date.replaceAll('-', '')}', 1);
   },
   diarySettingsKind: (s) => ('diary', DiarySettingsRevision.fromJson(s).number),
+  practiceKind: (s) {
+    final r = PracticeRevision.fromJson(s);
+    return (r.practice.id, r.number);
+  },
+  practiceSessionKind: (s) => (PracticeSession.fromJson(s).id, 1),
   sleepDayKind: (s) {
     final m = SleepDayMark.fromJson(s);
     return (sleepMarkId(m.date), 1);

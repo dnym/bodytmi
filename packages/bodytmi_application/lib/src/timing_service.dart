@@ -341,6 +341,7 @@ void validateTimingData(
   for (final t in timers) {
     if (!ids.add(t.id)) invalid('Duplicate timing identity.');
     if (t.active) active++;
+    if (t.isPractice) continue; // validated with practice sessions
     final s = bySession[t.sessionId];
     if (s == null) invalid('Timing session is missing.');
     if (t.plan.restOnly) {

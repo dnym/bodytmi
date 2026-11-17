@@ -80,6 +80,7 @@ final class LogicalArchiveFiles {
       'foods',
       'diaryEntries',
       'sleep',
+      'activities',
       'measures',
       'seriesPolicies',
       'profile',
@@ -364,6 +365,12 @@ final class LogicalArchiveFiles {
             db.execute(
               'INSERT INTO food_revisions(food_id,number,snapshot) VALUES (?,?,?)',
               [f.food.id, f.number, canonicalJson(f.toJson())],
+            );
+          }
+          for (final r in archive.activities) {
+            db.execute(
+              'INSERT INTO activity_records(id,local_date,snapshot) VALUES (?,?,?)',
+              [r.id, r.date, canonicalJson(r.toJson())],
             );
           }
           for (final r in archive.sleep) {

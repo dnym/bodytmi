@@ -215,6 +215,7 @@ final class NativeBackup {
         'food_revisions',
         'diary_entries',
         'sleep_records',
+        'activity_records',
         'measure_revisions',
         'series_policies',
         'profile_revisions',
@@ -833,6 +834,17 @@ final class NativeBackup {
           entries.add(e);
         }
         validateDiaryEntries(entries, foods);
+        validateActivityRecords([
+          for (final row in db.select('SELECT * FROM activity_records'))
+            (() {
+              final r = ActivityRecord.fromJson(
+                jsonDecode(row['snapshot'] as String),
+              );
+              if (r.id != row['id'] || r.date != row['local_date'])
+                invalid('Activity record row identity mismatch.');
+              return r;
+            })(),
+        ]);
         validateSleepRecords([
           for (final row in db.select('SELECT * FROM sleep_records'))
             (() {
@@ -924,6 +936,17 @@ final class NativeBackup {
           for (final row in db.select('SELECT snapshot FROM sessions'))
             sessionFromJson(jsonDecode(row['snapshot'] as String)),
         ]);
+        validatePracticeRecords([
+          for (final row in db.select(
+            "SELECT * FROM diet_records WHERE kind IN ('practice', 'practice-session')",
+          ))
+            DietRecord(
+              row['kind'] as String,
+              row['id'] as String,
+              row['number'] as int,
+              jsonObject(jsonDecode(row['snapshot'] as String), 'snapshot'),
+            ),
+        ], timers);
       }
       final executions = <WorkoutExecution>[];
       {

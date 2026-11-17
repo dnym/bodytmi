@@ -262,6 +262,17 @@ class SleepRecords extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Activity records; [localDate] mirrors the start date of the snapshot.
+@DataClassName('StoredActivityRecord')
+@TableIndex(name: 'activity_records_date', columns: {#localDate})
+class ActivityRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get localDate => text()();
+  TextColumn get snapshot => text()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('StoredBlockProgression')
 class BlockProgressions extends Table {
   TextColumn get id => text()();
@@ -288,9 +299,12 @@ class DerivedTargetGraphs extends Table {
   Set<Column> get primaryKey => {graphId, number};
 }
 
+/// Clocks of training sets and practice sessions. [sessionId] is a training
+/// session id or `practice:<id>`; the application validates both, so there
+/// is no foreign key to training sessions.
 class TimingActivities extends Table {
   TextColumn get id => text()();
-  TextColumn get sessionId => text().references(Sessions, #id)();
+  TextColumn get sessionId => text()();
   TextColumn get setId => text()();
   TextColumn get snapshot => text()();
   @override
@@ -396,6 +410,7 @@ class ProgramUpgradeReceipts extends Table {
     FoodRevisions,
     DiaryEntries,
     SleepRecords,
+    ActivityRecords,
     TimingActivities,
     WorkoutExecutions,
     DerivedTargetGraphs,

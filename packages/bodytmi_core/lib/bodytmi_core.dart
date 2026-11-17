@@ -13,6 +13,8 @@ export 'src/open_food_facts.dart';
 export 'src/solar.dart';
 export 'src/sleep.dart';
 export 'src/sleep_import.dart';
+export 'src/practice.dart';
+export 'src/activity_record.dart';
 export 'src/activity.dart';
 export 'src/window_repeat.dart';
 export 'src/workout.dart';
