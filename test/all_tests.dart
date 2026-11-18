@@ -31,6 +31,7 @@ import 'load_context_test.dart';
 import 'history_import_test.dart';
 import 'food_import_test.dart';
 import 'encryption_test.dart';
+import 'shared_store_test.dart';
 import 'locale_test.dart';
 import 'amrap_block_test.dart';
 import 'emom_test.dart';
@@ -225,6 +226,7 @@ Future<void> main() async {
   foodTests();
   foodImportTests();
   encryptionTests();
+  sharedStoreTests();
   bodyReportTests();
   unplannedSetsTests();
   tempoLeverTests();

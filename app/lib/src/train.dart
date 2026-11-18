@@ -1,0 +1,190 @@
+import 'package:material_ui/material_ui.dart';
+
+import 'format.dart';
+import 'profile.dart';
+import 'widgets.dart';
+
+final class _TrainData {
+  _TrainData(this.next, this.history);
+  final List<
+    ({
+      Map<String, Object?> run,
+      Map<String, Object?> day,
+      Map<String, Object?>? workout,
+    })
+  >
+  next;
+  final List<Map<String, Object?>> history;
+}
+
+/// The Train tab: the next workout of each active program and recent
+/// finished sessions. Logging a session comes in the next increment.
+final class TrainScreen extends StatelessWidget {
+  const TrainScreen({super.key});
+
+  static Future<_TrainData> _load(ProfileClient p) async {
+    final next =
+        <
+          ({
+            Map<String, Object?> run,
+            Map<String, Object?> day,
+            Map<String, Object?>? workout,
+          })
+        >[];
+    for (final run in await p.call<List<Object?>>('run list', {
+      'status': 'active',
+    })) {
+      final r = run! as Map<String, Object?>;
+      final schedule = await p.call<Map<String, Object?>>('run schedule', {
+        'runId': r['id'],
+        'count': 1,
+      });
+      final day = at(schedule, ['days', 0, 'day']) as Map<String, Object?>?;
+      if (day == null) continue;
+      final revision = await p.call<Map<String, Object?>>('store revision', {
+        'templateId': day['templateId'],
+        'revision': day['revision'],
+      });
+      next.add((
+        run: r,
+        day: day,
+        workout: revision['definition'] as Map<String, Object?>?,
+      ));
+    }
+    final history = [
+      for (final s in await p.call<List<Object?>>('store history'))
+        if ((s! as Map)['status'] == 'finalized') s as Map<String, Object?>,
+    ]..sort((a, b) => '${b['startedAt']}'.compareTo('${a['startedAt']}'));
+    return _TrainData(next, history.take(20).toList());
+  }
+
+  @override
+  Widget build(BuildContext context) => ProfileLoader<_TrainData>(
+    load: _load,
+    builder: (context, data) {
+      final f = Fmt.of(context);
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          if (data.next.isEmpty)
+            const SectionCard(
+              title: 'Next workout',
+              child: EmptyNote('No active program.'),
+            ),
+          for (final n in data.next)
+            SectionCard(
+              title: at(n.run, ['program', 'definition', 'name']) as String?,
+              trailing: n.run['gym'] == null ? null : Pill('${n.run['gym']}'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    n.day['label'] as String? ??
+                        at(n.workout, ['name']) as String? ??
+                        '',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  for (final slot
+                      in (at(n.workout, ['slots']) as List?) ?? const [])
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(_title('${(slot as Map)['exercise']}')),
+                          ),
+                          Muted(_targets(f, slot['targets'])),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: null,
+                    child: Text(
+                      n.run['currentSessionId'] != null
+                          ? 'Resume workout'
+                          : 'Start workout',
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Muted(
+                      'Logging comes next; use the CLI meanwhile.',
+                      align: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          SectionCard(
+            title: 'History',
+            child: data.history.isEmpty
+                ? const EmptyNote('No finished workouts yet.')
+                : Column(
+                    children: [for (final s in data.history) _HistoryRow(s)],
+                  ),
+          ),
+        ],
+      );
+    },
+  );
+
+  static String _title(String id) => id.isEmpty
+      ? id
+      : '${id[0].toUpperCase()}${id.substring(1).replaceAll('-', ' ')}';
+
+  static String _targets(Fmt f, Object? targets) {
+    if (targets is! Map) return '';
+    final mass = targets['mass'];
+    final reps = targets['reps'];
+    if (mass != null && reps != null) {
+      return '${f.quantity(mass, digits: 2)} × ${f.number((reps as Map)['value'])}';
+    }
+    return targets.values.map((q) => f.quantity(q, digits: 2)).join(' · ');
+  }
+}
+
+final class _HistoryRow extends StatelessWidget {
+  const _HistoryRow(this.s);
+  final Map<String, Object?> s;
+
+  @override
+  Widget build(BuildContext context) {
+    final f = Fmt.of(context);
+    final sets = (s['sets'] as List?) ?? const [];
+    final done = sets.where((x) => (x as Map)['status'] == 'completed').length;
+    final started = DateTime.tryParse('${s['startedAt']}');
+    final finished = DateTime.tryParse('${s['finishedAt']}');
+    final minutes = started != null && finished != null
+        ? finished.difference(started).inMinutes
+        : null;
+    final date = '${s['startedAt']}'.length >= 10
+        ? f.shortDate('${s['startedAt']}'.substring(0, 10))
+        : '';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  at(s, ['revision', 'definition', 'name']) as String? ??
+                      '${s['id']}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Muted('$done of ${sets.length} sets · ${f.minutes(minutes)}'),
+              ],
+            ),
+          ),
+          Muted(date),
+        ],
+      ),
+    );
+  }
+}

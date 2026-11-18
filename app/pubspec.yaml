@@ -1,0 +1,44 @@
+name: bodytmi_app
+description: BodyTMI, a local-first health and fitness tracker.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ^3.14.0
+  flutter: ">=3.47.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.11.0
+  path_provider: ^2.1.5
+  bodytmi: any
+  bodytmi_core: any
+  bodytmi_application: any
+  bodytmi_storage: any
+  bodytmi_locale: any
+  bodytmi_flutter: any
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+dependency_overrides:
+  # The app stays outside the pure Dart workspace so the CLI never needs
+  # Flutter; workspace packages resolve by path.
+  bodytmi:
+    path: ..
+  bodytmi_core:
+    path: ../packages/bodytmi_core
+  bodytmi_application:
+    path: ../packages/bodytmi_application
+  bodytmi_storage:
+    path: ../packages/bodytmi_storage
+  bodytmi_locale:
+    path: ../packages/bodytmi_locale
+  bodytmi_flutter:
+    path: ../adapters/bodytmi_flutter
+hooks:
+  user_defines:
+    sqlite3:
+      # SQLite3MultipleCiphers: plain SQLite unless a profile is locked.
+      source: sqlite3mc
+flutter:
+  uses-material-design: true

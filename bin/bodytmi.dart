@@ -223,12 +223,7 @@ Future<void> main(List<String> arguments) async {
       }
       options[name] = arguments[i + 1];
     }
-    if (!commandNames.contains(command) &&
-        !storedCommandNames.contains(command) &&
-        !foodCommandNames.contains(command) &&
-        !sleepCommandNames.contains(command) &&
-        !dailyCommandNames.contains(command) &&
-        !planningCommandNames.contains(command)) {
+    if (!isCommand(command)) {
       throw const BodyTmiException(
         'usage',
         'Unknown command/option. Use --help.',
@@ -252,17 +247,7 @@ Future<void> main(List<String> arguments) async {
     );
     final response = await withProfileKey(
       key,
-      () async => planningCommandNames.contains(command)
-          ? await executePlanning(command, request)
-          : dailyCommandNames.contains(command)
-          ? await executeDaily(command, request)
-          : sleepCommandNames.contains(command)
-          ? await executeSleep(command, request)
-          : foodCommandNames.contains(command)
-          ? await executeFood(command, request)
-          : storedCommandNames.contains(command)
-          ? await executeStored(command, request)
-          : const Commands().execute(command, request),
+      () => executeCommand(command, request),
     );
     stdout.writeln(jsonEncode(response));
   } on BodyTmiException catch (error) {

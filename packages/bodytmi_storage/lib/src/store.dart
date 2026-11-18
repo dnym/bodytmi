@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:bodytmi_application/bodytmi_application.dart';
@@ -21,8 +22,15 @@ import 'schema.dart';
 
 /// A single native owner. Never unlink the lock file: the OS holds ownership.
 final class TrainingStore implements TrainingRepository {
-  TrainingStore._(this._db, this._lock, this.path, this._cache);
+  TrainingStore._(
+    this._db,
+    this._lock,
+    this.path,
+    this._cache, [
+    this._borrowed = false,
+  ]);
   final TrainingDatabase _db;
+  final bool _borrowed;
   final ReadCache _cache;
   final RandomAccessFile _lock;
   final String path;
@@ -30,8 +38,30 @@ final class TrainingStore implements TrainingRepository {
   bool _databaseClosed = false;
   bool _closed = false;
 
+  /// Runs [body] so that every [open] of [store]'s path inside it borrows
+  /// [store] instead of opening the file again: one long-lived owner (the
+  /// app) can run ordinary commands. Borrowed handles close as no-ops and
+  /// refuse the terminal operations ([restore], [changeKey]).
+  static Future<T> sharing<T>(TrainingStore store, Future<T> Function() body) =>
+      runZoned(body, zoneValues: {_sharedKey: store});
+
+  static const _sharedKey = #bodytmiSharedStore;
+
   static Future<TrainingStore> open(String path) async {
     final file = File(path).absolute;
+    final shared = Zone.current[_sharedKey] as TrainingStore?;
+    if (shared != null &&
+        !shared._closed &&
+        await file.exists() &&
+        await file.resolveSymbolicLinks() == shared.path) {
+      return TrainingStore._(
+        shared._db,
+        shared._lock,
+        shared.path,
+        shared._cache,
+        true,
+      );
+    }
     await file.parent.create(recursive: true);
     if (!await file.exists()) await file.create();
     final canonical = await file.resolveSymbolicLinks();
@@ -100,6 +130,7 @@ final class TrainingStore implements TrainingRepository {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    if (_borrowed) return;
     try {
       if (!_databaseClosed) await _db.close();
     } finally {
@@ -176,6 +207,7 @@ final class TrainingStore implements TrainingRepository {
     if (!confirm)
       invalid('Restore replaces the profile and requires confirm:true.');
     if (_closed || _databaseClosed) throw StateError('Store is closed.');
+    _refuseBorrowed();
     await backup.checkDestination(path);
     await backup.checkDestination(recoveryDestination);
     await this.backup(recoveryDestination);
@@ -192,11 +224,20 @@ final class TrainingStore implements TrainingRepository {
     if (!confirm)
       invalid('Changing the profile passphrase requires confirm:true.');
     if (_closed || _databaseClosed) throw StateError('Store is closed.');
+    _refuseBorrowed();
     if (next == null && currentProfileKey == null)
       invalid('The profile is not encrypted.');
     await _db.close();
     _databaseClosed = true;
     await changeDatabaseKey(path, next);
+  }
+
+  void _refuseBorrowed() {
+    if (_borrowed)
+      throw const BodyTmiException(
+        'in_use',
+        'Close the app profile before restoring or changing its passphrase.',
+      );
   }
 
   @override

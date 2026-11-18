@@ -112,6 +112,9 @@ void catalogAcceptanceTests() {
         root,
       ).listSync(recursive: true).whereType<File>()) {
         if (!file.path.endsWith('.dart')) continue;
+        // Invented sample content for the GUI, like examples/: data, not
+        // behaviour keyed on a name.
+        if (file.path.endsWith('demo_profile.dart')) continue;
         final lines = file.readAsLinesSync();
         for (var i = 0; i < lines.length; i++) {
           check(

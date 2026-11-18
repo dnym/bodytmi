@@ -1,6 +1,6 @@
 DART ?= dart
 
-.PHONY: check format test analyze build simulate flutter-check android-check
+.PHONY: check format test analyze build simulate flutter-check android-check app-check demo-profile
 check: analyze test
 	$(DART) --suppress-analytics format --output=none --set-exit-if-changed bin lib packages test
 
@@ -41,3 +41,13 @@ android-check:
 	cd $(PROBE) && $(FLUTTER) --suppress-analytics analyze --fatal-infos
 	cd $(PROBE) && $(FLUTTER) --suppress-analytics test integration_test/storage_test.dart -d $(ANDROID_DEVICE)
 	cd $(PROBE) && FLUTTER=$(FLUTTER) tool/crash_check.sh $(ANDROID_DEVICE)
+
+# The Flutter app (app/): analyze and widget tests on real temporary profiles.
+app-check:
+	cd app && $(FLUTTER) --suppress-analytics pub get
+	cd app && $(FLUTTER) --suppress-analytics analyze --fatal-infos
+	cd app && $(FLUTTER) --suppress-analytics test
+
+# An invented demonstration profile for GUI work: make demo-profile OUT=path
+demo-profile:
+	$(DART) --suppress-analytics run tool/demo_profile.dart $(OUT)
