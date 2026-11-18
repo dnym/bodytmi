@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'backup.dart';
 import 'journal.dart';
 import 'lock.dart';
+import 'practice.dart';
 import 'profile.dart';
 import 'sleep.dart';
 import 'widgets.dart';
@@ -38,8 +39,14 @@ final class MoreScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => openJournal(context),
               ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Practices'),
+                subtitle: const Text('breathing and other timed practices'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openPractices(context),
+              ),
               for (final (title, subtitle) in [
-                ('Practices', 'box breathing, playlists'),
                 ('Goals & trials', 'goals, routines, trials, reviews'),
                 ('Diet plan', 'programmes, cycles, reviews'),
                 ('Gyms & equipment', 'gyms, instances, plates'),
