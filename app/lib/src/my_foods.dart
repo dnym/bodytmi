@@ -167,9 +167,17 @@ final class _PortionRow {
 /// A base food: name, per 100 g or 100 ml, the label's nutrients (blank
 /// means not declared, never zero) and named portions.
 final class FoodFormScreen extends StatefulWidget {
-  const FoodFormScreen({super.key, required this.foods, this.existing});
+  const FoodFormScreen({
+    super.key,
+    required this.foods,
+    this.existing,
+    this.draft,
+  });
   final List<Map<String, Object?>> foods;
   final Map<String, Object?>? existing; // food show response
+
+  /// An unsaved food to review, e.g. from a barcode lookup.
+  final Map<String, Object?>? draft;
 
   @override
   State<FoodFormScreen> createState() => _FoodFormScreenState();
@@ -177,9 +185,15 @@ final class FoodFormScreen extends StatefulWidget {
 
 final class _FoodFormScreenState extends State<FoodFormScreen> {
   Map<String, Object?> get _old =>
-      (widget.existing?['food'] as Map<String, Object?>?) ?? const {};
+      (widget.existing?['food'] as Map<String, Object?>?) ??
+      widget.draft ??
+      const {};
   late final name = TextEditingController(text: '${_old['name'] ?? ''}');
   late String basis = '${_old['basis'] ?? '100g'}';
+
+  /// The prefilled text per nutrient: a value type such as "<" stays only
+  /// while its value is unchanged.
+  final _original = <String, String>{};
   final nutrients = {
     for (final (id, _, _) in foodNutrients) id: TextEditingController(),
   };
@@ -199,6 +213,7 @@ final class _FoodFormScreenState extends State<FoodFormScreen> {
         locale,
         at(q, ['entered', 'value']) ?? at(q, ['value']),
       );
+      _original[key] = value.text;
     }
     for (final p in (_old['portions'] as List?) ?? const []) {
       portions.add(
@@ -276,14 +291,28 @@ final class _FoodFormScreenState extends State<FoodFormScreen> {
       'nutrients': values,
     }..remove('portions');
     if (portionList.isNotEmpty) food['portions'] = portionList;
-    // Values switch to what was typed; old value types no longer apply.
+    final types = <String, Object?>{
+      for (final e in ((_old['valueTypes'] as Map?) ?? const {}).entries)
+        if (values.containsKey(e.key) &&
+            nutrients['${e.key}']?.text.trim() == _original['${e.key}'])
+          '${e.key}': e.value,
+    };
     food.remove('valueTypes');
+    if (types.isNotEmpty) food['valueTypes'] = types;
     await _publish(context, food, widget.existing);
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.existing == null ? 'New food' : 'Food')),
+    appBar: AppBar(
+      title: Text(
+        widget.existing != null
+            ? 'Food'
+            : widget.draft != null
+            ? 'Review food'
+            : 'New food',
+      ),
+    ),
     body: ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
       children: [
@@ -302,11 +331,18 @@ final class _FoodFormScreenState extends State<FoodFormScreen> {
           ],
           selected: {basis},
           showSelectedIcon: false,
-          onSelectionChanged: widget.existing == null
+          onSelectionChanged: widget.existing == null && widget.draft == null
               ? (s) => setState(() => basis = s.single)
               : null,
         ),
         const SizedBox(height: 10),
+        if (at(_old, ['source', 'kind']) == 'lookup')
+          Muted(
+            'From Open Food Facts'
+            '${at(_old, ['source', 'url']) == null ? '' : ' (${at(_old, ['source', 'url'])})'}. '
+            'Check it against the package before saving. '
+            '${at(_old, ['source', 'notice']) ?? ''}',
+          ),
         const Muted(
           'As printed on the label. Leave a value blank if the '
           'label does not give it; it is then unknown, not zero.',
@@ -715,4 +751,118 @@ final class _FoodPickerState extends State<_FoodPicker> {
       ),
     );
   }
+}
+
+/// Where barcode lookups go; tests point it at a local server.
+String? openFoodFactsEndpoint;
+
+/// Asks for a barcode, looks it up on Open Food Facts (sending only the
+/// barcode) and opens the result for review before anything is saved. A
+/// barcode already saved opens that food instead.
+Future<void> lookUpBarcode(
+  BuildContext context,
+  List<Map<String, Object?>> foods,
+) async {
+  final profile = ProfileScope.of(context);
+  final code = await showDialog<String>(
+    context: context,
+    builder: (_) => const _BarcodeDialog(),
+  );
+  if (code == null || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.of(context);
+  final saved = foods.where((f) => f['id'] == 'off-$code').firstOrNull;
+  try {
+    if (saved != null) {
+      final shown = await profile.call<Map<String, Object?>>('food show', {
+        'foodId': saved['id'],
+      });
+      await navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => FoodFormScreen(foods: foods, existing: shown),
+        ),
+      );
+      return;
+    }
+    final found = await profile.pure<Map<String, Object?>>('food lookup', {
+      'barcode': code,
+      'endpoint': ?openFoodFactsEndpoint,
+    });
+    await navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => FoodFormScreen(
+          foods: foods,
+          draft: found['food'] as Map<String, Object?>?,
+        ),
+      ),
+    );
+  } on BodyTmiException catch (e) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          e.code == 'io' || e.code == 'storage'
+              ? 'Open Food Facts could not be reached.'
+              : e.message,
+        ),
+      ),
+    );
+  }
+}
+
+final class _BarcodeDialog extends StatefulWidget {
+  const _BarcodeDialog();
+
+  @override
+  State<_BarcodeDialog> createState() => _BarcodeDialogState();
+}
+
+final class _BarcodeDialogState extends State<_BarcodeDialog> {
+  final code = TextEditingController();
+  String? problem;
+
+  @override
+  void dispose() {
+    code.dispose();
+    super.dispose();
+  }
+
+  void _done() {
+    final digits = code.text.replaceAll(RegExp(r'\s'), '');
+    if (!RegExp(r'^[0-9]{6,14}$').hasMatch(digits)) {
+      setState(() => problem = 'A barcode is 6 to 14 digits.');
+      return;
+    }
+    Navigator.pop(context, digits);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Look up a barcode'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: code,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Barcode'),
+          onSubmitted: (_) => _done(),
+        ),
+        const SizedBox(height: 8),
+        const Muted(
+          'Sends only this number to Open Food Facts (openfoodfacts.org). '
+          'Nothing is saved until you review the result.',
+        ),
+        if (problem != null) ProblemText(problem!),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(onPressed: _done, child: const Text('Look up')),
+    ],
+  );
 }

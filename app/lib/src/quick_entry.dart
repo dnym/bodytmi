@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'format.dart';
+import 'my_foods.dart' show lookUpBarcode;
 import 'profile.dart';
 import 'session.dart' show parseDecimal;
 import 'sleep.dart' show SleepSheet;
@@ -542,7 +543,19 @@ final class _FoodEntryScreenState extends State<FoodEntryScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Add food')),
+    appBar: AppBar(
+      title: const Text('Add food'),
+      actions: [
+        IconButton(
+          tooltip: 'Look up a barcode',
+          icon: const Icon(Icons.qr_code_2),
+          onPressed: () async {
+            await lookUpBarcode(context, own);
+            if (mounted) await _loadOwn();
+          },
+        ),
+      ],
+    ),
     body: Column(
       children: [
         Padding(
