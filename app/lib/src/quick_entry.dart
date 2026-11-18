@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'format.dart';
 import 'profile.dart';
 import 'session.dart' show parseDecimal;
+import 'sleep.dart' show SleepSheet;
 import 'widgets.dart';
 
 /// Opens the quick-add menu (design A's "+" on Today).
@@ -57,14 +58,15 @@ Future<void> showQuickAdd(BuildContext context, {DateTime? clock}) =>
       ),
     );
 
-String _stamp(DateTime t) =>
+/// `yyyymmdd-hhmmss` for record ids.
+String stamp(DateTime t) =>
     '${t.year}${_two(t.month)}${_two(t.day)}-'
     '${_two(t.hour)}${_two(t.minute)}${_two(t.second)}';
 String _two(int v) => v.toString().padLeft(2, '0');
 
 /// Runs [write]; on success closes the sheet and confirms, otherwise shows
 /// the command's message and keeps the input.
-Future<void> _save(
+Future<void> saveAndClose(
   BuildContext context,
   String done,
   Future<void> Function(ProfileClient profile) write,
@@ -232,12 +234,12 @@ final class _WeighInState extends State<_WeighIn> {
         setState(() => problem = 'Enter your weight.');
         return;
       }
-      _save(
+      saveAndClose(
         context,
         'Weigh-in saved',
         (p) => p.write('mass record', {
           'measurement': {
-            'id': 'mass-${_stamp(at)}',
+            'id': 'mass-${stamp(at)}',
             'context': 'health',
             'observedAt': isoInstant(at),
             'mass': {'value': value, 'unit': unit},
@@ -292,95 +294,8 @@ Future<void> showSleepEntry(BuildContext context, {DateTime? clock}) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _SleepEntry(now: clock ?? DateTime.now()),
+      builder: (_) => SleepSheet(now: clock ?? DateTime.now()),
     );
-
-final class _SleepEntry extends StatefulWidget {
-  const _SleepEntry({required this.now});
-  final DateTime now;
-
-  @override
-  State<_SleepEntry> createState() => _SleepEntryState();
-}
-
-final class _SleepEntryState extends State<_SleepEntry> {
-  late DateTime wake = () {
-    final n = widget.now;
-    final seven = DateTime(n.year, n.month, n.day, 7);
-    return n.isBefore(seven) ? n : seven;
-  }();
-  late DateTime asleep = DateTime(wake.year, wake.month, wake.day - 1, 23);
-  int? quality;
-  bool nap = false;
-
-  /// Onset on the wake day when it is before the wake time, else the day
-  /// before; a night belongs to the day you woke.
-  DateTime get onset {
-    final same = DateTime(
-      wake.year,
-      wake.month,
-      wake.day,
-      asleep.hour,
-      asleep.minute,
-    );
-    return same.isBefore(wake) ? same : same.subtract(const Duration(days: 1));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final minutes = wake.difference(onset).inMinutes;
-    return EntrySheet(
-      title: nap ? 'Nap' : 'Last night',
-      action: 'Save',
-      onAction: () => _save(
-        context,
-        'Sleep saved',
-        (p) => p.write('sleep record', {
-          'sleep': {
-            'id': 'sleep-${_stamp(wake)}',
-            'kind': nap ? 'nap' : 'main',
-            'asleepAt': isoInstant(onset),
-            'wakeAt': isoInstant(wake),
-            'quality': ?quality,
-          },
-        }),
-      ),
-      children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Nap'),
-          value: nap,
-          onChanged: (v) => setState(() => nap = v),
-        ),
-        TimeRow(
-          label: 'Fell asleep',
-          value: asleep,
-          onChanged: (t) => setState(() => asleep = t),
-        ),
-        TimeRow(
-          label: 'Woke up',
-          value: wake,
-          onChanged: (t) => setState(() => wake = t),
-        ),
-        Muted(Fmt.of(context).minutes(minutes)),
-        const SizedBox(height: 12),
-        const Text('Quality'),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          children: [
-            for (var q = 1; q <= 5; q++)
-              ChoiceChip(
-                label: Text('$q'),
-                selected: quality == q,
-                onSelected: (on) => setState(() => quality = on ? q : null),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
 
 // --------------------------------------------------------------- quick kcal
 
@@ -466,12 +381,12 @@ final class _QuickEnergyState extends State<_QuickEnergy> {
         setState(() => problem = 'Enter the energy.');
         return;
       }
-      _save(
+      saveAndClose(
         context,
         'Added to the diary',
         (p) => p.write('diary add', {
           'entry': {
-            'id': 'food-${_stamp(at)}',
+            'id': 'food-${stamp(at)}',
             'at': isoInstant(at),
             'meal': meal,
             'quick': quick,
@@ -772,7 +687,7 @@ final class _FoodAmountState extends State<_FoodAmount> {
       }
       await profile.write('diary add', {
         'entry': {
-          'id': 'food-${_stamp(time)}',
+          'id': 'food-${stamp(time)}',
           'at': isoInstant(time),
           'meal': meal,
           'food': {'id': foodId},

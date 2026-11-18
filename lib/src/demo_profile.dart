@@ -50,7 +50,15 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
 
   // Profile and body.
   await run('profile set', {
-    'profile': {'sex': 'male', 'birthDate': '1988-04-02'},
+    'profile': {
+      'sex': 'male',
+      'birthDate': '1988-04-02',
+      'location': {
+        'latitude': '59.3293',
+        'longitude': '18.0686',
+        'timeZone': 'Europe/Stockholm',
+      },
+    },
     'expectedRevision': 0,
   });
   await run('observation record', {

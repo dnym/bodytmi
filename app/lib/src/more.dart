@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'backup.dart';
 import 'lock.dart';
 import 'profile.dart';
+import 'sleep.dart';
 import 'widgets.dart';
 
 /// The More tab: the other areas, the lock choice and profile tools.
@@ -22,8 +23,14 @@ final class MoreScreen extends StatelessWidget {
         SectionCard(
           child: Column(
             children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Sleep'),
+                subtitle: const Text('diary, schedule, daylight'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openSleep(context),
+              ),
               for (final (title, subtitle) in [
-                ('Sleep', 'diary, schedule, daylight'),
                 ('Journal', 'mood, energy, symptoms'),
                 ('Practices', 'box breathing, playlists'),
                 ('Goals & trials', 'goals, routines, trials, reviews'),
