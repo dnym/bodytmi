@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'format.dart';
 import 'gym_start.dart';
+import 'program_start.dart';
 import 'profile.dart';
 import 'session.dart';
 import 'widgets.dart';
@@ -80,6 +81,23 @@ final class TrainScreen extends StatelessWidget {
               title: 'Next workout',
               child: EmptyNote('No active program.'),
             ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: data.next.isEmpty
+                  ? FilledButton.icon(
+                      onPressed: () => openProgramStart(context),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Start a program'),
+                    )
+                  : TextButton.icon(
+                      onPressed: () => openProgramStart(context),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Start another program'),
+                    ),
+            ),
+          ),
           for (final n in data.next)
             SectionCard(
               title: at(n.run, ['program', 'definition', 'name']) as String?,
@@ -154,7 +172,7 @@ final class TrainScreen extends StatelessWidget {
 
   static String _targets(Fmt f, Object? targets) {
     if (targets is! Map) return '';
-    final mass = targets['mass'];
+    final mass = targets['mass'] ?? targets['load'];
     final reps = targets['reps'];
     if (mass != null && reps != null) {
       return '${f.quantity(mass, digits: 2)} × ${f.number((reps as Map)['value'])}';

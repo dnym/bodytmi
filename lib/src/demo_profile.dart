@@ -194,6 +194,30 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
   }
 
   // Training: a looping upper/lower program with two finished sessions.
+  // Double progression: reps rise to the top of the range, then weight.
+  for (final (id, name, lower, upper) in [
+    ('strength-3-5', 'Strength 3–5 reps, +2.5 kg', '3', '5'),
+    ('volume-10-15', 'Volume 10–15 reps, +2.5 kg', '10', '15'),
+  ]) {
+    await run('preset publish', {
+      'expectedRevision': 0,
+      'preset': {
+        'id': id,
+        'name': name,
+        'ruleType': 'double',
+        'rule': {
+          'objective': 'reps',
+          'lever': 'mass',
+          'lower': q(lower, 'rep'),
+          'upper': q(upper, 'rep'),
+          'objectiveStep': q('1', 'rep'),
+          'leverStep': q('2.5', 'kg'),
+          'deloadAfter': 3,
+          'deloadPercent': '10',
+        },
+      },
+    });
+  }
   Map<String, Object?> slot(
     String id,
     String exercise,
@@ -206,6 +230,12 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
     'exercise': exercise,
     'implementation': implementation,
     'equipment': equipment,
+    'progression': {
+      'preset': {
+        'id': int.parse(reps) <= 5 ? 'strength-3-5' : 'volume-10-15',
+        'revision': 1,
+      },
+    },
     'targets': {'mass': q(mass, 'kg'), 'reps': q(reps, 'rep')},
     'prefill': ['mass'],
   };

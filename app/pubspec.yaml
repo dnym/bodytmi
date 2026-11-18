@@ -49,3 +49,5 @@ flutter:
     # make app-check verifies it is identical.
     # Not .gz: Android packaging would silently decompress and rename it.
     - assets/slv-food-dataset.bin
+    # Copy of data/starter-catalog.json; make app-check verifies it.
+    - assets/starter-catalog.json

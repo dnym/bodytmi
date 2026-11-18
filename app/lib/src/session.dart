@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'format.dart';
 import 'gym_start.dart';
+import 'progression_review.dart';
 import 'set_equipment.dart';
 import 'profile.dart';
 import 'theme.dart';
@@ -198,6 +199,12 @@ final class _SessionScreenState extends State<SessionScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
+          if (_finished && _pinnedSlots.isNotEmpty)
+            ProgressionReview(
+              sessionId: widget.sessionId,
+              slots: _pinnedSlots,
+              titleOf: _slotTitle,
+            ),
           for (final MapEntry(key: slotId, value: sets) in slots.entries)
             SectionCard(
               title: _slotTitle(slotId),
@@ -265,6 +272,12 @@ final class _SessionScreenState extends State<SessionScreen> {
             ),
     );
   }
+
+  /// Slots whose workout names a progression preset.
+  List<Map<String, Object?>> get _pinnedSlots => [
+    for (final s in (definition['slots'] as List?) ?? const [])
+      if ((s as Map)['progression'] != null) s as Map<String, Object?>,
+  ];
 
   Map<String, Object?>? _slot(String id) => [
     for (final s in (definition['slots'] as List?) ?? const [])
@@ -513,7 +526,8 @@ final class _SessionScreenState extends State<SessionScreen> {
     }
     await _change('store finish', {'finishedAt': isoInstant(DateTime.now())});
     rest.stop();
-    if (mounted && _finished) Navigator.pop(context);
+    // Stay to review progression proposals when the workout has any.
+    if (mounted && _finished && _pinnedSlots.isEmpty) Navigator.pop(context);
   }
 
   static String _clock(Duration d) {
@@ -779,11 +793,13 @@ final class _SetRow extends StatelessWidget {
 String metricsText(Fmt f, Object? metrics) {
   if (metrics is! Map || metrics.isEmpty) return '—';
   Object? entered(Object? q) => q is Map ? q['entered'] ?? q : q;
-  final mass = entered(metrics['mass']);
+  // Weight is `mass` in most workouts and `load` in some blueprints.
+  final massKey = metrics.containsKey('mass') ? 'mass' : 'load';
+  final mass = entered(metrics[massKey]);
   final reps = entered(metrics['reps']);
   final rest = [
     for (final e in metrics.entries)
-      if (e.key != 'mass' && e.key != 'reps')
+      if (e.key != massKey && e.key != 'reps')
         f.quantity(entered(e.value), digits: 2),
   ];
   return [

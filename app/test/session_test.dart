@@ -121,6 +121,11 @@ void main() {
       expect(((sets[1]['actuals']! as Map)['reps']! as Map)['value'], '2');
       expect(sets[2]['status'], 'skipped');
       expect(sets.where((s) => s['status'] == 'skipped').length, 9);
+      // The finished workout stays open with its progression proposals.
+      await settle();
+      expect(find.text('PROGRESSION'), findsOneWidget);
+      await tester.tap(find.byType(BackButton));
+      await settle();
       // The run moved on to the next day.
       expect(find.text('Lower A'), findsWidgets);
     } finally {
