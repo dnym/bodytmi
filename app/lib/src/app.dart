@@ -1,8 +1,11 @@
+import 'dart:io' show Platform;
+
 import 'package:material_ui/material_ui.dart';
 
 import 'body.dart';
 import 'food.dart';
 import 'format.dart';
+import 'health_connect.dart' show refreshStepsQuietly;
 import 'more.dart';
 import 'profile.dart';
 import 'quick_entry.dart';
@@ -42,6 +45,17 @@ final class HomeShell extends StatefulWidget {
 
 final class _HomeShellState extends State<HomeShell> {
   int index = 0;
+  bool _stepsRefreshed = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Health Connect exists only on Android phones (not in tests).
+    if (!_stepsRefreshed && Platform.isAndroid) {
+      _stepsRefreshed = true;
+      refreshStepsQuietly(ProfileScope.of(context));
+    }
+  }
 
   static const _titles = ['Today', 'Train', 'Food', 'Body', 'More'];
 

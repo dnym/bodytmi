@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'backup.dart';
 import 'diet_plan.dart';
 import 'goals.dart';
+import 'health_connect.dart';
 import 'gyms.dart';
 import 'journal.dart';
 import 'lock.dart';
@@ -28,6 +29,13 @@ final class MoreScreen extends StatelessWidget {
         SectionCard(
           child: Column(
             children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Steps from Health Connect'),
+                subtitle: const Text('daily step totals, read only'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openHealthConnect(context),
+              ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Sleep'),

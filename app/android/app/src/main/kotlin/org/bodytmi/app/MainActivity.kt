@@ -1,5 +1,6 @@
 package org.bodytmi.app
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// A fragment activity: Health Connect's permission request needs it.
+class MainActivity : FlutterFragmentActivity()

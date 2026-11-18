@@ -21,6 +21,8 @@ dependencies:
   # Camera barcode scanning with the bundled on-device ML Kit model
   # (owner decision); typed entry stays available.
   mobile_scanner: 7.5.0
+  # Health Connect (Android): read-only daily step totals.
+  health: 13.3.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
