@@ -16,6 +16,7 @@ dependencies:
   bodytmi_storage: any
   bodytmi_locale: any
   bodytmi_flutter: any
+  flutter_secure_storage: ^11.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
