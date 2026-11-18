@@ -76,10 +76,8 @@ final class _DiaryEntryEditorState extends State<DiaryEntryEditor> {
 
   String get _unit => widget.food?['basis'] == '100ml' ? 'ml' : 'g';
 
-  List<Map<String, Object?>> get _portions => [
-    for (final p in (widget.food?['portions'] as List?) ?? const [])
-      p as Map<String, Object?>,
-  ];
+  List<Map<String, Object?>> get _portions =>
+      widget.food == null ? const [] : foodPortions(widget.food!);
 
   @override
   void initState() {

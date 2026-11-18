@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'diary_edit.dart';
 import 'format.dart';
+import 'my_foods.dart';
 import 'profile.dart';
 import 'today.dart' show FoodSummary;
 import 'widgets.dart';
@@ -69,6 +70,14 @@ final class _FoodScreenState extends State<FoodScreen> {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                 children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => openMyFoods(context),
+                      icon: const Icon(Icons.menu_book_outlined),
+                      label: const Text('My foods & recipes'),
+                    ),
+                  ),
                   SectionCard(
                     title:
                         at(diary, ['budget', 'dayType', 'name']) as String? ??

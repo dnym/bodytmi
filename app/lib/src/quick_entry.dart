@@ -628,6 +628,19 @@ final class _FoodEntryScreenState extends State<FoodEntryScreen> {
   }
 }
 
+/// The portions a food can be logged in: its declared portions and, for a
+/// recipe, one equal batch portion (`portion`) and the whole recipe
+/// (`whole`).
+List<Map<String, Object?>> foodPortions(Map<String, Object?> food) => [
+  for (final p in (food['portions'] as List?) ?? const [])
+    p as Map<String, Object?>,
+  if (food['kind'] == 'composite') ...[
+    if (at(food, ['batch', 'portions']) case final int n)
+      {'id': 'portion', 'name': 'Portion (1/$n)'},
+    {'id': 'whole', 'name': 'Whole recipe'},
+  ],
+];
+
 final class _FoodAmount extends StatefulWidget {
   const _FoodAmount({
     required this.choice,
@@ -654,10 +667,7 @@ final class _FoodAmountState extends State<_FoodAmount> {
 
   String get _unit => widget.food['basis'] == '100ml' ? 'ml' : 'g';
 
-  List<Map<String, Object?>> get _portions => [
-    for (final p in (widget.food['portions'] as List?) ?? const [])
-      p as Map<String, Object?>,
-  ];
+  List<Map<String, Object?>> get _portions => foodPortions(widget.food);
 
   @override
   void dispose() {
