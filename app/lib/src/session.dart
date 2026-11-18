@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'format.dart';
+import 'gym_start.dart';
 import 'profile.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -15,11 +16,19 @@ Future<String> startRunSession(
   ProfileClient profile,
   String runId, {
   DateTime? now,
+  GymChoice? gym,
 }) async {
-  final run = await profile.call<Map<String, Object?>>('run show', {
+  var run = await profile.call<Map<String, Object?>>('run show', {
     'runId': runId,
   });
   if (run['currentSessionId'] case final String id) return id;
+  if (gym != null && gym.makeDefault) {
+    run = await profile.write<Map<String, Object?>>('run gym', {
+      'runId': runId,
+      'expectedVersion': run['contentVersion'],
+      'gym': gym.gym,
+    });
+  }
   final at = now ?? DateTime.now();
   final id =
       'session-${at.year}${_two(at.month)}${_two(at.day)}-'
@@ -29,6 +38,7 @@ Future<String> startRunSession(
     'expectedVersion': run['contentVersion'],
     'id': id,
     'startedAt': isoInstant(at),
+    ...?gym?.fields,
   });
   return session['id']! as String;
 }
@@ -48,6 +58,7 @@ final class SessionScreen extends StatefulWidget {
 
 final class _SessionScreenState extends State<SessionScreen> {
   Map<String, Object?>? session;
+  String? gymLabel;
   Object? error;
   bool busy = false;
   final rest = RestCue();
@@ -77,7 +88,13 @@ final class _SessionScreenState extends State<SessionScreen> {
       final s = await profile.call<Map<String, Object?>>('store show', {
         'id': widget.sessionId,
       });
-      if (mounted) setState(() => session = s);
+      final label = await gymName(profile, s['gym']);
+      if (mounted) {
+        setState(() {
+          session = s;
+          gymLabel = label;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => error = e);
     }
@@ -161,11 +178,14 @@ final class _SessionScreenState extends State<SessionScreen> {
           children: [
             Text('${definition['name'] ?? definition['id']}'),
             Text(
-              _finished
-                  ? 'Finished'
-                  : elapsed == null
-                  ? 'In progress'
-                  : 'In progress · ${_clock(elapsed)} elapsed',
+              [
+                _finished
+                    ? 'Finished'
+                    : elapsed == null
+                    ? 'In progress'
+                    : 'In progress · ${_clock(elapsed)} elapsed',
+                if (gymLabel != null) gymLabel,
+              ].join(' · '),
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.of(context).muted,
@@ -180,7 +200,19 @@ final class _SessionScreenState extends State<SessionScreen> {
           for (final MapEntry(key: slotId, value: sets) in slots.entries)
             SectionCard(
               title: _slotTitle(slotId),
-              trailing: Muted(_slotTag(slotId)),
+              trailing: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 170),
+                child: Text(
+                  _slotTag(slotId),
+                  textAlign: TextAlign.right,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.of(context).muted,
+                  ),
+                ),
+              ),
               child: Column(
                 children: [
                   for (final s in sets)
@@ -229,9 +261,14 @@ final class _SessionScreenState extends State<SessionScreen> {
 
   String _slotTag(String id) {
     final slot = _slot(id);
+    final instance = at(session, ['loadInputs', id, 'instance', 'snapshot']);
     return [
       slot?['implementation'],
-      slot?['equipment'],
+      instance is Map
+          ? '${instance['name'] ?? instance['id']}'
+          : session?['gym'] != null && slot?['equipment'] != null
+          ? 'no equipment recorded'
+          : slot?['equipment'],
     ].whereType<String>().map((s) => s.replaceAll('-', ' ')).join(' · ');
   }
 

@@ -113,17 +113,99 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
     });
   }
 
+  // Two gyms: a home setup and a commercial gym with two bars.
+  for (final (id, name) in [
+    ('olympic-barbell', 'Olympic barbell'),
+    ('adjustable-dumbbell', 'Adjustable dumbbell'),
+    ('cable-machine', 'Cable machine'),
+  ]) {
+    await run('equipment publish', {
+      'equipment': {'id': id, 'name': name},
+      'expectedRevision': 0,
+    });
+  }
+  for (final (id, name) in [('home', 'Home'), ('city-gym', 'City gym')]) {
+    await run('gym publish', {
+      'gym': {'id': id, 'name': name},
+      'expectedRevision': 0,
+    });
+  }
+  Map<String, Object?> bar(List<(String, int)> plates) => {
+    'components': [
+      {'id': 'bar', 'kind': 'bar', 'mass': q('20', 'kg')},
+    ],
+    'channel': {'id': 'bar', 'sides': 2, 'symmetry': 'required'},
+    'plates': [
+      for (final (mass, count) in plates)
+        {'mass': q(mass, 'kg'), 'count': count},
+    ],
+  };
+  for (final instance in <Map<String, Object?>>[
+    {
+      'id': 'home-bar',
+      'equipmentId': 'olympic-barbell',
+      'gym': 'home',
+      'name': 'Home bar',
+      'loading': bar([('20', 2), ('10', 2), ('5', 2), ('2.5', 2), ('1.25', 2)]),
+    },
+    {
+      'id': 'home-dumbbells',
+      'equipmentId': 'adjustable-dumbbell',
+      'gym': 'home',
+      'name': 'Home dumbbells',
+      'scale': {
+        'id': 'home-dumbbells-settings',
+        'unit': 'kg',
+        'range': {'start': '2.5', 'step': '2.5', 'count': 12},
+      },
+    },
+    {
+      'id': 'city-cable',
+      'equipmentId': 'cable-machine',
+      'gym': 'city-gym',
+      'name': 'Cable tower',
+      'scale': {
+        'id': 'city-cable-stack',
+        'unit': 'kg',
+        'range': {'start': '5', 'step': '5', 'count': 20},
+      },
+    },
+    for (final n in [1, 2])
+      {
+        'id': 'city-bar-$n',
+        'equipmentId': 'olympic-barbell',
+        'gym': 'city-gym',
+        'name': 'Bar $n',
+        'loading': bar([
+          ('25', 8),
+          ('20', 4),
+          ('15', 4),
+          ('10', 4),
+          ('5', 4),
+          ('2.5', 4),
+          ('1.25', 4),
+        ]),
+      },
+  ]) {
+    await run('instance publish', {
+      'instance': instance,
+      'expectedRevision': 0,
+    });
+  }
+
   // Training: a looping upper/lower program with two finished sessions.
   Map<String, Object?> slot(
     String id,
     String exercise,
     String implementation,
+    String equipment,
     String mass,
     String reps,
   ) => {
     'id': id,
     'exercise': exercise,
     'implementation': implementation,
+    'equipment': equipment,
     'targets': {'mass': q(mass, 'kg'), 'reps': q(reps, 'rep')},
     'prefill': ['mass'],
   };
@@ -140,9 +222,16 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
       'id': 'upper-a',
       'name': 'Upper A',
       'slots': [
-        slot('bench', 'bench-press', 'barbell', '72.5', '3'),
-        slot('pulldown', 'lat-pulldown', 'cable', '52', '10'),
-        slot('row', 'one-arm-row', 'dumbbell', '22', '15'),
+        slot('bench', 'bench-press', 'barbell', 'olympic-barbell', '72.5', '3'),
+        slot('pulldown', 'lat-pulldown', 'cable', 'cable-machine', '52', '10'),
+        slot(
+          'row',
+          'one-arm-row',
+          'dumbbell',
+          'adjustable-dumbbell',
+          '22',
+          '15',
+        ),
       ],
       'plan': {
         'id': 'workout',
@@ -161,8 +250,15 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
       'id': 'lower-a',
       'name': 'Lower A',
       'slots': [
-        slot('squat', 'back-squat', 'barbell', '95', '3'),
-        slot('rdl', 'romanian-deadlift', 'barbell', '70', '10'),
+        slot('squat', 'back-squat', 'barbell', 'olympic-barbell', '95', '3'),
+        slot(
+          'rdl',
+          'romanian-deadlift',
+          'barbell',
+          'olympic-barbell',
+          '70',
+          '10',
+        ),
       ],
       'plan': {
         'id': 'workout',
@@ -232,74 +328,6 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
       'id': 'session-$n',
       'expectedVersion': session['contentVersion'],
       'finishedAt': at(day, 18, 25),
-    });
-  }
-
-  // Two gyms: a home setup and a commercial gym with two bars.
-  for (final (id, name) in [
-    ('olympic-barbell', 'Olympic barbell'),
-    ('adjustable-dumbbell', 'Adjustable dumbbell'),
-  ]) {
-    await run('equipment publish', {
-      'equipment': {'id': id, 'name': name},
-      'expectedRevision': 0,
-    });
-  }
-  for (final (id, name) in [('home', 'Home'), ('city-gym', 'City gym')]) {
-    await run('gym publish', {
-      'gym': {'id': id, 'name': name},
-      'expectedRevision': 0,
-    });
-  }
-  Map<String, Object?> bar(List<(String, int)> plates) => {
-    'components': [
-      {'id': 'bar', 'kind': 'bar', 'mass': q('20', 'kg')},
-    ],
-    'channel': {'id': 'bar', 'sides': 2, 'symmetry': 'required'},
-    'plates': [
-      for (final (mass, count) in plates)
-        {'mass': q(mass, 'kg'), 'count': count},
-    ],
-  };
-  for (final instance in <Map<String, Object?>>[
-    {
-      'id': 'home-bar',
-      'equipmentId': 'olympic-barbell',
-      'gym': 'home',
-      'name': 'Home bar',
-      'loading': bar([('20', 2), ('10', 2), ('5', 2), ('2.5', 2), ('1.25', 2)]),
-    },
-    {
-      'id': 'home-dumbbells',
-      'equipmentId': 'adjustable-dumbbell',
-      'gym': 'home',
-      'name': 'Home dumbbells',
-      'scale': {
-        'id': 'home-dumbbells-settings',
-        'unit': 'kg',
-        'range': {'start': '2.5', 'step': '2.5', 'count': 12},
-      },
-    },
-    for (final n in [1, 2])
-      {
-        'id': 'city-bar-$n',
-        'equipmentId': 'olympic-barbell',
-        'gym': 'city-gym',
-        'name': 'Bar $n',
-        'loading': bar([
-          ('25', 8),
-          ('20', 4),
-          ('15', 4),
-          ('10', 4),
-          ('5', 4),
-          ('2.5', 4),
-          ('1.25', 4),
-        ]),
-      },
-  ]) {
-    await run('instance publish', {
-      'instance': instance,
-      'expectedRevision': 0,
     });
   }
 

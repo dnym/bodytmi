@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_app/src/app.dart';
+import 'package:bodytmi_app/src/gym_start.dart';
 import 'package:bodytmi_app/src/profile.dart';
 import 'package:bodytmi_app/src/session.dart';
 import 'package:bodytmi_locale/bodytmi_locale.dart';
@@ -67,6 +68,15 @@ void main() {
       await tester.tap(find.text('Train'));
       await settle();
       await tester.tap(find.text('Start workout'));
+      await settle();
+      // The profile has gyms: start without one.
+      expect(find.text('Where are you training?'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(GymStartSheet),
+          matching: find.widgetWithText(FilledButton, 'Start workout'),
+        ),
+      );
       await settle();
       expect(find.text('bench press'.toUpperCase()), findsOneWidget);
       expect(find.text('11 sets to go'), findsOneWidget);

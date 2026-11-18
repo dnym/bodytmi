@@ -2,12 +2,14 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'format.dart';
+import 'gym_start.dart';
 import 'profile.dart';
 import 'session.dart';
 import 'widgets.dart';
 
 final class _TrainData {
-  _TrainData(this.next, this.history);
+  _TrainData(this.next, this.history, this.gymNames);
+  final Map<String, String> gymNames;
   final List<
     ({
       Map<String, Object?> run,
@@ -57,7 +59,12 @@ final class TrainScreen extends StatelessWidget {
       for (final s in await p.call<List<Object?>>('store history'))
         if ((s! as Map)['status'] == 'finalized') s as Map<String, Object?>,
     ]..sort((a, b) => '${b['startedAt']}'.compareTo('${a['startedAt']}'));
-    return _TrainData(next, history.take(20).toList());
+    final gymNames = <String, String>{
+      for (final r in await p.call<List<Object?>>('gym list'))
+        '${at(r, ['gym', 'id'])}':
+            '${at(r, ['gym', 'name']) ?? at(r, ['gym', 'id'])}',
+    };
+    return _TrainData(next, history.take(20).toList(), gymNames);
   }
 
   @override
@@ -76,7 +83,9 @@ final class TrainScreen extends StatelessWidget {
           for (final n in data.next)
             SectionCard(
               title: at(n.run, ['program', 'definition', 'name']) as String?,
-              trailing: n.run['gym'] == null ? null : Pill('${n.run['gym']}'),
+              trailing: n.run['gym'] == null
+                  ? null
+                  : Pill(data.gymNames['${n.run['gym']}'] ?? '${n.run['gym']}'),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -105,7 +114,12 @@ final class TrainScreen extends StatelessWidget {
                     ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: () => openRunSession(context, '${n.run['id']}'),
+                    onPressed: () => openRunSession(
+                      context,
+                      '${n.run['id']}',
+                      day: n.day,
+                      workout: n.workout,
+                    ),
                     child: Text(
                       n.run['currentSessionId'] != null
                           ? 'Resume workout'
@@ -191,10 +205,40 @@ final class _HistoryRow extends StatelessWidget {
 }
 
 /// Starts (or resumes) the next workout of [runId] and opens it.
-Future<void> openRunSession(BuildContext context, String runId) async {
+///
+/// A new workout first asks where it is done when the profile has gyms and
+/// the workout uses equipment; the chosen gym binds each exercise's
+/// equipment for the session.
+Future<void> openRunSession(
+  BuildContext context,
+  String runId, {
+  Map<String, Object?>? day,
+  Map<String, Object?>? workout,
+}) async {
   final profile = ProfileScope.of(context);
   try {
-    final id = await startRunSession(profile, runId);
+    final run = await profile.call<Map<String, Object?>>('run show', {
+      'runId': runId,
+    });
+    GymChoice? gym;
+    final usesEquipment = ((workout?['slots'] as List?) ?? const []).any(
+      (s) => (s as Map)['equipment'] != null,
+    );
+    if (run['currentSessionId'] == null && day != null && usesEquipment) {
+      final gyms = await profile.call<List<Object?>>('gym list');
+      if (gyms.isNotEmpty) {
+        if (!context.mounted) return;
+        gym = await chooseGym(
+          context,
+          templateId: '${day['templateId']}',
+          revision: day['revision']! as int,
+          runGym: run['gym'] as String?,
+          workout: workout!,
+        );
+        if (gym == null) return;
+      }
+    }
+    final id = await startRunSession(profile, runId, gym: gym);
     if (context.mounted) await openSession(context, id);
   } on BodyTmiException catch (e) {
     if (context.mounted) {
