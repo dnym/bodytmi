@@ -12,30 +12,6 @@ import 'package:material_ui/material_ui.dart';
 void main() {
   final clock = DateTime(2026, 11, 18, 9, 30);
 
-  test('authored rest is found per slot, else none', () {
-    final definition = {
-      'plan': {
-        'id': 'w',
-        'type': 'sequence',
-        'children': [
-          {
-            'id': 'r',
-            'type': 'repeat',
-            'count': 3,
-            'restBetweenSeconds': 150,
-            'child': {'id': 'e', 'type': 'effort', 'slot': 'squat'},
-          },
-          {'id': 'a', 'type': 'effort', 'slot': 'row'},
-          {'id': 'b', 'type': 'rest', 'durationSeconds': 60},
-          {'id': 'c', 'type': 'effort', 'slot': 'curl'},
-        ],
-      },
-    };
-    expect(restSeconds(definition, 'squat'), 150);
-    expect(restSeconds(definition, 'row'), 60);
-    expect(restSeconds(definition, 'curl'), isNull);
-  });
-
   test('typed decimals accept either decimal mark', () {
     final sv = PresentationLocale.resolve('sv');
     expect(parseDecimal(sv, '72,5'), '72.5');

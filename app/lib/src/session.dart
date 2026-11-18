@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'format.dart';
 import 'gym_start.dart';
 import 'progression_review.dart';
+import 'set_clock.dart';
 import 'set_equipment.dart';
 import 'profile.dart';
 import 'theme.dart';
@@ -58,31 +59,57 @@ final class SessionScreen extends StatefulWidget {
   State<SessionScreen> createState() => _SessionScreenState();
 }
 
-final class _SessionScreenState extends State<SessionScreen> {
+final class _SessionScreenState extends State<SessionScreen>
+    with WidgetsBindingObserver {
   Map<String, Object?>? session;
+
+  /// The guided traversal of this open workout (`execution show`).
+  Map<String, Object?>? execution;
+  SetClock? clock;
   String? gymLabel;
   Object? error;
   bool busy = false;
-  final rest = RestCue();
   Timer? _tick;
+  int _requests = 0;
 
-  ProfileClient get profile => ProfileScope.of(context);
+  /// Captured once: dispose must still reach the profile to pause.
+  late ProfileClient profile;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    profile = ProfileScope.of(context);
     if (session == null && error == null) _reload();
     _tick ??= Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      if (rest.takeAlert()) HapticFeedback.heavyImpact();
-      setState(() {});
+      if (mounted) setState(() {});
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tick?.cancel();
+    clock?.pause();
+    clock?.dispose();
     super.dispose();
+  }
+
+  /// A timed set pauses when the app is not shown; a rest keeps going, so
+  /// the phone can be put away between sets.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.hidden ||
+            state == AppLifecycleState.paused) &&
+        clock != null &&
+        clock!.plan['restOnly'] != true) {
+      clock!.pause();
+    }
   }
 
   Future<void> _reload() async {
@@ -91,24 +118,237 @@ final class _SessionScreenState extends State<SessionScreen> {
         'id': widget.sessionId,
       });
       final label = await gymName(profile, s['gym']);
+      Map<String, Object?>? e;
+      if (s['status'] != 'finalized') e = await _execution(s);
       if (mounted) {
         setState(() {
           session = s;
+          execution = e;
           gymLabel = label;
         });
+        await _settle();
       }
     } catch (e) {
       if (mounted) setState(() => error = e);
     }
   }
 
+  /// This session's traversal, started on first open.
+  Future<Map<String, Object?>?> _execution(Map<String, Object?> s) async {
+    for (final e in await profile.call<List<Object?>>('execution list')) {
+      final row = e! as Map;
+      if (row['sessionId'] == s['id']) {
+        return profile.call<Map<String, Object?>>('execution show', {
+          'id': row['id'],
+        });
+      }
+    }
+    try {
+      return await profile.write<Map<String, Object?>>('execution start', {
+        'id': 'execution-${s['id']}',
+        'sessionId': s['id'],
+        'at': isoInstant(DateTime.now()),
+      });
+    } on BodyTmiException {
+      return null; // e.g. a plan the traversal does not support
+    }
+  }
+
+  Map<String, Object?>? get _current =>
+      execution?['current'] as Map<String, Object?>?;
+
+  /// The effort the traversal is on, or null during a rest.
+  String? get _currentEffort =>
+      _current?['kind'] == 'effort' ? '${_current!['id']}' : null;
+
+  /// One traversal step; the response is the execution view.
+  Future<void> _exec(String action, Map<String, Object?> fields) async {
+    final e = execution;
+    if (e == null) return;
+    final next = await profile.write<Map<String, Object?>>(
+      'execution $action',
+      {
+        'id': e['id'],
+        'expectedVersion': e['version'],
+        'expectedSessionVersion': session!['contentVersion'],
+        'requestId':
+            'app-${DateTime.now().microsecondsSinceEpoch}-${_requests++}',
+        'at': isoInstant(DateTime.now()),
+        ...fields,
+      },
+    );
+    final s = await profile.call<Map<String, Object?>>('store show', {
+      'id': widget.sessionId,
+    });
+    if (!mounted) return;
+    setState(() {
+      execution = (next['execution'] ?? next) as Map<String, Object?>;
+      session = s;
+    });
+  }
+
+  /// Acknowledges what needs no input (sets logged ahead, finished rests)
+  /// and starts a prepared rest, so the traversal follows the log.
+  Future<void> _settle() async {
+    for (var i = 0; i < 50 && mounted; i++) {
+      final cur = _current;
+      final timer = execution?['timer'] as Map<String, Object?>?;
+      if (cur == null) break;
+      if (cur['kind'] == 'effort' && at(cur, ['set', 'status']) != 'planned') {
+        await _exec('advance', const {});
+        continue;
+      }
+      if (cur['kind'] == 'rest' && timer?['status'] == 'completed') {
+        await _exec('advance', const {});
+        continue;
+      }
+      _attach(timer);
+      if (cur['kind'] == 'rest' && clock != null && !clock!.running) {
+        await clock!.start();
+      }
+      break;
+    }
+    if (_current?['kind'] != 'rest' &&
+        (execution?['timer'] as Map?)?['status'] != 'running' &&
+        clock?.plan['restOnly'] == true) {
+      _attach(null);
+    }
+  }
+
+  void _attach(Map<String, Object?>? timer) {
+    if (timer == null || timer['status'] == 'completed') {
+      if (timer == null && clock != null && clock!.running) return;
+      clock?.dispose();
+      clock = null;
+      return;
+    }
+    if (clock?.id == timer['id']) return;
+    clock?.dispose();
+    clock = SetClock(profile, timer)
+      ..onStopped = (c) async {
+        HapticFeedback.heavyImpact();
+        if (!mounted) return;
+        if (c['status'] == 'completed') {
+          await _exec('advance', const {});
+          await _settle();
+        } else if (c['status'] == 'awaitingConfirmation') {
+          setState(() {});
+          await _review();
+        }
+      }
+      ..addListener(() {
+        if (mounted) setState(() {});
+      });
+  }
+
+  Future<void> _skipRest() async {
+    await clock?.pause();
+    await _guard(() => _exec('skip', {'confirm': true}));
+    await _settle();
+  }
+
+  Future<void> _continueRest() async {
+    await clock?.pause();
+    await _guard(() => _exec('advance', const {}));
+    await _settle();
+  }
+
+  /// Starts the clock of the current timed set.
+  Future<void> _startTimer() async {
+    await _guard(() async {
+      // `execution time` answers with the prepared clock itself.
+      await profile.write('execution time', {
+        'id': execution!['id'],
+        'expectedVersion': execution!['version'],
+        'at': isoInstant(DateTime.now()),
+      });
+      final e = await profile.call<Map<String, Object?>>('execution show', {
+        'id': execution!['id'],
+      });
+      if (mounted) setState(() => execution = e);
+    });
+    _attach(execution?['timer'] as Map<String, Object?>?);
+    await clock?.start();
+  }
+
+  /// Review after a timed set: as planned, or entered (the measured time
+  /// is recorded by the clock either way).
+  Future<void> _review() async {
+    final c = clock;
+    final cur = _current;
+    if (c == null || cur == null) return;
+    final asPlanned = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text("Time's up"),
+        content: const Text(
+          'The measured time is recorded. Log the rest of the set as '
+          'planned, or enter what you did?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Enter result'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('As planned'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || asPlanned == null) return;
+    Map<String, Object?>? actuals;
+    if (!asPlanned) {
+      final slotId = '${at(cur, ['set', 'slot'])}';
+      final result = await showModalBottomSheet<_SetResult>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => _SetSheet(
+          set: {...(cur['set']! as Map<String, Object?>), 'status': 'review'},
+          label: '${_slotTitle(slotId)} · review',
+          slot: _slot(slotId),
+          omit: {'${c.clock['metric']}'},
+        ),
+      );
+      if (result is! _Actuals) return;
+      actuals = result.actuals;
+    }
+    await _guard(
+      () => _exec('confirm', {
+        'timerId': c.id,
+        'timerVersion': c.clock['version'],
+        if (actuals == null) 'acceptSuggested': true else 'actuals': actuals,
+      }),
+    );
+    await _settle();
+  }
+
+  Future<void> _guard(Future<void> Function() step) async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      await step();
+    } on BodyTmiException catch (e) {
+      _show(e.message);
+      await _reload();
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  /// A planned set with a duration suggestion can be timed.
+  static bool _timed(Map<String, Object?>? set) {
+    for (final q in ((set?['suggested'] as Map?) ?? const {}).values) {
+      final unit = at(q, ['entered', 'unit']) ?? at(q, ['unit']);
+      if (const {'ms', 's', 'min', 'h'}.contains(unit)) return true;
+    }
+    return false;
+  }
+
   /// Runs one change; the response is the updated session.
-  Future<void> _change(
-    String command,
-    Map<String, Object?> fields, {
-    bool restAfter = false,
-    String? slot,
-  }) async {
+  Future<void> _change(String command, Map<String, Object?> fields) async {
     if (busy) return;
     setState(() => busy = true);
     try {
@@ -118,9 +358,11 @@ final class _SessionScreenState extends State<SessionScreen> {
         ...fields,
       });
       setState(() => session = updated);
-      if (restAfter && slot != null) {
-        final seconds = restSeconds(definition, slot);
-        if (seconds != null && _planned.isNotEmpty) rest.start(seconds);
+      if (execution != null) {
+        execution = await profile.call<Map<String, Object?>>('execution show', {
+          'id': execution!['id'],
+        });
+        await _settle();
       }
     } on BodyTmiException catch (e) {
       _show(e.message);
@@ -167,7 +409,9 @@ final class _SessionScreenState extends State<SessionScreen> {
     final f = Fmt.of(context);
     final started = DateTime.tryParse('${session!['startedAt']}');
     final elapsed = started == null ? null : DateTime.now().difference(started);
-    final current = _planned.firstOrNull;
+    final current = _currentEffort == null
+        ? _planned.firstOrNull
+        : _sets.where((s) => s['id'] == _currentEffort).firstOrNull;
     final slots = <String, List<Map<String, Object?>>>{};
     for (final s in _sets) {
       slots.putIfAbsent(s['slot']! as String, () => []).add(s);
@@ -248,12 +492,7 @@ final class _SessionScreenState extends State<SessionScreen> {
                       fmt: f,
                       onDone: busy || s['status'] != 'planned'
                           ? null
-                          : () => _change(
-                              'store complete',
-                              {'setId': s['id'], 'acceptSuggested': true},
-                              restAfter: true,
-                              slot: slotId,
-                            ),
+                          : () => _logSet(s, const {'acceptSuggested': true}),
                       onTap: busy ? null : () => _openSet(s, slotId),
                       note: _setNote(f, s, current: identical(s, current)),
                     ),
@@ -264,12 +503,7 @@ final class _SessionScreenState extends State<SessionScreen> {
       ),
       bottomNavigationBar: _finished
           ? null
-          : _BottomBar(
-              rest: rest,
-              remaining: _planned.length,
-              busy: busy,
-              onFinish: _finish,
-            ),
+          : _BottomBar(status: _status(), busy: busy, onFinish: _finish),
     );
   }
 
@@ -385,14 +619,30 @@ final class _SessionScreenState extends State<SessionScreen> {
                 ),
         );
       case _Skip():
-        await _change('store skip', {'setId': set['id'], 'confirm': true});
+        if (set['id'] == _currentEffort) {
+          await _guard(() => _exec('skip', {'confirm': true}));
+          await _settle();
+        } else {
+          await _change('store skip', {'setId': set['id'], 'confirm': true});
+        }
       case _Actuals(:final actuals):
-        await _change(
-          'store complete',
-          {'setId': set['id'], 'actuals': actuals},
-          restAfter: set['status'] == 'planned',
-          slot: slotId,
-        );
+        await _logSet(set, {'actuals': actuals});
+    }
+  }
+
+  /// The current set goes through the traversal (which prepares the next
+  /// rest); any other set is logged ahead or corrected directly.
+  Future<void> _logSet(
+    Map<String, Object?> set,
+    Map<String, Object?> what,
+  ) async {
+    if (set['id'] == _currentEffort &&
+        set['status'] == 'planned' &&
+        clock == null) {
+      await _guard(() => _exec('complete', what));
+      await _settle();
+    } else {
+      await _change('store complete', {'setId': set['id'], ...what});
     }
   }
 
@@ -495,6 +745,113 @@ final class _SessionScreenState extends State<SessionScreen> {
     }
   }
 
+  /// The bottom bar's left side: the rest or set clock, a manual rest,
+  /// a timer to start, or what is left.
+  Widget _status() {
+    final cur = _current;
+    final c = clock;
+    Widget big(String text, String sub) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          text,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+        ),
+        Muted(sub),
+      ],
+    );
+    if (cur?['kind'] == 'rest') {
+      if (c == null) {
+        return Row(
+          children: [
+            Expanded(child: big('Rest', 'continue when ready')),
+            TextButton(
+              onPressed: busy ? null : _continueRest,
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      }
+      final max = c.plan['restMaximumMilliseconds'] as int?;
+      final min = c.plan['restMilliseconds'] as int? ?? 0;
+      final ready = max != null && c.elapsed >= min;
+      return Row(
+        children: [
+          Expanded(
+            child: big(
+              ready ? 'Rest ready' : 'Rest ${countdown(c.remaining ?? 0)}',
+              'of ${countdown(min)}${c.running ? '' : ' · paused'}',
+            ),
+          ),
+          if (!c.running)
+            IconButton(
+              tooltip: 'Resume rest',
+              onPressed: busy ? null : () => c.start(),
+              icon: const Icon(Icons.play_arrow),
+            ),
+          TextButton(
+            onPressed: busy ? null : (ready ? _continueRest : _skipRest),
+            child: Text(ready ? 'Continue' : 'Skip rest'),
+          ),
+        ],
+      );
+    }
+    if (c != null && cur?['kind'] == 'effort') {
+      if (c.status == 'awaitingConfirmation') {
+        return Row(
+          children: [
+            Expanded(child: big("Time's up", 'review the set')),
+            TextButton(
+              onPressed: busy ? null : _review,
+              child: const Text('Review'),
+            ),
+          ],
+        );
+      }
+      final label = switch (c.phase) {
+        'preparation' => 'Get ready',
+        _ => 'Effort',
+      };
+      return Row(
+        children: [
+          Expanded(
+            child: big(
+              '$label ${countdown(c.remaining ?? c.elapsed)}',
+              c.running ? 'timing' : 'paused',
+            ),
+          ),
+          IconButton(
+            tooltip: c.running ? 'Pause' : 'Resume',
+            onPressed: busy ? null : () => c.running ? c.pause() : c.start(),
+            icon: Icon(c.running ? Icons.pause : Icons.play_arrow),
+          ),
+        ],
+      );
+    }
+    final left = _planned.length;
+    final timed =
+        cur?['kind'] == 'effort' &&
+        _timed(cur?['set'] as Map<String, Object?>?);
+    return Row(
+      children: [
+        Expanded(
+          child: Muted(
+            left == 0
+                ? 'All sets logged'
+                : '$left ${left == 1 ? 'set' : 'sets'} to go',
+          ),
+        ),
+        if (timed)
+          FilledButton.tonalIcon(
+            onPressed: busy ? null : _startTimer,
+            icon: const Icon(Icons.timer_outlined),
+            label: const Text('Start timer'),
+          ),
+      ],
+    );
+  }
+
   Future<void> _finish() async {
     final remaining = _planned.length;
     final confirmed = await showDialog<bool>(
@@ -520,12 +877,25 @@ final class _SessionScreenState extends State<SessionScreen> {
       ),
     );
     if (confirmed != true) return;
-    if (remaining > 0) {
+    await clock?.pause();
+    if (execution != null && execution!['status'] != 'completed') {
+      // Skip what is left of the walk in one step (its outermost group).
+      final groups = (execution!['groups'] as List?) ?? const [];
+      if (groups.isNotEmpty) {
+        await _guard(
+          () => _exec('skip-group', {
+            'groupPath': (groups.last as Map)['path'],
+            'confirm': true,
+          }),
+        );
+      }
+      _attach(null);
+    }
+    if (_planned.isNotEmpty) {
       await _change('store skip-remaining', {'confirm': true});
       if (_planned.isNotEmpty) return;
     }
     await _change('store finish', {'finishedAt': isoInstant(DateTime.now())});
-    rest.stop();
     // Stay to review progression proposals when the workout has any.
     if (mounted && _finished && _pinnedSlots.isEmpty) Navigator.pop(context);
   }
@@ -537,161 +907,36 @@ final class _SessionScreenState extends State<SessionScreen> {
   }
 }
 
-/// The authored rest after a set of [slotId]: the nearest enclosing
-/// repeat's `restBetweenSeconds`, or a rest node right after its effort.
-/// A display cue only: it records nothing.
-int? restSeconds(Map<String, Object?> definition, String slotId) {
-  int? found;
-  bool mentions(Object? node) {
-    if (node is! Map) return false;
-    if (node['type'] == 'effort') return node['slot'] == slotId;
-    return [
-      node['child'],
-      ...((node['children'] as List?) ?? const []),
-    ].any(mentions);
-  }
-
-  void walk(Object? node) {
-    if (node is! Map || found != null) return;
-    if (node['type'] == 'repeat' &&
-        node['restBetweenSeconds'] is int &&
-        mentions(node['child'])) {
-      found = node['restBetweenSeconds'] as int;
-      return;
-    }
-    final children = (node['children'] as List?) ?? const [];
-    for (var i = 0; i < children.length; i++) {
-      final child = children[i];
-      if (child is Map &&
-          child['type'] == 'effort' &&
-          child['slot'] == slotId &&
-          i + 1 < children.length &&
-          (children[i + 1] as Map)['type'] == 'rest' &&
-          children[i + 1]['durationSeconds'] is int) {
-        found = children[i + 1]['durationSeconds'] as int;
-        return;
-      }
-      walk(child);
-    }
-    walk(node['child']);
-  }
-
-  walk(definition['plan']);
-  return found;
-}
-
-/// A foreground rest countdown on a monotonic stopwatch. It is a cue, not a
-/// record: nothing is stored and it ends with the screen.
-final class RestCue {
-  final _watch = Stopwatch();
-  int _seconds = 0;
-  bool _alerted = false;
-
-  bool get active => _seconds > 0;
-  int get total => _seconds;
-  Duration get remaining {
-    final left = Duration(seconds: _seconds) - _watch.elapsed;
-    return left.isNegative ? Duration.zero : left;
-  }
-
-  bool get done => _seconds > 0 && remaining == Duration.zero;
-
-  void start(int seconds) {
-    _seconds = seconds;
-    _alerted = false;
-    _watch
-      ..reset()
-      ..start();
-  }
-
-  void add(int seconds) => _seconds += seconds;
-
-  void stop() {
-    _watch
-      ..stop()
-      ..reset();
-    _seconds = 0;
-  }
-
-  /// True once, when the countdown first reaches zero.
-  bool takeAlert() {
-    if (!done || _alerted) return false;
-    _alerted = true;
-    return true;
-  }
-}
-
 final class _BottomBar extends StatelessWidget {
   const _BottomBar({
-    required this.rest,
-    required this.remaining,
+    required this.status,
     required this.busy,
     required this.onFinish,
   });
-  final RestCue rest;
-  final int remaining;
+  final Widget status;
   final bool busy;
   final VoidCallback onFinish;
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final left = rest.remaining;
-    return Material(
-      color: scheme.surfaceContainer,
-      elevation: 8,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-          child: Row(
-            children: [
-              if (rest.active) ...[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        rest.done
-                            ? 'Rest done'
-                            : 'Rest ${left.inMinutes}:${_two(left.inSeconds % 60)}',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Muted('of ${rest.total ~/ 60}:${_two(rest.total % 60)}'),
-                    ],
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => rest.add(30),
-                  child: const Text('+30 s'),
-                ),
-                IconButton(
-                  tooltip: 'Stop rest',
-                  onPressed: rest.stop,
-                  icon: const Icon(Icons.close),
-                ),
-              ] else
-                Expanded(
-                  child: Muted(
-                    remaining == 0
-                        ? 'All sets logged'
-                        : '$remaining ${remaining == 1 ? 'set' : 'sets'} to go',
-                  ),
-                ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: busy ? null : onFinish,
-                child: const Text('Finish'),
-              ),
-            ],
-          ),
+  Widget build(BuildContext context) => Material(
+    color: Theme.of(context).colorScheme.surfaceContainer,
+    elevation: 8,
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Row(
+          children: [
+            Expanded(child: status),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: busy ? null : onFinish,
+              child: const Text('Finish'),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 final class _SetRow extends StatelessWidget {
@@ -838,7 +1083,11 @@ final class _SetSheet extends StatefulWidget {
     this.plates = false,
     this.otherEquipment = false,
     this.missingPlates = false,
+    this.omit = const {},
   });
+
+  /// Metrics measured elsewhere (a timed set's clock metric).
+  final Set<String> omit;
   final bool missingPlates;
   final Map<String, Object?> set;
   final String label;
@@ -864,10 +1113,11 @@ final class _SetSheetState extends State<_SetSheet> {
     };
     fields = {
       for (final e in source.entries)
-        e.key: (
-          text: TextEditingController(),
-          unit: '${(_entered(e.value) as Map?)?['unit'] ?? ''}',
-        ),
+        if (!widget.omit.contains(e.key))
+          e.key: (
+            text: TextEditingController(),
+            unit: '${(_entered(e.value) as Map?)?['unit'] ?? ''}',
+          ),
     };
   }
 
