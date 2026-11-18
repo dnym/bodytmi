@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
@@ -215,6 +216,87 @@ final class ProfileClient extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// A full logical export as file bytes: plain JSON, or with [passphrase]
+  /// a `bodytmi-encrypted/1` file under that passphrase (independent of the
+  /// profile lock). The passphrase goes straight to storage, never to disk.
+  Future<({Uint8List bytes, Map<String, Object?> summary})> exportArchive({
+    String? passphrase,
+  }) async {
+    while (_exclusiveRun != null) {
+      await _exclusiveRun!.future;
+    }
+    final key = passphrase == null
+        ? null
+        : ProfileKey.fromText(passphrase, newPassphrase: true);
+    return _tracked(
+      () => withProfileKey(_key, () async {
+        final dir = await Directory.systemTemp.createTemp('bodytmi-export-');
+        try {
+          final file = '${dir.path}/export.json';
+          final summary = await LogicalArchiveFiles.export(
+            await _store.archive(),
+            file,
+            encryptWith: key,
+          );
+          return (bytes: await File(file).readAsBytes(), summary: summary);
+        } finally {
+          await dir.delete(recursive: true);
+        }
+      }),
+    );
+  }
+
+  /// Validates an export file completely and returns its summary.
+  Future<Map<String, Object?>> inspectExport(
+    String path, {
+    String? passphrase,
+  }) => withProfileKey(_key, () async {
+    final prepared = await LogicalArchiveFiles.prepare(
+      path,
+      passphrase: passphrase == null ? null : ProfileKey.fromText(passphrase),
+    );
+    try {
+      return prepared.summary;
+    } finally {
+      await prepared.close();
+    }
+  });
+
+  /// Replaces the whole profile with an export, keeping the profile's own
+  /// lock. A native backup of the current profile is written to
+  /// [recoveryDestination] first; on failure the profile is unchanged.
+  Future<Map<String, Object?>> restoreExport(
+    String path, {
+    String? passphrase,
+    required String recoveryDestination,
+  }) => _exclusive(
+    () => withProfileKey(_key, () async {
+      final prepared = await LogicalArchiveFiles.prepare(
+        path,
+        passphrase: passphrase == null ? null : ProfileKey.fromText(passphrase),
+      );
+      try {
+        await prepared.checkDestination(this.path);
+        await prepared.checkDestination(recoveryDestination);
+        try {
+          await _store.restore(
+            prepared.backup,
+            recoveryDestination: recoveryDestination,
+            confirm: true,
+          );
+        } finally {
+          await _store.close();
+          _store = await TrainingStore.open(this.path);
+          revision++;
+          notifyListeners();
+        }
+        return prepared.summary;
+      } finally {
+        await prepared.close();
+      }
+    }),
+  );
 
   /// Waits for running commands, closes the store and forgets the key.
   Future<void> close() => _exclusive(() async {

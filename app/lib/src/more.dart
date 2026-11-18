@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'backup.dart';
 import 'lock.dart';
 import 'profile.dart';
 import 'widgets.dart';
@@ -38,6 +41,10 @@ final class MoreScreen extends StatelessWidget {
           ),
         ),
         const LockSection(),
+        BackupSection(
+          recoveryDirectory: () async =>
+              '${File(profile.path).parent.path}/recovery',
+        ),
         SectionCard(
           title: 'Profile',
           child: Column(
