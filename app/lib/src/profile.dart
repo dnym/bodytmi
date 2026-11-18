@@ -36,6 +36,12 @@ final class ProfileClient extends ChangeNotifier {
     return response['data'] as T;
   }
 
+  /// Runs a pure command (one that takes no database, such as the food
+  /// dataset search) and returns its `data`.
+  Future<T> pure<T>(String command, Map<String, Object?> fields) async =>
+      (await executeCommand(command, {'schemaVersion': 1, ...fields}))['data']
+          as T;
+
   /// [call] for commands that change data; listeners reload afterwards.
   Future<T> write<T>(
     String command, [

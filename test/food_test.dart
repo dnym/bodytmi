@@ -269,6 +269,24 @@ void foodTests() {
     equal(tallow.source!.json['release'], dataset.release);
     rejects(() => dataset.toFood(999999), 'not_found');
     equal(dataset.search('smör', 1).single.food.number, 29);
+    // Without the ö the same food is found, ranked as a folded match.
+    final folded = dataset.search('smor', 200);
+    final butter = folded.firstWhere((r) => r.food.number == 29);
+    equal(butter.match, 'folded');
+    // Letter-exact matches keep ranking before folded ones.
+    final sm = dataset.search('smör', 200);
+    check(sm.every((r) => r.match != 'folded'), 'smör stays letter-exact');
+    equal(foldDiacritics('mjölk åäø é'), 'mjolk aao e');
+    // Every word of a multi-word query, in any position.
+    final words = dataset.search('mjölk 3', 200);
+    check(
+      words.any((r) => r.food.number == 123 && r.match == 'words'),
+      'words',
+    );
+    check(
+      dataset.search('mjolk 3', 200).any((r) => r.food.number == 123),
+      'folded words',
+    );
   });
 
   test('salt and sodium follow each other by the label definition', () {

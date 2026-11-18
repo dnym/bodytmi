@@ -42,3 +42,8 @@ hooks:
       source: sqlite3mc
 flutter:
   uses-material-design: true
+  assets:
+    # Copy of data/food/slv.json.gz (Swedish Food Agency, CC BY 4.0);
+    # make app-check verifies it is identical.
+    # Not .gz: Android packaging would silently decompress and rename it.
+    - assets/slv-food-dataset.bin

@@ -5,6 +5,7 @@ import 'food.dart';
 import 'format.dart';
 import 'more.dart';
 import 'profile.dart';
+import 'quick_entry.dart';
 import 'theme.dart';
 import 'today.dart';
 import 'train.dart';
@@ -57,6 +58,17 @@ final class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 72,
+        actions: [
+          if (index == 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: IconButton.filledTonal(
+                tooltip: 'Quick add',
+                onPressed: () => showQuickAdd(context, clock: widget.clock),
+                icon: const Icon(Icons.add),
+              ),
+            ),
+        ],
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -73,6 +85,13 @@ final class _HomeShellState extends State<HomeShell> {
         ),
       ),
       body: IndexedStack(index: index, children: screens),
+      floatingActionButton: index == 2
+          ? FloatingActionButton.extended(
+              onPressed: () => openFoodEntry(context, clock: widget.clock),
+              icon: const Icon(Icons.add),
+              label: const Text('Add food'),
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => setState(() => index = i),

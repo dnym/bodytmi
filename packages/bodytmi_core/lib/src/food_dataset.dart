@@ -129,30 +129,51 @@ final class FoodDataset {
   }
 
   /// Plain search over Swedish and English names: exact, prefix, word
-  /// prefix, then substring; ties by number. Diacritics are not folded.
+  /// prefix, substring, then every query word somewhere in the name; ties
+  /// by number. Diacritics are significant
+  /// (å, ä and ö are letters of their own in Swedish), so letter-exact
+  /// matches always rank first; a query that only matches once accents are
+  /// folded (`mjolk` for Mjölk) is ranked after them as `folded`.
   List<({DatasetFood food, String match})> search(String query, int limit) {
     final key = catalogSearchKey(query);
     if (key.isEmpty) invalid('A search needs a query.');
+    final folded = foldDiacritics(key);
+    int rankOf(String n, String k) => n == k
+        ? 0
+        : n.startsWith(k)
+        ? 1
+        : n.split(RegExp(r'[\s,()/-]+')).any((w) => w.startsWith(k))
+        ? 2
+        : n.contains(k)
+        ? 3
+        : k.contains(' ') &&
+              k.split(' ').where((w) => w.isNotEmpty).every(n.contains)
+        ? 4
+        : 99;
     final ranked = <({DatasetFood food, String match, int rank})>[];
     for (final f in foods) {
       var best = 99;
       for (final name in [f.name, ?f.english]) {
         final n = catalogSearchKey(name);
-        final rank = n == key
-            ? 0
-            : n.startsWith(key)
-            ? 1
-            : n.split(RegExp(r'[\s,()/-]+')).any((w) => w.startsWith(key))
-            ? 2
-            : n.contains(key)
-            ? 3
-            : 99;
+        var rank = rankOf(n, key);
+        if (rank == 99) {
+          final r = rankOf(foldDiacritics(n), folded);
+          if (r < 99) rank = 5 + r;
+        }
         if (rank < best) best = rank;
       }
       if (best < 99) {
         ranked.add((
           food: f,
-          match: const ['exact', 'prefix', 'word-prefix', 'substring'][best],
+          match: best < 5
+              ? const [
+                  'exact',
+                  'prefix',
+                  'word-prefix',
+                  'substring',
+                  'words',
+                ][best]
+              : 'folded',
           rank: best,
         ));
       }
@@ -164,3 +185,25 @@ final class FoodDataset {
     return [for (final r in ranked.take(limit)) (food: r.food, match: r.match)];
   }
 }
+
+const _folds = {
+  'a': 'àáâãäåā',
+  'c': 'çč',
+  'e': 'èéêëē',
+  'i': 'ìíîïī',
+  'n': 'ñ',
+  'o': 'òóôõöøō',
+  's': 'š',
+  'u': 'ùúûüū',
+  'y': 'ýÿ',
+  'z': 'ž',
+};
+
+final _foldMap = {
+  for (final e in _folds.entries)
+    for (final c in e.value.split('')) c: e.key,
+};
+
+/// Lowercase text with common Latin diacritics removed (search only).
+String foldDiacritics(String text) =>
+    text.split('').map((c) => _foldMap[c] ?? c).join();

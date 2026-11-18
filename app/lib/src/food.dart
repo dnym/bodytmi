@@ -66,7 +66,7 @@ final class _FoodScreenState extends State<FoodScreen> {
                     .add(e as Map<String, Object?>);
               }
               return ListView(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                 children: [
                   SectionCard(
                     title:
