@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:bodytmi/bodytmi.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
+import 'package:bodytmi_storage/bodytmi_storage.dart'
+    show ProfileKey, withProfileKey;
 import 'package:sqlite3/sqlite3.dart';
 
 Future<void> main(List<String> arguments) async {
@@ -21,7 +23,8 @@ Future<void> main(List<String> arguments) async {
             ...dailyCommandNames,
             ...planningCommandNames,
           ],
-          'usage': 'bodytmi <group> <action> [--input FILE|-]',
+          'usage':
+              'bodytmi <group> <action> [--input FILE|-] [--passphrase-file FILE]',
           'input': 'One JSON request, schemaVersion: 1, from stdin or --input.',
           'storage':
               'store commands require a database path in the JSON request. Existing commands use explicit snapshots.',
@@ -147,6 +150,8 @@ Future<void> main(List<String> arguments) async {
               'store perform-on takes database/id/expectedVersion/setId/instanceId (null clears, with confirm:true) and optional applyToRemaining to record that a set, and the later untouched sets of its slot and role, are performed on another published instance of the slot equipment, e.g. the kg machine when the lb one is taken. The latest instance revision is frozen on the set; targets keep their own unit. The response lists, per set and metric, the nearest settings on that instance to each target (both neighbours on an exact tie). Progression counts a controlled actual equal to such a nearest setting on the instance used (the set\'s performedOn, else the session binding) as following the target, reports it as followedSettings, and keeps progressing in the track\'s unit; an available target must still be met exactly. A plate arrangement on such a set belongs to its performedOn instance. Optional unavailablePlates [{mass,count}] records declared plates that were missing (e.g. micro plates left at home); they must be in the instance stock with at least one plate remaining, nearest settings are judged on the remaining stock, and a recorded stack may not use them.',
           'locale':
               'Presentation only (policy bodytmi-locale/1); canonical records and all other JSON stay locale independent, and a locale never implies a unit preference. Every locale command takes locale (BCP 47, e.g. sv-SE), resolved exactly, then by language, then the en root, reported as match exact/language/root. locale info returns decimal/group separators, minus sign, zero digit, grouping sizes, ISO firstWeekday (1 Monday ... 7 Sunday), weekendDays, hourCycle and message catalog. locale format-number takes a decimal string value and optional grouping (default true) and minimumFractionDigits (zero padding only; digits are never rounded). locale parse-number takes text and optional allowGrouping: locale or ASCII digits, the locale minus sign or -, exactly the locale decimal separator, and group separators only when allowed and at locale grouping positions; it returns a canonical decimal string. locale format-date takes value (timestamp with offset, or YYYY-MM-DD for style date), style date/time/datetime and hourCycle locale/h12/h24, formatting the recorded wall clock, never the process timezone. locale format-duration takes whole milliseconds and style clock (m:ss or h:mm:ss) or units; locale parse-duration accepts only m:ss, h:mm:ss or explicit descending units (h, min/m, s with optional fraction, ms) and rejects bare numbers, returning milliseconds plus a seconds quantity. locale message takes a stable key and args (count for plural keys) and reports the catalog used and any fallback to en.',
+          'encryption':
+              'Encryption (D3). --passphrase-file FILE (UTF-8, one trailing line break ignored, at most 1024 characters) supplies the passphrase of an encrypted profile; it applies to every database file the command opens (the profile, native backups and temporary restore copies). A plain profile refuses a passphrase and an encrypted one requires it; a wrong passphrase is a storage error (exit 4). Profiles use SQLite3MultipleCiphers with its default ChaCha20-Poly1305 cipher and per-file key derivation, covering the database and its WAL. profile encryption (database) reports encrypted, the cipher and, with --passphrase-file, whether that passphrase opens it (passphraseChecked). profile set-passphrase (database/passphraseFile/confirm:true; at least 8 characters) encrypts a plain profile or, with the current --passphrase-file, changes the passphrase; profile remove-passphrase (database/confirm:true, with --passphrase-file) decrypts it. A change rekeys a private copy beside the profile, verifies it and renames it over the profile, so an interruption leaves the previous key working. There is no recovery without the passphrase. Native backups of an encrypted profile are encrypted with the same key (manifest encrypted:true) and need --passphrase-file to validate or restore; a backup restores only into a new path or a profile with the same encryption. archive export takes optional passphraseFile: without it the export is plain JSON (always available), with it a bodytmi-encrypted/1 file: canonical JSON {format, content (bodytmi-logical-export/1), compression gzip, kdf {algorithm argon2id, version 19, memoryKiB 65536, iterations 3, parallelism 1, salt (16 bytes base64)}, cipher {algorithm chacha20-poly1305 (RFC 8439), nonce (12 bytes base64)}, ciphertext (base64 of encrypted gzip bytes followed by the 16-byte tag)}, authenticated data = canonical JSON of every other field. archive validate and archive restore take passphraseFile for such a file; an encrypted export restores into any profile, which keeps its own encryption.',
           'historyImport':
               'import validate takes document in format bodytmi-history-import/1: source{namespace,app?,version?,exportedAt?}, sessions[{sourceId,date (YYYY-MM-DD) xor startedAt (timestamp with offset),finishedAt?,timezone?,name?,notes?,raw?,exercises[{sourceId,order,name,exerciseId?,implementationId?,equipment?,convention?,notes?,raw?,sets[{sourceId,ordinal,role work/warmup/backoff/drop/unknown,status completed/skipped/interrupted/unknown,actuals?,targets?,observations?,raw?}]}]}] and measurements[{id,sourceId,context,observedAt,mass,notes?}]. Every quantity names its unit; raw preserves unresolved source fields (integers or strings only). import preview takes database/document and reports new/unchanged/changed/conflict per record plus absent records, without writing. import apply additionally takes importedAt, confirm:true and optional onChanged reject (default) or update; it writes the whole plan in one transaction or nothing, reuses source identities so identical reimports are no-ops, and never deletes records absent from a later export. Imported measurements become body-mass observations in their explicit context with source provenance; another source or deleted identity conflicts. Imported sessions pin no workout revision and never feed prefill, progression, records or program cursors. import list takes database and optional namespace; import show takes database/namespace/sourceId; import delete takes database/namespace/sourceId/expectedVersion/confirm:true. import series takes database/metric and optional namespace, exerciseId, exerciseName, roles (default all but warmup), from inclusive and until exclusive calendar dates; contexts keep namespace, catalog mapping or exact source name, implementation, equipment, convention, role and entered unit separate, and date-only sessions are never given an invented time. store series optionally takes includeImported:true and importNamespace to add a separate imported block (policy bodytmi-imported-series/2) that never merges into native contexts: context runId/templateId/slotId/setupNote filters exclude imported history entirely, exercise/implementation/equipment/role match exactly, instant from/until exclude and count date-only sessions, family membership uses mapped exerciseId only, unknown roles appear by default but explicit roles must be native roles, and the 10000-point budget is shared. To map an exercise after import, re-import it with exerciseId set and onChanged:update.',
           'links':
@@ -199,27 +204,41 @@ Future<void> main(List<String> arguments) async {
       stdout.writeln(jsonEncode({'schemaVersion': 1, 'version': '0.1.0'}));
       return;
     }
-    if (arguments.length != 2 && arguments.length != 4) {
+    if (arguments.length < 2 || arguments.length.isOdd) {
       throw const BodyTmiException(
         'usage',
-        'Expected <group> <action> [--input FILE|-].',
+        'Expected <group> <action> [--input FILE|-] [--passphrase-file FILE].',
       );
     }
     final command = arguments.take(2).join(' ');
-    if ((!commandNames.contains(command) &&
-            !storedCommandNames.contains(command) &&
-            !foodCommandNames.contains(command) &&
-            !sleepCommandNames.contains(command) &&
-            !dailyCommandNames.contains(command) &&
-            !planningCommandNames.contains(command)) ||
-        (arguments.length == 4 && arguments[2] != '--input')) {
+    final options = <String, String>{};
+    for (var i = 2; i < arguments.length; i += 2) {
+      final name = arguments[i];
+      if (!const {'--input', '--passphrase-file'}.contains(name) ||
+          options.containsKey(name)) {
+        throw const BodyTmiException(
+          'usage',
+          'Unknown command/option. Use --help.',
+        );
+      }
+      options[name] = arguments[i + 1];
+    }
+    if (!commandNames.contains(command) &&
+        !storedCommandNames.contains(command) &&
+        !foodCommandNames.contains(command) &&
+        !sleepCommandNames.contains(command) &&
+        !dailyCommandNames.contains(command) &&
+        !planningCommandNames.contains(command)) {
       throw const BodyTmiException(
         'usage',
         'Unknown command/option. Use --help.',
       );
     }
+    final key = options['--passphrase-file'] == null
+        ? null
+        : await ProfileKey.readFile(options['--passphrase-file']!);
     const maxBytes = 8 * 1024 * 1024;
-    final inputPath = arguments.length == 4 ? arguments[3] : '-';
+    final inputPath = options['--input'] ?? '-';
     final stream = inputPath == '-' ? stdin : File(inputPath).openRead();
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in stream) {
@@ -231,17 +250,20 @@ Future<void> main(List<String> arguments) async {
       jsonDecode(utf8.decode(bytes.takeBytes())),
       'request',
     );
-    final response = planningCommandNames.contains(command)
-        ? await executePlanning(command, request)
-        : dailyCommandNames.contains(command)
-        ? await executeDaily(command, request)
-        : sleepCommandNames.contains(command)
-        ? await executeSleep(command, request)
-        : foodCommandNames.contains(command)
-        ? await executeFood(command, request)
-        : storedCommandNames.contains(command)
-        ? await executeStored(command, request)
-        : const Commands().execute(command, request);
+    final response = await withProfileKey(
+      key,
+      () async => planningCommandNames.contains(command)
+          ? await executePlanning(command, request)
+          : dailyCommandNames.contains(command)
+          ? await executeDaily(command, request)
+          : sleepCommandNames.contains(command)
+          ? await executeSleep(command, request)
+          : foodCommandNames.contains(command)
+          ? await executeFood(command, request)
+          : storedCommandNames.contains(command)
+          ? await executeStored(command, request)
+          : const Commands().execute(command, request),
+    );
     stdout.writeln(jsonEncode(response));
   } on BodyTmiException catch (error) {
     _error(error.code, error.message);

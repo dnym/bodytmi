@@ -7,6 +7,7 @@ import 'session_window_clock_adapter.dart';
 import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_storage/bodytmi_storage.dart';
+import 'package:sqlite3/sqlite3.dart' show OpenMode;
 
 const storedCommandNames = [
   'execution start',
@@ -92,6 +93,9 @@ const storedCommandNames = [
   'preset list',
   'profile show',
   'profile set',
+  'profile encryption',
+  'profile set-passphrase',
+  'profile remove-passphrase',
   'body source',
   'body sources',
   'body report',
@@ -935,9 +939,17 @@ Future<Map<String, Object?>> executeStored(
     'backup create' => {'destination'},
     'backup validate' => {'source'},
     'backup restore' => {'source', 'recoveryDestination', 'confirm'},
-    'archive export' => {'destination'},
-    'archive validate' => {'source'},
-    'archive restore' => {'source', 'recoveryDestination', 'confirm'},
+    'archive export' => {'destination', 'passphraseFile'},
+    'archive validate' => {'source', 'passphraseFile'},
+    'archive restore' => {
+      'source',
+      'recoveryDestination',
+      'confirm',
+      'passphraseFile',
+    },
+    'profile encryption' => <String>{},
+    'profile set-passphrase' => {'passphraseFile', 'confirm'},
+    'profile remove-passphrase' => {'confirm'},
     'progression propose' => {
       'sessionId',
       'slotId',
@@ -1117,10 +1129,64 @@ Future<Map<String, Object?>> executeStored(
     return ids;
   }
 
+  Future<ProfileKey?> passphrase({bool newPassphrase = false}) async =>
+      request['passphraseFile'] == null
+      ? null
+      : ProfileKey.readFile(
+          requiredString(request, 'passphraseFile'),
+          newPassphrase: newPassphrase,
+        );
+
+  if (command == 'profile encryption') {
+    final path = requiredString(request, 'database');
+    final state = databaseFileState(path);
+    if (state == DatabaseFileState.missing)
+      throw BodyTmiException('not_found', 'Database not found: $path');
+    final encrypted = state == DatabaseFileState.encrypted;
+    final key = currentProfileKey;
+    bool? unlocks;
+    if (encrypted && key != null) {
+      try {
+        openKeyed(path, mode: OpenMode.readOnly).close();
+        unlocks = true;
+      } on BodyTmiException {
+        unlocks = false;
+      }
+    }
+    return {
+      'schemaVersion': 1,
+      'data': {
+        'encrypted': encrypted,
+        if (encrypted) 'cipher': profileCipher,
+        'passphraseChecked': unlocks,
+      },
+    };
+  }
+  if (command == 'profile set-passphrase' ||
+      command == 'profile remove-passphrase') {
+    final next = command == 'profile set-passphrase'
+        ? await passphrase(newPassphrase: true) ??
+              invalid('profile set-passphrase needs passphraseFile.')
+        : null;
+    final store = await TrainingStore.open(requiredString(request, 'database'));
+    try {
+      await store.changeKey(next, confirm: flag('confirm'));
+    } finally {
+      await store.close();
+    }
+    return {
+      'schemaVersion': 1,
+      'data': {
+        'encrypted': next != null,
+        if (next != null) 'cipher': profileCipher,
+      },
+    };
+  }
   if (command == 'archive validate') {
-    checkKeys(request, {'schemaVersion', 'source'});
+    checkKeys(request, {'schemaVersion', 'source', 'passphraseFile'});
     final prepared = await LogicalArchiveFiles.prepare(
       requiredString(request, 'source'),
+      passphrase: await passphrase(),
     );
     try {
       return {'schemaVersion': 1, 'data': prepared.summary};
@@ -1135,6 +1201,7 @@ Future<Map<String, Object?>> executeStored(
     final database = requiredString(request, 'database');
     final prepared = await LogicalArchiveFiles.prepare(
       requiredString(request, 'source'),
+      passphrase: await passphrase(),
     );
     try {
       await prepared.checkDestination(database);
@@ -2232,6 +2299,7 @@ Future<Map<String, Object?>> executeStored(
         data = await LogicalArchiveFiles.export(
           await store.archive(),
           requiredString(request, 'destination'),
+          encryptWith: await passphrase(newPassphrase: true),
         );
       case 'backup create':
         data = await store.backup(requiredString(request, 'destination'));

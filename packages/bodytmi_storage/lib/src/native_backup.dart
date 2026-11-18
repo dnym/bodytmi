@@ -7,6 +7,7 @@ import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
+import 'profile_key.dart';
 import 'schema.dart';
 
 const _format = 'bodytmi-native-backup/1';
@@ -45,6 +46,8 @@ final class NativeBackup {
         'format': _format,
         'applicationVersion': '0.1.0',
         'databaseSchemaVersion': schemaVersion,
+        'encrypted':
+            databaseFileState(snapshot.path) == DatabaseFileState.encrypted,
         'database': {
           'file': _snapshotName,
           'bytes': size,
@@ -95,6 +98,7 @@ final class NativeBackup {
       'format',
       'applicationVersion',
       'databaseSchemaVersion',
+      'encrypted',
       'database',
     });
     if (manifest['format'] != _format ||
@@ -136,6 +140,20 @@ final class NativeBackup {
       }
       if (received != bytes || await _digest(copy) != hash)
         invalid('Backup database checksum mismatch.');
+      final encrypted =
+          databaseFileState(copy.path) == DatabaseFileState.encrypted;
+      if (manifest['encrypted'] is! bool || manifest['encrypted'] != encrypted)
+        invalid('Backup manifest encryption does not match its database.');
+      if (encrypted && currentProfileKey == null)
+        invalid(
+          'This backup is encrypted; supply its passphrase with '
+          '--passphrase-file.',
+        );
+      if (!encrypted && currentProfileKey != null)
+        invalid(
+          'This backup is not encrypted; omit --passphrase-file (restore it '
+          'into a new path, then set a passphrase there).',
+        );
       if (validateDatabase(copy.path) != manifest['databaseSchemaVersion'])
         invalid('Backup manifest schema version does not match its database.');
       return PreparedNativeBackup._(
@@ -158,7 +176,7 @@ final class NativeBackup {
     bool standalone = false,
     Future<void> Function(double progress)? onProgress,
   }) async {
-    final from = sqlite3.open(source, mode: OpenMode.readOnly);
+    final from = openKeyed(source, mode: OpenMode.readOnly);
     Database? to;
     try {
       final pages =
@@ -167,7 +185,7 @@ final class NativeBackup {
           from.select('PRAGMA page_size').single.values.single as int;
       if (pages * pageBytes > _maxDatabaseBytes)
         invalid('Database exceeds the 512 MiB backup resource limit.');
-      to = sqlite3.open(destination);
+      to = openKeyed(destination);
       to.execute('PRAGMA synchronous = FULL');
       await for (final progress in from.backup(to, nPage: 4096)) {
         await onProgress?.call(progress);
@@ -187,7 +205,7 @@ final class NativeBackup {
 
   /// Validate exact supported schema, foreign keys and all serialized content.
   static int validateDatabase(String path) {
-    final db = sqlite3.open(path, mode: OpenMode.readOnly);
+    final db = openKeyed(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA trusted_schema = OFF');
       if (db.userVersion != supportedSchemaVersion ||

@@ -16,6 +16,7 @@ import 'database.dart'
 import 'database.dart' as rows show ProgressionDecision, Session;
 import 'native_backup.dart';
 import 'read_cache.dart';
+import 'profile_key.dart';
 import 'schema.dart';
 
 /// A single native owner. Never unlink the lock file: the OS holds ownership.
@@ -38,6 +39,7 @@ final class TrainingStore implements TrainingRepository {
     RandomAccessFile? lock;
     TrainingDatabase? db;
     final cache = ReadCache();
+    final key = currentProfileKey;
     try {
       lock = await File('$canonical.owner.lock').open(mode: FileMode.append);
       try {
@@ -45,10 +47,12 @@ final class TrainingStore implements TrainingRepository {
       } on FileSystemException {
         _busy();
       }
+      checkKeyMatches(canonical, key);
       db = TrainingDatabase(
         NativeDatabase(
           File(canonical),
           setup: (native) {
+            applyProfileKey(native, key);
             final applicationId = native
                 .select('PRAGMA application_id')
                 .single
@@ -178,6 +182,21 @@ final class TrainingStore implements TrainingRepository {
     await _db.close();
     _databaseClosed = true;
     await backup.restoreInto(path, onProgress: onProgress);
+  }
+
+  /// Sets, changes or (with `null`) removes the passphrase. Terminal like
+  /// [restore]: the handle keeps ownership until close(). The profile is
+  /// replaced by a rekeyed, verified copy in one rename, so an interruption
+  /// leaves it under its previous key.
+  Future<void> changeKey(ProfileKey? next, {required bool confirm}) async {
+    if (!confirm)
+      invalid('Changing the profile passphrase requires confirm:true.');
+    if (_closed || _databaseClosed) throw StateError('Store is closed.');
+    if (next == null && currentProfileKey == null)
+      invalid('The profile is not encrypted.');
+    await _db.close();
+    _databaseClosed = true;
+    await changeDatabaseKey(path, next);
   }
 
   @override

@@ -20,3 +20,8 @@ dev_dependencies:
   crypto: ^3.0.8
 executables:
   bodytmi:
+hooks:
+  user_defines:
+    sqlite3:
+      # SQLite3MultipleCiphers (MIT): plain SQLite unless a key is set.
+      source: sqlite3mc

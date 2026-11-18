@@ -6,23 +6,30 @@ import 'package:bodytmi_application/bodytmi_application.dart';
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqlite3/sqlite3.dart';
 
+import 'encrypted_file.dart';
 import 'native_backup.dart';
+import 'profile_key.dart';
 import 'schema.dart';
 
 const _format = 'bodytmi-logical-export/1';
 const _maxBytes = 64 * 1024 * 1024;
+
+/// Base64 of compressed content stays below 4/3 of the plain limit.
+const _maxSealedBytes = 96 * 1024 * 1024;
 
 /// File I/O and checksums for the full current logical training-store contract.
 /// A logical file is portable JSON, not a SQLite backup or neutral history log.
 final class LogicalArchiveFiles {
   const LogicalArchiveFiles._();
 
+  /// With [encryptWith] the file is a `bodytmi-encrypted/1` envelope of the
+  /// same export; without it, plain JSON.
   static Future<Map<String, Object?>> export(
     TrainingArchive archive,
-    String destination,
-  ) async {
+    String destination, {
+    ProfileKey? encryptWith,
+  }) async {
     final output = File(destination).absolute;
     await _unused(output.path);
     final body = <String, Object?>{
@@ -31,9 +38,16 @@ final class LogicalArchiveFiles {
       'data': archive.toJson(),
     };
     final hash = _checksum(body);
-    final bytes = utf8.encode(canonicalJson({...body, 'sha256': hash}));
+    List<int> bytes = utf8.encode(canonicalJson({...body, 'sha256': hash}));
     if (bytes.length > _maxBytes)
       invalid('Logical export exceeds the 64 MiB resource limit.');
+    if (encryptWith != null) {
+      bytes = await EncryptedFile.seal(
+        bytes,
+        content: _format,
+        key: encryptWith,
+      );
+    }
     await output.parent.create(recursive: true);
     final stage = await output.parent.createTemp('.bodytmi-export-');
     try {
@@ -45,6 +59,7 @@ final class LogicalArchiveFiles {
       return {
         'destination': destination,
         'format': _format,
+        'encrypted': encryptWith != null,
         'sha256': hash,
         'records': archive.summary,
       };
@@ -55,10 +70,41 @@ final class LogicalArchiveFiles {
 
   /// Validate the complete logical file and reconstruct only in temporary storage.
   /// Live-profile replacement later uses the same native transaction/recovery path.
-  static Future<PreparedLogicalArchive> prepare(String source) async {
+  /// An encrypted export needs [passphrase]; a plain one refuses it.
+  static Future<PreparedLogicalArchive> prepare(
+    String source, {
+    ProfileKey? passphrase,
+  }) async {
     final file = File(source);
     final sourcePath = await file.resolveSymbolicLinks();
-    final input = jsonObject(jsonDecode(await _read(file)), 'logical export');
+    final raw = await _read(file, _maxSealedBytes);
+    Object? decoded;
+    try {
+      decoded = jsonDecode(utf8.decode(raw));
+    } on FormatException catch (e) {
+      invalid('Invalid JSON/text: ${e.message}');
+    }
+    final encrypted = EncryptedFile.recognises(decoded);
+    if (encrypted) {
+      if (passphrase == null)
+        invalid('This export is encrypted; supply passphraseFile.');
+      final plain = await EncryptedFile.openDecoded(
+        decoded,
+        content: _format,
+        key: passphrase,
+        maxBytes: _maxBytes,
+      );
+      try {
+        decoded = jsonDecode(utf8.decode(plain));
+      } on FormatException catch (e) {
+        invalid('Invalid JSON/text: ${e.message}');
+      }
+    } else if (passphrase != null) {
+      invalid('This export is not encrypted; omit passphraseFile.');
+    } else if (raw.length > _maxBytes) {
+      invalid('Logical export exceeds the 64 MiB resource limit.');
+    }
+    final input = jsonObject(decoded, 'logical export');
     checkKeys(input, {'format', 'applicationVersion', 'data', 'sha256'});
     if (input['format'] != _format)
       invalid('Unsupported logical export format.');
@@ -128,7 +174,7 @@ final class LogicalArchiveFiles {
     final stage = await Directory.systemTemp.createTemp('bodytmi-logical-');
     try {
       final path = '${stage.path}/profile.sqlite';
-      final db = sqlite3.open(path);
+      final db = openKeyed(path);
       try {
         db.execute('PRAGMA foreign_keys = ON');
         db.execute('PRAGMA synchronous = FULL');
@@ -425,6 +471,7 @@ final class LogicalArchiveFiles {
         sourcePath,
         backup,
         input['format'] as String,
+        encrypted,
       );
     } finally {
       await stage.delete(recursive: true);
@@ -439,15 +486,18 @@ final class PreparedLogicalArchive {
     this._sourcePath,
     this.backup,
     this.sourceFormat,
+    this.encrypted,
   );
   final TrainingArchive archive;
   final String checksum;
   final String _sourcePath;
   final PreparedNativeBackup backup;
   final String sourceFormat;
+  final bool encrypted;
 
   Map<String, Object?> get summary => {
     'format': sourceFormat,
+    'encrypted': encrypted,
     'sha256': checksum,
     'records': archive.summary,
   };
@@ -487,14 +537,14 @@ Future<void> _unused(String destination) async {
   }
 }
 
-Future<String> _read(File file) async {
-  if (await file.length() > _maxBytes)
-    invalid('Logical export exceeds the 64 MiB resource limit.');
+Future<Uint8List> _read(File file, int limit) async {
+  if (await file.length() > limit)
+    invalid('Logical export exceeds the resource limit.');
   final bytes = BytesBuilder(copy: false);
   await for (final chunk in file.openRead()) {
-    if (bytes.length + chunk.length > _maxBytes)
-      invalid('Logical export exceeds the 64 MiB resource limit.');
+    if (bytes.length + chunk.length > limit)
+      invalid('Logical export exceeds the resource limit.');
     bytes.add(chunk);
   }
-  return utf8.decode(bytes.takeBytes());
+  return bytes.takeBytes();
 }
