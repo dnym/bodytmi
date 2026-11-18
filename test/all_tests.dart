@@ -88,6 +88,7 @@ import 'gym_test.dart';
 import 'blueprint_test.dart';
 import 'catalog_import_test.dart';
 import 'gzclp_test.dart';
+import 'slot_preset_test.dart';
 import 'units_test.dart';
 import 'measure_test.dart';
 import 'observation_test.dart';
@@ -200,6 +201,7 @@ Future<void> main() async {
   blueprintTests();
   catalogImportTests();
   gzclpTests();
+  slotPresetTests();
   unitTests();
   measureTests();
   observationTests();

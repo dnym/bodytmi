@@ -305,6 +305,11 @@ final class StoredTrainingService {
     final implementations = await repository.implementationRevisions();
     final owners = implementationOwners(implementations);
     validateCatalogSlotAdoption(definition.slots, owners);
+    validateSlotPresets(
+      [definition],
+      await repository.progressionPresetRevisions(),
+      notFound: true,
+    );
     // Every authored AMRAP loop must be startable by the repeat engine.
     for (final amrap in definition.amraps)
       const WindowRepeatExecution().start(amrap);

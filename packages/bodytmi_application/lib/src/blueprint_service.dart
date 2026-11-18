@@ -108,8 +108,9 @@ final class BlueprintService {
     Blueprint blueprint,
     String name,
     Map<String, Object?> supplied,
-    Map<String, int> workoutRevisions,
-  ) async {
+    Map<String, int> workoutRevisions, [
+    Map<String, int> presetRevisions = const {},
+  ]) async {
     final choices = blueprint.resolveChoices(supplied);
     for (final choice in blueprint.choices) {
       if (choice.family case final family?) {
@@ -120,7 +121,12 @@ final class BlueprintService {
           invalid('Choice ${choice.id} must be an exercise of family $family.');
       }
     }
-    final docs = blueprint.fill(name, choices, workoutRevisions);
+    final docs = blueprint.fill(
+      name,
+      choices,
+      workoutRevisions,
+      presetRevisions,
+    );
     return (
       choices: choices,
       workouts: {
@@ -150,10 +156,19 @@ final class BlueprintService {
   ) => repository.transaction(() async {
     final blueprint = (await revision(blueprintId, number)).blueprint;
     final head = await instance(name);
-    final filled = await fill(blueprint, name, supplied, {
-      for (final key in blueprint.workouts.keys)
-        key: head == null ? 1 : (await _head(head.workoutId(key))) + 1,
-    });
+    final filled = await fill(
+      blueprint,
+      name,
+      supplied,
+      {
+        for (final key in blueprint.workouts.keys)
+          key: head == null ? 1 : (await _head(head.workoutId(key))) + 1,
+      },
+      {
+        for (final key in blueprint.presets.keys)
+          key: head == null ? 1 : (await _presetHead(head.presetId(key))) + 1,
+      },
+    );
     return {
       'policy': 'bodytmi-blueprint-fill/1',
       'blueprint': blueprintId,
@@ -177,6 +192,15 @@ final class BlueprintService {
 
   Future<int> _head(String templateId) async =>
       (await repository.revision(templateId))?.number ?? 0;
+
+  Future<int> _presetHead(String id) async {
+    try {
+      return (await PresetService(repository).revision(id)).number;
+    } on BodyTmiException catch (e) {
+      if (e.code == 'not_found') return 0;
+      rethrow;
+    }
+  }
 
   /// Publishes the filled-in workouts, presets and programme of instance
   /// [name] in one transaction and records receipt number
@@ -270,9 +294,21 @@ final class BlueprintService {
         : await programHead(name);
     if (blueprint.program != null)
       owned('Programme $name', programCurrent, head?.programRevision);
-    final filled = await fill(blueprint, name, choices, {
-      for (final e in workoutHeads.entries) e.key: e.value + 1,
-    });
+    final filled = await fill(
+      blueprint,
+      name,
+      choices,
+      {for (final e in workoutHeads.entries) e.key: e.value + 1},
+      {for (final e in presetHeads.entries) e.key: e.value + 1},
+    );
+    // Presets first: workout slots may pin their revisions.
+    final presets = <String, int>{};
+    for (final e in filled.presets.entries) {
+      presets[e.key] = (await presetService.publish(
+        e.value,
+        presetHeads[e.key]!,
+      )).number;
+    }
     final training = StoredTrainingService(repository);
     final workouts = <String, int>{};
     for (final e in filled.workouts.entries) {
@@ -280,13 +316,6 @@ final class BlueprintService {
         e.value,
         workoutHeads[e.key]!,
         requireCatalog: requireCatalog,
-      )).number;
-    }
-    final presets = <String, int>{};
-    for (final e in filled.presets.entries) {
-      presets[e.key] = (await presetService.publish(
-        e.value,
-        presetHeads[e.key]!,
       )).number;
     }
     final instances = <String, int>{};

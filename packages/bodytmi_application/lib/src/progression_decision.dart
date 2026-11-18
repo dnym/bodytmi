@@ -430,6 +430,28 @@ void validatePresetProvenance(
   }
 }
 
+/// Every slot naming a progression preset must name a published revision.
+/// [notFound] reports a missing one as not_found (publishing) instead of a
+/// validation error (archives and backups).
+void validateSlotPresets(
+  Iterable<WorkoutDefinition> definitions,
+  Iterable<ProgressionPresetRevision> presets, {
+  bool notFound = false,
+}) {
+  final published = {for (final p in presets) '${p.preset.id}@${p.number}'};
+  for (final definition in definitions) {
+    for (final slot in definition.slots) {
+      final p = slot.progression;
+      if (p == null || published.contains('${p.id}@${p.revision}')) continue;
+      final message =
+          'Slot ${slot.id} names unpublished progression preset '
+          '${p.id} revision ${p.revision}.';
+      if (notFound) throw BodyTmiException('not_found', message);
+      invalid(message);
+    }
+  }
+}
+
 ProgressionDecision? latestApplication(
   Iterable<ProgressionDecision> decisions,
   String templateId,

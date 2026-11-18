@@ -2225,6 +2225,24 @@ Future<Map<String, Object?>> executeStored(
             store,
           ).revision(reference.id, reference.revision);
         }
+        // Neither rule nor preset: the slot's own pinned preset, if any.
+        if (command == 'progression propose' &&
+            preset == null &&
+            !request.containsKey('rule') &&
+            !request.containsKey('ruleType')) {
+          final session = await StoredTrainingService(store).session(sessionId);
+          final slot = session.definition.slots
+              .where((s) => s.id == slotId)
+              .firstOrNull;
+          final bound = slot?.progression;
+          if (bound == null)
+            invalid(
+              'Slot $slotId names no progression preset; supply rule or preset.',
+            );
+          preset = await PresetService(
+            store,
+          ).revision(bound.id, bound.revision);
+        }
         // One transaction, so the staleness check shares decoded records.
         final (decision, changed) = await store.transaction(() async {
           final decision = switch (command) {

@@ -493,6 +493,7 @@ final class NativeBackup {
             invalid('Backup revision identity or sequence is inconsistent.');
           }
           validateCatalogSlotAdoption(revision.definition.slots, catalogOwners);
+          validateSlotPresets([revision.definition], presets);
         }
       } finally {
         revisions.close();

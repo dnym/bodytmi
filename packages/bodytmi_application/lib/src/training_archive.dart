@@ -585,6 +585,7 @@ final class TrainingArchive {
     validateImplementationRevisions(implementations, exercises);
     validateProgressionPresetRevisions(presets);
     validatePresetProvenance(progressions, presets);
+    validateSlotPresets([for (final r in revisions) r.definition], presets);
     validateBlueprintInstances(blueprintInstances, blueprints);
     validateBlueprintLineage(
       blueprintInstances,

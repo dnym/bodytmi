@@ -33,6 +33,7 @@ final class ExerciseSlot {
     this.timing,
     this.convention,
     this.categories,
+    this.progression,
   );
 
   factory ExerciseSlot.fromJson(Object? input) {
@@ -50,6 +51,7 @@ final class ExerciseSlot {
       'timing',
       'convention',
       'categories',
+      'progression',
     });
     final targets = metricsFromJson(json['targets']);
     final prefill = json['prefill'] ?? <Object?>[];
@@ -92,8 +94,16 @@ final class ExerciseSlot {
           ? null
           : LoadConvention.fromJson(json['convention']),
       categories,
+      json['progression'] == null
+          ? null
+          : slotProgressionFromJson(json['progression']),
     );
   }
+
+  /// The progression preset revision this slot's working sets progress
+  /// with, when the workout names one; `progression propose` uses it when
+  /// no rule is supplied. It prescribes nothing by itself.
+  final SlotPreset? progression;
 
   final String id;
   final String exerciseId;
@@ -154,7 +164,25 @@ final class ExerciseSlot {
       'categories': {
         for (final e in categories.entries) e.key: e.value.toJson(),
       },
+    if (progression case final p?)
+      'progression': {
+        'preset': {'id': p.id, 'revision': p.revision},
+      },
   };
+}
+
+/// A pinned progression preset revision named by a workout slot.
+typedef SlotPreset = ({String id, int revision});
+
+SlotPreset slotProgressionFromJson(Object? input) {
+  final j = jsonObject(input, 'progression');
+  checkKeys(j, {'preset'});
+  final preset = jsonObject(j['preset'], 'progression.preset');
+  checkKeys(preset, {'id', 'revision'});
+  final revision = preset['revision'];
+  if (revision is! int || revision < 1)
+    invalid('progression.preset.revision must be a positive integer.');
+  return (id: identifier(preset, 'id'), revision: revision);
 }
 
 final class WorkoutDefinition {

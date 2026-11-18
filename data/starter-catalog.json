@@ -690,7 +690,7 @@
       "id": "gzclp",
       "name": "GZCLP",
       "source": "Cody Lefever (gzcl), \"GZCLP (GZCL Linear Progression for new lifters)\", in \"Strength Training: Using the GZCL Method from Novice to Elite\", r/Fitness, 2016; excerpted from his \"GZCL Method: Applications & Adaptations\".",
-      "notes": "Four workouts rotate A1, B1, A2, B2, ideally with a day off between them (three a week). T1 lifts start at 3x5+ (five sets of three, last set as many reps as possible, stop at ten), drop to 2x6+ and 1x10+ when the base volume is missed at the same weight, then test a 5RM and restart at 85% of it. T2 lifts run 10x3, 8x3, 6x3, then restart at 10x3 a little heavier than the last 10x3 start. T3 lifts are 15x3+ and go up once the last set reaches 25. Propose each slot with its preset: t1-lower/t1-upper for T1 squat and deadlift/bench and OHP, t2-lower/t2-upper likewise for T2, t3 for T3. The T3 lifts appear on two days each and progress separately on each day unless their tracks are linked. Push AMRAP sets to one or two reps before failure, not beyond ten.",
+      "notes": "Four workouts rotate A1, B1, A2, B2, ideally with a day off between them (three a week). T1 lifts start at 3x5+ (five sets of three, last set as many reps as possible, stop at ten), drop to 2x6+ and 1x10+ when the base volume is missed at the same weight, then test a 5RM and restart at 85% of it. T2 lifts run 10x3, 8x3, 6x3, then restart at 10x3 a little heavier than the last 10x3 start. T3 lifts are 15x3+ and go up once the last set reaches 25. Each slot names its tier preset (t1-lower/t1-upper for T1 squat and deadlift/bench and OHP, t2-lower/t2-upper likewise for T2, t3 for T3), so proposing needs no rule. The T3 lifts appear on two days each and progress separately on each day unless their tracks are linked. Push AMRAP sets to one or two reps before failure, not beyond ten.",
       "choices": [
         {
           "id": "squat-t1",
@@ -903,6 +903,16 @@
                   ],
                   "default": "triples"
                 }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t1-lower"
+                  },
+                  "revision": {
+                    "$presetRevision": "t1-lower"
+                  }
+                }
               }
             },
             {
@@ -928,6 +938,16 @@
                   ],
                   "default": "tens"
                 }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t2-upper"
+                  },
+                  "revision": {
+                    "$presetRevision": "t2-upper"
+                  }
+                }
               }
             },
             {
@@ -944,6 +964,16 @@
                 "reps": {
                   "value": "15",
                   "unit": "rep"
+                }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t3"
+                  },
+                  "revision": {
+                    "$presetRevision": "t3"
+                  }
                 }
               }
             }
@@ -1270,6 +1300,16 @@
                   ],
                   "default": "triples"
                 }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t1-upper"
+                  },
+                  "revision": {
+                    "$presetRevision": "t1-upper"
+                  }
+                }
               }
             },
             {
@@ -1295,6 +1335,16 @@
                   ],
                   "default": "tens"
                 }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t2-lower"
+                  },
+                  "revision": {
+                    "$presetRevision": "t2-lower"
+                  }
+                }
               }
             },
             {
@@ -1309,6 +1359,16 @@
                 "reps": {
                   "value": "15",
                   "unit": "rep"
+                }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t3"
+                  },
+                  "revision": {
+                    "$presetRevision": "t3"
+                  }
                 }
               }
             }
@@ -1635,6 +1695,16 @@
                   ],
                   "default": "triples"
                 }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t1-upper"
+                  },
+                  "revision": {
+                    "$presetRevision": "t1-upper"
+                  }
+                }
               }
             },
             {
@@ -1660,6 +1730,16 @@
                   ],
                   "default": "tens"
                 }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t2-lower"
+                  },
+                  "revision": {
+                    "$presetRevision": "t2-lower"
+                  }
+                }
               }
             },
             {
@@ -1676,6 +1756,16 @@
                 "reps": {
                   "value": "15",
                   "unit": "rep"
+                }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t3"
+                  },
+                  "revision": {
+                    "$presetRevision": "t3"
+                  }
                 }
               }
             }
@@ -2002,6 +2092,16 @@
                   ],
                   "default": "triples"
                 }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t1-lower"
+                  },
+                  "revision": {
+                    "$presetRevision": "t1-lower"
+                  }
+                }
               }
             },
             {
@@ -2027,6 +2127,16 @@
                   ],
                   "default": "tens"
                 }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t2-upper"
+                  },
+                  "revision": {
+                    "$presetRevision": "t2-upper"
+                  }
+                }
               }
             },
             {
@@ -2041,6 +2151,16 @@
                 "reps": {
                   "value": "15",
                   "unit": "rep"
+                }
+              },
+              "progression": {
+                "preset": {
+                  "id": {
+                    "$presetId": "t3"
+                  },
+                  "revision": {
+                    "$presetRevision": "t3"
+                  }
                 }
               }
             }

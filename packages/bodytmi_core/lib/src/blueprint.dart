@@ -240,6 +240,7 @@ String? _text(Map<String, Object?> j, String key, int max) {
 /// * `{"$workoutId": key}` / `{"$workoutRevision": key}` — the identity and
 ///   revision a workout of this blueprint is published as;
 /// * `{"$presetId": key}` — a preset's published identity;
+/// * `{"$presetRevision": key}` — the revision it is published as;
 /// * `{"$value": choice}` / `{"$unit": choice}` — the entered value string or
 ///   unit name of a quantity choice (e.g. a scale range start and unit).
 ///
@@ -354,7 +355,7 @@ final class Blueprint {
           case r'$workoutId' || r'$workoutRevision':
             if (!workouts.containsKey(argument))
               invalid('Placeholder names undeclared workout $argument.');
-          case r'$presetId':
+          case r'$presetId' || r'$presetRevision':
             if (!presets.containsKey(argument))
               invalid('Placeholder names undeclared preset $argument.');
           default:
@@ -410,8 +411,9 @@ final class Blueprint {
   fill(
     String name,
     Map<String, Object> resolved,
-    Map<String, int> workoutRevisions,
-  ) {
+    Map<String, int> workoutRevisions, [
+    Map<String, int> presetRevisions = const {},
+  ]) {
     identifier({'name': name}, 'name');
     Object? replace(String kind, Object? argument) => switch (kind) {
       r'$choice' => resolved[argument]!,
@@ -421,6 +423,9 @@ final class Blueprint {
         workoutRevisions[argument] ??
             invalid('No revision for workout $argument.'),
       r'$presetId' => '$name-$argument',
+      r'$presetRevision' =>
+        presetRevisions[argument] ??
+            invalid('No revision for preset $argument.'),
       r'$value' => (resolved[argument]! as Map<String, Object?>)['value'],
       r'$unit' => (resolved[argument]! as Map<String, Object?>)['unit'],
       _ => invalid('Unknown blueprint placeholder $kind.'),
