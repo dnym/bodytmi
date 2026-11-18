@@ -6,6 +6,7 @@ import 'body.dart';
 import 'food.dart';
 import 'format.dart';
 import 'health_connect.dart' show refreshStepsQuietly;
+import 'reminders.dart' show refreshRemindersQuietly;
 import 'more.dart';
 import 'profile.dart';
 import 'quick_entry.dart';
@@ -53,7 +54,9 @@ final class _HomeShellState extends State<HomeShell> {
     // Health Connect exists only on Android phones (not in tests).
     if (!_stepsRefreshed && Platform.isAndroid) {
       _stepsRefreshed = true;
-      refreshStepsQuietly(ProfileScope.of(context));
+      final profile = ProfileScope.of(context);
+      refreshStepsQuietly(profile);
+      refreshRemindersQuietly(profile);
     }
   }
 

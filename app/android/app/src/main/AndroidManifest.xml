@@ -10,6 +10,10 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- Health Connect: read step counts only, when you connect it. -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <!-- Routine reminders: shown by the phone at the due time; kept across
+         restarts. Inexact timing, so no exact-alarm permission. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
         android:label="BodyTMI"
         android:name="${applicationName}"
@@ -27,6 +31,18 @@
         <receiver
             android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
             tools:node="remove" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
         <activity
             android:name=".MainActivity"
             android:exported="true"

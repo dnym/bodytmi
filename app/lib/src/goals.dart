@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:bodytmi_application/bodytmi_application.dart'
     show canonicalJson;
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'format.dart';
+import 'reminders.dart';
 import 'profile.dart';
 import 'quick_entry.dart';
 import 'session.dart' show parseDecimal;
@@ -124,6 +127,9 @@ final class _GoalsScreenState extends State<GoalsScreen> {
   String get _today => isoDate(_now);
 
   Future<_GoalsData> _load(ProfileClient p) async {
+    // Any change (a routine ticked, added or done by its evidence) can move
+    // reminders; the schedule is rebuilt in the background.
+    unawaited(refreshRemindersQuietly(p));
     final list = await p.call<Map<String, Object?>>('goal list');
     final goals = [
       for (final g in (list['goals'] as List?) ?? const [])
@@ -324,6 +330,7 @@ final class _GoalsScreenState extends State<GoalsScreen> {
         r as Map<String, Object?>,
     ];
     return [
+      const ReminderSwitch(),
       if (routines.isEmpty)
         const SectionCard(child: EmptyNote('No routines yet.')),
       for (final r in routines)
@@ -1220,5 +1227,74 @@ final class _ReviewSheetState extends State<ReviewSheet> {
       ),
       if (problem != null) ProblemText(problem!),
     ],
+  );
+}
+
+/// Reminders on or off for this phone; switching on asks to post
+/// notifications and schedules the next week's routines.
+final class ReminderSwitch extends StatefulWidget {
+  const ReminderSwitch({super.key});
+
+  @override
+  State<ReminderSwitch> createState() => _ReminderSwitchState();
+}
+
+final class _ReminderSwitchState extends State<ReminderSwitch> {
+  bool? on;
+  String? message;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (on == null) {
+      ReminderSettings.enabled(ProfileScope.of(context).path).then((v) {
+        if (mounted) setState(() => on = v);
+      });
+    }
+  }
+
+  Future<void> _set(bool value) async {
+    final profile = ProfileScope.of(context);
+    if (value && !await notifier.permit()) {
+      setState(
+        () => message =
+            'Notifications are not allowed for BodyTMI; allow them in the '
+            "phone's settings to get reminders.",
+      );
+      return;
+    }
+    await ReminderSettings.setEnabled(profile.path, value);
+    try {
+      final n = await rescheduleReminders(profile);
+      if (mounted) {
+        setState(() {
+          on = value;
+          message = value
+              ? '$n reminder${n == 1 ? '' : 's'} in the next 7 days.'
+              : null;
+        });
+      }
+    } on Object catch (e) {
+      if (mounted) setState(() => message = '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SectionCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Remind me when routines are due'),
+          subtitle: const Text(
+            'On this phone only. A routine already done is not reminded.',
+          ),
+          value: on ?? false,
+          onChanged: on == null ? null : _set,
+        ),
+        if (message != null) Muted(message!),
+      ],
+    ),
   );
 }
