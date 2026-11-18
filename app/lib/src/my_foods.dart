@@ -1,6 +1,9 @@
 import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:bodytmi_locale/bodytmi_locale.dart';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:material_ui/material_ui.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'format.dart';
 import 'gyms.dart' show freeId;
@@ -849,10 +852,29 @@ final class _BarcodeDialogState extends State<_BarcodeDialog> {
           decoration: const InputDecoration(labelText: 'Barcode'),
           onSubmitted: (_) => _done(),
         ),
+        if (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () async {
+                final scanned = await Navigator.of(context).push<String>(
+                  MaterialPageRoute(builder: (_) => const BarcodeScanScreen()),
+                );
+                if (scanned == null || !mounted) return;
+                code.text = scanned;
+                _done();
+              },
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: const Text('Scan with the camera'),
+            ),
+          ),
         const SizedBox(height: 8),
         const Muted(
           'Sends only this number to Open Food Facts (openfoodfacts.org). '
-          'Nothing is saved until you review the result.',
+          'Nothing is saved until you review the result. Scanning reads '
+          'the code on the phone (Google ML Kit, on-device); typing it '
+          'needs no camera.',
         ),
         if (problem != null) ProblemText(problem!),
       ],
@@ -864,5 +886,77 @@ final class _BarcodeDialogState extends State<_BarcodeDialog> {
       ),
       FilledButton(onPressed: _done, child: const Text('Look up')),
     ],
+  );
+}
+
+/// Reads one product barcode with the camera and returns its digits. The
+/// camera runs only while this screen is open.
+final class BarcodeScanScreen extends StatefulWidget {
+  const BarcodeScanScreen({super.key});
+
+  @override
+  State<BarcodeScanScreen> createState() => _BarcodeScanScreenState();
+}
+
+final class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
+  final controller = MobileScannerController(
+    formats: const [
+      BarcodeFormat.ean13,
+      BarcodeFormat.ean8,
+      BarcodeFormat.upcA,
+      BarcodeFormat.upcE,
+    ],
+  );
+  bool done = false;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Scan a barcode')),
+    body: Stack(
+      children: [
+        MobileScanner(
+          controller: controller,
+          onDetect: (capture) {
+            if (done) return;
+            for (final b in capture.barcodes) {
+              final v = b.rawValue;
+              if (v != null && RegExp(r'^[0-9]{6,14}$').hasMatch(v)) {
+                done = true;
+                Navigator.pop(context, v);
+                return;
+              }
+            }
+          },
+          errorBuilder: (context, error) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                error.errorCode == MobileScannerErrorCode.permissionDenied
+                    ? 'Camera access was not allowed. Type the barcode '
+                          'instead, or allow the camera in settings.'
+                    : 'The camera could not start. Type the barcode instead.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+        const Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Point the camera at the barcode.',
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 }

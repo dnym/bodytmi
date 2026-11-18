@@ -1,13 +1,30 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Device unlock: the keystore key is released by fingerprint or screen lock. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Only for lookups you start (Open Food Facts barcodes); nothing else
          goes online and nothing is sent in the background. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Barcode scanning, only while the scanner is open. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:label="BodyTMI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- ML Kit (barcode scanning) bundles Google's datatransport, which
+             uploads ML Kit usage logs. Removing its backend discovery and
+             schedulers leaves it no way to send anything; scanning runs
+             fully on the device. -->
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            tools:node="remove" />
+        <service
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+            tools:node="remove" />
+        <receiver
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+            tools:node="remove" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
