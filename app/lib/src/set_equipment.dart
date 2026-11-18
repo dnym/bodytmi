@@ -104,7 +104,10 @@ final class PlatesSheet extends StatefulWidget {
 }
 
 final class _PlatesSheetState extends State<PlatesSheet> {
-  late final Map loading = widget.instance.snapshot['loading']! as Map;
+  late final Map loading = availableLoading(
+    widget.instance.snapshot['loading']! as Map,
+    widget.set['unavailablePlates'],
+  );
   late final int sides = at(loading, ['channel', 'sides']) == 2 ? 2 : 1;
   late final List<Map> stock = [
     for (final p in (loading['plates'] as List?) ?? const []) p as Map,
@@ -270,9 +273,180 @@ final class _PlatesSheetState extends State<PlatesSheet> {
 /// Another instance chosen for a set; instanceId null returns to the
 /// session's binding.
 final class OtherChoice {
-  const OtherChoice(this.instanceId, {this.remaining = false});
+  const OtherChoice(
+    this.instanceId, {
+    this.remaining = false,
+    this.unavailable = const [],
+  });
   final String? instanceId;
   final bool remaining;
+
+  /// Declared plates that are missing, as `store perform-on` takes them.
+  final List<Map<String, Object?>> unavailable;
+}
+
+/// [loading] without the set's missing plates (counts are totals).
+Map<String, Object?> availableLoading(Map loading, Object? unavailable) {
+  final missing = <String, int>{
+    for (final u in (unavailable as List?) ?? const [])
+      Decimal.parse('${at(u, ['mass', 'value'])}').toString():
+          (u as Map)['count'] as int,
+  };
+  return <String, Object?>{
+    ...loading.cast<String, Object?>(),
+    'plates': <Object?>[
+      for (final p in (loading['plates'] as List?) ?? const [])
+        if ((p as Map)['count'] as int >
+            (missing[Decimal.parse('${at(p, ['mass', 'value'])}').toString()] ??
+                0))
+          <String, Object?>{
+            'mass': p['mass'],
+            'count':
+                (p['count'] as int) -
+                (missing[Decimal.parse('${at(p, ['mass', 'value'])}')
+                        .toString()] ??
+                    0),
+          },
+    ],
+  };
+}
+
+/// `2 × 1.25 kg, 2 × 2.5 kg` for a set's missing plates.
+String missingText(Fmt f, Object? unavailable) => [
+  for (final u in (unavailable as List?) ?? const [])
+    '${(u as Map)['count']} × ${f.quantity(at(u, ['mass', 'entered']) ?? u['mass'], digits: 3)}',
+].join(', ');
+
+/// Missing plates chosen in [MissingPlatesSheet].
+final class MissingChoice {
+  const MissingChoice(this.unavailable, {required this.remaining});
+  final List<Map<String, Object?>> unavailable;
+  final bool remaining;
+}
+
+/// Records which declared plates are missing today (e.g. micro plates
+/// left at home), so loading hints and nearest settings use the rest.
+/// At least one plate must remain.
+final class MissingPlatesSheet extends StatefulWidget {
+  const MissingPlatesSheet({
+    super.key,
+    required this.instance,
+    required this.current,
+  });
+  final InstanceRef instance;
+  final Object? current; // the set's unavailablePlates
+
+  @override
+  State<MissingPlatesSheet> createState() => _MissingPlatesSheetState();
+}
+
+final class _MissingPlatesSheetState extends State<MissingPlatesSheet> {
+  late final List<Map> stock = [
+    for (final p
+        in (at(widget.instance.snapshot, ['loading', 'plates']) as List?) ??
+            const [])
+      p as Map,
+  ];
+  late final List<int> missing = [
+    for (final p in stock)
+      () {
+        for (final u in (widget.current as List?) ?? const []) {
+          if (Decimal.parse('${at(u, ['mass', 'value'])}') ==
+              Decimal.parse('${at(p, ['mass', 'value'])}')) {
+            return (u as Map)['count'] as int;
+          }
+        }
+        return 0;
+      }(),
+  ];
+  bool remaining = true;
+
+  int get _left {
+    var n = 0;
+    for (final (i, p) in stock.indexed) {
+      n += (p['count'] as int) - missing[i];
+    }
+    return n;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = Fmt.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Missing plates · ${widget.instance.snapshot['name'] ?? widget.instance.id}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const Muted(
+              'How many of each declared plate are not there today, in '
+              'total. Loading hints and nearest weights use the rest.',
+            ),
+            for (final (i, p) in stock.indexed)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${f.quantity((p['mass'] as Map)['entered'] ?? p['mass'], digits: 3)}'
+                      ' (of ${p['count']})',
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Fewer missing ${_mass(f, p['mass'])}',
+                    onPressed: missing[i] == 0
+                        ? null
+                        : () => setState(() => missing[i]--),
+                    icon: const Icon(Icons.remove_circle_outline),
+                  ),
+                  SizedBox(
+                    width: 28,
+                    child: Text('${missing[i]}', textAlign: TextAlign.center),
+                  ),
+                  IconButton(
+                    tooltip: 'More missing ${_mass(f, p['mass'])}',
+                    onPressed: missing[i] >= (p['count'] as int) || _left <= 1
+                        ? null
+                        : () => setState(() => missing[i]++),
+                    icon: const Icon(Icons.add_circle_outline),
+                  ),
+                ],
+              ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Also the remaining sets of this exercise'),
+              value: remaining,
+              onChanged: (v) => setState(() => remaining = v),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(
+                  context,
+                  MissingChoice([
+                    for (final (i, p) in stock.indexed)
+                      if (missing[i] > 0)
+                        <String, Object?>{
+                          'mass': <String, Object?>{
+                            ...((p['mass'] as Map)['entered'] ?? p['mass'])
+                                as Map<String, Object?>,
+                          },
+                          'count': missing[i],
+                        },
+                  ], remaining: remaining),
+                ),
+                child: const Text('Save'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Picks another published instance of the slot's equipment for a set

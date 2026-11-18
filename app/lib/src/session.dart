@@ -315,6 +315,8 @@ final class _SessionScreenState extends State<SessionScreen> {
             instance?.snapshot['loading'] != null,
         otherEquipment:
             set['status'] == 'planned' && _slot(slotId)?['equipment'] != null,
+        missingPlates:
+            set['status'] == 'planned' && instance?.snapshot['loading'] != null,
       ),
     );
     if (result == null || !mounted) return;
@@ -343,6 +345,32 @@ final class _SessionScreenState extends State<SessionScreen> {
         );
         if (choice == null) return;
         await _performOn(set, choice);
+      case _Missing():
+        final missing = await showModalBottomSheet<MissingChoice>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => MissingPlatesSheet(
+            instance: instance!,
+            current: set['unavailablePlates'],
+          ),
+        );
+        if (missing == null) return;
+        final binding = at(session, [
+          'loadInputs',
+          slotId,
+          'instance',
+          'instanceId',
+        ]);
+        await _performOn(
+          set,
+          missing.unavailable.isEmpty && instance!.id == binding
+              ? const OtherChoice(null)
+              : OtherChoice(
+                  instance!.id,
+                  remaining: missing.remaining,
+                  unavailable: missing.unavailable,
+                ),
+        );
       case _Skip():
         await _change('store skip', {'setId': set['id'], 'confirm': true});
       case _Actuals(:final actuals):
@@ -364,34 +392,61 @@ final class _SessionScreenState extends State<SessionScreen> {
       return 'Plates: ${plateText(f, arrangement, instanceOf(session!, set))}';
     }
     final instance = instanceOf(session!, set);
-    final other = set['performedOn'] != null
-        ? 'On ${instance?.snapshot['name'] ?? instance?.id}'
-        : null;
-    if (!current || set['status'] != 'planned') return other;
+    final binding = at(session, [
+      'loadInputs',
+      '${set['slot']}',
+      'instance',
+      'instanceId',
+    ]);
+    final missing = set['unavailablePlates'];
+    final other = [
+      if (set['performedOn'] != null && instance?.id != binding)
+        'On ${instance?.snapshot['name'] ?? instance?.id}',
+      if (missing is List && missing.isNotEmpty)
+        'Missing ${missingText(f, missing)}',
+    ].join(' · ');
+    if (!current || set['status'] != 'planned') {
+      return other.isEmpty ? null : other;
+    }
     final mass = at(set, ['suggested', 'mass']);
     if (instance == null ||
         instance.snapshot['loading'] == null ||
         mass is! Map) {
-      return other;
+      return other.isEmpty ? null : other;
     }
     final entered = (mass['entered'] ?? mass) as Map;
     final key =
-        '${instance.id}@${instance.revision}:${entered['value']}${entered['unit']}';
+        '${instance.id}@${instance.revision}:${entered['value']}${entered['unit']}'
+        '-${missingText(f, missing)}';
+    final target = <String, Object?>{
+      'value': entered['value'],
+      'unit': entered['unit'],
+    };
     if (!_plateHints.containsKey(key)) {
       _plateHints[key] = null;
-      profile
-          .call<Map<String, Object?>>('store plate-plan', {
-            'instanceId': instance.id,
-            'revision': instance.revision,
-            'target': {'value': entered['value'], 'unit': entered['unit']},
-          })
+      // With missing plates, plan on what is there (pure plate plan).
+      (missing is List && missing.isNotEmpty
+              ? profile
+                    .pure<Map<String, Object?>>('plate plan', {
+                      'loading': availableLoading(
+                        instance.snapshot['loading']! as Map,
+                        missing,
+                      ),
+                      'target': target,
+                    })
+                    .then((plan) => <String, Object?>{'plan': plan})
+              : profile.call<Map<String, Object?>>('store plate-plan', {
+                  'instanceId': instance.id,
+                  'revision': instance.revision,
+                  'target': target,
+                }))
           .then((r) {
             if (mounted) {
               setState(() => _plateHints[key] = planHint(f, r['plan']));
             }
           }, onError: (_) {});
     }
-    final parts = [?other, ?_plateHints[key]];
+    final parts = [if (other.isNotEmpty) other, ?_plateHints[key]];
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
@@ -407,6 +462,8 @@ final class _SessionScreenState extends State<SessionScreen> {
         'instanceId': choice.instanceId,
         if (choice.instanceId == null) 'confirm': true,
         if (choice.instanceId != null) 'applyToRemaining': choice.remaining,
+        if (choice.unavailable.isNotEmpty)
+          'unavailablePlates': <Object?>[...choice.unavailable],
       });
       if (!mounted) return;
       setState(() => session = r['session'] as Map<String, Object?>);
@@ -748,6 +805,8 @@ final class _Plates extends _SetResult {}
 
 final class _Other extends _SetResult {}
 
+final class _Missing extends _SetResult {}
+
 final class _Actuals extends _SetResult {
   _Actuals(this.actuals);
   final Map<String, Object?> actuals;
@@ -762,7 +821,9 @@ final class _SetSheet extends StatefulWidget {
     this.slot,
     this.plates = false,
     this.otherEquipment = false,
+    this.missingPlates = false,
   });
+  final bool missingPlates;
   final Map<String, Object?> set;
   final String label;
   final Map<String, Object?>? slot;
@@ -897,7 +958,7 @@ final class _SetSheetState extends State<_SetSheet> {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
-          if (widget.plates || widget.otherEquipment)
+          if (widget.plates || widget.otherEquipment || widget.missingPlates)
             Wrap(
               spacing: 8,
               children: [
@@ -910,6 +971,12 @@ final class _SetSheetState extends State<_SetSheet> {
                           ? 'Record plates'
                           : 'Plates',
                     ),
+                  ),
+                if (widget.missingPlates)
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(context, _Missing()),
+                    icon: const Icon(Icons.remove_circle_outline),
+                    label: const Text('Missing plates'),
                   ),
                 if (widget.otherEquipment)
                   OutlinedButton.icon(
