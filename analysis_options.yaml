@@ -2,6 +2,10 @@ analyzer:
   exclude:
     - _docs/**
     - '**/*.g.dart'
+    # Flutter packages: checked by make app-check / flutter-check /
+    # android-check with Flutter; the root check needs only Dart.
+    - app/**
+    - adapters/**
   language:
     strict-casts: true
     strict-inference: true
