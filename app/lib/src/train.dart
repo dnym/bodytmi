@@ -1,7 +1,9 @@
+import 'package:bodytmi_core/bodytmi_core.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'format.dart';
 import 'profile.dart';
+import 'session.dart';
 import 'widgets.dart';
 
 final class _TrainData {
@@ -103,18 +105,11 @@ final class TrainScreen extends StatelessWidget {
                     ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: null,
+                    onPressed: () => openRunSession(context, '${n.run['id']}'),
                     child: Text(
                       n.run['currentSessionId'] != null
                           ? 'Resume workout'
                           : 'Start workout',
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Muted(
-                      'Logging comes next; use the CLI meanwhile.',
-                      align: TextAlign.center,
                     ),
                   ),
                 ],
@@ -125,7 +120,13 @@ final class TrainScreen extends StatelessWidget {
             child: data.history.isEmpty
                 ? const EmptyNote('No finished workouts yet.')
                 : Column(
-                    children: [for (final s in data.history) _HistoryRow(s)],
+                    children: [
+                      for (final s in data.history)
+                        InkWell(
+                          onTap: () => openSession(context, '${s['id']}'),
+                          child: _HistoryRow(s),
+                        ),
+                    ],
                   ),
           ),
         ],
@@ -188,3 +189,21 @@ final class _HistoryRow extends StatelessWidget {
     );
   }
 }
+
+/// Starts (or resumes) the next workout of [runId] and opens it.
+Future<void> openRunSession(BuildContext context, String runId) async {
+  final profile = ProfileScope.of(context);
+  try {
+    final id = await startRunSession(profile, runId);
+    if (context.mounted) await openSession(context, id);
+  } on BodyTmiException catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+}
+
+Future<void> openSession(BuildContext context, String id) => Navigator.of(
+  context,
+).push(MaterialPageRoute<void>(builder: (_) => SessionScreen(sessionId: id)));

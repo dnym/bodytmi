@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'format.dart';
 import 'profile.dart';
 import 'theme.dart';
+import 'train.dart' show openRunSession;
 import 'widgets.dart';
 
 /// Everything the Today screen shows, read through the JSON commands.
@@ -314,6 +315,18 @@ final class _TodayScreenState extends State<TodayScreen> {
                           ),
                           if (run.gym != null) Pill(run.gym!),
                         ],
+                      ),
+                    ),
+                  for (final run in d.runs)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: FilledButton(
+                        onPressed: () => openRunSession(context, run.runId),
+                        child: Text(
+                          run.inProgress != null
+                              ? 'Resume ${run.label}'
+                              : 'Start ${run.label}',
+                        ),
                       ),
                     ),
                 ],
