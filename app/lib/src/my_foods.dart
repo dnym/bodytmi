@@ -327,24 +327,30 @@ final class _FoodFormScreenState extends State<FoodFormScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: '100g', label: Text('per 100 g')),
-            ButtonSegment(value: '100ml', label: Text('per 100 ml')),
-          ],
-          selected: {basis},
-          showSelectedIcon: false,
-          onSelectionChanged: widget.existing == null && widget.draft == null
-              ? (s) => setState(() => basis = s.single)
-              : null,
-        ),
+        // The basis is fixed once a food exists or comes from a lookup;
+        // a disabled toggle would hide which one it is, so say it.
+        if (widget.existing == null && widget.draft == null)
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: '100g', label: Text('per 100 g')),
+              ButtonSegment(value: '100ml', label: Text('per 100 ml')),
+            ],
+            selected: {basis},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => setState(() => basis = s.single),
+          )
+        else
+          Text(
+            basis == '100ml' ? 'Values per 100 ml' : 'Values per 100 g',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
         const SizedBox(height: 10),
         if (at(_old, ['source', 'kind']) == 'lookup')
           Muted(
             'From Open Food Facts'
             '${at(_old, ['source', 'url']) == null ? '' : ' (${at(_old, ['source', 'url'])})'}. '
             'Check it against the package before saving. '
-            '${at(_old, ['source', 'notice']) ?? ''}',
+            '${at(_old, ['source', 'notes']) ?? ''}',
           ),
         const Muted(
           'As printed on the label. Leave a value blank if the '
