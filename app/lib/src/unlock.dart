@@ -9,38 +9,54 @@ import 'theme.dart';
 import 'widgets.dart';
 
 /// Opens the profile at [path], asking for the passphrase or device unlock
-/// first when it is encrypted, then shows the app.
+/// first when it is encrypted, then shows the app. A locked profile locks
+/// again when the app returns after [ProfileClient.relockAfter] away (at
+/// once when that is zero): the store is closed and the key forgotten.
 final class BodyTmiRoot extends StatefulWidget {
   const BodyTmiRoot({
     super.key,
     required this.path,
     required this.keyStore,
     this.clock,
+    this.now,
   });
 
   final String path;
   final DeviceKeyStore keyStore;
   final DateTime? clock;
 
+  /// Wall clock for the away timer; tests inject one.
+  final DateTime Function()? now;
+
   @override
   State<BodyTmiRoot> createState() => _BodyTmiRootState();
 }
 
-final class _BodyTmiRootState extends State<BodyTmiRoot> {
+final class _BodyTmiRootState extends State<BodyTmiRoot>
+    with WidgetsBindingObserver {
   ProfileClient? profile;
   LockMode? mode;
-  bool encrypted = false;
+  late final away = AwayTimer(now: widget.now);
+  bool _locking = false;
+  int _generation = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _start();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    profile?.close();
+    super.dispose();
   }
 
   Future<void> _start() async {
     final saved = await LockSettings.read(widget.path);
-    encrypted = profileEncrypted(widget.path);
-    if (!encrypted) {
+    if (!profileEncrypted(widget.path)) {
       final p = await ProfileClient.open(
         widget.path,
         keyStore: widget.keyStore,
@@ -52,6 +68,40 @@ final class _BodyTmiRootState extends State<BodyTmiRoot> {
       return;
     }
     setState(() => mode = saved == LockMode.none ? LockMode.passphrase : saved);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final p = profile;
+    switch (state) {
+      case AppLifecycleState.hidden || AppLifecycleState.paused:
+        if (p == null || p.lock == LockMode.none) return;
+        away.left();
+        if (p.relockAfter == Duration.zero) _lock();
+      case AppLifecycleState.resumed:
+        final gone = away.returned();
+        if (p != null && p.lock != LockMode.none && gone >= p.relockAfter) {
+          _lock();
+        }
+      default:
+    }
+  }
+
+  Future<void> _lock() async {
+    final p = profile;
+    if (p == null || _locking) return;
+    _locking = true;
+    try {
+      final next = p.lock;
+      setState(() {
+        profile = null;
+        mode = next;
+        _generation++;
+      });
+      await p.close();
+    } finally {
+      _locking = false;
+    }
   }
 
   @override
@@ -67,6 +117,7 @@ final class _BodyTmiRootState extends State<BodyTmiRoot> {
       home: mode == null
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : UnlockScreen(
+              key: ValueKey(_generation),
               path: widget.path,
               mode: mode!,
               keyStore: widget.keyStore,
@@ -96,22 +147,40 @@ final class UnlockScreen extends StatefulWidget {
   State<UnlockScreen> createState() => _UnlockScreenState();
 }
 
-final class _UnlockScreenState extends State<UnlockScreen> {
+final class _UnlockScreenState extends State<UnlockScreen>
+    with WidgetsBindingObserver {
   final passphrase = TextEditingController();
   String? problem;
   bool busy = false;
   bool hidden = true;
 
+  bool _prompted = false;
+
   @override
   void initState() {
     super.initState();
-    if (widget.mode == LockMode.device) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _device());
-    }
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoPrompt());
+  }
+
+  /// Device unlock prompts on its own only while the app is on screen, never
+  /// while it is in the background (a phone in a pocket).
+  void _autoPrompt() {
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (!mounted || _prompted || widget.mode != LockMode.device) return;
+    if (state != null && state != AppLifecycleState.resumed) return;
+    _prompted = true;
+    _device();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _autoPrompt();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     passphrase.dispose();
     super.dispose();
   }

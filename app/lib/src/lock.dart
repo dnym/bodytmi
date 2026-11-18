@@ -27,29 +27,96 @@ final class LockSettings {
 
   static File _file(String profile) => File('$profile.lock.json');
 
-  static Future<LockMode> read(String profile) async {
+  static Future<Map<String, Object?>> _json(String profile) async {
     final file = _file(profile);
-    if (!await file.exists()) return LockMode.none;
+    if (!await file.exists()) return {};
     try {
       final json = jsonDecode(await file.readAsString());
-      final name = (json as Map)['mode'];
-      return LockMode.values.firstWhere(
-        (m) => m.name == name,
-        orElse: () => LockMode.passphrase,
-      );
+      return json is Map<String, Object?> ? json : {'mode': 'passphrase'};
     } on FormatException {
-      return LockMode.passphrase;
+      return {'mode': 'passphrase'};
     }
   }
 
-  static Future<void> write(String profile, LockMode mode) async {
-    final file = _file(profile);
-    final temp = File('${file.path}.tmp');
-    await temp.writeAsString(
-      jsonEncode({'schemaVersion': 1, 'mode': mode.name}),
-      flush: true,
+  static Future<LockMode> read(String profile) async {
+    final json = await _json(profile);
+    if (json.isEmpty) return LockMode.none;
+    return LockMode.values.firstWhere(
+      (m) => m.name == json['mode'],
+      orElse: () => LockMode.passphrase,
     );
+  }
+
+  /// How long the app may be away before a locked profile locks again.
+  static Future<Duration> relockAfter(String profile) async {
+    final seconds = (await _json(profile))['relockAfterSeconds'];
+    return relockChoices.contains(
+          Duration(seconds: seconds is int ? seconds : -1),
+        )
+        ? Duration(seconds: seconds! as int)
+        : defaultRelockAfter;
+  }
+
+  static Future<void> write(String profile, LockMode mode) =>
+      _update(profile, {'mode': mode.name});
+
+  static Future<void> writeRelockAfter(String profile, Duration after) {
+    if (!relockChoices.contains(after)) {
+      invalid('Choose one of the offered re-lock times.');
+    }
+    return _update(profile, {'relockAfterSeconds': after.inSeconds});
+  }
+
+  static Future<void> _update(
+    String profile,
+    Map<String, Object?> fields,
+  ) async {
+    final file = _file(profile);
+    final json = {...await _json(profile), 'schemaVersion': 1, ...fields};
+    json.putIfAbsent('mode', () => LockMode.none.name);
+    final temp = File('${file.path}.tmp');
+    await temp.writeAsString(jsonEncode(json), flush: true);
     await temp.rename(file.path);
+  }
+}
+
+/// Offered re-lock delays after the app leaves the screen.
+const relockChoices = [
+  Duration.zero,
+  Duration(minutes: 1),
+  Duration(minutes: 5),
+  Duration(minutes: 15),
+  Duration(hours: 1),
+];
+const defaultRelockAfter = Duration(minutes: 5);
+
+/// Measures time away from the app with both the wall clock and a monotonic
+/// stopwatch, and counts the larger: a monotonic clock may stop in deep
+/// sleep, and the wall clock can be changed.
+final class AwayTimer {
+  AwayTimer({DateTime Function()? now}) : _now = now ?? DateTime.now;
+  final DateTime Function() _now;
+  final _watch = Stopwatch();
+  DateTime? _leftAt;
+
+  bool get away => _leftAt != null;
+
+  void left() {
+    if (_leftAt != null) return;
+    _leftAt = _now();
+    _watch
+      ..reset()
+      ..start();
+  }
+
+  /// Time away, then forgets it.
+  Duration returned() {
+    final left = _leftAt;
+    _leftAt = null;
+    _watch.stop();
+    if (left == null) return Duration.zero;
+    final wall = _now().difference(left);
+    return wall > _watch.elapsed ? wall : _watch.elapsed;
   }
 }
 

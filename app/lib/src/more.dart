@@ -184,6 +184,34 @@ final class _LockSectionState extends State<LockSection> {
                 child: const Text('Change passphrase'),
               ),
             ),
+          if (mode != LockMode.none)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  const Expanded(child: Text('Lock again after leaving')),
+                  DropdownButton<Duration>(
+                    value: profile.relockAfter,
+                    onChanged: busy
+                        ? null
+                        : (d) => d == null ? null : profile.setRelockAfter(d),
+                    items: [
+                      for (final d in relockChoices)
+                        DropdownMenuItem(
+                          value: d,
+                          child: Text(
+                            d == Duration.zero
+                                ? 'Immediately'
+                                : d.inHours >= 1
+                                ? '${d.inHours} h'
+                                : '${d.inMinutes} min',
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           if (busy)
             const Padding(
               padding: EdgeInsets.only(top: 12),

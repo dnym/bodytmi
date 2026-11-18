@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bodytmi/bodytmi.dart';
@@ -34,20 +35,24 @@ final class ProfileClient extends ChangeNotifier {
     DeviceKeyStore? keyStore,
   }) async {
     final store = await withProfileKey(key, () => TrainingStore.open(path));
+    final relock = await LockSettings.relockAfter(path);
     return ProfileClient._(
       path,
       store,
       key,
       lock ?? (key == null ? LockMode.none : LockMode.passphrase),
       keyStore ?? KeystoreDeviceKeyStore(),
-    );
+    )..relockAfter = relock;
   }
 
   /// Changes how the profile is locked. The profile is rewritten under the
   /// new key (or none) as one verified file replacement; on any failure it
   /// keeps its previous key and lock. A device key is stored before the
   /// rewrite and the previous device key removed only after it.
-  Future<void> setLock(LockMode next, {String? passphrase}) async {
+  Future<void> setLock(LockMode next, {String? passphrase}) =>
+      _exclusive(() => _setLock(next, passphrase: passphrase));
+
+  Future<void> _setLock(LockMode next, {String? passphrase}) async {
     final ProfileKey? nextKey;
     String? deviceKey;
     switch (next) {
@@ -96,23 +101,84 @@ final class ProfileClient extends ChangeNotifier {
     }
   }
 
-  /// Runs one command and returns its `data`.
+  /// Runs one command and returns its `data`. Commands wait while the store
+  /// is being closed or re-keyed, and fail once the profile is locked.
   Future<T> call<T>(
     String command, [
     Map<String, Object?> fields = const {},
   ]) async {
-    final response = await withProfileKey(
-      _key,
-      () => TrainingStore.sharing(
-        _store,
-        () => executeCommand(command, {
-          'schemaVersion': 1,
-          'database': path,
-          ...fields,
-        }),
-      ),
-    );
-    return response['data'] as T;
+    while (_exclusiveRun != null) {
+      await _exclusiveRun!.future;
+    }
+    return _tracked(() async {
+      if (_closed) {
+        throw const BodyTmiException('locked', 'The profile is locked.');
+      }
+      final response = await withProfileKey(
+        _key,
+        () => TrainingStore.sharing(
+          _store,
+          () => executeCommand(command, {
+            'schemaVersion': 1,
+            'database': path,
+            ...fields,
+          }),
+        ),
+      );
+      return response['data'] as T;
+    });
+  }
+
+  int _running = 0;
+  bool _closed = false;
+  Completer<void>? _exclusiveRun;
+  final _idle = <Completer<void>>[];
+
+  Future<T> _tracked<T>(Future<T> Function() action) async {
+    _running++;
+    try {
+      return await action();
+    } finally {
+      if (--_running == 0) {
+        for (final c in _idle) {
+          c.complete();
+        }
+        _idle.clear();
+      }
+    }
+  }
+
+  /// Runs [action] alone: after running commands finish, with new ones
+  /// waiting until it is done (closing or re-keying the store).
+  Future<T> _exclusive<T>(Future<T> Function() action) async {
+    while (_exclusiveRun != null) {
+      await _exclusiveRun!.future;
+    }
+    final gate = _exclusiveRun = Completer<void>();
+    try {
+      await idle();
+      return await action();
+    } finally {
+      _exclusiveRun = null;
+      gate.complete();
+    }
+  }
+
+  /// Completes once no command is running.
+  Future<void> idle() {
+    if (_running == 0) return Future.value();
+    final c = Completer<void>();
+    _idle.add(c);
+    return c.future;
+  }
+
+  /// How long the app may be away before it locks again (locked profiles).
+  Duration relockAfter = defaultRelockAfter;
+
+  Future<void> setRelockAfter(Duration after) async {
+    await LockSettings.writeRelockAfter(path, after);
+    relockAfter = after;
+    notifyListeners();
   }
 
   /// Runs a pure command (one that takes no database, such as the food
@@ -133,7 +199,9 @@ final class ProfileClient extends ChangeNotifier {
   }
 
   /// Replaces this profile with an invented demonstration profile.
-  Future<void> replaceWithDemo() async {
+  Future<void> replaceWithDemo() => _exclusive(_replaceWithDemo);
+
+  Future<void> _replaceWithDemo() async {
     await _store.close();
     for (final suffix in ['', '-wal', '-shm', '-journal']) {
       final file = File('$path$suffix');
@@ -148,7 +216,13 @@ final class ProfileClient extends ChangeNotifier {
     }
   }
 
-  Future<void> close() => _store.close();
+  /// Waits for running commands, closes the store and forgets the key.
+  Future<void> close() => _exclusive(() async {
+    if (_closed) return;
+    _closed = true;
+    _key = null;
+    await _store.close();
+  });
 }
 
 /// Makes the [ProfileClient] available below it and rebuilds dependants
