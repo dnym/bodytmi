@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'backup.dart';
+import 'goals.dart';
 import 'journal.dart';
 import 'lock.dart';
 import 'practice.dart';
@@ -46,8 +47,14 @@ final class MoreScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => openPractices(context),
               ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Goals & trials'),
+                subtitle: const Text('goals, routines, trials'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openGoals(context),
+              ),
               for (final (title, subtitle) in [
-                ('Goals & trials', 'goals, routines, trials, reviews'),
                 ('Diet plan', 'programmes, cycles, reviews'),
                 ('Gyms & equipment', 'gyms, instances, plates'),
               ])
