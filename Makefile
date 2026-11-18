@@ -45,6 +45,7 @@ android-check:
 # The Flutter app (app/): analyze and widget tests on real temporary profiles.
 app-check:
 	cmp data/food/slv.json.gz app/assets/slv-food-dataset.bin
+	cmp data/starter-catalog.json app/assets/starter-catalog.json
 	cd app && $(FLUTTER) --suppress-analytics pub get
 	cd app && $(FLUTTER) --suppress-analytics analyze --fatal-infos
 	cd app && $(FLUTTER) --suppress-analytics test
