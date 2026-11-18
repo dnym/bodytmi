@@ -14,7 +14,15 @@ Future<void> openSleep(BuildContext context, {DateTime? clock}) => Navigator.of(
 ).push(MaterialPageRoute<void>(builder: (_) => SleepScreen(clock: clock)));
 
 final class _SleepData {
-  _SleepData(this.nights, this.stats, this.schedule, this.sun, this.location);
+  _SleepData(
+    this.nights,
+    this.stats,
+    this.schedule,
+    this.sun,
+    this.location,
+    this.marked,
+  );
+  final Set<String> marked;
   final List<Map<String, Object?>> nights;
   final Map<String, Object?> stats;
   final Map<String, Object?>? schedule;
@@ -60,12 +68,17 @@ final class SleepScreen extends StatelessWidget {
         schedule = s['schedule'] as Map<String, Object?>?;
       }
     }
+    final marks = await p.call<List<Object?>>('sleep marks', {
+      'from': isoDate(today.subtract(const Duration(days: 27))),
+      'until': isoDate(today),
+    });
     return _SleepData(
       nights.cast<Map<String, Object?>>(),
       stats,
       schedule,
       sun,
       location,
+      {for (final m in marks) '${(m! as Map)['date']}'},
     );
   }
 
@@ -138,12 +151,16 @@ final class SleepScreen extends StatelessWidget {
                               : 'unavailable',
                           note: regularity?['status'] == 'resolved'
                               ? null
-                              : '${regularity?['reason'] ?? ''} It needs consecutive days '
-                                    'marked complete (sleep mark in the CLI; '
-                                    'not yet in the app).',
+                              : '${regularity?['reason'] ?? ''} Mark consecutive '
+                                    'days complete below.',
                         ),
                       ],
                     ),
+            ),
+            CompleteDaysCard(
+              today: today,
+              marked: d.marked,
+              logged: {for (final n in d.nights) '${n['date']}'},
             ),
             _DaylightCard(sun: d.sun, location: d.location),
             _ScheduleCard(schedule: d.schedule, today: today),
@@ -790,6 +807,101 @@ final class _SleepSheetState extends State<SleepSheet> {
           ),
         if (problem != null) ProblemText(problem!),
       ],
+    );
+  }
+}
+
+/// Marks days on which every sleep and nap is logged, so the time outside
+/// logged sleep was awake; the regularity score compares consecutive
+/// marked days. Today is not offered: its night has not happened yet.
+final class CompleteDaysCard extends StatefulWidget {
+  const CompleteDaysCard({
+    super.key,
+    required this.today,
+    required this.marked,
+    required this.logged,
+  });
+  final DateTime today;
+  final Set<String> marked;
+  final Set<String> logged;
+
+  @override
+  State<CompleteDaysCard> createState() => _CompleteDaysCardState();
+}
+
+final class _CompleteDaysCardState extends State<CompleteDaysCard> {
+  bool busy = false;
+
+  List<DateTime> get _days => [
+    for (var i = 14; i >= 1; i--) widget.today.subtract(Duration(days: i)),
+  ];
+
+  Future<void> _mark(List<String> dates, bool complete) async {
+    if (busy || dates.isEmpty) return;
+    final profile = ProfileScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => busy = true);
+    try {
+      for (final d in dates) {
+        await profile.write('sleep mark', {
+          'date': d,
+          'status': complete ? 'complete' : 'unmarked',
+        });
+      }
+    } on BodyTmiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = Fmt.of(context);
+    final unmarkedLogged = [
+      for (final d in _days)
+        // A day touches the night ending that morning and the one starting
+        // that evening (logged under the next date).
+        if (widget.logged.contains(isoDate(d)) &&
+            widget.logged.contains(isoDate(d.add(const Duration(days: 1)))) &&
+            !widget.marked.contains(isoDate(d)))
+          isoDate(d),
+    ];
+    return SectionCard(
+      title: 'Complete days',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Muted(
+            'Mark a day when every sleep and nap touching it is logged; time '
+            'outside them then counts as awake. Unmarked days stay unknown.',
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final d in _days)
+                FilterChip(
+                  label: Text('${f.longDate(d).substring(0, 3)} ${d.day}'),
+                  selected: widget.marked.contains(isoDate(d)),
+                  onSelected: busy ? null : (on) => _mark([isoDate(d)], on),
+                ),
+            ],
+          ),
+          if (unmarkedLogged.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: busy ? null : () => _mark(unmarkedLogged, true),
+                child: Text(
+                  'Mark the ${unmarkedLogged.length} '
+                  'day${unmarkedLogged.length == 1 ? '' : 's'} with both nights logged',
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

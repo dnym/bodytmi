@@ -165,4 +165,60 @@ void main() {
       await close(tester);
     }
   });
+
+  testWidgets('marking complete days makes regularity available', (
+    tester,
+  ) async {
+    await open(tester);
+    try {
+      expect(
+        find.textContaining('Mark consecutive days complete'),
+        findsOneWidget,
+      );
+      // Demo nights end 12–18 November: days 12–17 have both nights.
+      await tester.tap(find.text('Mark the 6 days with both nights logged'));
+      // The regularity row shows a number instead of the hint.
+      final hint = find.textContaining('Mark consecutive days complete');
+      for (var k = 0; k < 200 && hint.evaluate().isNotEmpty; k++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 40)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(
+        find.textContaining('Mark consecutive days complete'),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widgetList<FilterChip>(find.byType(FilterChip))
+            .where((c) => c.selected)
+            .length,
+        6,
+      );
+      await tester.tap(find.text('Mon 16'));
+      await waitFor(
+        tester,
+        find.byWidgetPredicate(
+          (w) =>
+              w is FilterChip &&
+              !w.selected &&
+              (w.label as Text).data == 'Mon 16',
+        ),
+      );
+      final marks = await pumped(
+        tester,
+        profile.call<List<Object?>>('sleep marks', {
+          'from': '2026-11-01',
+          'until': '2026-11-19',
+        }),
+      );
+      expect(
+        [for (final m in marks) (m! as Map)['date']],
+        ['2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-17'],
+      );
+    } finally {
+      await close(tester);
+    }
+  });
 }

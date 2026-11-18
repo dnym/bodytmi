@@ -10,6 +10,7 @@ const sleepCommandNames = [
   'sleep show',
   'sleep list',
   'sleep mark',
+  'sleep marks',
   'sleep schedule',
   'sleep schedules',
   'sleep sun',
@@ -33,6 +34,7 @@ Future<Map<String, Object?>> executeSleep(
     'sleep show' => {'id'},
     'sleep list' => {'from', 'until'},
     'sleep mark' => {'date', 'status'},
+    'sleep marks' => {'from', 'until'},
     'sleep schedule' => {'schedule', 'expectedRevision'},
     'sleep schedules' => <String>{},
     'sleep sun' => {'from', 'days'},
@@ -128,6 +130,18 @@ Future<Map<String, Object?>> executeSleep(
             requiredString(request, 'status'),
           )).toJson(),
         );
+      case 'sleep marks':
+        final from = checkDate(request['from'], 'from');
+        final until = checkDate(request['until'], 'until');
+        if (from.compareTo(until) >= 0) invalid('from is before until.');
+        final marks = await sleep.marks();
+        return ok([
+          for (final d in marks.keys.toList()..sort())
+            if (d.compareTo(from) >= 0 &&
+                d.compareTo(until) < 0 &&
+                marks[d]!.status == 'complete')
+              marks[d]!.toJson(),
+        ]);
       case 'sleep schedule':
         return ok(
           (await sleep.setSchedule(

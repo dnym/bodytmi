@@ -340,6 +340,24 @@ void stage4AcceptanceTests() {
       for (var d = 1; d <= 6; d++) {
         await ok('sleep mark', {'date': '2026-11-0$d', 'status': 'complete'});
       }
+      await ok('sleep mark', {'date': '2026-11-03', 'status': 'unmarked'});
+      equal(
+        [
+          for (final m
+              in (await ok('sleep marks', {
+                    'from': '2026-11-02',
+                    'until': '2026-11-06',
+                  }))['list']!
+                  as List)
+            (m as Map)['date'],
+        ].join(','),
+        '2026-11-02,2026-11-04,2026-11-05',
+      );
+      await fails('sleep marks', {
+        'from': '2026-11-06',
+        'until': '2026-11-06',
+      }, 2);
+      await ok('sleep mark', {'date': '2026-11-03', 'status': 'complete'});
       stats = await ok('sleep stats', {
         'from': '2026-11-01',
         'until': '2026-11-08',
