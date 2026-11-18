@@ -85,6 +85,8 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
   }
   for (final (id, measure, value, ago) in [
     ('waist-1', 'waist', '92.5', 36),
+    ('neck-0', 'neck', '39.5', 36),
+    ('navel-0', 'navel', '93.0', 36),
     ('waist-2', 'waist', '90.0', 8),
     ('neck-1', 'neck', '39.5', 8),
     ('navel-1', 'navel', '91.0', 8),
@@ -267,39 +269,19 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
     'carbohydrate': '0',
     'fat': '1.8',
   });
-  await run('daytype publish', {
+  // A Normal programme plan, started long enough ago to be reviewed.
+  await run('energy method', {
+    'from': date(today.subtract(const Duration(days: 60))),
+    'method': {'formula': 'mifflin-st-jeor', 'pal': '1.55'},
     'expectedRevision': 0,
-    'dayType': {
-      'id': 'deficit',
-      'name': 'Deficit day',
-      'goals': {
-        'energy': {'fixed': q('2100', 'kcal')},
-        'protein': {'fixed': q('170', 'g')},
-        'fat': {'minimum': q('50', 'g'), 'maximum': q('80', 'g')},
-      },
-    },
   });
-  await run('cycle publish', {
-    'expectedRevision': 0,
-    'cycle': {
-      'id': 'deficit',
-      'name': 'Steady deficit',
-      'loop': true,
-      'days': [
-        {
-          'type': 'day',
-          'dayType': {'id': 'deficit', 'revision': 1},
-        },
-      ],
-    },
-  });
-  await run('diet start', {
-    'runId': 'cut',
-    'cycleId': 'deficit',
-    'cycleRevision': 1,
-    'startDate': date(today.subtract(const Duration(days: 20))),
-    'asOf': at(-21, 20),
-    'requestId': 'demo-cut',
+  await run('plan activate', {
+    'planId': 'cut',
+    'programme': 'normal',
+    'choices': <String, Object?>{},
+    'startDate': date(today.subtract(const Duration(days: 24))),
+    'asOf': at(-25, 20),
+    'requestId': 'demo-plan',
   });
   for (final (id, time, meal, foodId, grams) in [
     ('breakfast-1', (7, 15), 'breakfast', 'cottage-cheese', '250'),
