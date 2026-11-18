@@ -52,7 +52,7 @@ final class MoreScreen extends StatelessWidget {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Goals & trials'),
-                subtitle: const Text('goals, routines, trials'),
+                subtitle: const Text('goals, routines, trials, reviews'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => openGoals(context),
               ),

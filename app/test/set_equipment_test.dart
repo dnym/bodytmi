@@ -85,13 +85,10 @@ void main() {
       await waitFor(tester, find.text('Plates: 25 + 1.25 kg each side'));
       var session = await stored(id);
       final first = (session['sets'] as List).first as Map;
-      expect(
-        [
-          for (final p in (first['loadArrangement'] as Map)['plates'] as List)
-            ((p as Map)['mass'] as Map)['value'] + ':${p['count']}',
-        ],
-        unorderedEquals(['1.25:2', '25:2']),
-      );
+      expect([
+        for (final p in (first['loadArrangement'] as Map)['plates'] as List)
+          ((p as Map)['mass'] as Map)['value'] + ':${p['count']}',
+      ], unorderedEquals(['1.25:2', '25:2']));
 
       // Set 2 onwards on the other bar.
       await tester.tap(find.text('2').first);

@@ -97,7 +97,9 @@ final class _GoalsData {
     this.progress,
     this.today,
     this.trials,
+    this.reviews,
   );
+  final List<Map<String, Object?>> reviews;
   final List<Map<String, Object?>> goals;
   final List<Object?> planGoals;
   final Map<String, Map<String, Object?>> progress;
@@ -113,7 +115,7 @@ final class GoalsScreen extends StatefulWidget {
   State<GoalsScreen> createState() => _GoalsScreenState();
 }
 
-enum _Tab { goals, routines, trials }
+enum _Tab { goals, routines, trials, reviews }
 
 final class _GoalsScreenState extends State<GoalsScreen> {
   _Tab tab = _Tab.goals;
@@ -149,6 +151,10 @@ final class _GoalsScreenState extends State<GoalsScreen> {
       progress,
       await p.call<Map<String, Object?>>('today show', {'date': _today}),
       trials,
+      [
+        for (final r in await p.call<List<Object?>>('review list'))
+          r! as Map<String, Object?>,
+      ],
     );
   }
 
@@ -162,6 +168,7 @@ final class _GoalsScreenState extends State<GoalsScreen> {
         _Tab.goals => 'Add goal',
         _Tab.routines => 'Add routine',
         _Tab.trials => 'Add trial',
+        _Tab.reviews => 'Add review',
       }),
     ),
     body: Column(
@@ -173,6 +180,7 @@ final class _GoalsScreenState extends State<GoalsScreen> {
               ButtonSegment(value: _Tab.goals, label: Text('Goals')),
               ButtonSegment(value: _Tab.routines, label: Text('Routines')),
               ButtonSegment(value: _Tab.trials, label: Text('Trials')),
+              ButtonSegment(value: _Tab.reviews, label: Text('Reviews')),
             ],
             selected: {tab},
             showSelectedIcon: false,
@@ -188,6 +196,21 @@ final class _GoalsScreenState extends State<GoalsScreen> {
                 _Tab.goals => _goals(context, d),
                 _Tab.routines => _routines(context, d),
                 _Tab.trials => _trials(context, d),
+                _Tab.reviews => [
+                  if (d.reviews.isEmpty)
+                    const SectionCard(
+                      child: EmptyNote(
+                        'No reviews yet. A review is a named set of daily '
+                        'measures you look at together, e.g. every Sunday.',
+                      ),
+                    ),
+                  for (final r in d.reviews)
+                    ReviewCard(
+                      key: ValueKey('${r['id']}#${r['version']}'),
+                      review: r,
+                      today: _now,
+                    ),
+                ],
               },
             ),
           ),
@@ -203,6 +226,7 @@ final class _GoalsScreenState extends State<GoalsScreen> {
       _Tab.goals => GoalSheet(today: _now),
       _Tab.routines => RoutineSheet(today: _now),
       _Tab.trials => TrialSheet(today: _now),
+      _Tab.reviews => const ReviewSheet(),
     },
   );
 
@@ -957,6 +981,242 @@ final class _TrialSheetState extends State<TrialSheet> {
       const Muted(
         'A trial describes what happened in each period. Seasons, routines '
         'and expectations also differ, so it is not proof of an effect.',
+      ),
+      if (problem != null) ProblemText(problem!),
+    ],
+  );
+}
+
+/// One saved review run over the last 7, 28 or 90 days: per measure the
+/// known days, mean and range, and a line of the daily values.
+final class ReviewCard extends StatefulWidget {
+  const ReviewCard({super.key, required this.review, required this.today});
+  final Map<String, Object?> review;
+  final DateTime today;
+
+  @override
+  State<ReviewCard> createState() => _ReviewCardState();
+}
+
+final class _ReviewCardState extends State<ReviewCard> {
+  int days = 7;
+  Map<String, Object?>? result;
+  String? problem;
+  int? _revision;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final profile = ProfileScope.of(context);
+    if (_revision != profile.revision) {
+      _revision = profile.revision;
+      _run();
+    }
+  }
+
+  Future<void> _run() async {
+    final end = DateTime(
+      widget.today.year,
+      widget.today.month,
+      widget.today.day + 1,
+    );
+    try {
+      final r = await ProfileScope.of(context)
+          .call<Map<String, Object?>>('review run', {
+            'id': widget.review['id'],
+            'from': isoDate(end.subtract(Duration(days: days))),
+            'until': isoDate(end),
+          });
+      if (mounted) {
+        setState(() {
+          result = r;
+          problem = null;
+        });
+      }
+    } on BodyTmiException catch (e) {
+      if (mounted) setState(() => problem = e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = Fmt.of(context);
+    return SectionCard(
+      title: '${widget.review['name']}',
+      trailing: IconButton(
+        tooltip: 'Edit review',
+        icon: const Icon(Icons.edit_outlined),
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => ReviewSheet(existing: widget.review),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.review['notes'] != null)
+            Muted('${widget.review['notes']}'),
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 7, label: Text('7 days')),
+              ButtonSegment(value: 28, label: Text('28 days')),
+              ButtonSegment(value: 90, label: Text('90 days')),
+            ],
+            selected: {days},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) {
+              setState(() => days = s.single);
+              _run();
+            },
+          ),
+          if (problem != null) ProblemText(problem!),
+          for (final m in (result?['metrics'] as List?) ?? const [])
+            () {
+              final metric = m as Map;
+              final (name, unit) = metricName(metric['metric']);
+              final sum = (metric['summary'] as Map?) ?? const {};
+              final u = unit.isEmpty ? '' : ' $unit';
+              final values = [
+                for (final d in (metric['days'] as List?) ?? const [])
+                  if ((d as Map)['status'] == 'value')
+                    double.parse('${d['value']}'),
+              ];
+              return Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Muted(
+                      sum['known'] == 0
+                          ? 'No data on any of ${sum['days']} days'
+                          : [
+                              'Mean ${f.number(sum['mean'])}$u',
+                              if (sum['min'] != sum['max'])
+                                '${f.number(sum['min'])}–${f.number(sum['max'])}$u',
+                              '${sum['known']} of ${sum['days']} days known',
+                            ].join(' · '),
+                    ),
+                    if (values.length > 1 && sum['min'] != sum['max'])
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: LineChart(values: values, height: 40),
+                      ),
+                  ],
+                ),
+              );
+            }(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Adds or edits a saved review: a name, measures and notes.
+final class ReviewSheet extends StatefulWidget {
+  const ReviewSheet({super.key, this.existing});
+  final Map<String, Object?>? existing;
+
+  @override
+  State<ReviewSheet> createState() => _ReviewSheetState();
+}
+
+final class _ReviewSheetState extends State<ReviewSheet> {
+  late final name = TextEditingController(
+    text: '${widget.existing?['name'] ?? ''}',
+  );
+  late final notes = TextEditingController(
+    text: '${widget.existing?['notes'] ?? ''}',
+  );
+  late final List<Object?> kept = [
+    for (final m in (widget.existing?['metrics'] as List?) ?? const [])
+      if (!metricPresets.any((p) => _key(p.$2) == _key(m))) m,
+  ];
+  late final selected = <int>{
+    for (final m in (widget.existing?['metrics'] as List?) ?? const [])
+      for (var i = 0; i < metricPresets.length; i++)
+        if (_key(metricPresets[i].$2) == _key(m)) i,
+  };
+  String? problem;
+
+  @override
+  void dispose() {
+    name.dispose();
+    notes.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (name.text.trim().isEmpty) {
+      setState(() => problem = 'Give the review a name.');
+      return;
+    }
+    if (selected.isEmpty && kept.isEmpty) {
+      setState(() => problem = 'Choose at least one measure.');
+      return;
+    }
+    final old = widget.existing;
+    final review = <String, Object?>{
+      'id': old?['id'] ?? 'review-${stamp(DateTime.now())}',
+      'name': name.text.trim(),
+      'metrics': <Object?>[
+        for (final i in selected.toList()..sort()) metricPresets[i].$2,
+        ...kept,
+      ],
+      if (notes.text.trim().isNotEmpty) 'notes': notes.text.trim(),
+    };
+    saveAndClose(
+      context,
+      old == null ? 'Review added' : 'Review updated',
+      (p) => p.write('review save', {
+        'review': review,
+        'expectedVersion': old?['version'] ?? 0,
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => EntrySheet(
+    title: widget.existing == null ? 'New review' : 'Review',
+    action: 'Save',
+    onAction: _save,
+    children: [
+      TextField(
+        controller: name,
+        decoration: const InputDecoration(
+          labelText: 'Name',
+          hintText: 'e.g. Weekly check-in',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 10),
+      const Text('Measures'),
+      Wrap(
+        spacing: 6,
+        children: [
+          for (var i = 0; i < metricPresets.length; i++)
+            FilterChip(
+              label: Text(metricPresets[i].$1),
+              selected: selected.contains(i),
+              onSelected: (on) =>
+                  setState(() => on ? selected.add(i) : selected.remove(i)),
+            ),
+        ],
+      ),
+      if (kept.isNotEmpty)
+        Muted('Also kept: ${kept.map((m) => metricName(m).$1).join(', ')}'),
+      const SizedBox(height: 10),
+      TextField(
+        controller: notes,
+        maxLines: 2,
+        decoration: const InputDecoration(
+          labelText: 'Notes (optional)',
+          border: OutlineInputBorder(),
+        ),
       ),
       if (problem != null) ProblemText(problem!),
     ],
