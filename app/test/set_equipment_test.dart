@@ -60,7 +60,7 @@ void main() {
         ),
       );
       openSession(tester.element(find.byType(Scaffold).first), id);
-      await waitFor(tester, find.text('Load 25 + 1.25 kg each side'));
+      await waitFor(tester, find.text('Load 25 + 2.5 kg each side'));
       await settle();
 
       // Log set 1, then record its plates (prefilled from the plan).
@@ -71,10 +71,10 @@ void main() {
       await settle();
       await tester.tap(find.text('Record plates'));
       await waitFor(tester, find.text('Plates on Bar 1'));
-      await waitFor(tester, find.text('Total 72.5 kg'));
+      await waitFor(tester, find.text('Total 75 kg'));
       await tester.tap(find.byTooltip('More 2.5'));
       await settle();
-      expect(find.text('Total 77.5 kg'), findsOneWidget);
+      expect(find.text('Total 80 kg'), findsOneWidget);
       expect(
         find.textContaining('the stack is recorded as loaded'),
         findsOneWidget,
@@ -82,13 +82,13 @@ void main() {
       await tester.tap(find.byTooltip('Fewer 2.5'));
       await settle();
       await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await waitFor(tester, find.text('Plates: 25 + 1.25 kg each side'));
+      await waitFor(tester, find.text('Plates: 25 + 2.5 kg each side'));
       var session = await stored(id);
       final first = (session['sets'] as List).first as Map;
       expect([
         for (final p in (first['loadArrangement'] as Map)['plates'] as List)
           ((p as Map)['mass'] as Map)['value'] + ':${p['count']}',
-      ], unorderedEquals(['1.25:2', '25:2']));
+      ], unorderedEquals(['2.5:2', '25:2']));
 
       // Set 2 onwards on the other bar.
       await tester.tap(find.text('2').first);
@@ -100,7 +100,7 @@ void main() {
       await tester.tap(find.text('Bar 2'));
       await waitFor(
         tester,
-        find.textContaining('Nearest available: Weight 72.5 kg'),
+        find.textContaining('Nearest available: Weight 75 kg'),
       );
       await settle();
       expect(find.textContaining('On Bar 2'), findsWidgets);

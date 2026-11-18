@@ -77,10 +77,9 @@ void main() {
       );
       openSession(tester.element(find.byType(Scaffold).first), id);
       await waitFor(tester, find.text('PROGRESSION'));
-      await waitFor(tester, find.text('Next: 72.5 kg × 4 · 5 sets'));
-      expect(find.text('Add reps'), findsWidgets);
-      expect(find.text('Add weight'), findsOneWidget);
-      expect(find.text('Next: 24.5 kg × 10 · 3 sets'), findsOneWidget);
+      await waitFor(tester, find.text('Next: 75 kg × 4 · 5 sets'));
+      expect(find.text('Add reps'), findsNWidgets(3));
+      expect(find.text('Next: 24.5 kg × 13 · 3 sets'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(FilledButton, 'Accept').first);
       await waitFor(tester, find.text('accepted'));

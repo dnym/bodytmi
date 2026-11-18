@@ -61,7 +61,7 @@ void main() {
         ),
       );
       openSession(tester.element(find.byType(Scaffold).first), id);
-      await waitFor(tester, find.text('Load 20 + 5 + 1.25 kg each side'));
+      await waitFor(tester, find.text('Load 20 + 5 + 2.5 kg each side'));
       await settle();
 
       await tester.tap(find.text('1').first);
@@ -70,14 +70,14 @@ void main() {
       await tester.tap(find.text('Missing plates'));
       await waitFor(tester, find.textContaining('Missing plates · Home bar'));
       await settle();
-      await tester.tap(find.byTooltip('More missing 1.25'));
+      await tester.tap(find.byTooltip('More missing 2.5'));
       await tester.pump();
-      await tester.tap(find.byTooltip('More missing 1.25'));
+      await tester.tap(find.byTooltip('More missing 2.5'));
       await tester.pump();
       expect(
         tester
             .widget<IconButton>(
-              find.widgetWithIcon(IconButton, Icons.add_circle_outline).last,
+              find.widgetWithIcon(IconButton, Icons.add_circle_outline).at(3),
             )
             .onPressed,
         isNull,
@@ -85,11 +85,13 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Save'));
       await waitFor(
         tester,
-        find.textContaining('Nearest available: Weight 70 kg or 75 kg'),
+        find.textContaining('Nearest available: Weight 72.5 kg'),
       );
       await waitFor(
         tester,
-        find.text('Missing 2 × 1.25 kg · Not loadable exactly: 70 kg or 75 kg'),
+        find.text(
+          'Missing 2 × 2.5 kg · Not loadable exactly: 72.5 kg or 80 kg',
+        ),
       );
       var sets = await bench(id);
       expect(sets.every((s) => s['unavailablePlates'] != null), isTrue);
@@ -104,11 +106,11 @@ void main() {
       await tester.tap(find.text('Missing plates'));
       await waitFor(tester, find.textContaining('Missing plates · Home bar'));
       await settle();
-      await tester.tap(find.byTooltip('Fewer missing 1.25'));
-      await tester.tap(find.byTooltip('Fewer missing 1.25'));
+      await tester.tap(find.byTooltip('Fewer missing 2.5'));
+      await tester.tap(find.byTooltip('Fewer missing 2.5'));
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await waitFor(tester, find.text('Load 20 + 5 + 1.25 kg each side'));
+      await waitFor(tester, find.text('Load 20 + 5 + 2.5 kg each side'));
       sets = await bench(id);
       expect(sets.first['performedOn'], isNull);
       expect(sets.first['unavailablePlates'], isNull);

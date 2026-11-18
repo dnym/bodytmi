@@ -55,7 +55,7 @@ void main() {
         find.text('Mean 428.6 min · 414–448 min · 7 of 7 days known'),
         findsOneWidget,
       );
-      expect(find.text('Mean 1 sessions · 2 of 7 days known'), findsOneWidget);
+      expect(find.text('Mean 1 sessions · 3 of 7 days known'), findsOneWidget);
       await tester.tap(find.text('28 days'));
       await waitFor(tester, find.textContaining('of 28 days known'));
 

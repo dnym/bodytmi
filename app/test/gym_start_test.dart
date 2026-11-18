@@ -66,6 +66,7 @@ void main() {
       await settle();
       await tester.tap(find.text('Train'));
       await settle();
+      await waitFor(tester, find.text('Start workout'));
       await tester.tap(find.text('Start workout'));
       await waitFor(tester, find.text('Where are you training?'));
       await settle();

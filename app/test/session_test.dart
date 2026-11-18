@@ -9,6 +9,8 @@ import 'package:bodytmi_locale/bodytmi_locale.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'lock_test.dart' show waitFor;
+
 void main() {
   final clock = DateTime(2026, 11, 18, 9, 30);
 
@@ -43,6 +45,7 @@ void main() {
       await settle();
       await tester.tap(find.text('Train'));
       await settle();
+      await waitFor(tester, find.text('Start workout'));
       await tester.tap(find.text('Start workout'));
       await settle();
       // The profile has gyms: start without one.

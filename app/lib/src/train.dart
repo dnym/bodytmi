@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'format.dart';
 import 'gym_start.dart';
+import 'history.dart';
 import 'program_start.dart';
 import 'profile.dart';
 import 'session.dart';
@@ -53,7 +54,12 @@ final class TrainScreen extends StatelessWidget {
       next.add((
         run: r,
         day: day,
-        workout: revision['definition'] as Map<String, Object?>?,
+        workout: await _progressed(
+          p,
+          revision['definition'] as Map<String, Object?>?,
+          day,
+          '${r['id']}',
+        ),
       ));
     }
     final history = [
@@ -66,6 +72,53 @@ final class TrainScreen extends StatelessWidget {
             '${at(r, ['gym', 'name']) ?? at(r, ['gym', 'id'])}',
     };
     return _TrainData(next, history.take(20).toList(), gymNames);
+  }
+
+  /// The workout with each progressing slot's targets replaced by what its
+  /// accepted progression prescribes next (the first working set).
+  static Future<Map<String, Object?>?> _progressed(
+    ProfileClient p,
+    Map<String, Object?>? workout,
+    Map<String, Object?> day,
+    String runId,
+  ) async {
+    if (workout == null) return null;
+    final slots = <Object?>[];
+    for (final slot in (workout['slots'] as List?) ?? const []) {
+      final s = slot as Map<String, Object?>;
+      Map<String, Object?>? next;
+      if (s['progression'] != null) {
+        try {
+          final track = await p.call<Map<String, Object?>>(
+            'progression track',
+            {
+              'templateId': day['templateId'],
+              'revision': day['revision'],
+              'slotId': s['id'],
+              'runId': runId,
+              'asOf': isoInstant(DateTime.now()),
+            },
+          );
+          if (track['resolved'] == true) {
+            next = at(track, ['state', 'nextSets', 0]) as Map<String, Object?>?;
+          }
+        } on BodyTmiException {
+          next = null;
+        }
+      }
+      slots.add(
+        next == null
+            ? s
+            : {
+                ...s,
+                'targets': {
+                  ...((s['targets'] as Map<String, Object?>?) ?? const {}),
+                  ...next,
+                },
+              },
+      );
+    }
+    return {...workout, 'slots': slots};
   }
 
   @override
@@ -147,6 +200,7 @@ final class TrainScreen extends StatelessWidget {
                 ],
               ),
             ),
+          const ProgressCard(),
           SectionCard(
             title: 'History',
             child: data.history.isEmpty

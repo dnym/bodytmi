@@ -331,10 +331,19 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
     'id': 'strength',
     'programId': 'strength',
     'revision': 1,
-    'startedAt': at(-5, 17),
+    'startedAt': at(-13, 17),
     'loop': true,
   });
-  for (final (n, day) in [(1, -4), (2, -2)]) {
+  // Six finished workouts, each followed by its accepted progression, so
+  // targets move through the pinned double-progression rules.
+  for (final (n, day) in [
+    (1, -12),
+    (2, -10),
+    (3, -8),
+    (4, -6),
+    (5, -4),
+    (6, -2),
+  ]) {
     final runView = await run('run show', {'runId': 'strength'});
     final started = await run('run start', {
       'runId': 'strength',
@@ -359,6 +368,22 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
       'expectedVersion': session['contentVersion'],
       'finishedAt': at(day, 18, 25),
     });
+    final slots = {
+      for (final set in session['sets']! as List<Object?>)
+        (set! as Map<String, Object?>)['slot'],
+    };
+    for (final slot in slots) {
+      final proposed = await run('progression propose', {
+        'sessionId': 'session-$n',
+        'slotId': slot,
+      });
+      await run('progression accept', {
+        'sessionId': 'session-$n',
+        'slotId': slot,
+        'expectedVersion': _data(proposed)['version'],
+        'acceptedAt': at(day, 18, 30),
+      });
+    }
   }
 
   // Foods, a diet run and today's diary.
