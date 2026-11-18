@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'format.dart';
 import 'gym_start.dart';
+import 'set_equipment.dart';
 import 'profile.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -230,6 +231,7 @@ final class _SessionScreenState extends State<SessionScreen> {
                               slot: slotId,
                             ),
                       onTap: busy ? null : () => _openSet(s, slotId),
+                      note: _setNote(f, s, current: identical(s, current)),
                     ),
                 ],
               ),
@@ -283,6 +285,7 @@ final class _SessionScreenState extends State<SessionScreen> {
   }
 
   Future<void> _openSet(Map<String, Object?> set, String slotId) async {
+    final instance = instanceOf(session!, set);
     final result = await showModalBottomSheet<_SetResult>(
       context: context,
       isScrollControlled: true,
@@ -290,10 +293,39 @@ final class _SessionScreenState extends State<SessionScreen> {
         set: set,
         label: '${_slotTitle(slotId)} · set ${_setLabel(set)}',
         slot: _slot(slotId),
+        plates:
+            set['status'] == 'completed' &&
+            instance?.snapshot['loading'] != null,
+        otherEquipment:
+            set['status'] == 'planned' && _slot(slotId)?['equipment'] != null,
       ),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     switch (result) {
+      case _Plates():
+        final arrangement = await showModalBottomSheet<PlateArrangement>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => PlatesSheet(set: set, instance: instance!),
+        );
+        if (arrangement == null) return;
+        await _change('store arrange', {
+          'setId': set['id'],
+          'arrangement': arrangement.json,
+          if (arrangement.json == null) 'confirm': true,
+        });
+      case _Other():
+        final choice = await showModalBottomSheet<OtherChoice>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => OtherEquipmentSheet(
+            equipmentId: '${_slot(slotId)!['equipment']}',
+            current: instance?.id,
+            performedOn: at(set, ['performedOn', 'instanceId']) as String?,
+          ),
+        );
+        if (choice == null) return;
+        await _performOn(set, choice);
       case _Skip():
         await _change('store skip', {'setId': set['id'], 'confirm': true});
       case _Actuals(:final actuals):
@@ -303,6 +335,76 @@ final class _SessionScreenState extends State<SessionScreen> {
           restAfter: set['status'] == 'planned',
           slot: slotId,
         );
+    }
+  }
+
+  /// Plate hints for (instance revision, target) pairs; null while loading
+  /// or when the instance has no plate loading.
+  final _plateHints = <String, String?>{};
+
+  String? _setNote(Fmt f, Map<String, Object?> set, {required bool current}) {
+    if (set['loadArrangement'] case final Map arrangement) {
+      return 'Plates: ${plateText(f, arrangement, instanceOf(session!, set))}';
+    }
+    final instance = instanceOf(session!, set);
+    final other = set['performedOn'] != null
+        ? 'On ${instance?.snapshot['name'] ?? instance?.id}'
+        : null;
+    if (!current || set['status'] != 'planned') return other;
+    final mass = at(set, ['suggested', 'mass']);
+    if (instance == null ||
+        instance.snapshot['loading'] == null ||
+        mass is! Map) {
+      return other;
+    }
+    final entered = (mass['entered'] ?? mass) as Map;
+    final key =
+        '${instance.id}@${instance.revision}:${entered['value']}${entered['unit']}';
+    if (!_plateHints.containsKey(key)) {
+      _plateHints[key] = null;
+      profile
+          .call<Map<String, Object?>>('store plate-plan', {
+            'instanceId': instance.id,
+            'revision': instance.revision,
+            'target': {'value': entered['value'], 'unit': entered['unit']},
+          })
+          .then((r) {
+            if (mounted) {
+              setState(() => _plateHints[key] = planHint(f, r['plan']));
+            }
+          }, onError: (_) {});
+    }
+    final parts = [?other, ?_plateHints[key]];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  Future<void> _performOn(Map<String, Object?> set, OtherChoice choice) async {
+    if (busy) return;
+    final f = Fmt.of(context);
+    setState(() => busy = true);
+    try {
+      final r = await profile.write<Map<String, Object?>>('store perform-on', {
+        'id': widget.sessionId,
+        'expectedVersion': session!['contentVersion'],
+        'setId': set['id'],
+        'instanceId': choice.instanceId,
+        if (choice.instanceId == null) 'confirm': true,
+        if (choice.instanceId != null) 'applyToRemaining': choice.remaining,
+      });
+      if (!mounted) return;
+      setState(() => session = r['session'] as Map<String, Object?>);
+      final nearest = [
+        for (final x in (r['settings'] as List?) ?? const [])
+          if ((x as Map)['setId'] == set['id'])
+            '${metricLabel('${x['metric']}')} '
+                '${((x['settings'] as List?) ?? const []).map((q) => f.quantity((q as Map)['entered'] ?? q, digits: 3)).join(' or ')}',
+      ];
+      if (nearest.isNotEmpty) _show('Nearest available: ${nearest.join(', ')}');
+    } on BodyTmiException catch (e) {
+      _show(e.message);
+      await _reload();
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -512,6 +614,7 @@ final class _SetRow extends StatelessWidget {
     required this.fmt,
     required this.onDone,
     required this.onTap,
+    this.note,
   });
   final Map<String, Object?> set;
   final String label;
@@ -519,6 +622,7 @@ final class _SetRow extends StatelessWidget {
   final Fmt fmt;
   final VoidCallback? onDone;
   final VoidCallback? onTap;
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -539,44 +643,57 @@ final class _SetRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               )
             : null,
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(width: 36, child: Text(label, style: style)),
-            Expanded(
-              child: Text(
-                metricsText(fmt, set['suggested']),
-                style: style.copyWith(color: c.muted),
-              ),
+            Row(
+              children: [
+                SizedBox(width: 36, child: Text(label, style: style)),
+                Expanded(
+                  child: Text(
+                    metricsText(fmt, set['suggested']),
+                    style: style.copyWith(color: c.muted),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    switch (status) {
+                      'completed' => metricsText(fmt, set['actuals']),
+                      'skipped' => 'skipped',
+                      _ => '—',
+                    },
+                    style: style.copyWith(
+                      color: status == 'skipped' ? c.muted : null,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 48,
+                  height: 40,
+                  child: status == 'completed'
+                      ? Icon(Icons.check, color: scheme.primary)
+                      : status == 'planned'
+                      ? IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Done as planned',
+                          onPressed: onDone,
+                          icon: Icon(
+                            Icons.check_circle_outline,
+                            color: current ? scheme.primary : c.muted,
+                          ),
+                        )
+                      : null,
+                ),
+              ],
             ),
-            Expanded(
-              child: Text(
-                switch (status) {
-                  'completed' => metricsText(fmt, set['actuals']),
-                  'skipped' => 'skipped',
-                  _ => '—',
-                },
-                style: style.copyWith(
-                  color: status == 'skipped' ? c.muted : null,
+            if (note != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 36, bottom: 4),
+                child: Text(
+                  note!,
+                  style: TextStyle(fontSize: 13, color: c.muted),
                 ),
               ),
-            ),
-            SizedBox(
-              width: 48,
-              height: 40,
-              child: status == 'completed'
-                  ? Icon(Icons.check, color: scheme.primary)
-                  : status == 'planned'
-                  ? IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Done as planned',
-                      onPressed: onDone,
-                      icon: Icon(
-                        Icons.check_circle_outline,
-                        color: current ? scheme.primary : c.muted,
-                      ),
-                    )
-                  : null,
-            ),
           ],
         ),
       ),
@@ -610,6 +727,10 @@ sealed class _SetResult {}
 
 final class _Skip extends _SetResult {}
 
+final class _Plates extends _SetResult {}
+
+final class _Other extends _SetResult {}
+
 final class _Actuals extends _SetResult {
   _Actuals(this.actuals);
   final Map<String, Object?> actuals;
@@ -618,10 +739,18 @@ final class _Actuals extends _SetResult {
 /// Enter or correct a set's actuals, prefilled from the logged result or
 /// the suggestion in their entered units.
 final class _SetSheet extends StatefulWidget {
-  const _SetSheet({required this.set, required this.label, this.slot});
+  const _SetSheet({
+    required this.set,
+    required this.label,
+    this.slot,
+    this.plates = false,
+    this.otherEquipment = false,
+  });
   final Map<String, Object?> set;
   final String label;
   final Map<String, Object?>? slot;
+  final bool plates;
+  final bool otherEquipment;
 
   @override
   State<_SetSheet> createState() => _SetSheetState();
@@ -750,6 +879,28 @@ final class _SetSheetState extends State<_SetSheet> {
                 problem!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
+            ),
+          if (widget.plates || widget.otherEquipment)
+            Wrap(
+              spacing: 8,
+              children: [
+                if (widget.plates)
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(context, _Plates()),
+                    icon: const Icon(Icons.album_outlined),
+                    label: Text(
+                      widget.set['loadArrangement'] == null
+                          ? 'Record plates'
+                          : 'Plates',
+                    ),
+                  ),
+                if (widget.otherEquipment)
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(context, _Other()),
+                    icon: const Icon(Icons.swap_horiz),
+                    label: const Text('Other equipment'),
+                  ),
+              ],
             ),
           Row(
             children: [
