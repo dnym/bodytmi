@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'backup.dart';
+import 'journal.dart';
 import 'lock.dart';
 import 'profile.dart';
 import 'sleep.dart';
@@ -30,8 +31,14 @@ final class MoreScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => openSleep(context),
               ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Journal'),
+                subtitle: const Text('mood, energy, symptoms, pain, illness'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openJournal(context),
+              ),
               for (final (title, subtitle) in [
-                ('Journal', 'mood, energy, symptoms'),
                 ('Practices', 'box breathing, playlists'),
                 ('Goals & trials', 'goals, routines, trials, reviews'),
                 ('Diet plan', 'programmes, cycles, reviews'),
