@@ -26,6 +26,49 @@ String freeId(String name, Iterable<String> taken, {String fallback = 'item'}) {
 String _m(Fmt f, Object? q, {bool unit = true}) =>
     f.quantity(q, digits: 3, unit: unit);
 
+/// Exercises to attach setup notes to: the catalog plus every exercise in
+/// the workouts of published programs (id → display name).
+Future<Map<String, String>> knownExercises(ProfileClient p) async {
+  String pretty(String id) {
+    final t = id.replaceAll('-', ' ');
+    return t.isEmpty ? t : '${t[0].toUpperCase()}${t.substring(1)}';
+  }
+
+  final out = <String, String>{};
+  final workouts = <String>{};
+  void days(Object? node) {
+    if (node is Map) {
+      if (node['templateId'] != null && node['revision'] is int) {
+        workouts.add('${node['templateId']}@${node['revision']}');
+      }
+      node.values.forEach(days);
+    } else if (node is List) {
+      node.forEach(days);
+    }
+  }
+
+  for (final r in await p.call<List<Object?>>('program list')) {
+    days(r);
+  }
+  for (final w in workouts) {
+    final [id, revision] = w.split('@');
+    final rev = await p.call<Map<String, Object?>>('store revision', {
+      'templateId': id,
+      'revision': int.parse(revision),
+    });
+    for (final slot
+        in (at(rev, ['definition', 'slots']) as List?) ?? const []) {
+      final e = '${(slot as Map)['exercise']}';
+      out[e] = pretty(e);
+    }
+  }
+  for (final r in await p.call<List<Object?>>('exercise list')) {
+    final e = (r! as Map)['exercise'] as Map;
+    out['${e['id']}'] = '${e['name'] ?? pretty('${e['id']}')}';
+  }
+  return out;
+}
+
 /// One line describing how an instance is loaded or set.
 String loadingSummary(Fmt f, Map<String, Object?> instance) {
   final loading = instance['loading'] as Map?;
@@ -65,7 +108,8 @@ String loadingSummary(Fmt f, Map<String, Object?> instance) {
 }
 
 final class _GymData {
-  _GymData(this.gyms, this.equipment, this.instances);
+  _GymData(this.gyms, this.equipment, this.instances, this.exercises);
+  final Map<String, String> exercises; // id → display name
   final List<Map<String, Object?>> gyms; // latest revision records
   final Map<String, Map<String, Object?>> equipment; // id → latest record
   final List<Map<String, Object?>> instances; // latest revision records
@@ -99,6 +143,7 @@ final class GymsScreen extends StatelessWidget {
       await p.call<List<Object?>>('instance list'),
       'instance',
     ).values.toList(),
+    await knownExercises(p),
   );
 
   @override
@@ -210,8 +255,63 @@ final class GymsScreen extends StatelessWidget {
                 ),
               );
             }(),
+          if (gym != null) _setupNotes(context, d, gym),
         ],
       ),
+    );
+  }
+
+  Widget _setupNotes(
+    BuildContext context,
+    _GymData d,
+    Map<String, Object?> gym,
+  ) {
+    final notes = (at(gym, ['gym', 'setupNotes']) as Map?) ?? const {};
+    Future<void> edit([String? exercise]) => showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) =>
+          SetupNoteSheet(gym: gym, exercises: d.exercises, exercise: exercise),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final e in notes.entries)
+          InkWell(
+            onTap: () => edit('${e.key}'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.sticky_note_2_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${d.exercises[e.key] ?? e.key}: ',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          TextSpan(text: '${e.value}'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => edit(),
+            icon: const Icon(Icons.add),
+            label: const Text('Setup note'),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1011,5 +1111,124 @@ final class _InstanceScreenState extends State<InstanceScreen> {
             .showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
+  }
+}
+
+/// Adds, edits or removes one gym's setup note for an exercise ("rack pins
+/// at 9"). A session started at the gym freezes the note for that
+/// exercise's slots; later edits never change past sessions.
+final class SetupNoteSheet extends StatefulWidget {
+  const SetupNoteSheet({
+    super.key,
+    required this.gym,
+    required this.exercises,
+    this.exercise,
+  });
+  final Map<String, Object?> gym; // latest revision record
+  final Map<String, String> exercises;
+  final String? exercise;
+
+  @override
+  State<SetupNoteSheet> createState() => _SetupNoteSheetState();
+}
+
+final class _SetupNoteSheetState extends State<SetupNoteSheet> {
+  Map<String, Object?> get _notes =>
+      (at(widget.gym, ['gym', 'setupNotes']) as Map<String, Object?>?) ??
+      const {};
+  late String? exercise = widget.exercise;
+  late final note = TextEditingController(
+    text: '${_notes[widget.exercise] ?? ''}',
+  );
+  String? problem;
+
+  @override
+  void dispose() {
+    note.dispose();
+    super.dispose();
+  }
+
+  void _save({bool remove = false}) {
+    if (exercise == null) {
+      setState(() => problem = 'Choose the exercise.');
+      return;
+    }
+    if (!remove && note.text.trim().isEmpty) {
+      setState(() => problem = 'Write the note, or remove it.');
+      return;
+    }
+    final notes = <String, Object?>{..._notes};
+    if (widget.exercise != null && widget.exercise != exercise) {
+      notes.remove(widget.exercise);
+    }
+    if (remove) {
+      notes.remove(exercise);
+    } else {
+      notes[exercise!] = note.text.trim();
+    }
+    final gym = <String, Object?>{
+      ...(widget.gym['gym']! as Map<String, Object?>),
+    }..remove('setupNotes');
+    if (notes.isNotEmpty) gym['setupNotes'] = notes;
+    saveAndClose(
+      context,
+      remove ? 'Setup note removed' : 'Setup note saved',
+      (p) => p.write('gym publish', {
+        'gym': gym,
+        'expectedRevision': widget.gym['revision'],
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final choices = {
+      ...widget.exercises,
+      ?exercise: ?widget.exercises[exercise] ?? exercise,
+    };
+    final sorted = choices.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+    return EntrySheet(
+      title:
+          'Setup note at ${at(widget.gym, ['gym', 'name']) ?? at(widget.gym, ['gym', 'id'])}',
+      action: 'Save',
+      onAction: _save,
+      children: [
+        if (sorted.isEmpty)
+          const Muted('No exercises yet: publish a workout or catalog entry.')
+        else
+          DropdownButtonFormField<String>(
+            initialValue: exercise,
+            decoration: const InputDecoration(labelText: 'Exercise'),
+            items: [
+              for (final e in sorted)
+                DropdownMenuItem(value: e.key, child: Text(e.value)),
+            ],
+            onChanged: (v) => setState(() => exercise = v),
+          ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: note,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Note',
+            hintText: 'e.g. Rack pins at 9, bench on the third mark',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const Muted(
+          'Shown with that exercise when a workout starts at this gym.',
+        ),
+        if (widget.exercise != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => _save(remove: true),
+              child: const Text('Remove note'),
+            ),
+          ),
+        if (problem != null) ProblemText(problem!),
+      ],
+    );
   }
 }

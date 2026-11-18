@@ -216,6 +216,23 @@ final class _SessionScreenState extends State<SessionScreen> {
               ),
               child: Column(
                 children: [
+                  if (at(session, ['gymSetupNotes', slotId])
+                      case final String note)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.sticky_note_2_outlined,
+                            size: 18,
+                            color: AppColors.of(context).muted,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(child: Muted(note)),
+                        ],
+                      ),
+                    ),
                   for (final s in sets)
                     _SetRow(
                       set: s,
