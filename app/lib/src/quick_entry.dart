@@ -81,8 +81,9 @@ Future<void> _save(
 }
 
 /// Common sheet frame with a title and a primary action.
-final class _EntrySheet extends StatelessWidget {
-  const _EntrySheet({
+final class EntrySheet extends StatelessWidget {
+  const EntrySheet({
+    super.key,
     required this.title,
     required this.children,
     required this.action,
@@ -124,8 +125,9 @@ final class _EntrySheet extends StatelessWidget {
 }
 
 /// A time-of-day row that opens the platform time picker.
-final class _TimeRow extends StatelessWidget {
-  const _TimeRow({
+final class TimeRow extends StatelessWidget {
+  const TimeRow({
+    super.key,
     required this.label,
     required this.value,
     required this.onChanged,
@@ -162,8 +164,9 @@ final class _TimeRow extends StatelessWidget {
   );
 }
 
-final class _DecimalField extends StatelessWidget {
-  const _DecimalField({
+final class DecimalField extends StatelessWidget {
+  const DecimalField({
+    super.key,
     required this.controller,
     required this.label,
     this.suffix,
@@ -220,7 +223,7 @@ final class _WeighInState extends State<_WeighIn> {
   }
 
   @override
-  Widget build(BuildContext context) => _EntrySheet(
+  Widget build(BuildContext context) => EntrySheet(
     title: 'Weigh in',
     action: 'Save',
     onAction: () {
@@ -243,7 +246,7 @@ final class _WeighInState extends State<_WeighIn> {
       );
     },
     children: [
-      _DecimalField(
+      DecimalField(
         controller: mass,
         label: 'Weight',
         suffix: unit,
@@ -258,19 +261,19 @@ final class _WeighInState extends State<_WeighIn> {
         showSelectedIcon: false,
         onSelectionChanged: (s) => setState(() => unit = s.single),
       ),
-      _TimeRow(
+      TimeRow(
         label: 'Time',
         value: at,
         onChanged: (t) => setState(() => at = t),
       ),
       const Muted('Body mass for health; training mass is kept separately.'),
-      if (problem != null) _Problem(problem!),
+      if (problem != null) ProblemText(problem!),
     ],
   );
 }
 
-final class _Problem extends StatelessWidget {
-  const _Problem(this.text);
+final class ProblemText extends StatelessWidget {
+  const ProblemText(this.text, {super.key});
   final String text;
 
   @override
@@ -326,7 +329,7 @@ final class _SleepEntryState extends State<_SleepEntry> {
   @override
   Widget build(BuildContext context) {
     final minutes = wake.difference(onset).inMinutes;
-    return _EntrySheet(
+    return EntrySheet(
       title: nap ? 'Nap' : 'Last night',
       action: 'Save',
       onAction: () => _save(
@@ -349,12 +352,12 @@ final class _SleepEntryState extends State<_SleepEntry> {
           value: nap,
           onChanged: (v) => setState(() => nap = v),
         ),
-        _TimeRow(
+        TimeRow(
           label: 'Fell asleep',
           value: asleep,
           onChanged: (t) => setState(() => asleep = t),
         ),
-        _TimeRow(
+        TimeRow(
           label: 'Woke up',
           value: wake,
           onChanged: (t) => setState(() => wake = t),
@@ -399,8 +402,8 @@ String mealFor(DateTime t) {
 
 const _meals = ['breakfast', 'lunch', 'dinner', 'snack'];
 
-final class _MealChips extends StatelessWidget {
-  const _MealChips({required this.value, required this.onChanged});
+final class MealChips extends StatelessWidget {
+  const MealChips({super.key, required this.value, required this.onChanged});
   final String value;
   final ValueChanged<String> onChanged;
 
@@ -444,7 +447,7 @@ final class _QuickEnergyState extends State<_QuickEnergy> {
   }
 
   @override
-  Widget build(BuildContext context) => _EntrySheet(
+  Widget build(BuildContext context) => EntrySheet(
     title: 'Quick kcal',
     action: 'Add',
     onAction: () {
@@ -477,7 +480,7 @@ final class _QuickEnergyState extends State<_QuickEnergy> {
       );
     },
     children: [
-      _DecimalField(
+      DecimalField(
         controller: fields['energy']!,
         label: 'Energy',
         suffix: 'kcal',
@@ -491,7 +494,7 @@ final class _QuickEnergyState extends State<_QuickEnergy> {
             ('fat', 'Fat'),
           ]) ...[
             Expanded(
-              child: _DecimalField(
+              child: DecimalField(
                 controller: fields[id]!,
                 label: label,
                 suffix: 'g',
@@ -503,13 +506,13 @@ final class _QuickEnergyState extends State<_QuickEnergy> {
       ),
       const Muted('Leave a macro empty if you do not know it.'),
       const SizedBox(height: 8),
-      _MealChips(value: meal, onChanged: (m) => setState(() => meal = m)),
-      _TimeRow(
+      MealChips(value: meal, onChanged: (m) => setState(() => meal = m)),
+      TimeRow(
         label: 'Time',
         value: at,
         onChanged: (t) => setState(() => at = t),
       ),
-      if (problem != null) _Problem(problem!),
+      if (problem != null) ProblemText(problem!),
     ],
   );
 }
@@ -791,12 +794,12 @@ final class _FoodAmountState extends State<_FoodAmount> {
   }
 
   @override
-  Widget build(BuildContext context) => _EntrySheet(
+  Widget build(BuildContext context) => EntrySheet(
     title: widget.choice.name,
     action: 'Add',
     onAction: busy ? null : _add,
     children: [
-      _DecimalField(
+      DecimalField(
         controller: amount,
         label: portion == null ? 'Amount' : 'Portions',
         suffix: portion == null ? _unit : null,
@@ -820,13 +823,13 @@ final class _FoodAmountState extends State<_FoodAmount> {
           ],
         ),
       const SizedBox(height: 8),
-      _MealChips(value: meal, onChanged: (m) => setState(() => meal = m)),
-      _TimeRow(
+      MealChips(value: meal, onChanged: (m) => setState(() => meal = m)),
+      TimeRow(
         label: 'Time',
         value: time,
         onChanged: (t) => setState(() => time = t),
       ),
-      if (problem != null) _Problem(problem!),
+      if (problem != null) ProblemText(problem!),
     ],
   );
 }

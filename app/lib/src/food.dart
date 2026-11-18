@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'diary_edit.dart';
 import 'format.dart';
 import 'profile.dart';
 import 'today.dart' show FoodSummary;
@@ -98,34 +99,40 @@ final class _FoodScreenState extends State<FoodScreen> {
                       child: Column(
                         children: [
                           for (final e in entries)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '${e['foodName'] ?? 'Quick entry'}',
-                                        ),
-                                        Muted(_amount(f, at(e, ['entry']))),
-                                      ],
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => editDiaryEntry(context, e),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${e['foodName'] ?? 'Quick entry'}',
+                                          ),
+                                          Muted(_amount(f, at(e, ['entry']))),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  Muted(
-                                    f.number(
-                                      at(e, [
-                                        'nutrition',
-                                        'nutrients',
-                                        'energy',
-                                        'value',
-                                      ]),
-                                      digits: 0,
+                                    Muted(
+                                      f.number(
+                                        at(e, [
+                                          'nutrition',
+                                          'nutrients',
+                                          'energy',
+                                          'value',
+                                        ]),
+                                        digits: 0,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                         ],
