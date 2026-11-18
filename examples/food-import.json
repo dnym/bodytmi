@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "database": "/tmp/bodytmi-example.sqlite",
+  "document": {
+    "format": "bodytmi-food-import/1",
+    "source": {
+      "namespace": "old-diary",
+      "app": "example-converter",
+      "version": "1"
+    },
+    "foods": [
+      {
+        "sourceId": "food/12",
+        "name": "Milk 1.5%",
+        "kind": "base",
+        "basis": "100ml",
+        "source": {
+          "kind": "label"
+        },
+        "nutrients": {
+          "energy": {
+            "value": "47",
+            "unit": "kcal"
+          },
+          "protein": {
+            "value": "3.5",
+            "unit": "g"
+          },
+          "carbohydrate": {
+            "value": "4.8",
+            "unit": "g"
+          },
+          "fat": {
+            "value": "1.5",
+            "unit": "g"
+          }
+        },
+        "density": {
+          "mass": {
+            "value": "103",
+            "unit": "g"
+          },
+          "volume": {
+            "value": "100",
+            "unit": "ml"
+          }
+        }
+      },
+      {
+        "sourceId": "food/31",
+        "name": "Rye bread",
+        "kind": "base",
+        "basis": "100g",
+        "nutrients": {
+          "energy": {
+            "value": "230",
+            "unit": "kcal"
+          },
+          "protein": {
+            "value": "7",
+            "unit": "g"
+          },
+          "carbohydrate": {
+            "value": "40",
+            "unit": "g"
+          },
+          "fat": {
+            "value": "2.5",
+            "unit": "g"
+          }
+        },
+        "portions": [
+          {
+            "id": "slice",
+            "name": "Slice",
+            "amount": {
+              "value": "35",
+              "unit": "g"
+            }
+          }
+        ]
+      },
+      {
+        "sourceId": "meal/4",
+        "name": "Breakfast",
+        "kind": "composite",
+        "components": [
+          {
+            "food": {
+              "sourceId": "food/12"
+            },
+            "amount": {
+              "value": "200",
+              "unit": "ml"
+            }
+          },
+          {
+            "food": {
+              "sourceId": "food/31"
+            },
+            "amount": {
+              "portion": "slice",
+              "count": "2"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "confirm": true
+}

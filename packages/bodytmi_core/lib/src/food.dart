@@ -1,6 +1,7 @@
 import 'catalog_labels.dart';
 import 'errors.dart';
 import 'fraction.dart';
+import 'import_origin.dart';
 import 'nutrient.dart';
 import 'quantity.dart';
 
@@ -210,6 +211,7 @@ final class Food {
     required this.portions,
     required this.components,
     required this.batch,
+    required this.origin,
   });
 
   factory Food.fromJson(Object? input) {
@@ -223,6 +225,7 @@ final class Food {
       'source',
       'kind',
       'portions',
+      'import',
     };
     final id = identifier(j, 'id');
     final name = _optionalText(j, 'name', 200) ?? invalid('A food has a name.');
@@ -230,6 +233,9 @@ final class Food {
         ? CatalogLabels.fromJson(j['labels'])
         : CatalogLabels.empty;
     final notes = _optionalText(j, 'notes', 4000);
+    final origin = j['import'] == null
+        ? null
+        : importOriginFromJson(j['import']);
     final source = j.containsKey('source')
         ? FoodSource.fromJson(j['source'])
         : null;
@@ -287,6 +293,7 @@ final class Food {
         portions: List.unmodifiable(portions),
         components: const [],
         batch: null,
+        origin: origin,
       );
       for (final p in portions) {
         food._basisUnits(QuantityAmount(p.amount));
@@ -316,6 +323,7 @@ final class Food {
         portions: List.unmodifiable(portions),
         components: List.unmodifiable(raw.map(FoodComponent.fromJson)),
         batch: batch,
+        origin: origin,
       );
     }
     invalid('A food kind is base or composite.');
@@ -333,6 +341,9 @@ final class Food {
   final List<FoodPortion> portions;
   final List<FoodComponent> components;
   final Batch? batch;
+
+  /// Set when a `bodytmi-food-import/1` document wrote this revision.
+  final ImportOrigin? origin;
 
   bool get isComposite => components.isNotEmpty;
 
@@ -388,6 +399,7 @@ final class Food {
       if (density != null) 'density': density!.toJson(),
     },
     if (portions.isNotEmpty) 'portions': [for (final p in portions) p.toJson()],
+    if (origin != null) 'import': importOriginToJson(origin!),
   };
 }
 

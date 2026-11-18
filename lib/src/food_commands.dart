@@ -37,6 +37,12 @@ const foodCommandNames = [
   'diary set-day-start',
   'energy calibrate',
   'diary reference',
+  'food import-validate',
+  'food import-preview',
+  'food import-apply',
+  'diary import-validate',
+  'diary import-preview',
+  'diary import-apply',
 ];
 
 const _maxDatasetBytes = 64 * 1024 * 1024;
@@ -120,7 +126,10 @@ Future<Map<String, Object?>> executeFood(
   Map<String, Object?> request,
 ) async {
   final pure =
+      command.endsWith('import-validate') ||
       !(command.startsWith('diary') ||
+          command.endsWith('import-preview') ||
+          command.endsWith('import-apply') ||
           command == 'energy calibrate' ||
           const {
             'food publish',
@@ -159,6 +168,12 @@ Future<Map<String, Object?>> executeFood(
     'diary set-day-start' => {'dayStart', 'expectedRevision'},
     'diary reference' => {'from', 'until', 'context'},
     'energy calibrate' => {'from', 'until', 'context', 'minimumDays'},
+    'food import-validate' ||
+    'food import-preview' ||
+    'diary import-validate' ||
+    'diary import-preview' => {'document'},
+    'food import-apply' ||
+    'diary import-apply' => {'document', 'onChanged', 'confirm'},
     _ => invalid('Unknown food command.'),
   };
   checkKeys(request, {'schemaVersion', if (!pure) 'database', ...fields});
@@ -176,6 +191,21 @@ Future<Map<String, Object?>> executeFood(
   final selected = _nutrients(request);
 
   switch (command) {
+    case 'food import-validate':
+      final doc = FoodImportDocument.fromJson(request['document']);
+      return ok({
+        'format': foodImportFormat,
+        'namespace': doc.namespace,
+        'foods': doc.foods.length,
+      });
+    case 'diary import-validate':
+      final doc = DiaryImportDocument.fromJson(request['document']);
+      return ok({
+        'format': diaryImportFormat,
+        'namespace': doc.namespace,
+        'entries': doc.entries.length,
+        'days': doc.days.length,
+      });
     case 'food validate':
       return ok(Food.fromJson(request['food']).toJson());
     case 'food dataset-info':
@@ -289,7 +319,41 @@ Future<Map<String, Object?>> executeFood(
   try {
     final foods = FoodService(store);
     final diary = DiaryService(store);
+    String onChanged() {
+      final v = request['onChanged'] ?? 'reject';
+      if (v is! String) invalid('onChanged must be reject or update.');
+      return v;
+    }
+
     switch (command) {
+      case 'food import-preview':
+        return ok(
+          await FoodImportService(
+            store,
+          ).preview(FoodImportDocument.fromJson(request['document'])),
+        );
+      case 'food import-apply':
+        return ok(
+          await FoodImportService(store).apply(
+            FoodImportDocument.fromJson(request['document']),
+            onChanged: onChanged(),
+            confirm: request['confirm'] == true,
+          ),
+        );
+      case 'diary import-preview':
+        return ok(
+          await DiaryImportService(
+            store,
+          ).preview(DiaryImportDocument.fromJson(request['document'])),
+        );
+      case 'diary import-apply':
+        return ok(
+          await DiaryImportService(store).apply(
+            DiaryImportDocument.fromJson(request['document']),
+            onChanged: onChanged(),
+            confirm: request['confirm'] == true,
+          ),
+        );
       case 'food publish':
         return ok(
           (await foods.publish(

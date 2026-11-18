@@ -48,6 +48,7 @@ export 'src/energy_calibration.dart';
 export 'src/reference_service.dart';
 export 'src/sleep_service.dart';
 export 'src/sleep_import_service.dart';
+export 'src/food_import_service.dart';
 export 'src/practice_service.dart';
 export 'src/activity_service.dart';
 export 'src/daily_metrics.dart';

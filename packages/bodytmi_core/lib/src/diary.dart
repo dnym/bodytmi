@@ -2,6 +2,7 @@ import 'diet.dart' show addDays;
 import 'errors.dart';
 import 'food.dart';
 import 'fraction.dart';
+import 'import_origin.dart';
 import 'instant.dart';
 import 'nutrient.dart';
 import 'quantity.dart';
@@ -61,6 +62,7 @@ final class DiaryEntry {
     required this.food,
     required this.amount,
     required this.quick,
+    required this.origin,
   });
 
   /// [dayStart] assigns the date when the input has none. An explicit date
@@ -80,6 +82,7 @@ final class DiaryEntry {
       'food',
       'amount',
       'quick',
+      'import',
     });
     final at = j['at'];
     parseInstant(at, 'at');
@@ -127,6 +130,7 @@ final class DiaryEntry {
       food: hasFood ? foodRefFromJson(j['food'], 'food') : null,
       amount: hasFood ? FoodAmount.fromJson(j['amount'], 'amount') : null,
       quick: Map.unmodifiable(quick),
+      origin: j['import'] == null ? null : importOriginFromJson(j['import']),
     );
   }
 
@@ -139,6 +143,9 @@ final class DiaryEntry {
   final FoodRef? food;
   final FoodAmount? amount;
   final Map<String, Quantity> quick;
+
+  /// Set when a `bodytmi-diary-import/1` document wrote this entry.
+  final ImportOrigin? origin;
 
   DateTime get instant => parseInstant(at, 'at');
 
@@ -154,6 +161,7 @@ final class DiaryEntry {
       'amount': amount!.toJson(),
     } else
       'quick': {for (final e in quick.entries) e.key: e.value.toJson()},
+    if (origin != null) 'import': importOriginToJson(origin!),
   };
 
   /// Nutrition of this entry; a quick entry is one item.

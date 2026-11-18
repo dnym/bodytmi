@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "database": "/tmp/bodytmi-example.sqlite",
+  "document": {
+    "format": "bodytmi-diary-import/1",
+    "source": {
+      "namespace": "old-diary",
+      "app": "example-converter",
+      "version": "1"
+    },
+    "entries": [
+      {
+        "sourceId": "log/1001",
+        "at": "2026-01-05T07:30:00+01:00",
+        "meal": "breakfast",
+        "food": {
+          "namespace": "old-diary",
+          "sourceId": "meal/4"
+        },
+        "amount": {
+          "portion": "whole",
+          "count": "1"
+        }
+      },
+      {
+        "sourceId": "log/1002",
+        "at": "2026-01-06T00:30:00+01:00",
+        "notes": "Late snack",
+        "quick": {
+          "energy": {
+            "value": "250",
+            "unit": "kcal"
+          },
+          "protein": {
+            "value": "10",
+            "unit": "g"
+          }
+        }
+      }
+    ],
+    "days": [
+      {
+        "date": "2026-01-05",
+        "status": "complete"
+      }
+    ]
+  },
+  "confirm": true
+}
