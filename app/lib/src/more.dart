@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'backup.dart';
 import 'diet_plan.dart';
 import 'goals.dart';
+import 'gyms.dart';
 import 'journal.dart';
 import 'lock.dart';
 import 'practice.dart';
@@ -62,16 +63,13 @@ final class MoreScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => openDietPlan(context),
               ),
-              for (final (title, subtitle) in [
-                ('Gyms & equipment', 'gyms, instances, plates'),
-              ])
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  enabled: false,
-                  title: Text(title),
-                  subtitle: Text('$subtitle · coming to the app'),
-                  trailing: const Icon(Icons.chevron_right),
-                ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Gyms & equipment'),
+                subtitle: const Text('gyms, equipment, plate calculator'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openGyms(context),
+              ),
             ],
           ),
         ),

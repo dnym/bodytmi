@@ -235,6 +235,74 @@ Future<void> buildDemoProfile(String database, {DateTime? now}) async {
     });
   }
 
+  // Two gyms: a home setup and a commercial gym with two bars.
+  for (final (id, name) in [
+    ('olympic-barbell', 'Olympic barbell'),
+    ('adjustable-dumbbell', 'Adjustable dumbbell'),
+  ]) {
+    await run('equipment publish', {
+      'equipment': {'id': id, 'name': name},
+      'expectedRevision': 0,
+    });
+  }
+  for (final (id, name) in [('home', 'Home'), ('city-gym', 'City gym')]) {
+    await run('gym publish', {
+      'gym': {'id': id, 'name': name},
+      'expectedRevision': 0,
+    });
+  }
+  Map<String, Object?> bar(List<(String, int)> plates) => {
+    'components': [
+      {'id': 'bar', 'kind': 'bar', 'mass': q('20', 'kg')},
+    ],
+    'channel': {'id': 'bar', 'sides': 2, 'symmetry': 'required'},
+    'plates': [
+      for (final (mass, count) in plates)
+        {'mass': q(mass, 'kg'), 'count': count},
+    ],
+  };
+  for (final instance in <Map<String, Object?>>[
+    {
+      'id': 'home-bar',
+      'equipmentId': 'olympic-barbell',
+      'gym': 'home',
+      'name': 'Home bar',
+      'loading': bar([('20', 2), ('10', 2), ('5', 2), ('2.5', 2), ('1.25', 2)]),
+    },
+    {
+      'id': 'home-dumbbells',
+      'equipmentId': 'adjustable-dumbbell',
+      'gym': 'home',
+      'name': 'Home dumbbells',
+      'scale': {
+        'id': 'home-dumbbells-settings',
+        'unit': 'kg',
+        'range': {'start': '2.5', 'step': '2.5', 'count': 12},
+      },
+    },
+    for (final n in [1, 2])
+      {
+        'id': 'city-bar-$n',
+        'equipmentId': 'olympic-barbell',
+        'gym': 'city-gym',
+        'name': 'Bar $n',
+        'loading': bar([
+          ('25', 8),
+          ('20', 4),
+          ('15', 4),
+          ('10', 4),
+          ('5', 4),
+          ('2.5', 4),
+          ('1.25', 4),
+        ]),
+      },
+  ]) {
+    await run('instance publish', {
+      'instance': instance,
+      'expectedRevision': 0,
+    });
+  }
+
   // Foods, a diet run and today's diary.
   Future<void> food(String id, String name, Map<String, String> per100g) =>
       run('food publish', {
