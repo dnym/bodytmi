@@ -1,6 +1,6 @@
 DART ?= dart
 
-.PHONY: check format test analyze build simulate flutter-check android-check app-check demo-profile
+.PHONY: check format test analyze build simulate flutter-check android-check app-check release-apk demo-profile
 check: analyze test
 	$(DART) --suppress-analytics format --output=none --set-exit-if-changed bin lib packages test
 
@@ -49,6 +49,23 @@ app-check:
 	cd app && $(FLUTTER) --suppress-analytics pub get
 	cd app && $(FLUTTER) --suppress-analytics analyze --fatal-infos
 	cd app && $(FLUTTER) --suppress-analytics test
+
+# Signed release APK for direct installation (no Google Play). Needs
+# app/android/key.properties (see app/android/app/build.gradle.kts) and
+# refuses to finish if the APK carries the debug certificate.
+APK_PLATFORMS ?= android-arm64
+ANDROID_SDK ?= $(HOME)/Android/Sdk
+APKSIGNER ?= $(lastword $(sort $(wildcard $(ANDROID_SDK)/build-tools/*/apksigner)))
+RELEASE_APK = app/build/app/outputs/flutter-apk/app-release.apk
+release-apk:
+	@test -f app/android/key.properties || { echo "Missing app/android/key.properties; see app/android/app/build.gradle.kts." >&2; exit 1; }
+	@test -n "$(APKSIGNER)" || { echo "apksigner not found under $(ANDROID_SDK)/build-tools; set APKSIGNER." >&2; exit 1; }
+	mkdir -p build
+	cd app && $(FLUTTER) --suppress-analytics build apk --release --target-platform $(APK_PLATFORMS)
+	$(APKSIGNER) verify --print-certs $(RELEASE_APK) > build/release-certs.txt
+	@if grep -q 'CN=Android Debug' build/release-certs.txt; then rm -f build/release-certs.txt; echo "APK is signed with the debug key." >&2; exit 1; fi
+	@grep -E 'DN|SHA-256' build/release-certs.txt; rm -f build/release-certs.txt
+	@echo "Signed: $(RELEASE_APK)"
 
 # An invented demonstration profile for GUI work: make demo-profile OUT=path
 demo-profile:
